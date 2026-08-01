@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+/* IFK Mora — nordisk ljus design */
+:root {
+  --background: #f7f9fb;
+  --foreground: #1e293b;
+  --ifk-blue: #004c88;
+  --ifk-blue-hover: #005faa;
+  --ifk-blue-light: #0079d8;
+  --ifk-blue-pale: #d3ebfb;
+  --ifk-blue-muted: #e8f4fc;
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-ifk-blue: var(--ifk-blue);
+  --color-ifk-blue-hover: var(--ifk-blue-hover);
+  --color-ifk-blue-light: var(--ifk-blue-light);
+  --color-ifk-blue-pale: var(--ifk-blue-pale);
+  --color-ifk-blue-muted: var(--ifk-blue-muted);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+@layer components {
+  .form-label {
+    @apply block text-sm font-medium text-slate-700;
+  }
+
+  .form-input {
+    @apply mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-ifk-blue focus:ring-2 focus:ring-ifk-blue/20;
+  }
+
+  .form-select {
+    @apply mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-ifk-blue focus:ring-2 focus:ring-ifk-blue/20;
+  }
+
+  .form-file {
+    @apply mt-1 block w-full text-sm text-slate-700 file:mr-4 file:rounded-lg file:border-0 file:bg-ifk-blue-pale file:px-4 file:py-2 file:text-sm file:font-medium file:text-ifk-blue hover:file:bg-ifk-blue-muted;
+  }
+
+  .btn-primary {
+    @apply rounded-lg bg-ifk-blue px-4 py-2 text-sm font-medium text-white transition hover:bg-ifk-blue-hover disabled:opacity-50;
+  }
+
+  .card {
+    @apply rounded-xl border border-slate-200 bg-white p-6 shadow-sm;
+  }
+
+  .page-eyebrow {
+    @apply text-sm font-semibold uppercase tracking-widest text-ifk-blue;
+  }
+
+  .link-primary {
+    @apply font-medium text-ifk-blue hover:text-ifk-blue-hover;
+  }
+
+  .link-muted {
+    @apply text-slate-500 hover:text-slate-700;
+  }
+}

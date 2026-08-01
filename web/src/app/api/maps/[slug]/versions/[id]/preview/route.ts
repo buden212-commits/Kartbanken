@@ -1,0 +1,91 @@
+import { requireSession } from "@/lib/auth/api";
+import {
+  buildPreviewSvgPath,
+  ensureSvgMetadata,
+  generateAndStorePreviewSvg,
+  generateOcadSvgLayered,
+  svgBufferHasLayers,
+  svgBufferHasMetadata,
+} from "@/lib/ocad/svg";
+import { prisma } from "@/lib/prisma";
+import { readStoredFile, uploadFile } from "@/lib/storage";
+import { NextResponse } from "next/server";
+
+export const maxDuration = 300;
+
+type RouteParams = { params: Promise<{ slug: string; id: string }> };
+
+export async function GET(_request: Request, { params }: RouteParams) {
+  const session = await requireSession();
+  if (session instanceof NextResponse) return session;
+
+  const { slug, id } = await params;
+
+  const map = await prisma.mapFile.findUnique({ where: { slug } });
+  if (!map) {
+    return NextResponse.json({ error: "Kartfil hittades inte" }, { status: 404 });
+  }
+
+  const version = await prisma.mapVersion.findFirst({
+    where: { id, mapFileId: map.id },
+  });
+
+  if (!version) {
+    return NextResponse.json({ error: "Version hittades inte" }, { status: 404 });
+  }
+
+  let previewSvgPath = version.previewSvgPath;
+
+  if (!previewSvgPath) {
+    previewSvgPath = buildPreviewSvgPath(version.mapFileId, version.versionNumber);
+    try {
+      const buffer = await readStoredFile(version.storagePath);
+      await generateAndStorePreviewSvg(buffer, previewSvgPath);
+      await prisma.mapVersion.update({
+        where: { id: version.id },
+        data: { previewSvgPath },
+      });
+    } catch (err) {
+      console.error("Preview SVG generation failed:", err);
+      return NextResponse.json(
+        { error: "Kunde inte generera kartpreview" },
+        { status: 500 },
+      );
+    }
+  }
+
+  try {
+    let svgBuffer = await readStoredFile(previewSvgPath);
+    let ocdBuffer: Buffer | null = null;
+
+    const needsLayerUpgrade = !svgBufferHasLayers(svgBuffer);
+    const needsMetadata = !svgBufferHasMetadata(svgBuffer);
+
+    if (needsLayerUpgrade || needsMetadata) {
+      ocdBuffer = await readStoredFile(version.storagePath);
+
+      if (needsLayerUpgrade) {
+        const { svg } = await generateOcadSvgLayered(ocdBuffer);
+        svgBuffer = Buffer.from(svg, "utf-8");
+        await uploadFile(previewSvgPath, svgBuffer);
+      } else if (needsMetadata) {
+        const { buffer, changed } = await ensureSvgMetadata(svgBuffer, ocdBuffer);
+        if (changed) {
+          await uploadFile(previewSvgPath, buffer);
+        }
+        svgBuffer = buffer;
+      }
+    }
+
+    return new NextResponse(new Uint8Array(svgBuffer), {
+      headers: {
+        "Content-Type": "image/svg+xml; charset=utf-8",
+        "Cache-Control": "private, max-age=3600",
+        "Content-Length": String(svgBuffer.byteLength),
+      },
+    });
+  } catch (err) {
+    console.error("Preview read failed:", err);
+    return NextResponse.json({ error: "Preview saknas" }, { status: 404 });
+  }
+}

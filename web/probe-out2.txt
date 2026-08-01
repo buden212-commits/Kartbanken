@@ -1,0 +1,254 @@
+﻿node.exe : npm warn Unknown env config "devdir". This will stop working in the next major version of npm. See `npm help
+ npmrc` for supported config options.
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (npm warn Unknow...config options.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+recTypes: 8, 9, 10, 12, 15, 19, 24, 26, 30, 1024, 1026, 1028, 1030, 1032, 1035, 1039, 1044, 1045, 1046, 1058, 1059, 1061, 1063, 1064, 1066, 1067, 1068, 1071, 1076, 1082, 1083
+
+=== recType 15 count 8 ===
+0 {"_first":"Alla symboler","_pairs":[{"code":"g","value":"-1"},{"code":"e","value":"1"},{"code":"f","value":"1"},{"code":"l","value":"1"},{"code":"i","value":"0"}],"g":"-1","e":"1","f":"1","l":"1","i":"0"}
+1 {"_first":"ISOM2017-6-2  Kartnorm ","_pairs":[{"code":"g","value":"20"},{"code":"e","value":"0"},{"code":"f","value":"1"},{"code":"l","value":"0"},{"code":"i","value":"1"}],"g":"20","e":"0","f":"1","l":"0","i":"1"}
+2 {"_first":"Minimi-m├Ñtt enligt ISOM2017-6","_pairs":[{"code":"g","value":"9"},{"code":"e","value":"0"},{"code":"f","value":"0"},{"code":"l","value":"0"},{"code":"i","value":"1"}],"g":"9","e":"0","f":"0","l":"0","i":"1"}
+3 {"_first":"Tillagda/├ändrade. IFK Mora OK","_pairs":[{"code":"g","value":"4"},{"code":"e","value":"0"},{"code":"f","value":"0"},{"code":"l","value":"0"},{"code":"i","value":"1"}],"g":"4","e":"0","f":"0","l":"0","i":"1"}
+4 {"_first":"Kartdatabas","_pairs":[{"code":"g","value":"3"},{"code":"e","value":"0"},{"code":"f","value":"0"},{"code":"l","value":"0"},{"code":"i","value":"1"}],"g":"3","e":"0","f":"0","l":"0","i":"1"}
+5 {"_first":"Kartlayout","_pairs":[{"code":"g","value":"2"},{"code":"e","value":"0"},{"code":"f","value":"0"},{"code":"l","value":"0"},{"code":"i","value":"1"}],"g":"2","e":"0","f":"0","l":"0","i":"1"}
+6 {"_first":"Banp├Ñtryck","_pairs":[{"code":"g","value":"1"},{"code":"e","value":"0"},{"code":"f","value":"0"},{"code":"l","value":"0"},{"code":"i","value":"1"}],"g":"1","e":"0","f":"0","l":"0","i":"1"}
+7 {"_first":"HittaUT","_pairs":[{"code":"g","value":"5"},{"code":"e","value":"0"},{"code":"f","value":"0"},{"code":"l","value":"0"},{"code":"i","value":"1"}],"g":"5","e":"0","f":"0","l":"0","i":"1"}
+
+=== recType 8 count 61 ===
+0 {"_first":"C:\\Users\\larsa\\Downloads\\Bon├ñs 20251124 Norra delen.jpg","_pairs":[{"code":"a","value":"0.00374613"},{"code":"b","value":"0.02105293"},{"code":"c","value":"..\\..\\Users\\larsa\\Downloads\\"},{"code":"r","value":"1"},{"code":"s","value":"0"},{"code":"u","value":"0.0423275208"},{"code":"v","value":"0.0423286696"},{"code":"x","value":"318.519375"},{"code":"y","value":"238.077695"}],"a":"0.00374613","b":"0.02105293","c":"..\\..\\Users\\larsa\\Downloads\\","r":"1","s":"0","u":"0.0423275208","v":"0.0423286696","x":"318.519375","y":"238.077695"}
+1 {"_first":"C:\\Users\\larsa\\Downloads\\Bon├ñs 20251112 s├Âdra delen.jpg","_pairs":[{"code":"a","value":"-0.01901576"},{"code":"b","value":"0.00648775"},{"code":"c","value":"..\\..\\Users\\larsa\\Downloads\\"},{"code":"r","value":"1"},{"code":"s","value":"0"},{"code":"u","value":"0.0423417651"},{"code":"v","value":"0.0423350783"},{"code":"x","value":"217.192188"},{"code":"y","value":"235.960117"}],"a":"-0.01901576","b":"0.00648775","c":"..\\..\\Users\\larsa\\Downloads\\","r":"1","s":"0","u":"0.0423417651","v":"0.0423350783","x":"217.192188","y":"235.960117"}
+2 {"_first":"C:\\Users\\larsa\\Downloads\\Revidering Bj├Ârntj├ñrn.jpg","_pairs":[{"code":"a","value":"-0.10917626"},{"code":"b","value":"-0.10917626"},{"code":"c","value":"..\\..\\Users\\larsa\\Downloads\\"},{"code":"r","value":"1"},{"code":"s","value":"0"},{"code":"u","value":"0.0212214066"},{"code":"v","value":"0.0212214066"},{"code":"x","value":"500.678281"},{"code":"y","value":"1305.402852"}],"a":"-0.10917626","b":"-0.10917626","c":"..\\..\\Users\\larsa\\Downloads\\","r":"1","s":"0","u":"0.0212214066","v":"0.0212214066","x":"500.678281","y":"1305.402852"}
+3 {"_first":"C:\\Users\\larsa\\Downloads\\├ûstnor v├ñster 20251208.jpg","_pairs":[{"code":"a","value":"-0.00368450"},{"code":"b","value":"-0.03981254"},{"code":"c","value":"..\\..\\Users\\larsa\\Downloads\\"},{"code":"r","value":"1"},{"code":"s","value":"0"},{"code":"u","value":"0.0282315283"},{"code":"v","value":"0.0282107176"},{"code":"x","value":"291.157656"},{"code":"y","value":"86.485273"}],"a":"-0.00368450","b":"-0.03981254","c":"..\\..\\Users\\larsa\\Downloads\\","r":"1","s":"0","u":"0.0282315283","v":"0.0282107176","x":"291.157656","y":"86.485273"}
+4 {"_first":"C:\\Users\\larsa\\Downloads\\├ändringsf├Ârslag 20251009.jpg","_pairs":[{"code":"a","value":"-5.90860499"},{"code":"b","value":"-5.90860499"},{"code":"c","value":"..\\..\\Users\\larsa\\Downloads\\"},{"code":"r","value":"1"},{"code":"s","value":"0"},{"code":"t","value":"0"},{"code":"u","value":"0.0211637125"},{"code":"v","value":"0.0211637125"},{"code":"x","value":"232.053711"},{"code":"y","value":"466.305117"}],"a":"-5.90860499","b":"-5.90860499","c":"..\\..\\Users\\larsa\\Downloads\\","r":"1","s":"0","t":"0","u":"0.0211637125","v":"0.0211637125","x":"232.053711","y":"466.305117"}
+5 {"_first":"C:\\Users\\larsa\\Downloads\\detaljer-gr├Ânklitt.ocd","_pairs":[{"code":"c","value":"..\\..\\Users\\larsa\\Downloads\\"},{"code":"r","value":"1"},{"code":"s","value":"0"}],"c":"..\\..\\Users\\larsa\\Downloads\\","r":"1","s":"0"}
+6 {"_first":"C:\\Users\\larsa\\Downloads\\Gr├Ânklitt 2024-10-25_rev_HJ 20241101.ocd","_pairs":[{"code":"c","value":"..\\..\\Users\\larsa\\Downloads\\"},{"code":"r","value":"1"},{"code":"s","value":"0"}],"c":"..\\..\\Users\\larsa\\Downloads\\","r":"1","s":"0"}
+7 {"_first":"C:\\Users\\larsa\\Downloads\\senast ├ñndrade h├Âst -24.ocd","_pairs":[{"code":"c","value":"..\\..\\Users\\larsa\\Downloads\\"},{"code":"r","value":"1"},{"code":"s","value":"0"}],"c":"..\\..\\Users\\larsa\\Downloads\\","r":"1","s":"0"}
+
+groups: { '0': 90005 }
+impLayer: { '0': 90005 }
+status: { '1': 90005 }
+symbols hidden: 13
+sym 101000 tree[0-7] [
+  31868, 31868,
+  31868, 31868,
+  31868, 31868,
+  31868, 31868
+] hidden false
+sym 101001 tree[0-7] [
+  31868, 31868,
+  31868, 31868,
+  31868, 31868,
+  31868, 31868
+] hidden false
+sym 101002 tree[0-7] [
+  31868, 31868,
+  31868, 31868,
+  31868, 31868,
+  31868, 31868
+] hidden false
+HIDDEN 553005 [
+  31868, 31868,
+  31868, 31868,
+  31868, 31868,
+  31868, 31868
+]
+HIDDEN 554000 [
+  31868, 31868,
+  31868, 31868,
+  31868, 31868,
+  31868, 31868
+]
+visible 101000 [
+  31868, 31868,
+  31868, 31868,
+  31868, 31868,
+  31868, 31868
+]
+visible 101001 [
+  31868, 31868,
+  31868, 31868,
+  31868, 31868,
+  31868, 31868
+]
+
+Symtree membership counts (by tree index):
+  [0] g=-1 "Alla symboler" f=1 l=1 -> 309 symbols
+  [1] g=20 "ISOM2017-6-2  Kartnorm " f=1 l=0 -> 308 symbols
+  [2] g=9 "Minimi-m├Ñtt enligt ISOM2017-6" f=0 l=0 -> 310 symbols
+  [3] g=4 "Tillagda/├ändrade. IFK Mora OK" f=0 l=0 -> 306 symbols
+  [4] g=3 "Kartdatabas" f=0 l=0 -> 308 symbols
+  [5] g=2 "Kartlayout" f=0 l=0 -> 308 symbols
+  [6] g=1 "Banp├Ñtryck" f=0 l=0 -> 310 symbols
+  [7] g=5 "HittaUT" f=0 l=0 -> 310 symbols
+
+objects per symtree index: {
+  '0': 89958,
+  '1': 89986,
+  '2': 89986,
+  '3': 89986,
+  '4': 89938,
+  '5': 89986,
+  '6': 89986,
+  '7': 89986
+}
+
+--- v4 file ---
+recType 35: 0
+recType 23: 0
+recType 13: 0
+symtree sample: [
+  {
+    "_first": "Alla symboler",
+    "_pairs": [
+      {
+        "code": "g",
+        "value": "-1"
+      },
+      {
+        "code": "e",
+        "value": "1"
+      },
+      {
+        "code": "f",
+        "value": "1"
+      },
+      {
+        "code": "l",
+        "value": "1"
+      },
+      {
+        "code": "i",
+        "value": "0"
+      }
+    ],
+    "g": "-1",
+    "e": "1",
+    "f": "1",
+    "l": "1",
+    "i": "0"
+  },
+  {
+    "_first": "ISOM2017-2  Kartnorm ",
+    "_pairs": [
+      {
+        "code": "g",
+        "value": "20"
+      },
+      {
+        "code": "e",
+        "value": "0"
+      },
+      {
+        "code": "f",
+        "value": "1"
+      },
+      {
+        "code": "l",
+        "value": "0"
+      },
+      {
+        "code": "i",
+        "value": "1"
+      }
+    ],
+    "g": "20",
+    "e": "0",
+    "f": "1",
+    "l": "0",
+    "i": "1"
+  },
+  {
+    "_first": "Minimi-m├Ñtt enligt ISOM2017",
+    "_pairs": [
+      {
+        "code": "g",
+        "value": "9"
+      },
+      {
+        "code": "e",
+        "value": "0"
+      },
+      {
+        "code": "f",
+        "value": "0"
+      },
+      {
+        "code": "l",
+        "value": "0"
+      },
+      {
+        "code": "i",
+        "value": "1"
+      }
+    ],
+    "g": "9",
+    "e": "0",
+    "f": "0",
+    "l": "0",
+    "i": "1"
+  },
+  {
+    "_first": "Tillagda/├ändrade. IFK Mora OK",
+    "_pairs": [
+      {
+        "code": "g",
+        "value": "4"
+      },
+      {
+        "code": "e",
+        "value": "0"
+      },
+      {
+        "code": "f",
+        "value": "0"
+      },
+      {
+        "code": "l",
+        "value": "0"
+      },
+      {
+        "code": "i",
+        "value": "1"
+      }
+    ],
+    "g": "4",
+    "e": "0",
+    "f": "0",
+    "l": "0",
+    "i": "1"
+  },
+  {
+    "_first": "Kartdatabas",
+    "_pairs": [
+      {
+        "code": "g",
+        "value": "3"
+      },
+      {
+        "code": "e",
+        "value": "0"
+      },
+      {
+        "code": "f",
+        "value": "0"
+      },
+      {
+        "code": "l",
+        "value": "0"
+      },
+      {
+        "code": "i",
+        "value": "1"
+      }
+    ],
+    "g": "3",
+    "e": "0",
+    "f": "0",
+    "l": "0",
+    "i": "1"
+  }
+]
