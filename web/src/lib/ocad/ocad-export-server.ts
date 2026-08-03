@@ -1,5 +1,9 @@
 import { createRequire } from "module";
 import {
+  measureObjectByteSize,
+  readObjectIndexEntry,
+} from "@/lib/ocad/ocad-integrate";
+import {
   buildVersionWarning,
   normalizeSourceVersion,
   OCAD_EXPORT_VERSIONS,
@@ -158,6 +162,161 @@ export function cropOcadBuffer(buffer: Buffer, options: CropOcadOptions): CropOc
     removedObjects,
     versionWarning: buildVersionWarning(sourceVersion, targetVersion),
   };
+}
+
+function iterateActiveObjectEntries(
+  buffer: Buffer,
+  callback: (entry: ObjectIndexEntry, statusOffset: number, objectIndex: number) => void,
+): void {
+  const reader = new BufferReader(buffer);
+  const header = new FileHeader(reader);
+  if (!header.isValid()) {
+    throw new Error("Ogiltig OCAD-fil");
+  }
+
+  let objectIndexOffset = header.objectIndexBlock;
+  let startIndex = 0;
+
+  while (objectIndexOffset) {
+    const blockStart = objectIndexOffset;
+    reader.push(objectIndexOffset);
+    const block = new ObjectIndexBlock(reader, startIndex, header.version);
+    reader.pop();
+
+    for (let i = 0; i < block.table.length; i++) {
+      const entry = block.table[i];
+      if (!entry?.pos || entry.status <= 0 || entry.status >= 3) continue;
+
+      const entryOffset =
+        blockStart + OBJECT_INDEX_BLOCK_HEADER_SIZE + i * OBJECT_INDEX_ENTRY_SIZE;
+      const statusOffset = entryOffset + OBJECT_INDEX_STATUS_OFFSET;
+      callback(entry, statusOffset, startIndex + i);
+    }
+
+    startIndex += 256;
+    objectIndexOffset = block.nextObjectIndexBlock;
+  }
+}
+
+/** Marks OCAD objects deleted by their object index (best-effort integration helper). */
+export function markObjectsDeletedByIndices(
+  buffer: Buffer,
+  objectIndices: Set<number>,
+): { deleted: number } {
+  const output = Buffer.from(buffer);
+  let deleted = 0;
+
+  iterateActiveObjectEntries(output, (_entry, statusOffset, objectIndex) => {
+    if (objectIndices.has(objectIndex)) {
+      output.writeUInt8(0, statusOffset);
+      deleted++;
+    }
+  });
+
+  return { deleted };
+}
+
+type ObjectEntryRef = {
+  pos: number;
+  sizeEstimate: number;
+  statusOffset: number;
+};
+
+function collectObjectEntries(buffer: Buffer): Map<number, ObjectEntryRef> {
+  const map = new Map<number, ObjectEntryRef>();
+  iterateActiveObjectEntries(buffer, (entry, statusOffset, objectIndex) => {
+    map.set(objectIndex, {
+      pos: entry.pos,
+      sizeEstimate: Math.max(0, pointXY(entry.rc.max)[0] - pointXY(entry.rc.min)[0]),
+      statusOffset,
+    });
+  });
+  return map;
+}
+
+/**
+ * Copies raw object bytes from checkin to head when object indices match.
+ * Works when object size is unchanged; new objects cannot be appended (MVP limitation).
+ */
+export type CopyObjectSkipReason =
+  | "missing_in_head"
+  | "missing_in_checkin"
+  | "size_mismatch";
+
+export type CopyObjectSkipDetail = {
+  objectIndex: number;
+  reason: CopyObjectSkipReason;
+};
+
+const COPY_SKIP_REASON_TEXT: Record<CopyObjectSkipReason, string> = {
+  missing_in_head: "Objektet finns inte i aktuella versionen (saknat objectIndex).",
+  missing_in_checkin: "Objektet finns inte i checkin-filen.",
+  size_mismatch:
+    "Objektets lagrade storlek skiljer sig — byte-kopiering stöds bara när storleken är oförändrad.",
+};
+
+export function copySkipReasonText(reason: CopyObjectSkipReason): string {
+  return COPY_SKIP_REASON_TEXT[reason];
+}
+
+export function copyMatchingObjectData(
+  headBuffer: Buffer,
+  checkinBuffer: Buffer,
+  objectIndices: Set<number>,
+): { copied: number; skipped: number; skippedItems: CopyObjectSkipDetail[] } {
+  const output = Buffer.from(headBuffer);
+  const headEntries = collectObjectEntries(output);
+  const checkinEntries = collectObjectEntries(checkinBuffer);
+
+  let copied = 0;
+  let skipped = 0;
+  const skippedItems: CopyObjectSkipDetail[] = [];
+
+  for (const index of objectIndices) {
+    const headEntry = headEntries.get(index);
+    const checkinEntry = checkinEntries.get(index);
+    if (!headEntry) {
+      skipped++;
+      skippedItems.push({ objectIndex: index, reason: "missing_in_head" });
+      continue;
+    }
+    if (!checkinEntry) {
+      skipped++;
+      skippedItems.push({ objectIndex: index, reason: "missing_in_checkin" });
+      continue;
+    }
+
+    const headIndexInfo = readObjectIndexEntry(output, index);
+    const checkinIndexInfo = readObjectIndexEntry(checkinBuffer, index);
+    if (!headIndexInfo || !checkinIndexInfo) {
+      skipped++;
+      skippedItems.push({ objectIndex: index, reason: "missing_in_checkin" });
+      continue;
+    }
+
+    const headSize = measureObjectByteSize(output, headIndexInfo);
+    const checkinSize = measureObjectByteSize(checkinBuffer, checkinIndexInfo);
+    const copySize = Math.max(headSize, checkinSize);
+
+    if (headEntry.pos + copySize > output.length || checkinEntry.pos + copySize > checkinBuffer.length) {
+      skipped++;
+      skippedItems.push({ objectIndex: index, reason: "size_mismatch" });
+      continue;
+    }
+
+    const headSlice = output.subarray(headEntry.pos, headEntry.pos + copySize);
+    const checkinSlice = checkinBuffer.subarray(checkinEntry.pos, checkinEntry.pos + copySize);
+    if (headSlice.length !== checkinSlice.length) {
+      skipped++;
+      skippedItems.push({ objectIndex: index, reason: "size_mismatch" });
+      continue;
+    }
+
+    checkinSlice.copy(output, headEntry.pos);
+    copied++;
+  }
+
+  return { copied, skipped, skippedItems };
 }
 
 export type { CropOcadOptions, CropOcadResult, OcadExportVersion } from "./ocad-export-shared";

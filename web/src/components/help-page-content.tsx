@@ -1,0 +1,717 @@
+import Link from "next/link";
+import type { ReactNode } from "react";
+import { auth } from "@/auth";
+import { canAdmin, canUpload, roleLabel } from "@/lib/auth/permissions";
+
+const sections = [
+  { id: "oversikt", label: "Översikt" },
+  { id: "kom-igang", label: "Kom igång" },
+  { id: "roller", label: "Roller och behörigheter" },
+  { id: "kartfiler", label: "Kartfiler" },
+  { id: "versioner", label: "Versionshantering" },
+  { id: "checkout", label: "Checka ut och in" },
+  { id: "bana", label: "Lägg bana" },
+  { id: "publicering", label: "Publicering" },
+  { id: "jamfor", label: "Jämföra versioner" },
+  { id: "verifiera", label: "Verifiera" },
+  { id: "kartvy", label: "Visa karta och export" },
+  { id: "admin", label: "Administration", adminOnly: true },
+  { id: "faq", label: "Vanliga frågor" },
+] as const;
+
+function HelpSection({
+  id,
+  title,
+  children,
+}: {
+  id: string;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section id={id} className="scroll-mt-24">
+      <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
+      <div className="mt-4 space-y-4 text-sm leading-relaxed text-slate-700">{children}</div>
+    </section>
+  );
+}
+
+function HelpList({ items }: { items: string[] }) {
+  return (
+    <ul className="list-disc space-y-2 pl-5">
+      {items.map((item) => (
+        <li key={item}>{item}</li>
+      ))}
+    </ul>
+  );
+}
+
+export async function HelpPageContent() {
+  const session = await auth();
+  const role = session?.user.role;
+  const showAdmin = !!(role && canAdmin(role));
+  const showEditor = !!(role && canUpload(role));
+
+  const visibleSections = sections.filter((s) => !("adminOnly" in s && s.adminOnly) || showAdmin);
+
+  return (
+    <div className="grid gap-10 lg:grid-cols-[220px_1fr] lg:gap-12">
+      <nav className="lg:sticky lg:top-24 lg:self-start">
+        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Innehåll</p>
+        <ul className="mt-3 space-y-1 text-sm">
+          {visibleSections.map((s) => (
+            <li key={s.id}>
+              <a
+                href={`#${s.id}`}
+                className="block rounded-md px-2 py-1.5 text-slate-600 transition hover:bg-ifk-blue-pale hover:text-ifk-blue"
+              >
+                {s.label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+
+      <div className="space-y-12">
+        <HelpSection id="oversikt" title="Översikt">
+          <p>
+            <strong>kartor.ifkmora.se</strong> är IFK Mora OK:s system för versionshantering och
+            jämförelse av orienteringskartor i OCAD-format (.ocd). Du kan ladda upp nya versioner,
+            granska skillnader mellan versioner, visa kartor i webbläsaren, exportera utsnitt som
+            PDF eller OCAD, planera banor direkt på kartan, och — som redaktör — checka ut
+            delområden för parallell redigering i OCAD.
+          </p>
+          <p>Huvudflödet för versionshantering ser ut så här:</p>
+          <ol className="list-decimal space-y-2 pl-5">
+            <li>Logga in och välj en kartfil på startsidan.</li>
+            <li>Ladda upp en ny .ocd-fil som skapar en ny version.</li>
+            <li>Granska diff mot föregående version.</li>
+            <li>Publicera versionen när den ska vara tillgänglig för läsare.</li>
+          </ol>
+          <p className="mt-4">Parallell redigering via checkout:</p>
+          <ol className="list-decimal space-y-2 pl-5">
+            <li>Checka ut ett område på kartfilens sida och ladda ner utcheckning .ocd.</li>
+            <li>Redigera i OCAD och checka in filen.</li>
+            <li>Granska diff, bekräfta och låt administratör integrera ändringarna.</li>
+          </ol>
+          <p className="mt-4">Banplanering:</p>
+          <ol className="list-decimal space-y-2 pl-5">
+            <li>Öppna Lägg bana på kartfilens sida.</li>
+            <li>Rita start, kontroller och mål med IOF-symboler 700–709.</li>
+            <li>Spara banan och exportera som PDF vid behov.</li>
+          </ol>
+        </HelpSection>
+
+        <HelpSection id="kom-igang" title="Kom igång">
+          <h3 className="font-medium text-slate-900">Skapa konto</h3>
+          <p>
+            Gå till <Link href="/login" className="link-primary">inloggningssidan</Link> och välj
+            fliken <strong>Skapa konto</strong>. Fyll i namn, e-post och lösenord (minst 8 tecken).
+            Ditt konto får statusen <em>Väntar på godkännande</em> tills en administratör godkänt
+            det. Administratören får ett e-postmeddelande om SMTP är konfigurerat.
+          </p>
+
+          <h3 className="font-medium text-slate-900">Logga in</h3>
+          <p>
+            Använd e-post och lösenord på inloggningssidan. Om kontot ännu inte godkänts kan du
+            inte logga in — du får meddelandet att kontot väntar på godkännande. Kontakta klubbens
+            administratör om det dröjer.
+          </p>
+
+          <h3 className="font-medium text-slate-900">Navigation</h3>
+          <HelpList
+            items={[
+              "Kartfiler — startsidan med alla kartor",
+              "Verifiera — tillfällig jämförelse utan uppladdning",
+              "Hjälp — den här sidan",
+              "Admin — användar- och systeminställningar (endast administratörer)",
+            ]}
+          />
+        </HelpSection>
+
+        <HelpSection id="roller" title="Roller och behörigheter">
+          <p>Din roll styr vad du kan se och göra i systemet.</p>
+          <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-600">
+                  <th className="px-4 py-3 font-medium">Roll</th>
+                  <th className="px-4 py-3 font-medium">Behörigheter</th>
+                </tr>
+              </thead>
+              <tbody className="text-slate-700">
+                <tr className="border-b border-slate-100">
+                  <td className="px-4 py-3 font-medium">Läsare</td>
+                  <td className="px-4 py-3">
+                    Ladda ner, visa och jämföra <strong>publicerade</strong> versioner. Skapa och
+                    redigera egna banor (privata som standard)
+                  </td>
+                </tr>
+                <tr className="border-b border-slate-100">
+                  <td className="px-4 py-3 font-medium">Redaktör</td>
+                  <td className="px-4 py-3">
+                    Allt läsare kan, plus ladda upp versioner, publicera/avpublicera, se
+                    opublicerade versioner och checka ut/in områden för OCAD-redigering
+                  </td>
+                </tr>
+                <tr>
+                  <td className="px-4 py-3 font-medium">Administratör</td>
+                  <td className="px-4 py-3">
+                    Allt redaktör kan, plus skapa kartfiler, redigera kartnamn, godkänna konton,
+                    avbryta checkouts och hantera systeminställningar
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          {role && (
+            <p className="rounded-lg border border-ifk-blue/20 bg-ifk-blue-pale px-4 py-3 text-ifk-blue">
+              Du är inloggad som <strong>{session?.user.email}</strong> med rollen{" "}
+              <strong>{roleLabel(role)}</strong>.
+            </p>
+          )}
+        </HelpSection>
+
+        <HelpSection id="kartfiler" title="Kartfiler">
+          <p>
+            Startsidan visar alla logiska kartfiler i klubben. Varje rad visar kartnamn, senaste
+            version, uppladdningsdatum, filstorlek och vem som laddade upp.
+          </p>
+          <p>Klicka på ett kartnamn för att öppna kartfilens detaljsida med full versionshistorik.</p>
+          {showAdmin && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+              <p className="font-medium text-slate-900">Administratörer</p>
+              <p className="mt-1">
+                På startsidan kan du skapa nya kartfiler med namn och valfri beskrivning. En
+                kartfil är en logisk behållare — den första versionen laddas upp på kartfilens
+                detaljsida. På kartfilens sida kan du ändra visningsnamnet via knappen{" "}
+                <strong>Redigera namn</strong> bredvid titeln (URL-adressen ändras inte).
+              </p>
+            </div>
+          )}
+        </HelpSection>
+
+        <HelpSection id="versioner" title="Versionshantering">
+          <p>
+            Varje uppladdning av en .ocd-fil skapar en ny version. Tidigare versioner behålls och
+            kan jämföras eller laddas ner.
+          </p>
+          {showEditor ? (
+            <>
+              <h3 className="font-medium text-slate-900">Ladda upp ny version</h3>
+              <HelpList
+                items={[
+                  "Öppna kartfilen och välj OCAD-fil (.ocd) i uppladdningsformuläret",
+                  "Lägg till en valfri kommentar, t.ex. vad som ändrats",
+                  "Efter uppladdning jämförs automatiskt mot föregående version",
+                  "Nya versioner är opublicerade tills du markerar dem som publicerade",
+                  "Administratören får e-postnotis om ny uppladdning (om SMTP är konfigurerat)",
+                ]}
+              />
+            </>
+          ) : (
+            <p>
+              Som läsare ser du publicerade versioner. Oppublicerade versioner visas som{" "}
+              <em>Ej tillgänglig för läsare</em>.
+            </p>
+          )}
+          <h3 className="font-medium text-slate-900">Åtgärder per version</h3>
+          <HelpList
+            items={[
+              "Ladda ner — hämta originalfilen (.ocd)",
+              "Jämför — diff mot föregående version",
+              "Visa karta — interaktiv kartvy i webbläsaren",
+              "Öppna i nytt fönster — helskärmsvy utan sidhuvud",
+            ]}
+          />
+          <h3 className="font-medium text-slate-900">Versionshistorik</h3>
+          <p>
+            Endast den senaste versionen visas som standard. Klicka{" "}
+            <strong>Visa alla tidigare versioner</strong> för att expandera äldre versioner, och{" "}
+            <strong>Dölj äldre versioner</strong> för att fälla ihop listan igen.
+          </p>
+        </HelpSection>
+
+        <HelpSection id="checkout" title="Checka ut och in">
+          <p>
+            Checkout låter redaktörer reservera ett delområde på kartan, ladda ner en utcheckning
+            .ocd-fil för redigering i OCAD, och sedan checka in ändringarna för granskning och
+            integration. Alla inloggade användare ser aktiva checkout-områden som färgade
+            överlagringar med vem som checkat ut och när.
+          </p>
+
+          {showEditor ? (
+            <>
+              <h3 className="font-medium text-slate-900">Checka ut område</h3>
+              <HelpList
+                items={[
+                  "Öppna kartfilen och klicka Checka ut område (knappen bredvid karttiteln)",
+                  "Välj verktyg: rektangel eller polygon",
+                  "Rita området på kartan och bekräfta urvalet",
+                  "Klicka Checka ut område — du kommer till checkout-detaljsidan",
+                  "Ladda ner utcheckning .ocd och redigera i OCAD",
+                  "Överlappande checkouts blockeras — vänta tills ett område frigörs",
+                ]}
+              />
+
+              <h3 className="font-medium text-slate-900">Checka in och integrera</h3>
+              <HelpList
+                items={[
+                  "Ladda upp den redigerade .ocd-filen via Checka in på checkout-sidan",
+                  "Granska utcheckningsdiff mot aktuell version (tillagda, borttagna, ändrade)",
+                  "Bekräfta integration — checkout går till admin-bekräftelse",
+                  "Administratör bekräftar och integrerar — en ny kartversion skapas",
+                ]}
+              />
+            </>
+          ) : (
+            <p>
+              Som läsare kan du se aktiva checkout-områden på kartfilens sida, men du kan inte
+              skapa egna checkouts. Kontakta en redaktör om du behöver redigera kartor.
+            </p>
+          )}
+
+          <h3 className="font-medium text-slate-900">Synliga överlagringar</h3>
+          <p>
+            På kartfilens sida visas färgade ytor för alla aktiva checkouts. Varje färg motsvarar
+            en användare och visar vem som arbetar i området och när checkout skapades. Det hjälper
+            teamet undvika parallella ändringar i samma del av kartan.
+          </p>
+
+          {showAdmin && (
+            <>
+              <h3 className="font-medium text-slate-900">Administratör</h3>
+              <HelpList
+                items={[
+                  "Avbryt checkout (tvinga avbryt) med valfri anledning om arbetet behöver stoppas",
+                  "Bekräfta och integrera efter att användaren bekräftat diff",
+                  "Vid full uppladdning av hel karta varnas du om aktiva checkouts finns",
+                ]}
+              />
+            </>
+          )}
+
+          {showEditor && (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
+              Ladda inte upp en hel karta (.ocd) medan aktiva checkouts pågår om du inte vet vad
+              du gör — det kan störa parallellt arbete. Systemet varnar dig innan uppladdningen
+              genomförs.
+            </p>
+          )}
+
+          <h3 className="font-medium text-slate-900">Påminnelser</h3>
+          <p>
+            Om en checkout är aktiv längre än sju dagar (standard, konfigurerbart av administratör)
+            får checkout-ägaren ett påminnelsemail att checka in eller avbryta arbetet.
+          </p>
+        </HelpSection>
+
+        <HelpSection id="bana" title="Lägg bana">
+          <p>
+            Med <strong>Lägg bana</strong> planerar du orienteringsbanor direkt ovanpå kartans
+            senaste version. Banor sparas separat och påverkar aldrig själva kartfilen — de är
+            overlay-lager som kan delas med andra användare.
+          </p>
+          <p>
+            Öppna banredigeraren via knappen <strong>Lägg bana</strong> på kartfilens sida, eller
+            gå direkt till <code className="rounded bg-slate-100 px-1">/maps/[slug]/bana</code>.
+          </p>
+
+          <h3 className="font-medium text-slate-900">IOF-symboler 700–709</h3>
+          <p>
+            Banor ritas med IOF:s banplaneringssymboler (magenta/lila) enligt ISOM. Tillgängliga
+            symboler:
+          </p>
+          <HelpList
+            items={[
+              "700 Övrig — punkt, linje, yta eller text",
+              "701 Start — triangel (punkt)",
+              "702 Kartutlämning — cirkel (punkt)",
+              "703 Kontroll — cirkel (punkt); banlinjer dras automatiskt mellan start, kontroller och mål",
+              "704 Kontrollnummer — text; nummer sätts automatiskt vid nya kontroller",
+              "705 Banlinje — linje",
+              "706 Mål — dubbelcirkel (punkt)",
+              "707 Markerad sträcka — streckad linje",
+              "708 Förbudslinje — dubbellinje",
+              "709 Förbudsområde — yta med skraffering",
+            ]}
+          />
+
+          <h3 className="font-medium text-slate-900">Rita och redigera</h3>
+          <HelpList
+            items={[
+              "Välj symbol i panelen till höger och verktyg: Rita, Flytta eller Radera",
+              "Punkt — klicka på kartan",
+              "Linje — klicka punkter, dubbelklicka eller Avsluta linje",
+              "Yta — klicka hörn, dubbelklicka nära start eller Avsluta yta",
+              "Text — klicka och skriv i dialogrutan",
+              "Flytta — dra valt objekt; vid kontroll (703) följer kontrollnumret (704) med",
+              "Flytta kontrollnummer (704) separat via verktyget Flytta eller knappen nr i kontrollistan",
+              "Radera — välj objekt och tryck Radera, eller använd verktyget Radera",
+            ]}
+          />
+
+          <h3 className="font-medium text-slate-900">Kontrollista och banlängd</h3>
+          <p>
+            Kontrollistan till höger visar alla kontroller med automatisk numrering. Banlängd
+            (banlängd) beräknas live utifrån banlinjerna mellan start, kontroller och mål, och
+            visas både i verktygsraden och i kontrollistan. Klicka på en kontroll i listan för att
+            zooma in på den.
+          </p>
+
+          <h3 className="font-medium text-slate-900">Spara och dela</h3>
+          <HelpList
+            items={[
+              "Ge banan ett namn och klicka Spara",
+              "Nya banor är privata som standard — kryssa i Gör publik för att dela med alla",
+              "Privata banor syns bara för dig; publika banor kan öppnas av alla godkända användare",
+              "Öppna befintlig bana via listan Öppna bana… eller från banlistan på kartfilens sida",
+              "Ny bana — starta om utan att spara ändringar i aktuell bana",
+              "Radera bana — tar bort banan permanent (ägare eller administratör)",
+            ]}
+          />
+
+          <h3 className="font-medium text-slate-900">Skuggbana</h3>
+          <p>
+            Välj en annan sparad bana som <strong>skuggbana</strong> i rullgardinsmenyn. Den visas
+            halvtransparent ovanpå din aktiva bana så att du kan jämföra två banor visuellt utan att
+            ändra någon av dem.
+          </p>
+
+          <h3 className="font-medium text-slate-900">PDF-export</h3>
+          <p>
+            Efter att banan sparats kan du exportera den som PDF längst ned i banredigeraren:
+          </p>
+          <HelpList
+            items={[
+              "Välj pappersformat: A4 eller A3",
+              "Välj orientering: stående eller liggande",
+              "Välj skala (t.ex. 1:10 000, 1:7 500, 1:5 000)",
+              "Utskriftsområdet centreras automatiskt på banans objekt",
+              "PDF roteras +7° enligt IOF-utskriftsstandard",
+              "Bannamn och banlängd skrivs ut nederst till vänster i magenta",
+            ]}
+          />
+          <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-700">
+            Banor påverkar aldrig kartfilens versioner. Uppdateras kartan laddas banor mot den nya
+            aktuella versionen — kontrollera att banan fortfarande stämmer efter större kartändringar.
+          </p>
+
+          {!showEditor && (
+            <p>
+              Som läsare kan du skapa och redigera egna banor, men inte andras privata banor.
+              Publika banor kan du öppna och kopiera som underlag för egna banor.
+            </p>
+          )}
+        </HelpSection>
+
+        <HelpSection id="publicering" title="Publicering">
+          <p>
+            Nya versioner är <strong>opublicerade</strong> som standard. Det innebär att läsare inte
+            kan se, ladda ner eller jämföra dem förrän en redaktör eller administratör publicerar
+            dem.
+          </p>
+          {showEditor ? (
+            <HelpList
+              items={[
+                "Kryssa i Publicerad i versionshistoriken för att göra versionen synlig för läsare",
+                "Avmarkera för att dölja versionen igen",
+                "Publicera först när kartan är granskad och klar att delas",
+              ]}
+            />
+          ) : (
+            <p>
+              Om du inte ser den senaste versionen kan det bero på att den ännu inte publicerats.
+              Kontakta en redaktör i klubben.
+            </p>
+          )}
+        </HelpSection>
+
+        <HelpSection id="jamfor" title="Jämföra versioner">
+          <p>
+            Jämförelsen visar skillnader mellan två versioner: tillagda, borttagna och ändrade
+            kartobjekt. Du når jämförelsen via knappen <strong>Jämför</strong> i
+            versionshistoriken, via <strong>Jämför senaste två versioner</strong>, eller automatiskt
+            efter uppladdning.
+          </p>
+
+          <h3 className="font-medium text-slate-900">Färgkoder</h3>
+          <HelpList
+            items={[
+              "Grön — tillagda objekt",
+              "Röd — borttagna objekt",
+              "Gul/amber — ändrade objekt",
+            ]}
+          />
+
+          <h3 className="font-medium text-slate-900">Kartvyer</h3>
+          <HelpList
+            items={[
+              "Hela kartan — senaste versionen",
+              "Nya objekt — endast tillagda",
+              "Raderade objekt — endast borttagna",
+              "Ändrade objekt — endast ändrade",
+            ]}
+          />
+          <p>
+            Klicka på kartan eller i ändringslistan för att zooma in på ett objekt och se
+            symbolnummer, typ och position.
+          </p>
+
+          <h3 className="font-medium text-slate-900">Detaljerade ändringar</h3>
+          <p>
+            Fliken visar alla ändringar med filter (alla/tillagda/borttagna/ändrade) och sökning på
+            symbol, namn eller text. Fliken <strong>Ändringar per symbol</strong> summerar antal
+            per symboltyp.
+          </p>
+
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
+            Stora kartfiler kan ta upp till en minut att parsa och jämföra. Sidan uppdateras
+            automatiskt när beräkningen är klar.
+          </p>
+        </HelpSection>
+
+        <HelpSection id="verifiera" title="Verifiera">
+          <p>
+            Sidan <Link href="/verifiera" className="link-primary">Verifiera</Link> låter dig
+            jämföra två .ocd-filer <strong>tillfälligt</strong> utan att spara dem som version i
+            systemet. Använd det när du vill kontrollera ändringar innan du laddar upp.
+          </p>
+          <HelpList
+            items={[
+              "Välj två OCAD-filer och starta jämförelsen",
+              "Samma diff-vy som vid versionsjämförelse: kartlager, ändringslista och per symbol",
+              "Filerna sparas inte — inget sparas i versionshistoriken",
+              "Export till PDF/OCD finns inte i Verifiera",
+            ]}
+          />
+        </HelpSection>
+
+        <HelpSection id="kartvy" title="Visa karta och export">
+          <p>
+            <strong>Visa karta</strong> öppnar en interaktiv kartvy med zoom och panorering. Kartan
+            autoanpassas till hela kartans utbredning vid öppning (<strong>Hela kartan</strong>).
+            Du kan klicka på objekt i jämförelsevyer för att se detaljer.
+          </p>
+
+          <h3 className="font-medium text-slate-900">Zoom och navigering</h3>
+          <HelpList
+            items={[
+              "Knapparna + och − zoomar in respektive ut med 50 % per klick",
+              "Mushjul zoomar också i 50 %-steg",
+              "Hela kartan — återställer vyn så att hela kartan syns",
+              "Dra i kartan för att panorera",
+            ]}
+          />
+
+          <h3 className="font-medium text-slate-900">Min position (GPS)</h3>
+          <p>
+            I kartvyn finns knappen <strong>Min position</strong> om kartan är georefererad och din
+            enhet stödjer GPS. Ett fast sikte (crosshair) visar var du befinner dig på kartan —
+            siktet behåller samma storlek på skärmen oavsett zoomnivå. Statusraden visar
+            positionsnoggrannhet. Använd <strong>Panorera hit</strong> för att centrera kartan på
+            din position, eller <strong>Stoppa GPS</strong> när du är klar.
+          </p>
+          <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-700">
+            GPS kräver georefererad karta och fungerar bäst utomhus med bra mottagning. Om kartan
+            saknar georeferering visas ett felmeddelande.
+          </p>
+
+          <h3 className="font-medium text-slate-900">Öppna i nytt fönster</h3>
+          <p>
+            Knappen <strong>Öppna i nytt fönster</strong> i versionshistoriken öppnar kartvyn i ett
+            separat fönster utan sidhuvud och navigation — bra för presentation, fältarbete eller
+            arbete på en second skärm. GPS och export fungerar även i helskärmsvyn.
+          </p>
+
+          <h3 className="font-medium text-slate-900">Exportera utsnitt</h3>
+          <p>
+            I kartvyn (ej i Verifiera) kan du exportera ett valt område via knappen{" "}
+            <strong>Exportera</strong>:
+          </p>
+          <HelpList
+            items={[
+              "Välj skala: 1:10 000, 1:7 500 eller 1:5 000",
+              "Välj pappersformat: A4 eller A3",
+              "Välj orientering: stående eller liggande",
+              "Välj utdataformat: PDF eller OCAD (.ocd)",
+              "Dra exportramen på kartan till önskat utsnitt innan du exporterar",
+            ]}
+          />
+        </HelpSection>
+
+        {showAdmin && (
+          <HelpSection id="admin" title="Administration">
+            <p>
+              Administratörer hanterar konton och systeminställningar via{" "}
+              <Link href="/admin/users" className="link-primary">Användare</Link> och{" "}
+              <Link href="/admin/settings" className="link-primary">Inställningar</Link>.
+            </p>
+
+            <h3 className="font-medium text-slate-900">Användarhantering</h3>
+            <p>
+              På <Link href="/admin/users" className="link-primary">/admin/users</Link> hanterar du
+              alla konton:
+            </p>
+            <HelpList
+              items={[
+                "Godkänn väntande konton och tilldela roll (läsare, redaktör eller administratör)",
+                "Avvisa konton som inte ska få tillgång",
+                "Skapa konton manuellt med e-post, namn, lösenord och roll",
+                "Nya självregistreringar visas som väntande tills du godkänner dem",
+              ]}
+            />
+
+            <h3 className="font-medium text-slate-900">E-postinställningar (SMTP)</h3>
+            <p>
+              Under <Link href="/admin/settings" className="link-primary">Inställningar</Link>{" "}
+              konfigureras SMTP för systemets e-postnotiser:
+            </p>
+            <HelpList
+              items={[
+                "SMTP-server och port (Gmail: smtp.gmail.com, port 587)",
+                "Gmail-adress som avsändare och Google App-lösenord (krävs vid tvåfaktorsautentisering)",
+                "Admin-notis e-post — mottagare för administrativa meddelanden",
+                "Skicka testmail för att verifiera att inställningarna fungerar",
+                "Värden kan också sättas i .env som reserv vid uppstart",
+              ]}
+            />
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
+              Hamnar mailet i skräppost? Markera som «Inte skräppost» i Gmail, lägg till avsändaren
+              i kontakter, och överväg Google Workspace med egen domän och SPF/DKIM för produktion.
+            </p>
+
+            <h3 className="font-medium text-slate-900">E-postnotiser</h3>
+            <p>När SMTP är konfigurerat skickas automatiskt e-post vid:</p>
+            <HelpList
+              items={[
+                "Ny användarregistrering — till admin, med länk till användarhantering",
+                "Ny kartversion uppladdad — till admin, med karta och versionsinfo",
+                "Ny checkout skapad — till checkout-ägare och admin",
+                "Checkin inskickad — till checkout-ägare och admin, med länk till diff",
+                "Användare bekräftat integration — till admin",
+                "Checkout integrerad — till checkout-ägare och admin",
+                "Checkout avbruten av admin — till checkout-ägare och admin",
+                "Påminnelse om gammal checkout — till checkout-ägare efter 7 dagar (konfigurerbart)",
+              ]}
+            />
+
+            <h3 className="font-medium text-slate-900">Skapa kartfiler</h3>
+            <p>
+              Endast administratörer kan skapa nya logiska kartfiler på startsidan. Redaktörer kan
+              sedan ladda upp versioner till befintliga kartfiler.
+            </p>
+
+            <h3 className="font-medium text-slate-900">Redigera kartnamn</h3>
+            <p>
+              På kartfilens detaljsida kan administratörer klicka <strong>Redigera namn</strong>{" "}
+              bredvid titeln för att ändra visningsnamnet. URL-adressen (slug) ändras inte.
+            </p>
+          </HelpSection>
+        )}
+
+        <HelpSection id="faq" title="Vanliga frågor">
+          <div className="space-y-6">
+            <div>
+              <h3 className="font-medium text-slate-900">Jag kan inte logga in</h3>
+              <p className="mt-1">
+                Kontot kan vänta på godkännande eller ha avvisats. Skapa konto om du saknar konto
+                och kontakta klubbens administratör. Godkända konton kan logga in direkt.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-slate-900">Jag får inga e-postnotiser</h3>
+              <p className="mt-1">
+                SMTP måste vara konfigurerat under Admin → Inställningar (eller i .env).
+                Administratören kan skicka ett testmail för att verifiera. Kontrollera även
+                skräppostmappen.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-slate-900">Vad är checkout?</h3>
+              <p className="mt-1">
+                Checkout låter redaktörer reservera ett kartområde, ladda ner en utcheckning .ocd,
+                redigera i OCAD och checka in ändringarna för granskning. Andra ser ditt område som
+                en färgad överlagring på kartan. Efter diff-granskning bekräftar du integrationen,
+                och en administratör slår ihop ändringarna i en ny kartversion.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-slate-900">Vad är Lägg bana?</h3>
+              <p className="mt-1">
+                Lägg bana är ett verktyg för att rita orienteringsbanor ovanpå kartan med IOF-symboler
+                700–709. Banor sparas separat och påverkar inte kartfilen. Du kan spara privata eller
+                publika banor, jämföra med skuggbana och exportera som PDF.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-slate-900">Påverkar banor kartfilen?</h3>
+              <p className="mt-1">
+                Nej. Banor är overlay-lager som lagras separat. Kartversioner ändras bara via
+                uppladdning eller checkout-integration.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-slate-900">Varför ser jag bara en version i historiken?</h3>
+              <p className="mt-1">
+                Endast den senaste versionen visas som standard. Klicka{" "}
+                <strong>Visa alla tidigare versioner</strong> på kartfilens sida för att se äldre
+                versioner.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-slate-900">GPS fungerar inte i kartvyn</h3>
+              <p className="mt-1">
+                Kartan måste vara georefererad och enheten måste tillåta platsåtkomst i
+                webbläsaren. Prova utomhus med bra mottagning. Knappen Min position visas bara när
+                GPS är tillgängligt.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-slate-900">Jag ser inte den senaste versionen</h3>
+              <p className="mt-1">
+                Som läsare visas bara publicerade versioner. Be en redaktör publicera versionen om
+                den ska vara tillgänglig.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-slate-900">Uppladdningen misslyckades</h3>
+              <p className="mt-1">
+                Kontrollera att filen har ändelsen .ocd och att den inte är korrupt. Mycket stora
+                filer kan ta längre tid — vänta och försök igen vid timeout.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-slate-900">Jämförelsen tar lång tid</h3>
+              <p className="mt-1">
+                Det är normalt för stora kartor. Sidan uppdateras automatiskt när parsning och diff
+                är klar.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-slate-900">Vad är skillnaden mellan Verifiera och Jämför?</h3>
+              <p className="mt-1">
+                Verifiera jämför två filer tillfälligt utan att spara. Jämför i versionshistoriken
+                arbetar med sparade versioner och stödjer export.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-slate-900">Varför varnas jag vid uppladdning?</h3>
+              <p className="mt-1">
+                Om det finns aktiva checkouts varnar systemet innan du laddar upp en hel karta.
+                Full uppladdning kan påverka parallellt arbete i utcheckade områden. Använd checkout
+                och integration om du redigerat via utcheckningsfiler.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-slate-900">Behöver du mer hjälp?</h3>
+              <p className="mt-1">
+                Kontakta klubbens administratör eller kartaansvarig i IFK Mora OK.
+              </p>
+            </div>
+          </div>
+        </HelpSection>
+      </div>
+    </div>
+  );
+}

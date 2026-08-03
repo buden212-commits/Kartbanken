@@ -1,0 +1,61 @@
+import { logAction } from "@/lib/audit";
+import { requireDownload } from "@/lib/auth/api";
+import {
+  canAdminConfirmIntegration,
+  canConfirmCheckoutIntegration,
+} from "@/lib/auth/permissions";
+import { getCheckoutById } from "@/lib/checkout/repository";
+import { prisma } from "@/lib/prisma";
+import { readStoredFile } from "@/lib/storage";
+import { NextResponse } from "next/server";
+
+type RouteParams = { params: Promise<{ slug: string; id: string }> };
+
+export async function GET(_request: Request, { params }: RouteParams) {
+  const session = await requireDownload();
+  if (session instanceof NextResponse) return session;
+
+  const { slug, id } = await params;
+  const map = await prisma.mapFile.findUnique({ where: { slug }, select: { id: true, title: true } });
+  if (!map) {
+    return NextResponse.json({ error: "Kartfil hittades inte" }, { status: 404 });
+  }
+
+  const checkout = await getCheckoutById(map.id, id);
+  if (!checkout) {
+    return NextResponse.json({ error: "Checkout hittades inte" }, { status: 404 });
+  }
+
+  const canDownload =
+    canAdminConfirmIntegration(session.user.role) ||
+    canConfirmCheckoutIntegration(session.user.role, checkout.userId, session.user.id);
+
+  if (!canDownload) {
+    return NextResponse.json({ error: "Ingen behörighet att ladda ner utcheckning" }, { status: 403 });
+  }
+
+  if (!checkout.exportStoragePath) {
+    return NextResponse.json({ error: "Subset-fil saknas" }, { status: 404 });
+  }
+
+  try {
+    const buffer = await readStoredFile(checkout.exportStoragePath);
+    const fileName = `${map.title.replace(/\s+/g, "-")}-checkout-${id.slice(0, 8)}.ocd`;
+
+    await logAction(session.user.id, "DOWNLOAD", "MapCheckout", checkout.id, {
+      mapSlug: slug,
+      kind: "subset",
+    });
+
+    return new NextResponse(new Uint8Array(buffer), {
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"`,
+        "Content-Length": String(buffer.byteLength),
+      },
+    });
+  } catch (err) {
+    console.error("Checkout download failed:", err);
+    return NextResponse.json({ error: "Nedladdning misslyckades" }, { status: 500 });
+  }
+}
