@@ -78,13 +78,13 @@ async function seedExampleMap(adminId: string | null) {
   });
 
   const storagePath = buildMapVersionPath(map.id, 1);
-  await uploadFile(storagePath, buffer);
+  const storedRef = await uploadFile(storagePath, buffer);
 
   await prisma.mapVersion.create({
     data: {
       mapFileId: map.id,
       versionNumber: 1,
-      storagePath,
+      storagePath: storedRef,
       originalFilename: filename,
       fileSizeBytes: buffer.byteLength,
       contentHash: sha256(buffer),

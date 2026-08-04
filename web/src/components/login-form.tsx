@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { getLoginBlockReason } from "@/lib/auth/login-status";
 
 export function LoginForm() {
   const router = useRouter();
@@ -28,7 +29,14 @@ export function LoginForm() {
     setLoading(false);
 
     if (result?.error) {
-      setError("Fel e-post eller lösenord, eller så saknar du åtkomst.");
+      const blockReason = await getLoginBlockReason(email, password);
+      if (blockReason === "pending") {
+        setError("Ditt konto väntar på godkännande av administratör.");
+      } else if (blockReason === "rejected") {
+        setError("Ditt konto har avvisats. Kontakta administratören om du tror att detta är fel.");
+      } else {
+        setError("Fel e-post eller lösenord.");
+      }
       return;
     }
 

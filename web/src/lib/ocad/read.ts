@@ -23,7 +23,11 @@ const { readOcad, ocadToGeoJson } = require("ocad2geojson") as {
   }>;
   ocadToGeoJson: (
     ocadFile: unknown,
-    options?: { applyCrs?: boolean },
+    options?: {
+      applyCrs?: boolean;
+      generateSymbolElements?: boolean;
+      exportHidden?: boolean;
+    },
   ) => { features: Feature<Geometry, { sym: number; objectIndex: number; text?: string }>[] };
 };
 
@@ -39,7 +43,14 @@ export async function parseOcadBuffer(
 ): Promise<OcadParseSummary> {
   const started = Date.now();
   const ocadFile = await readOcad(buffer, { quietWarnings: true });
-  const geojson = ocadToGeoJson(ocadFile, { applyCrs: false });
+  // generateSymbolElements must stay false: decorative symbol parts become GeoJSON
+  // features without objectIndex and would pollute diffs (tens of thousands of fakes).
+  // exportHidden: true so objects the user can edit in OCAD are included in comparisons.
+  const geojson = ocadToGeoJson(ocadFile, {
+    applyCrs: false,
+    generateSymbolElements: false,
+    exportHidden: true,
+  });
   const symbolNames = buildSymbolNameMap(ocadFile.symbols);
   const objects = normalizeFromGeoJson(
     geojson.features as Feature<Geometry, OcadObjectProperties>[],

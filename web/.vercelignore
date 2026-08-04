@@ -1,0 +1,6 @@
+.env
+.env.local
+.env.*.local
+/storage/
+prisma/dev.db
+prisma/dev.db-journal

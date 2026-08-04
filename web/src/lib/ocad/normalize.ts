@@ -88,14 +88,21 @@ export function normalizeFromGeoJson(
   features: Feature<Geometry, OcadObjectProperties>[],
   symbolNames: Map<number, string>,
 ): NormalizedOcadObject[] {
-  return features.map((feature) => {
-    const symbolNumber = feature.properties?.sym ?? 0;
-    const objectIndex = feature.properties?.objectIndex ?? -1;
+  const objects: NormalizedOcadObject[] = [];
+
+  for (const feature of features) {
+    // Skip decorative symbol-element features (no objectIndex / no sym).
+    const objectIndex = feature.properties?.objectIndex;
+    const symbolNumber = feature.properties?.sym;
+    if (objectIndex == null || objectIndex < 0 || symbolNumber == null || symbolNumber === 0) {
+      continue;
+    }
+
     const text = feature.properties?.text?.trim() || undefined;
     const coords = flattenCoordinates(feature.geometry);
     const type = geometryTypeFromFeature(feature);
 
-    return {
+    objects.push({
       objectIndex,
       symbolNumber,
       symbolName: symbolNames.get(symbolNumber) ?? `Symbol ${symbolNumber}`,
@@ -104,8 +111,10 @@ export function normalizeFromGeoJson(
       bbox: computeBbox(coords),
       geometryHash: hashGeometry(feature.geometry, symbolNumber, text),
       text,
-    };
-  });
+    });
+  }
+
+  return objects;
 }
 
 export function summarizeParseResult(input: {

@@ -232,10 +232,11 @@ export function DiffViewClient({
 
       {hasChanges && (
         <>
-          <section className="card">
+          <section>
             <h2 className="text-lg font-medium text-slate-900">Kartvyer</h2>
             <p className="mt-1 text-sm text-slate-600">
-              Välj karta nedan. Klicka på kartan eller i ändringslistan för att se objektinfo.
+              Välj karta nedan. Tryck på kartan eller i ändringslistan för objektinfo. På mobil: dra
+              för att panorera, nyp för att zooma.
             </p>
 
             {!layerPaths && (
@@ -250,7 +251,7 @@ export function DiffViewClient({
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
-                  className={`rounded-lg px-4 py-2 text-sm transition ${
+                  className={`rounded-lg px-3 py-2 text-sm transition sm:px-4 ${
                     activeTab === tab.id
                       ? "bg-ifk-blue text-white"
                       : "border border-slate-300 text-slate-700 hover:border-ifk-blue hover:text-ifk-blue"

@@ -1,0 +1,302 @@
+"use client";
+
+import Link from "next/link";
+import { useState } from "react";
+import { formatBytes, formatDateOnly, formatTimeOnly } from "@/lib/format";
+import { VersionHistoryActions } from "@/components/version-history-actions";
+import { VersionPublishToggle } from "@/components/version-publish-toggle";
+
+export type VersionHistoryItem = {
+  id: string;
+  versionNumber: number;
+  originalFilename: string;
+  uploadedAt: string;
+  fileSizeBytes: number;
+  comment: string | null;
+  parseStatus: string;
+  objectCount: number | null;
+  isPublished: boolean;
+  uploaderLabel: string;
+  previousVersionId?: string;
+  canView: boolean;
+};
+
+type Props = {
+  mapSlug: string;
+  versions: VersionHistoryItem[];
+  canManagePublication: boolean;
+  canDelete?: boolean;
+};
+
+function parseLabel(version: VersionHistoryItem): string {
+  if (version.parseStatus === "OK") {
+    return `${version.objectCount?.toLocaleString("sv-SE") ?? "?"} objekt`;
+  }
+  if (version.parseStatus === "PROCESSING") return "Parsar…";
+  if (version.parseStatus === "ERROR") return "Parsningsfel";
+  return "Väntar";
+}
+
+const toggleBtn =
+  "mt-3 w-full rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-100";
+
+function VersionCard({
+  version,
+  mapSlug,
+  canManagePublication,
+  canDelete,
+}: {
+  version: VersionHistoryItem;
+  mapSlug: string;
+  canManagePublication: boolean;
+  canDelete: boolean;
+}) {
+  return (
+    <li className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-mono text-sm font-medium text-slate-800">
+            v{version.versionNumber}
+          </p>
+          <p className="mt-1 truncate text-sm" title={version.originalFilename}>
+            {version.canView ? (
+              <Link
+                href={`/maps/${mapSlug}/versions/${version.id}`}
+                className="link-primary"
+              >
+                {version.originalFilename}
+              </Link>
+            ) : (
+              <span className="text-slate-700">{version.originalFilename}</span>
+            )}
+          </p>
+        </div>
+        <p className="shrink-0 text-xs text-slate-500">{parseLabel(version)}</p>
+      </div>
+
+      <div className="mt-3">
+        <VersionPublishToggle
+          mapSlug={mapSlug}
+          versionId={version.id}
+          initialPublished={version.isPublished}
+          canManage={canManagePublication}
+        />
+      </div>
+
+      <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-slate-600">
+        <div>
+          <dt className="text-slate-400">Datum</dt>
+          <dd className="mt-0.5" title={formatTimeOnly(version.uploadedAt)}>
+            {formatDateOnly(version.uploadedAt)}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-slate-400">Storlek</dt>
+          <dd className="mt-0.5">{formatBytes(version.fileSizeBytes)}</dd>
+        </div>
+        <div>
+          <dt className="text-slate-400">Uppladdare</dt>
+          <dd className="mt-0.5 truncate">{version.uploaderLabel}</dd>
+        </div>
+        <div className="col-span-2">
+          <dt className="text-slate-400">Kommentar</dt>
+          <dd className="mt-0.5 whitespace-pre-wrap break-words">{version.comment ?? "—"}</dd>
+        </div>
+      </dl>
+
+      <div className="mt-4">
+        <VersionHistoryActions
+          mapSlug={mapSlug}
+          versionId={version.id}
+          versionNumber={version.versionNumber}
+          previousVersionId={version.previousVersionId}
+          canView={version.canView}
+          canDelete={canDelete}
+        />
+      </div>
+    </li>
+  );
+}
+
+function VersionRow({
+  version,
+  mapSlug,
+  canManagePublication,
+  canDelete,
+}: {
+  version: VersionHistoryItem;
+  mapSlug: string;
+  canManagePublication: boolean;
+  canDelete: boolean;
+}) {
+  return (
+    <tr className="border-b border-slate-100 last:border-0">
+      <td className="px-2 py-2.5 font-mono text-slate-700">v{version.versionNumber}</td>
+      <td className="px-2 py-2.5" title={version.originalFilename}>
+        {version.canView ? (
+          <Link
+            href={`/maps/${mapSlug}/versions/${version.id}`}
+            className="link-primary block truncate"
+          >
+            {version.originalFilename}
+          </Link>
+        ) : (
+          <span className="block truncate text-slate-700">{version.originalFilename}</span>
+        )}
+      </td>
+      <td className="whitespace-nowrap px-2 py-2.5 text-slate-600" title={formatTimeOnly(version.uploadedAt)}>
+        {formatDateOnly(version.uploadedAt)}
+      </td>
+      <td className="whitespace-nowrap px-2 py-2.5 text-slate-600">
+        {formatBytes(version.fileSizeBytes)}
+      </td>
+      <td className="px-2 py-2.5" title={version.uploaderLabel}>
+        <span className="block truncate text-slate-600">{version.uploaderLabel}</span>
+      </td>
+      <td className="px-2 py-2.5" title={version.comment ?? undefined}>
+        <span className="line-clamp-2 break-words text-slate-600">
+          {version.comment ?? "—"}
+        </span>
+      </td>
+      <td className="whitespace-nowrap px-2 py-2.5 text-xs text-slate-500">
+        {parseLabel(version)}
+      </td>
+      <td className="px-2 py-2.5">
+        <VersionPublishToggle
+          mapSlug={mapSlug}
+          versionId={version.id}
+          initialPublished={version.isPublished}
+          canManage={canManagePublication}
+          compact
+        />
+      </td>
+      <td className="px-2 py-2.5">
+        <VersionHistoryActions
+          mapSlug={mapSlug}
+          versionId={version.id}
+          versionNumber={version.versionNumber}
+          previousVersionId={version.previousVersionId}
+          canView={version.canView}
+          canDelete={canDelete}
+        />
+      </td>
+    </tr>
+  );
+}
+
+export function VersionHistoryList({
+  mapSlug,
+  versions,
+  canManagePublication,
+  canDelete = false,
+}: Props) {
+  const [showOlder, setShowOlder] = useState(false);
+
+  const latestVersion = versions[0];
+  const olderVersions = versions.slice(1);
+  const olderCount = olderVersions.length;
+
+  if (!latestVersion) return null;
+
+  return (
+    <>
+      <ul className="mt-4 space-y-3 md:hidden">
+        <VersionCard
+          version={latestVersion}
+          mapSlug={mapSlug}
+          canManagePublication={canManagePublication}
+          canDelete={canDelete}
+        />
+        {showOlder &&
+          olderVersions.map((version) => (
+            <VersionCard
+              key={version.id}
+              version={version}
+              mapSlug={mapSlug}
+              canManagePublication={canManagePublication}
+              canDelete={canDelete}
+            />
+          ))}
+        {olderCount > 0 && (
+          <li>
+            <button
+              type="button"
+              className={toggleBtn}
+              onClick={() => setShowOlder((value) => !value)}
+              aria-expanded={showOlder}
+            >
+              {showOlder
+                ? "Dölj äldre versioner"
+                : `Visa alla tidigare versioner (${olderCount} st)`}
+            </button>
+          </li>
+        )}
+      </ul>
+
+      <div className="mt-4 hidden rounded-xl border border-slate-200 bg-white shadow-sm md:block">
+        <table className="w-full table-fixed text-sm">
+          <colgroup>
+            <col className="w-12" />
+            <col className="w-[14%]" />
+            <col className="w-[11%]" />
+            <col className="w-[8%]" />
+            <col className="w-[12%]" />
+            <col />
+            <col className="w-[9%]" />
+            <col className="w-10" />
+            <col className="w-[8rem]" />
+          </colgroup>
+          <thead>
+            <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-500">
+              <th className="px-2 pb-3 pt-4 font-medium">Version</th>
+              <th className="px-2 pb-3 pt-4 font-medium">Filnamn</th>
+              <th className="px-2 pb-3 pt-4 font-medium">Datum</th>
+              <th className="px-2 pb-3 pt-4 font-medium">Storlek</th>
+              <th className="px-2 pb-3 pt-4 font-medium">Uppladdare</th>
+              <th className="px-2 pb-3 pt-4 font-medium">Kommentar</th>
+              <th className="px-2 pb-3 pt-4 font-medium">Status</th>
+              <th className="px-2 pb-3 pt-4 font-medium" title="Publicerad">
+                Pub.
+              </th>
+              <th className="px-2 pb-3 pt-4 font-medium">Åtgärder</th>
+            </tr>
+          </thead>
+          <tbody>
+            <VersionRow
+              version={latestVersion}
+              mapSlug={mapSlug}
+              canManagePublication={canManagePublication}
+              canDelete={canDelete}
+            />
+            {showOlder &&
+              olderVersions.map((version) => (
+                <VersionRow
+                  key={version.id}
+                  version={version}
+                  mapSlug={mapSlug}
+                  canManagePublication={canManagePublication}
+                  canDelete={canDelete}
+                />
+              ))}
+            {olderCount > 0 && (
+              <tr>
+                <td colSpan={9} className="border-t border-slate-100 px-2 py-3">
+                  <button
+                    type="button"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-100"
+                    onClick={() => setShowOlder((value) => !value)}
+                    aria-expanded={showOlder}
+                  >
+                    {showOlder
+                      ? "Dölj äldre versioner"
+                      : `Visa alla tidigare versioner (${olderCount} st)`}
+                  </button>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}

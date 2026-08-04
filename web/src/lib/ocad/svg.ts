@@ -1,6 +1,11 @@
 import { createRequire } from "module";
 import { uploadFile } from "@/lib/storage";
 import {
+  extractOcadCrsInfo,
+  serializeOcadCrs,
+  type OcadCrsInfo,
+} from "./crs";
+import {
   collectSymbolLayersForRender,
   extractOcadLayerTree,
   flattenOcadLayers,
@@ -10,6 +15,7 @@ import {
   type OcadFileWithLayers,
   type OcadMapLayer,
 } from "./layers";
+import { extractKartramFromOcad, serializeKartramForSvg } from "./kartram";
 import type { SvgBounds } from "./svg-utils";
 
 const require = createRequire(import.meta.url);
@@ -34,7 +40,14 @@ const { DOMImplementation, XMLSerializer } = require("xmldom") as {
 type OcadFile = OcadFileWithLayers & {
   objects: Array<{ objIndex: { _index: number }; sym: number }>;
   getBounds: () => number[];
-  getCrs: () => { scale: number };
+  getCrs: () => {
+    easting?: number;
+    northing?: number;
+    scale?: number;
+    grivation?: number;
+    code?: number;
+    name?: string | null;
+  };
   header: { version: number };
 };
 
@@ -43,9 +56,49 @@ function mapScaleFromOcad(ocadFile: OcadFile): number {
   return typeof scale === "number" && Number.isFinite(scale) && scale > 0 ? scale : 15000;
 }
 
+function crsFromOcad(ocadFile: OcadFile): OcadCrsInfo {
+  return (
+    extractOcadCrsInfo(ocadFile.getCrs()) ?? {
+      easting: 0,
+      northing: 0,
+      scale: mapScaleFromOcad(ocadFile),
+      grivation: 0,
+      epsg: 0,
+      name: null,
+    }
+  );
+}
+
 function applySvgMetadata(svgElement: Element, ocadFile: OcadFile): void {
-  svgElement.setAttribute("data-ocad-scale", String(mapScaleFromOcad(ocadFile)));
+  const crs = crsFromOcad(ocadFile);
+  svgElement.setAttribute("data-ocad-scale", String(crs.scale));
   svgElement.setAttribute("data-ocad-version", String(ocadFile.header.version));
+  svgElement.setAttribute("data-ocad-crs", serializeOcadCrs(crs));
+  applyKartramMetadata(svgElement, ocadFile);
+}
+
+function applyKartramMetadata(svgElement: Element, ocadFile: OcadFile): void {
+  const rawBounds = ocadFile.getBounds();
+  if (!rawBounds || rawBounds.length < 4) return;
+  const yFlip = rawBounds[1] + rawBounds[3];
+  const kartramInfo = extractKartramFromOcad(
+    ocadFile as Parameters<typeof extractKartramFromOcad>[0],
+    yFlip,
+  );
+  if (!kartramInfo) return;
+  svgElement.setAttribute("data-ocad-kartram", serializeKartramForSvg(kartramInfo));
+}
+
+function kartramAttributeForOcad(ocadFile: OcadFile): string {
+  const rawBounds = ocadFile.getBounds();
+  if (!rawBounds || rawBounds.length < 4) return "";
+  const yFlip = rawBounds[1] + rawBounds[3];
+  const kartramInfo = extractKartramFromOcad(
+    ocadFile as Parameters<typeof extractKartramFromOcad>[0],
+    yFlip,
+  );
+  if (!kartramInfo) return "";
+  return ` data-ocad-kartram="${escapeXmlAttr(serializeKartramForSvg(kartramInfo))}"`;
 }
 
 function boundsFromOcad(ocadFile: OcadFile): SvgBounds | null {
@@ -104,11 +157,20 @@ export function injectOcadVersionAttribute(svgText: string, version: number): st
   return svgText.replace(/<svg/i, `<svg data-ocad-version="${version}"`);
 }
 
+export function injectOcadCrsAttribute(svgText: string, crs: OcadCrsInfo): string {
+  const encoded = escapeXmlAttr(serializeOcadCrs(crs));
+  if (/data-ocad-crs=["']/i.test(svgText)) {
+    return svgText.replace(/data-ocad-crs=["'][^"']*["']/i, `data-ocad-crs="${encoded}"`);
+  }
+  return svgText.replace(/<svg/i, `<svg data-ocad-crs="${encoded}"`);
+}
+
 export function svgBufferHasMetadata(buffer: Buffer): boolean {
   const head = buffer.subarray(0, Math.min(buffer.length, 4096)).toString("utf-8");
   return (
     /data-ocad-scale=["']/i.test(head) &&
-    /data-ocad-version=["']/i.test(head)
+    /data-ocad-version=["']/i.test(head) &&
+    /data-ocad-crs=["']/i.test(head)
   );
 }
 
@@ -255,16 +317,19 @@ export async function generateOcadSvgLayered(buffer: Buffer): Promise<{
     ? `${bounds.minX} ${bounds.minY} ${bounds.maxX - bounds.minX} ${bounds.maxY - bounds.minY}`
     : "0 0 100 100";
 
+  const crs = crsFromOcad(ocadFile);
+  const kartramAttr = kartramAttributeForOcad(ocadFile);
   const svg = [
     `<svg xmlns="http://www.w3.org/2000/svg"`,
     `viewBox="${viewBox}"`,
     `width="100%" height="100%"`,
     `preserveAspectRatio="xMidYMid meet"`,
     `fill="transparent"`,
-    `data-ocad-scale="${mapScaleFromOcad(ocadFile)}"`,
+    `data-ocad-scale="${crs.scale}"`,
     `data-ocad-version="${ocadFile.header.version}"`,
+    `data-ocad-crs="${escapeXmlAttr(serializeOcadCrs(crs))}"`,
     `data-ocad-layers-version="${OCAD_LAYERS_FORMAT_VERSION}"`,
-    `data-ocad-layers="${layersJson}">`,
+    `data-ocad-layers="${layersJson}"${kartramAttr}>`,
     defsMarkup ? `<defs>${defsMarkup}</defs>` : "",
     `<g transform="${rootTransform}">`,
     layerMarkupParts.join(""),
@@ -305,20 +370,23 @@ async function generateOcadSvgFlat(
 
 export async function getOcadMetadata(
   buffer: Buffer,
-): Promise<{ scale: number; version: number }> {
+): Promise<{ scale: number; version: number; crs: OcadCrsInfo }> {
   const ocadFile = (await readOcad(buffer, { quietWarnings: true })) as OcadFile;
+  const crs = crsFromOcad(ocadFile);
   return {
-    scale: mapScaleFromOcad(ocadFile),
+    scale: crs.scale,
     version: ocadFile.header.version,
+    crs,
   };
 }
 
 export function injectOcadMetadataAttributes(
   svgText: string,
-  metadata: { scale: number; version: number },
+  metadata: { scale: number; version: number; crs: OcadCrsInfo },
 ): string {
   let result = injectOcadScaleAttribute(svgText, metadata.scale);
   result = injectOcadVersionAttribute(result, metadata.version);
+  result = injectOcadCrsAttribute(result, metadata.crs);
   return result;
 }
 

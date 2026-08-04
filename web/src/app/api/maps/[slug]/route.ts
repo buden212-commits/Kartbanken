@@ -1,4 +1,6 @@
-import { requireSession } from "@/lib/auth/api";
+import { logAction } from "@/lib/audit";
+import { requireAdmin, requireSession } from "@/lib/auth/api";
+import { deleteMapFile } from "@/lib/maps/delete-map";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -58,4 +60,80 @@ export async function GET(_request: Request, { params }: RouteParams) {
       };
     }),
   });
+}
+
+export async function PATCH(request: Request, { params }: RouteParams) {
+  const session = await requireAdmin();
+  if (session instanceof NextResponse) return session;
+
+  const { slug } = await params;
+
+  let body: { title?: string };
+  try {
+    body = (await request.json()) as { title?: string };
+  } catch {
+    return NextResponse.json({ error: "Ogiltig JSON" }, { status: 400 });
+  }
+
+  const title = body.title?.trim();
+  if (!title) {
+    return NextResponse.json({ error: "Titel krävs" }, { status: 400 });
+  }
+
+  const map = await prisma.mapFile.findUnique({ where: { slug } });
+  if (!map) {
+    return NextResponse.json({ error: "Kartfil hittades inte" }, { status: 404 });
+  }
+
+  if (title === map.title) {
+    return NextResponse.json({
+      id: map.id,
+      slug: map.slug,
+      title: map.title,
+      description: map.description,
+    });
+  }
+
+  const updated = await prisma.mapFile.update({
+    where: { id: map.id },
+    data: { title },
+    select: { id: true, slug: true, title: true, description: true },
+  });
+
+  await logAction(session.user.id, "MAP_RENAMED", "MapFile", map.id, {
+    slug: map.slug,
+    previousTitle: map.title,
+    newTitle: title,
+  });
+
+  return NextResponse.json(updated);
+}
+
+export async function DELETE(_request: Request, { params }: RouteParams) {
+  const session = await requireAdmin();
+  if (session instanceof NextResponse) return session;
+
+  const { slug } = await params;
+
+  const map = await prisma.mapFile.findUnique({
+    where: { slug },
+    select: { id: true },
+  });
+
+  if (!map) {
+    return NextResponse.json({ error: "Kartfil hittades inte" }, { status: 404 });
+  }
+
+  const result = await deleteMapFile(map.id);
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: result.status });
+  }
+
+  await logAction(session.user.id, "MAP_DELETED", "MapFile", map.id, {
+    slug: result.slug,
+    title: result.title,
+    versionCount: result.versionCount,
+  });
+
+  return NextResponse.json({ ok: true });
 }

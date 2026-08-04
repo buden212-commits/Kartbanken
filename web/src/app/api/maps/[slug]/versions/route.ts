@@ -1,11 +1,14 @@
 import { logAction } from "@/lib/audit";
 import { requireUpload } from "@/lib/auth/api";
+import { notifyAdminOfNewUpload } from "@/lib/email";
+import { runAfterResponse } from "@/lib/background";
 import { sha256 } from "@/lib/hash";
 import { processVersionAfterUpload } from "@/lib/ocad/process-version";
 import { prisma } from "@/lib/prisma";
 import {
   buildMapVersionPath,
   deleteFile,
+  shouldUseClientUpload,
   uploadFile,
   validateOcdUpload,
 } from "@/lib/storage";
@@ -34,7 +37,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     return NextResponse.json(
       {
         error:
-          "Kunde inte läsa uppladdningen. Filen kan vara för stor — OCAD-filer på 20+ MB kräver att servergränsen är höjd (max 100 MB).",
+          "Kunde inte läsa uppladdningen. Stora filer (>4 MB) kräver Blob client upload via upload-init.",
       },
       { status: 400 },
     );
@@ -50,6 +53,16 @@ export async function POST(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: validation.error }, { status: 400 });
   }
 
+  if (shouldUseClientUpload(file.size)) {
+    return NextResponse.json(
+      {
+        error: "Filen är för stor för direktuppladdning. Använd upload-init/upload-complete.",
+        clientUploadRequired: true,
+      },
+      { status: 413 },
+    );
+  }
+
   const comment = formData.get("comment")?.toString().trim() || null;
   const buffer = Buffer.from(await file.arrayBuffer());
   const contentHash = sha256(buffer);
@@ -63,13 +76,13 @@ export async function POST(request: Request, { params }: RouteParams) {
   const storagePath = buildMapVersionPath(map.id, versionNumber);
 
   try {
-    await uploadFile(storagePath, buffer);
+    const storedRef = await uploadFile(storagePath, buffer);
 
     const version = await prisma.mapVersion.create({
       data: {
         mapFileId: map.id,
         versionNumber,
-        storagePath,
+        storagePath: storedRef,
         originalFilename: file.name,
         fileSizeBytes: file.size,
         contentHash,
@@ -85,10 +98,23 @@ export async function POST(request: Request, { params }: RouteParams) {
       filename: file.name,
     });
 
-    // Parsning + diff mot föregående version körs i bakgrunden
-    void processVersionAfterUpload(map.id, version.id, latest?.id ?? null).catch(
-      console.error,
+    runAfterResponse(() =>
+      processVersionAfterUpload(map.id, version.id, latest?.id ?? null),
     );
+
+    void notifyAdminOfNewUpload({
+      uploader: { name: session.user.name, email: session.user.email },
+      map: { title: map.title, slug: map.slug },
+      version: {
+        id: version.id,
+        versionNumber: version.versionNumber,
+        originalFilename: file.name,
+        comment,
+        storagePath: storedRef,
+      },
+    }).catch((err) => {
+      console.error("[email] Failed to send upload notification:", err);
+    });
 
     return NextResponse.json(
       {

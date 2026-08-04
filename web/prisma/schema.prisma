@@ -3,24 +3,31 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  emailVerified DateTime?
-  image         String?
-  passwordHash  String?
-  role          String    @default("PENDING")
-  approvedAt    DateTime?
-  approvedById  String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  accounts      Account[]
-  sessions      Session[]
+  id                 String        @id @default(cuid())
+  name               String?
+  email              String        @unique
+  emailVerified      DateTime?
+  image              String?
+  passwordHash       String?
+  role               String        @default("PENDING")
+  approvedAt         DateTime?
+  approvedById       String?
+  lastLoginAt        DateTime?
+  receiveNotifications Boolean       @default(false)
+  receiveOcdAttachment Boolean       @default(false)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  accounts           Account[]
+  sessions           Session[]
+  checkouts          MapCheckout[] @relation("CheckoutUser")
+  cancelledCheckouts MapCheckout[] @relation("CheckoutCancelledBy")
+  courses            Course[]
 }
 
 model Account {
@@ -58,13 +65,15 @@ model VerificationToken {
 }
 
 model MapFile {
-  id          String       @id @default(cuid())
-  slug        String       @unique
+  id          String        @id @default(cuid())
+  slug        String        @unique
   title       String
   description String?
-  createdAt   DateTime     @default(now())
+  createdAt   DateTime      @default(now())
   createdById String?
   versions    MapVersion[]
+  checkouts   MapCheckout[]
+  courses     Course[]
 }
 
 model MapVersion {
@@ -79,13 +88,48 @@ model MapVersion {
   uploadedAt       DateTime @default(now())
   comment          String?
   isRecommended    Boolean  @default(false)
+  isPublished      Boolean  @default(false)
   previewSvgPath   String?
   objectCount      Int?
   parseStatus      String   @default("PENDING")
   parseError       String?
-  mapFile          MapFile  @relation(fields: [mapFileId], references: [id], onDelete: Cascade)
+  mapFile               MapFile       @relation(fields: [mapFileId], references: [id], onDelete: Cascade)
+  checkoutsAsBase       MapCheckout[] @relation("CheckoutBaseVersion")
+  checkoutsAsIntegrated MapCheckout[] @relation("CheckoutIntegratedVersion")
 
   @@unique([mapFileId, versionNumber])
+}
+
+model MapCheckout {
+  id                  String    @id @default(cuid())
+  mapFileId           String
+  baseVersionId       String
+  userId              String
+  status              String    @default("ACTIVE")
+  selectionType       String
+  selectionJson       String
+  exportStoragePath   String?
+  checkinStoragePath  String?
+  diffSummaryJson     String?
+  userConfirmedAt     DateTime?
+  adminConfirmedAt    DateTime?
+  integratedAt        DateTime?
+  integratedVersionId String?
+  cancelledAt         DateTime?
+  cancelledById       String?
+  cancelReason        String?
+  integrationComment  String?
+  reminderSentAt      DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  mapFile           MapFile     @relation(fields: [mapFileId], references: [id], onDelete: Cascade)
+  baseVersion       MapVersion  @relation("CheckoutBaseVersion", fields: [baseVersionId], references: [id])
+  user              User        @relation("CheckoutUser", fields: [userId], references: [id])
+  integratedVersion MapVersion? @relation("CheckoutIntegratedVersion", fields: [integratedVersionId], references: [id])
+  cancelledBy       User?       @relation("CheckoutCancelledBy", fields: [cancelledById], references: [id])
+
+  @@index([mapFileId, status])
 }
 
 model VersionDiff {
@@ -109,5 +153,46 @@ model AuditLog {
   targetType String?
   targetId   String?
   metadata   String?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+}
+
+model AppSettings {
+  id                     String   @id @default("default")
+  smtpHost               String?
+  smtpPort               Int?
+  smtpUser               String?
+  smtpPassEncrypted      String?
+  adminNotificationEmail String?
+  enabled                Boolean  @default(false)
+  updatedAt              DateTime @updatedAt
+}
+
+model Course {
+  id          String         @id @default(cuid())
+  mapFileId   String
+  name        String
+  createdById String
+  isPublic    Boolean        @default(false)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  mapFile     MapFile        @relation(fields: [mapFileId], references: [id], onDelete: Cascade)
+  createdBy   User           @relation(fields: [createdById], references: [id])
+  objects     CourseObject[]
+
+  @@index([mapFileId, isPublic])
+}
+
+model CourseObject {
+  id           String   @id @default(cuid())
+  courseId     String
+  symbolNr     Int
+  objectType   String
+  geometryJson String
+  textContent  String?
+  sortOrder    Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  course       Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@index([courseId, sortOrder])
 }

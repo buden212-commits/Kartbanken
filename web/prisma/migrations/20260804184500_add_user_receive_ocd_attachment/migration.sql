@@ -1,0 +1,1 @@
+ALTER TABLE "User" ADD COLUMN "receiveOcdAttachment" BOOLEAN NOT NULL DEFAULT false;

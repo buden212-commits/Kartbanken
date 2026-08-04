@@ -1,5 +1,6 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import { logAction } from "@/lib/audit";
 import { Role, type Role as RoleType } from "@/lib/roles";
 import { verifyPassword } from "@/lib/auth/password";
 import { prisma } from "@/lib/prisma";
@@ -23,6 +24,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const valid = await verifyPassword(password, user.passwordHash);
         if (!valid) return null;
+
+        if (user.role === Role.PENDING || user.role === Role.REJECTED) {
+          return null;
+        }
+
+        const loggedInAt = new Date();
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { lastLoginAt: loggedInAt },
+        });
+        await logAction(user.id, "LOGIN", "User", user.id, {
+          email: user.email,
+          at: loggedInAt.toISOString(),
+        });
 
         return {
           id: user.id,

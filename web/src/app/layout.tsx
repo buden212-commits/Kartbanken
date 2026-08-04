@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { SessionProvider } from "next-auth/react";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AppHeader } from "@/components/app-header";
@@ -19,20 +20,25 @@ export const metadata: Metadata = {
   description: "Versionshantering och OCD-jämförelse för orienteringskartor",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const pathname = (await headers()).get("x-pathname") ?? "";
+  const isMapViewer = /\/maps\/[^/]+\/versions\/[^/]+\/viewer/.test(pathname);
+
   return (
     <html
       lang="sv"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col bg-background text-slate-900">
+      <body
+        className={`${isMapViewer ? "h-full" : "flex min-h-full flex-col"} bg-background text-slate-900`}
+      >
         <SessionProvider>
-          <AppHeader />
-          <main className="flex-1">{children}</main>
+          {!isMapViewer && <AppHeader />}
+          <main className={isMapViewer ? "h-full" : "flex-1"}>{children}</main>
         </SessionProvider>
       </body>
     </html>

@@ -47,6 +47,14 @@ export function buildTempDiffLayerPath(jobId: string, layer: DiffLayerKind): str
   return `temp-compare/${jobId}/layers/${layer}.svg`;
 }
 
+export function buildCheckoutDiffLayerPath(
+  mapFileId: string,
+  checkoutId: string,
+  layer: DiffLayerKind,
+): string {
+  return `maps/${mapFileId}/checkout-diff/${checkoutId}/${layer}.svg`;
+}
+
 export async function generateDiffLayerSvgs(
   bufferA: Buffer,
   bufferB: Buffer,

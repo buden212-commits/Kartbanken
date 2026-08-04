@@ -1,28 +1,52 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { canUpload } from "@/lib/auth/permissions";
-import { formatBytes, formatDate } from "@/lib/format";
+import { canAdmin, canCheckout, canCreateCourse, canUpload } from "@/lib/auth/permissions";
+import { MapTitleEditor } from "@/components/map-title-editor";
+import { findActiveCheckoutsForMap, getHeadVersionId, serializeCheckoutResponse } from "@/lib/checkout/repository";
+import { listCoursesForMap, serializeCourseSummary } from "@/lib/course/repository";
+import { versionVisibilityFilter } from "@/lib/maps/version-query";
+import { canViewVersion } from "@/lib/auth/version-access";
 import { prisma } from "@/lib/prisma";
 import { UploadVersionForm } from "@/components/upload-version-form";
+import { VersionHistoryList } from "@/components/version-history-list";
+import { CheckoutAreaCta } from "@/components/checkout-area-cta";
+import { CheckoutListPanel } from "@/components/checkout-list-panel";
+import { CheckoutOverviewMap } from "@/components/checkout-overview-map";
+import { CourseListPanel } from "@/components/course/course-list-panel";
+import { Role } from "@/lib/roles";
 
 type PageProps = { params: Promise<{ slug: string }> };
 
 export default async function MapDetailPage({ params }: PageProps) {
   const { slug } = await params;
   const session = await auth();
-  const canUploadVersion = session && canUpload(session.user.role);
+  const role = session?.user.role;
+  const canUploadVersion = !!(session && role && canUpload(role));
+  const canManagePublication = canUploadVersion;
+  const canCreateCheckout = !!(session && role && canCheckout(role));
+  const isAdmin = !!(session && role && canAdmin(role));
 
   const map = await prisma.mapFile.findUnique({
     where: { slug },
     include: {
       versions: {
+        where: versionVisibilityFilter(role),
         orderBy: { versionNumber: "desc" },
       },
     },
   });
 
   if (!map) notFound();
+
+  const activeCheckouts = await findActiveCheckoutsForMap(map.id);
+  const headVersionId = await getHeadVersionId(map.id);
+  const checkoutListItems = activeCheckouts.map(serializeCheckoutResponse);
+
+  const courseList =
+    session?.user?.id && role && canCreateCourse(role)
+      ? (await listCoursesForMap(map.id, session.user.id)).map(serializeCourseSummary)
+      : [];
 
   const uploaderIds = [
     ...new Set(map.versions.map((v) => v.uploadedById).filter(Boolean)),
@@ -35,36 +59,87 @@ export default async function MapDetailPage({ params }: PageProps) {
     : [];
   const uploaderMap = new Map(uploaders.map((u) => [u.id, u]));
 
+  const versionHistoryItems = map.versions.map((version, index) => {
+    const uploader = version.uploadedById ? uploaderMap.get(version.uploadedById) : null;
+    return {
+      id: version.id,
+      versionNumber: version.versionNumber,
+      originalFilename: version.originalFilename,
+      uploadedAt: version.uploadedAt.toISOString(),
+      fileSizeBytes: Number(version.fileSizeBytes),
+      comment: version.comment,
+      parseStatus: version.parseStatus,
+      objectCount: version.objectCount,
+      isPublished: version.isPublished,
+      uploaderLabel: uploader?.name ?? uploader?.email ?? "—",
+      previousVersionId: map.versions[index + 1]?.id,
+      canView: role ? canViewVersion(role, version.isPublished) : false,
+    };
+  });
+
+  const publishedVersions = map.versions.filter((v) => v.isPublished);
+  const latestComparePair =
+    publishedVersions.length >= 2
+      ? [publishedVersions[1]!, publishedVersions[0]!]
+      : canManagePublication && map.versions.length >= 2
+        ? [map.versions[1]!, map.versions[0]!]
+        : null;
+
   return (
-    <div className="mx-auto max-w-5xl px-6 py-12">
+    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
       <Link href="/" className="link-muted text-sm">
-        ← Alla kartfiler
+        ← Alla områden
       </Link>
 
-      <h1 className="mt-4 text-3xl font-semibold text-slate-900">{map.title}</h1>
-      {map.description && <p className="mt-2 text-slate-600">{map.description}</p>}
+      <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <MapTitleEditor
+            mapSlug={map.slug}
+            initialTitle={map.title}
+            canEdit={isAdmin}
+            showDelete={isAdmin}
+          />
+          {map.description && <p className="mt-2 text-slate-600">{map.description}</p>}
+        </div>
+        {canCreateCheckout && (
+          <CheckoutAreaCta
+            mapSlug={map.slug}
+            canCheckout={canCreateCheckout}
+            headVersionId={headVersionId}
+          />
+        )}
+      </div>
 
       {canUploadVersion && (
         <section className="card mt-8">
           <h2 className="text-lg font-medium text-slate-900">Ladda upp ny version</h2>
           <p className="mt-1 text-sm text-slate-600">
             Uppladdning skapar en ny version — tidigare versioner behålls. Efter uppladdning
-            jämförs automatiskt med föregående version.
+            jämförs automatiskt med föregående version. Nya versioner är opublicerade tills du
+            markerar dem som publicerade.
           </p>
           <div className="mt-4">
-            <UploadVersionForm mapSlug={map.slug} />
+            <UploadVersionForm
+              mapSlug={map.slug}
+              activeCheckouts={checkoutListItems.map((checkout) => ({
+                id: checkout.id,
+                userLabel: checkout.user.name ?? checkout.user.email,
+                createdAt: checkout.createdAt,
+                objectCount: checkout.selection.objectIds.length,
+              }))}
+            />
           </div>
         </section>
       )}
 
       <section className="mt-10">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-medium text-slate-900">
             Versionshistorik ({map.versions.length})
           </h2>
-          {map.versions.length >= 2 && (
+          {latestComparePair && (
             <Link
-              href={`/maps/${map.slug}/compare?v1=${map.versions[1]!.id}&v2=${map.versions[0]!.id}`}
+              href={`/maps/${map.slug}/compare?v1=${latestComparePair[0].id}&v2=${latestComparePair[1].id}`}
               className="rounded-lg border border-ifk-blue/30 bg-ifk-blue-pale px-4 py-2 text-sm font-medium text-ifk-blue transition hover:border-ifk-blue hover:bg-ifk-blue-muted"
             >
               Jämför senaste två versioner
@@ -75,86 +150,48 @@ export default async function MapDetailPage({ params }: PageProps) {
         {map.versions.length === 0 ? (
           <p className="mt-4 text-sm text-slate-500">Inga versioner uppladdade ännu.</p>
         ) : (
-          <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-500">
-                  <th className="px-4 pb-3 pt-4 pr-4 font-medium">Version</th>
-                  <th className="pb-3 pt-4 pr-4 font-medium">Filnamn</th>
-                  <th className="pb-3 pt-4 pr-4 font-medium">Datum</th>
-                  <th className="pb-3 pt-4 pr-4 font-medium">Storlek</th>
-                  <th className="pb-3 pt-4 pr-4 font-medium">Uppladdare</th>
-                  <th className="pb-3 pt-4 pr-4 font-medium">Kommentar</th>
-                  <th className="pb-3 pt-4 pr-4 font-medium">Status</th>
-                  <th className="pb-3 pt-4 px-4 font-medium">Åtgärder</th>
-                </tr>
-              </thead>
-              <tbody>
-                {map.versions.map((version, index) => {
-                  const uploader = version.uploadedById
-                    ? uploaderMap.get(version.uploadedById)
-                    : null;
-                  const previousVersion = map.versions[index + 1];
-
-                  const parseLabel =
-                    version.parseStatus === "OK"
-                      ? `${version.objectCount?.toLocaleString("sv-SE") ?? "?"} objekt`
-                      : version.parseStatus === "PROCESSING"
-                        ? "Parsar…"
-                        : version.parseStatus === "ERROR"
-                          ? "Parsningsfel"
-                          : "Väntar";
-
-                  return (
-                    <tr key={version.id} className="border-b border-slate-100 last:border-0">
-                      <td className="px-4 py-3 pr-4 font-mono text-slate-700">
-                        v{version.versionNumber}
-                      </td>
-                      <td
-                        className="max-w-[200px] truncate py-3 pr-4"
-                        title={version.originalFilename}
-                      >
-                        {version.originalFilename}
-                      </td>
-                      <td className="py-3 pr-4 text-slate-600">
-                        {formatDate(version.uploadedAt)}
-                      </td>
-                      <td className="py-3 pr-4 text-slate-600">
-                        {formatBytes(version.fileSizeBytes)}
-                      </td>
-                      <td className="py-3 pr-4 text-slate-600">
-                        {uploader?.name ?? uploader?.email ?? "—"}
-                      </td>
-                      <td className="max-w-[180px] truncate py-3 pr-4 text-slate-600">
-                        {version.comment ?? "—"}
-                      </td>
-                      <td className="py-3 pr-4 text-xs text-slate-500">{parseLabel}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          <a
-                            href={`/api/maps/${map.slug}/versions/${version.id}/download`}
-                            className="rounded-md border border-slate-300 px-3 py-1 text-xs text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
-                          >
-                            Ladda ner
-                          </a>
-                          {previousVersion && (
-                            <Link
-                              href={`/maps/${map.slug}/compare?v1=${previousVersion.id}&v2=${version.id}`}
-                              className="rounded-md border border-ifk-blue/30 bg-ifk-blue-pale px-3 py-1 text-xs font-medium text-ifk-blue transition hover:border-ifk-blue"
-                            >
-                              Jämför
-                            </Link>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <VersionHistoryList
+            mapSlug={map.slug}
+            versions={versionHistoryItems}
+            canManagePublication={!!canManagePublication}
+            canDelete={isAdmin}
+          />
         )}
       </section>
+
+      {headVersionId && activeCheckouts.length > 0 && (
+        <section className="mt-10">
+          <h2 className="text-lg font-medium text-slate-900">Checkout-områden på kartan</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Färgade ytor visar vem som checkat ut vad (read-only).
+          </p>
+          <CheckoutOverviewMap
+            mapSlug={map.slug}
+            headVersionId={headVersionId}
+            checkouts={checkoutListItems}
+          />
+        </section>
+      )}
+
+      {session?.user?.id && (
+        <CheckoutListPanel
+          mapSlug={map.slug}
+          checkouts={checkoutListItems}
+          sessionUserId={session.user.id}
+          isAdmin={role === Role.ADMIN}
+          canCheckout={canCreateCheckout}
+          headVersionId={headVersionId}
+        />
+      )}
+
+      {session?.user?.id && role && canCreateCourse(role) && (
+        <CourseListPanel
+          mapSlug={map.slug}
+          courses={courseList}
+          sessionUserId={session.user.id}
+          isAdmin={role === Role.ADMIN}
+        />
+      )}
     </div>
   );
 }

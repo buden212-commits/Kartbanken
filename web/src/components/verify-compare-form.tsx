@@ -1,5 +1,6 @@
 "use client";
 
+import { uploadVerifyCompare } from "@/lib/upload-client";
 import { useState } from "react";
 
 type Props = {
@@ -30,25 +31,22 @@ export function VerifyCompareForm({ onJobCreated }: Props) {
       return;
     }
 
-    const uploadData = new FormData();
-    uploadData.set("fileA", fileA);
-    uploadData.set("fileB", fileB);
+    try {
+      const res = await uploadVerifyCompare(fileA, fileB);
 
-    const res = await fetch("/api/verify/compare", {
-      method: "POST",
-      body: uploadData,
-    });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error ?? "Uppladdning misslyckades");
+        return;
+      }
 
-    setLoading(false);
-
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      setError(data.error ?? "Uppladdning misslyckades");
-      return;
+      const result = await res.json();
+      onJobCreated(result.jobId as string);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Uppladdning misslyckades");
+    } finally {
+      setLoading(false);
     }
-
-    const result = await res.json();
-    onJobCreated(result.jobId as string);
   }
 
   return (

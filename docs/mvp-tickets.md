@@ -1,7 +1,7 @@
 # MVP — Implementationstickets
 
-> **Kopplad till:** [prd.md](../prd.md) v0.4  
-> **Fas:** 1 — MVP  
+> **Kopplad till:** [prd.md](../prd.md) v0.6  
+> **Fas:** 1 — MVP · **Fas 2 — Checkout/checkin (E9)** · **Fas 3 — Lägg bana (E10)**  
 > **Uppskattad tid:** 6–8 veckor (1 utvecklare; OCD-diff ökar scope)  
 > **Stack:** Next.js 15 · Auth.js · PostgreSQL · Cloudflare R2 · ocad2geojson · Vercel  
 > **Domän:** kartor.ifkmora.se · **Admin:** buud212@gmail.com
@@ -21,8 +21,10 @@
 | E6 Auditlogg | 3 | 2 dagar | E1, E3 |
 | E7 UI & polish | 5 | 3–4 dagar | E3, E4, E5 |
 | E8 Deploy & drift | 5 | 2–3 dagar | Alla |
+| **E9 Checkout/checkin** | **18** | **12–16 dagar** | E3, E4, E6 |
+| **E10 Lägg bana** | **19** | **14–18 dagar** | E3, E4, E7 |
 
-**Totalt:** ~50 tickets · ~32–42 arbetsdagar
+**Totalt:** ~87 tickets · ~58–76 arbetsdagar (MVP + checkout + Lägg bana)
 
 ---
 
@@ -682,4 +684,586 @@ DIFF_SPATIAL_TOLERANCE_M=2      # meter för objektmatchning
 
 ---
 
-*Nästa steg: starta T0.1 + T4.1 (PoC parse exempelfil).*
+## E9 — Checkout/checkin (v0.5)
+
+> **PRD:** §18, §6.7 (`CHECKOUT-*`)  
+> **Förutsättning:** MVP (E3 kartfiler, E4 diff, E6 audit, befintlig e-postinfrastruktur)  
+> **Uppskattad tid:** 12–16 arbetsdagar
+
+### Översikt faser
+
+| Fas | Tickets | Fokus | Komplexitet |
+|-----|---------|-------|-------------|
+| 9A Datamodell & lås | T9.1–T9.3 | Schema, RBAC, overlap | M–L |
+| 9B Urval & export | T9.4–T9.6 | Area UI, subset .ocd, checkout API | L |
+| 9C Visualisering & checkin | T9.7–T9.9 | Overlay, upload, subset-diff | M–L |
+| 9D Integration & bekräftelse | T9.10–T9.13 | Rebase, dual confirm, admin cancel | L–M |
+| 9E Notifiering & polish | T9.14–T9.18 | E-post, cron, varning, audit | S–M |
+
+---
+
+### T9.1 Prisma-schema `MapCheckout`
+**Prioritet:** Must · **Est:** 4h · **Komplexitet:** M · **Beror på:** T0.2, E3
+
+- [ ] Modell enligt PRD §8: `MapCheckout` med status, area, objectIds, storage paths, timestamps
+- [ ] Enum `CheckoutStatus`: `ACTIVE`, `CHECKIN_PENDING`, `USER_CONFIRMED`, `INTEGRATED`, `CANCELLED`
+- [ ] Enum `CheckoutAreaType`: `RECTANGLE`, `POLYGON`
+- [ ] Relationer: `mapFileId`, `baseVersionId`, `checkedOutBy`, `integratedVersionId`, `cancelledBy`, `adminConfirmedBy`
+- [ ] Index på `(mapFileId, status)` för snabb lookup av aktiva checkouts
+
+**Acceptans:** Migration körs; CRUD via Prisma fungerar.
+
+---
+
+### T9.2 RBAC för checkout
+**Prioritet:** Must · **Est:** 2h · **Komplexitet:** S · **Beror på:** T1.4, T9.1
+
+- [ ] `canCheckout`, `canCheckin`, `canConfirmIntegration`, `canForceCancelCheckout` i `lib/auth/permissions.ts`
+- [ ] Reader: nekas checkout; Editor: egen checkout; Admin: allt + force cancel + admin-bekräftelse
+- [ ] Server-side checks i alla checkout-API routes
+
+**Acceptans:** CHECKOUT-13, CHECKOUT-14 — rollkontroll enligt PRD §4.
+
+---
+
+### T9.3 Låslogik och overlap-detektering
+**Prioritet:** Must · **Est:** 8h · **Komplexitet:** L · **Beror på:** T9.1, T4.3
+
+- [ ] `lib/checkout/locks.ts`: kontrollera spatial overlap mellan ny area och aktiva checkouts
+- [ ] Objektnivå: två checkouts får inte dela samma objectId (intersect av `objectIdsJson`)
+- [ ] Geometri: polygon/rektangel-intersect i kart-CRS (t.ex. Turf.js eller egen bbox+polygon)
+- [ ] Returnera tydligt fel: vilken checkout som blockerar
+
+**Acceptans:** CHECKOUT-3 — överlappande checkout nekas.
+
+---
+
+### T9.4 UI: områdesurval (rektangel/polygon)
+**Prioritet:** Must · **Est:** 10h · **Komplexitet:** L · **Beror på:** T4.9, T3.6
+
+- [x] `/maps/[slug]/checkout` — rita rektangel eller polygon ovanpå SVG-kartpreview
+- [x] Växla verktyg: rektangel / polygon (minst 3 hörn)
+- [x] Visa befintliga checkout-områden som read-only overlay (förbereder T9.7)
+- [x] Bekräfta valt område → POST checkout
+
+**Acceptans:** CHECKOUT-1 — användare kan definiera område visuellt.
+
+---
+
+### T9.5 Subset .ocd-export
+**Prioritet:** Must · **Est:** 12h · **Komplexitet:** L · **Beror på:** T4.1, T4.3, T9.3
+
+- [x] `lib/ocad/subset-export.ts`: filtrera objekt vars bbox/centroid intersectar checkout-area
+- [x] Generera subset `.ocd` (PoC: utred OCAD-skrivning vs export-format som OCAD kan öppna)
+- [x] Spara `objectIdsJson` och `subsetStoragePath` på MapCheckout
+- [x] Hantera parse-varningar; dokumentera begränsningar
+
+**Acceptans:** CHECKOUT-2 — nedladdad fil innehåller endast objekt inom området och öppnas i OCAD.
+
+---
+
+### T9.6 API: skapa checkout och ladda ner subset
+**Prioritet:** Must · **Est:** 6h · **Komplexitet:** M · **Beror på:** T9.3, T9.5, T2.2
+
+- [x] `POST /api/maps/[slug]/checkouts` — areaType, areaGeometryJson; baseras på senaste version (head)
+- [x] Kör overlap-kontroll; skapa MapCheckout med status `ACTIVE`
+- [x] `GET /api/maps/[slug]/checkouts/[id]/download` — signerad URL till subset .ocd
+- [x] Auditlogg: `CHECKOUT_CREATED`
+
+**Acceptans:** Fullt checkout-flöde från API; subset nedladdningsbar.
+
+---
+
+### T9.7 Checkout-overlay på kartdetalj
+**Prioritet:** Must · **Est:** 6h · **Komplexitet:** M · **Beror på:** T9.4, T3.6
+
+- [x] `/maps/[slug]` visar alla aktiva checkouts som färgade polygoner/rektanglar
+- [x] Tooltip/lista: ägare (namn), skapad datum, status
+- [x] Reader ser overlay read-only; Editor ser knapp "Checka ut område"
+
+**Acceptans:** CHECKOUT-4 — alla inloggade ser vem som checkat ut vad.
+
+---
+
+### T9.8 API: checkin-uppladdning
+**Prioritet:** Must · **Est:** 5h · **Komplexitet:** M · **Beror på:** T9.6, T2.1
+
+- [x] `POST /api/maps/[slug]/checkouts/[id]/checkin` — presigned upload av redigerad subset .ocd
+- [x] Validera filtyp/storlek; spara `checkinStoragePath`; status → `CHECKIN_PENDING`
+- [x] Trigga subset-diff (T9.9) asynkront
+- [x] Auditlogg: `CHECKIN_SUBMITTED`
+
+**Acceptans:** Editor kan ladda upp redigerad subset efter offline-arbete.
+
+---
+
+### T9.9 Subset-diff (endast checkade objekt)
+**Prioritet:** Must · **Est:** 8h · **Komplexitet:** L · **Beror på:** T4.4, T9.5, T9.8
+
+- [x] `lib/checkout/subset-diff.ts`: diffa checkin-subset mot **aktuell head-version**
+- [x] Begränsa till objekt i `objectIdsJson` (+ nya objekt inom checkout-area)
+- [x] Flagga om head ändrats sedan `baseVersionId` (rebase-varning)
+- [x] Spara diff-resultat på checkout-post (JSON) för granskning
+
+**Acceptans:** CHECKOUT-5, CHECKOUT-6 — diff endast relevanta objekt mot senaste version.
+
+---
+
+### T9.10 Integration mot head (rebase/merge)
+**Prioritet:** Must · **Est:** 10h · **Komplexitet:** L · **Beror på:** T9.9, T4.4
+
+- [x] `lib/checkout/integrate.ts`: applicera bekräftade ändringar på parsad head → ny `.ocd`
+- [x] Hantera tillagda/borttagna/ändrade inom checkout-scope
+- [x] Skapa ny `MapVersion`; koppla `integratedVersionId`; status → `INTEGRATED`
+- [x] Trigga parse-job för ny version (T4.2)
+
+**Acceptans:** Efter dubbel bekräftelse skapas ny version med integrerade ändringar.
+
+---
+
+### T9.11 Gransknings- och bekräftelsevy (användare)
+**Prioritet:** Must · **Est:** 6h · **Komplexitet:** M · **Beror på:** T9.9, T4.7
+
+- [x] `/maps/[slug]/checkout/[id]` — visa subset-diff (sammanfattning + SVG-markeringar)
+- [x] Knapp "Bekräfta integration" (checkout-ägare); status → `USER_CONFIRMED`
+- [x] Tydlig text: väntar på admin-bekräftelse efter användarens godkännande
+
+**Acceptans:** CHECKOUT-7 — användare måste bekräfta innan admin kan integrera.
+
+---
+
+### T9.12 Admin-bekräftelse av integration
+**Prioritet:** Must · **Est:** 4h · **Komplexitet:** M · **Beror på:** T9.11, T9.10
+
+- [x] Admin-vy (checkout-detalj eller `/admin/checkouts`): granska diff
+- [x] Knapp "Bekräfta och integrera" → kör T9.10; spara `adminConfirmedAt`, `adminConfirmedBy`
+- [x] Endast tillgänglig när status = `USER_CONFIRMED`
+
+**Acceptans:** CHECKOUT-8 — både användare och admin måste bekräfta.
+
+---
+
+### T9.13 Admin: force cancel checkout
+**Prioritet:** Must · **Est:** 3h · **Komplexitet:** S · **Beror på:** T9.6, T1.4
+
+- [x] `DELETE /api/maps/[slug]/checkouts/[id]` — admin only
+- [x] Status → `CANCELLED`; spara `cancelledBy`, `cancelReason` (valfri)
+- [x] Frigör lås; auditlogg: `CHECKOUT_CANCELLED`
+
+**Acceptans:** CHECKOUT-9 — admin kan avbryta checkout utan integration.
+
+---
+
+### T9.14 E-postnotiser (alla checkout-händelser)
+**Prioritet:** Must · **Est:** 6h · **Komplexitet:** M · **Beror på:** T9.6, T9.8, T9.12, T9.13
+
+- [x] Återanvänd befintlig e-postinfrastruktur (Gmail SMTP / befintlig `lib/email`)
+- [x] Mallar (svenska): checkout skapad, checkin inskickad, integration bekräftad, checkout avbruten
+- [x] Mottagare: checkout-ägare + admin (konfigurerbar lista)
+- [x] Länk till checkout-detalj i varje mail
+
+**Acceptans:** CHECKOUT-10 — e-post vid alla fyra händelsetyper.
+
+---
+
+### T9.15 Cron: påminnelse för inaktiva checkouts
+**Prioritet:** Must · **Est:** 4h · **Komplexitet:** M · **Beror på:** T9.14, T9.1
+
+- [x] Vercel Cron (eller befintlig jobbinfrastruktur): daglig körning
+- [x] Hitta checkouts med status `ACTIVE` och `createdAt` > `CHECKOUT_REMINDER_DAYS` (default 7)
+- [x] Skicka påminnelse-e-post; uppdatera `reminderSentAt`
+- [x] Env: `CHECKOUT_REMINDER_DAYS=7`
+
+**Acceptans:** CHECKOUT-11 — påminnelse efter konfigurerat antal dagar.
+
+---
+
+### T9.16 Varning vid full uppladdning
+**Prioritet:** Must · **Est:** 2h · **Komplexitet:** S · **Beror på:** T3.4, T9.7
+
+- [x] Vid upload-form på `/maps/[slug]`: om aktiva checkouts finns → visa varningsdialog
+- [x] Lista berörda checkouts (ägare, område, datum)
+- [x] Användaren kan fortsätta eller avbryta
+
+**Acceptans:** CHECKOUT-12 — full upload tillåten med tydlig varning.
+
+---
+
+### T9.17 Auditlogg checkout-händelser
+**Prioritet:** Must · **Est:** 2h · **Komplexitet:** S · **Beror på:** T6.1, E9
+
+- [x] Actions: `CHECKOUT_CREATED`, `CHECKIN_SUBMITTED`, `CHECKOUT_USER_CONFIRMED`, `CHECKOUT_INTEGRATED`, `CHECKOUT_CANCELLED`, `CHECKOUT_REMINDER_SENT`
+- [x] Integrera i alla checkout-API routes och cron
+
+**Acceptans:** CHECKOUT-16 — spårbarhet i auditlogg.
+
+---
+
+### T9.18 Checkout-lista på kartdetalj
+**Prioritet:** Must · **Est:** 4h · **Komplexitet:** M · **Beror på:** T9.7, T3.6
+
+- [x] Tabell/sektion "Aktiva checkouts" på `/maps/[slug]`
+- [x] Kolumner: område (thumbnail/miniatyr), ägare, skapad, status, åtgärder
+- [x] Editor: länk till egna checkouts; Admin: länk till alla + avbryt
+
+**Acceptans:** Översiktlig lista kompletterar kart-overlay.
+
+---
+
+## Implementeringsordning — checkout (E9)
+
+### Sprint 5 (vecka 7–8): Datamodell & lås
+```
+T9.1 → T9.2 → T9.3
+T9.17 (audit actions definierade)
+```
+
+### Sprint 6 (vecka 8–9): Urval & export
+```
+T9.4 → T9.5 → T9.6
+T9.7 (overlay grund)
+```
+
+### Sprint 7 (vecka 9–10): Checkin & diff
+```
+T9.8 → T9.9
+T9.18 (lista)
+```
+
+### Sprint 8 (vecka 10–11): Integration & bekräftelse
+```
+T9.10 → T9.11 → T9.12 → T9.13
+```
+
+### Sprint 9 (vecka 11–12): Notifiering & polish
+```
+T9.14 → T9.15 → T9.16
+Manuell E2E-test av hela checkout-flödet
+```
+
+---
+
+## Miljövariabler — checkout (tillägg)
+
+```env
+CHECKOUT_REMINDER_DAYS=7           # dagar innan påminnelse-e-post
+CHECKOUT_ADMIN_NOTIFY_EMAIL=       # valfritt; default alla admins
+```
+
+---
+
+## Risker — checkout
+
+| Risk | Sannolikhet | Åtgärd |
+|------|-------------|--------|
+| Subset .ocd inte öppningsbar i OCAD | Hög | PoC tidigt (T9.5); ev. OCAD batch/script som fallback |
+| Rebase-konflikter vid parallell head-ändring | Medel | Tydlig diff-granskning; flagga konflikter i UI |
+| Polygon-precision i webb-SVG vs kart-CRS | Medel | Enhetstester med kända koordinater |
+| Långvariga checkouts blockerar områden | Medel | Påminnelse (T9.15) + admin force cancel (T9.13) |
+
+---
+
+## E10 — Lägg bana (v0.6)
+
+> **PRD:** §20, §6.8 (`COURSE-*`)  
+> **Förutsättning:** MVP (E3 kartfiler, E4 parsning/SVG, E7 kartvy "Hela kartan")  
+> **Uppskattad tid:** 14–18 arbetsdagar
+
+### Översikt faser
+
+| Fas | Tickets | Fokus | Komplexitet |
+|-----|---------|-------|-------------|
+| 10A Schema & API | T10.1–T10.4, T10.19 | Datamodell, CRUD, overlay-lagring, audit | M |
+| 10B Editor grund | T10.5–T10.7 | Kartläge, symbolpanel, punktplacering | M–L |
+| 10C Rita & text | T10.8–T10.10 | Linje/yta, textmodal | L |
+| 10D Verktyg & spara | T10.11–T10.14 | Flytta/radera, save/load, privat/publik | M |
+| 10E Skuggbana & lista | T10.15–T10.16 | Ghost course, kontrollista | M |
+| 10F PDF-export | T10.17–T10.18 | A4/A3, skala, utskrift | L |
+
+---
+
+### T10.1 Prisma-schema `Course` och `CourseObject`
+**Prioritet:** Must · **Est:** 4h · **Komplexitet:** M · **Beror på:** T0.2, E3
+
+- [x] Modeller enligt PRD §8: `Course`, `CourseObject`
+- [x] `Course`: `mapFileId`, `name`, `createdBy`, `isPublic` (default `false`), timestamps
+- [x] `CourseObject`: `courseId`, `symbolNr` (700–709), `objectType` enum (`POINT`, `LINE`, `AREA`, `TEXT`), `geometryJson`, `textContent`, `sortOrder`
+- [x] Index på `(mapFileId, isPublic)` och `(courseId, sortOrder)`
+- [x] Cascade delete: CourseObject raderas med Course
+
+**Acceptans:** Migration körs; CRUD via Prisma fungerar.
+
+---
+
+### T10.2 RBAC för banor
+**Prioritet:** Must · **Est:** 2h · **Komplexitet:** S · **Beror på:** T1.4, T10.1
+
+- [x] `canCreateCourse`, `canEditCourse`, `canViewCourse` i `lib/auth/permissions.ts`
+- [x] **Alla inloggade** (Reader, Editor, Admin) kan skapa banor (COURSE-16)
+- [x] Redigera/radera: endast ägare eller admin
+- [x] Visa: ägare ser privata; alla reader+ ser publika
+
+**Acceptans:** COURSE-10, COURSE-11 — rollkontroll enligt PRD §17.
+
+---
+
+### T10.3 API: CRUD banor
+**Prioritet:** Must · **Est:** 6h · **Komplexitet:** M · **Beror på:** T10.1, T10.2
+
+- [x] `GET /api/maps/[slug]/courses` — egna + publika banor på kartfilen
+- [x] `POST /api/maps/[slug]/courses` — skapa bana: `name`, `isPublic` (default false)
+- [x] `GET /api/maps/[slug]/courses/[id]` — hämta bana med objekt (ägarskap/synlighet)
+- [x] `PATCH /api/maps/[slug]/courses/[id]` — uppdatera namn, `isPublic`
+- [x] `DELETE /api/maps/[slug]/courses/[id]` — ägare eller admin
+- [x] Auditlogg: `COURSE_CREATED`, `COURSE_UPDATED`, `COURSE_DELETED`
+
+**Acceptans:** COURSE-8, COURSE-9 — spara med namn; privat/publik.
+
+---
+
+### T10.4 API: CRUD overlay-objekt
+**Prioritet:** Must · **Est:** 6h · **Komplexitet:** M · **Beror på:** T10.3
+
+- [x] `PUT /api/maps/[slug]/courses/[id]/objects` — bulk upsert objektlista (ersätter alla)
+- [x] Validera `symbolNr` 700–709, `objectType`, GeoJSON-geometri i kart-CRS
+- [x] `sortOrder` sätts i placeringsordning (kontrollista)
+- [x] Max objekt soft limit (500) med varning i svar
+
+**Acceptans:** Overlay lagras som JSON; påverkar aldrig MapVersion (COURSE-12).
+
+---
+
+### T10.5 Kartläge "Lägg bana" i "Hela kartan"
+**Prioritet:** Must · **Est:** 8h · **Komplexitet:** L · **Beror på:** T4.9, T3.6
+
+- [x] Växla läge i befintlig kartvy (`diff-map-panel` / `fullscreen-map-viewer`-mönster)
+- [x] Bakgrund: **senaste head-version** SVG (COURSE-2)
+- [x] Toolbar: "Lägg bana" / "Visa" / verktyg (förbereder T10.11)
+- [x] Layout: karta vänster, symbolpanel höger (COURSE-3)
+
+**Acceptans:** COURSE-1 — inloggad användare kan öppna banläge mot head.
+
+---
+
+### T10.6 Symbolpanel 700–709
+**Prioritet:** Must · **Est:** 6h · **Komplexitet:** M · **Beror på:** T10.5
+
+- [x] Panel till höger: alla symboler **700–709** med namn/ikon
+- [x] `lib/course/symbols.ts`: metadata (nummer, etikett, tillåten geometrityp)
+- [x] Välj aktiv symbol → cursor/verktygsläge ändras
+- [x] Approximerade SVG-ikoner per symbol (dokumentera begränsning)
+
+**Acceptans:** COURSE-3 — alla symboler 700–709 tillgängliga.
+
+---
+
+### T10.7 Punktplacering
+**Prioritet:** Must · **Est:** 6h · **Komplexitet:** M · **Beror på:** T10.5, T10.6
+
+- [x] Klick på karta → skapa punktobjekt med aktiv symbol
+- [x] Koordinater i kart-CRS (samma transform som befintlig SVG-viewer)
+- [x] Rendera overlay ovanpå bakgrundskarta
+- [x] Uppdatera lokal state; spara via T10.4
+
+**Acceptans:** COURSE-4 — punktplacering fungerar för punkt-symboler.
+
+---
+
+### T10.8 Linjerita
+**Prioritet:** Must · **Est:** 8h · **Komplexitet:** L · **Beror på:** T10.7
+
+- [x] Klick för vertex; dubbelklick/Enter avslutar linje
+- [x] Esc avbryter pågående ritning
+- [x] Preview-linje under ritning
+- [x] Endast symboler med linje-geometrityp tillåtna
+
+**Acceptans:** COURSE-4 — linjeobjekt kan ritas och sparas.
+
+---
+
+### T10.9 Ytrita (polygon)
+**Prioritet:** Must · **Est:** 8h · **Komplexitet:** L · **Beror på:** T10.8
+
+- [x] Klick för hörn; stäng polygon (klick nära start eller knapp "Avsluta")
+- [x] Minst 3 hörn krävs
+- [x] Preview under ritning
+- [ ] Validering: self-intersect varning (Should)
+
+**Acceptans:** COURSE-4 — yta/polygon kan ritas och sparas.
+
+---
+
+### T10.10 Textmodal och textplacering
+**Prioritet:** Must · **Est:** 5h · **Komplexitet:** M · **Beror på:** T10.7
+
+- [x] Välj textsymbol → klick placerar punkt → **modal** för textinmatning
+- [x] Redigera text via dubbelklick på befintligt textobjekt
+- [x] Spara `textContent` på CourseObject
+- [x] Rendera textlabel ovanpå karta
+
+**Acceptans:** COURSE-6 — textmodal vid textobjekt.
+
+---
+
+### T10.11 Verktyg: flytta
+**Prioritet:** Must · **Est:** 6h · **Komplexitet:** M · **Beror på:** T10.7
+
+- [x] Verktyg "Flytta" i toolbar
+- [x] Klicka objekt → dra till ny position
+- [x] Punkt: flytta centroid; linje/yta: flytta alla vertex (hela objektet)
+- [x] Uppdatera geometri i state + spara
+
+**Acceptans:** COURSE-7 — flytta overlay-objekt.
+
+---
+
+### T10.12 Verktyg: radera
+**Prioritet:** Must · **Est:** 3h · **Komplexitet:** S · **Beror på:** T10.7
+
+- [x] Verktyg "Radera" eller Delete-tangent på valt objekt
+- [x] Bekräftelse vid radering (Should)
+- [x] Omnumrera `sortOrder` för kontrollista efter radering
+
+**Acceptans:** COURSE-7 — radera overlay-objekt.
+
+---
+
+### T10.13 Spara/ladda bana i editorn
+**Prioritet:** Must · **Est:** 5h · **Komplexitet:** M · **Beror på:** T10.3, T10.4, T10.5
+
+- [x] "Spara"-knapp: namn (vid ny), `isPublic`-kryssruta
+- [x] "Öppna"-dropdown: egna + publika banor på kartfilen
+- [x] Ladda objekt till editor-state
+- [x] Ny bana vs uppdatera befintlig
+
+**Acceptans:** COURSE-8 — spara och ladda banor med namn.
+
+---
+
+### T10.14 Lista banor på kartdetalj
+**Prioritet:** Must · **Est:** 4h · **Komplexitet:** M · **Beror på:** T10.3, T3.6
+
+- [x] Sektion "Banor" på `/maps/[slug]`: egna + publika
+- [x] Kolumner: namn, ägare, skapad, publik/privat, åtgärder
+- [x] Länk till öppna i "Lägg bana"-läge
+- [x] Admin kan radera valfri bana
+
+**Acceptans:** Publika banor synliga för alla; privata endast för ägare.
+
+---
+
+### T10.15 Skuggbana (ghost)
+**Prioritet:** Must · **Est:** 5h · **Komplexitet:** M · **Beror på:** T10.13
+
+- [x] Dropdown "Visa skuggbana" — välj annan sparad bana (egen eller publik)
+- [x] Rendera skuggbana **halvtransparent** (read-only)
+- [x] En aktiv redigerbar bana + högst en skuggbana
+- [x] Toggle av/på utan att påverka aktiv bana
+
+**Acceptans:** COURSE-13 — skuggbana för jämförelse.
+
+---
+
+### T10.16 Kontrollista med auto-numrering
+**Prioritet:** Must · **Est:** 5h · **Komplexitet:** M · **Beror på:** T10.4, T10.13
+
+- [x] Panel eller sidosektion: kontrollista 1, 2, 3 … efter `sortOrder`
+- [x] Filtrera objekt med kontroll-symbol (702; ev. 704–709)
+- [x] Klick på rad → zoom/fokus på kontroll i karta
+- [x] Uppdateras vid placering, flytt, radering
+
+**Acceptans:** COURSE-14 — auto-numrering i placeringsordning.
+
+---
+
+### T10.17 PDF-export — format och layout
+**Prioritet:** Must · **Est:** 10h · **Komplexitet:** L · **Beror på:** T10.13, befintlig PDF-export
+
+- [x] `GET /api/maps/[slug]/courses/[id]/export/pdf` — query: `format` (A4/A3), `orientation` (portrait/landscape), `scale`
+- [x] Återanvänd befintlig kart-PDF-motor (samma familj som övrig kartexport)
+- [x] PDF: bakgrundskarta (head) + overlay + valfri kontrollista
+- [x] Auditlogg: `COURSE_PDF_EXPORT`
+
+**Acceptans:** COURSE-15 — A4/A3, liggande/stående.
+
+---
+
+### T10.18 PDF-export — skala och förhandsgranskning
+**Prioritet:** Must · **Est:** 6h · **Komplexitet:** M · **Beror på:** T10.17
+
+- [x] UI: välj skala (t.ex. 1:7500, 1:10000, 1:15000; intervall enligt PRD §20.9)
+- [x] Beräkna utskriftsarea utifrån skala + pappersformat
+- [ ] Förhandsgranska crop/omfång innan export
+- [x] Enhetstester för skala-matematik (kritisk risk)
+
+**Acceptans:** COURSE-15 — användarvald skala med korrekt proportioner.
+
+---
+
+### T10.19 Auditlogg ban-händelser
+**Prioritet:** Should · **Est:** 2h · **Komplexitet:** S · **Beror på:** T6.1, E10
+
+- [x] Actions: `COURSE_CREATED`, `COURSE_UPDATED`, `COURSE_DELETED`, `COURSE_PDF_EXPORT`
+- [x] Integrera i alla course-API routes
+
+**Acceptans:** COURSE-17 — spårbarhet i auditlogg.
+
+---
+
+## Implementeringsordning — Lägg bana (E10)
+
+### Sprint 10 (vecka 13–14): Schema & API
+```
+T10.1 → T10.2 → T10.3 → T10.4
+T10.19 (audit actions)
+```
+
+### Sprint 11 (vecka 14–15): Editor grund
+```
+T10.5 → T10.6 → T10.7
+T10.14 (banlista grund)
+```
+
+### Sprint 12 (vecka 15–16): Rita & text
+```
+T10.8 → T10.9 → T10.10
+```
+
+### Sprint 13 (vecka 16–17): Verktyg & spara
+```
+T10.11 → T10.12 → T10.13
+```
+
+### Sprint 14 (vecka 17–18): Skuggbana, lista, PDF
+```
+T10.15 → T10.16
+T10.17 → T10.18
+Manuell E2E-test av hela banflödet
+```
+
+---
+
+## Miljövariabler — Lägg bana (tillägg)
+
+```env
+COURSE_MAX_OBJECTS=500              # soft limit per bana
+COURSE_PDF_SCALE_MIN=4000           # minsta skala (1:N)
+COURSE_PDF_SCALE_MAX=20000          # största skala (1:N)
+COURSE_CONTROL_SYMBOLS=702          # kommaseparerade symbolnummer för kontrollista
+```
+
+---
+
+## Risker — Lägg bana
+
+| Risk | Sannolikhet | Åtgärd |
+|------|-------------|--------|
+| OCAD-symbolutseende approximeras i webben | Hög | T10.6 — dokumentera; iterera SVG-ikoner; acceptera i v1 |
+| PDF-skala-matematik fel | Medel | T10.18 enhetstester; återanvänd befintlig PDF-kod |
+| Stort scope (alla geometrityper + PDF) | Medel | Strikt fasindelning E10A–F; leverera punkt först |
+| Head-ändring vs sparade overlay-koordinater | Låg–Medel | Visa head-versionsdatum i editor; ev. varning (PRD §20.6) |
+| Prestanda vid många overlay-objekt | Låg | Soft limit 500; SVG-layer optimering |
+
+---
+
+*Nästa steg: E10 efter E9, starta T10.1 + T10.5 (schema + kartläge parallellt).*

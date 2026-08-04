@@ -1,3 +1,4 @@
+import { parseOcadCrsFromSvg, type OcadCrsInfo } from "./crs";
 import { parseSvgRootTransform, type SvgRootTransform } from "./svg-coords";
 import type { OcadMapLayer } from "./layers";
 
@@ -69,6 +70,7 @@ export function extractSvgInner(svgText: string): {
   fill: string | null;
   ocadMapScale: number | null;
   ocadFileVersion: number | null;
+  ocadCrs: OcadCrsInfo | null;
   ocadLayers: OcadMapLayer[];
   rootTransform: SvgRootTransform;
 } {
@@ -78,6 +80,7 @@ export function extractSvgInner(svgText: string): {
   const fill = fillMatch?.[1] ?? null;
   const ocadMapScale = parseOcadMapScale(svgText);
   const ocadFileVersion = parseOcadFileVersion(svgText);
+  const ocadCrs = parseOcadCrsFromSvg(svgText);
   const ocadLayers = parseOcadLayersFromSvg(svgText);
   const inner = svgText
     .replace(/<\?xml[^?]*\?>/i, "")
@@ -89,6 +92,7 @@ export function extractSvgInner(svgText: string): {
     fill,
     ocadMapScale,
     ocadFileVersion,
+    ocadCrs,
     ocadLayers,
     rootTransform: parseSvgRootTransform(inner),
   };
