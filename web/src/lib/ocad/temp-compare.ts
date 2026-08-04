@@ -3,11 +3,20 @@ import type { OcadObjectChange } from "./diff-types";
 import { buildTempDiffLayerPath, generateDiffLayerSvgs } from "./diff-layers";
 import { parseOcadBuffer } from "./read";
 import { generateAndStorePreviewSvg } from "./svg";
-import { readStoredFile, uploadFile } from "@/lib/storage";
+import {
+  fileExists,
+  readStoredFile,
+  uploadFile,
+} from "@/lib/storage";
 import { randomUUID } from "crypto";
 
 const TOLERANCE = Number(process.env.DIFF_SPATIAL_TOLERANCE_M ?? 2);
 const MAX_STORED_CHANGES = 5000;
+
+/** Skip re-start om ett bakgrundsanrop redan kör (serverless kan ta flera minuter). */
+const PROCESSING_LEASE_MS = 2 * 60 * 1000;
+/** Efter detta markeras jobbet som misslyckat om det fortfarande är processing. */
+export const TEMP_COMPARE_STALE_MS = 15 * 60 * 1000;
 
 export type TempCompareLayerPaths = {
   added: string;
@@ -35,6 +44,7 @@ export type TempCompareJob = {
   userId: string;
   createdAt: string;
   status: "processing" | "ok" | "error";
+  processingStartedAt?: string;
   error?: string;
   fileNameA: string;
   fileNameB: string;
@@ -94,9 +104,91 @@ export async function createTempCompareJob(
   return jobId;
 }
 
+export async function initTempCompareJob(
+  userId: string,
+  fileNameA: string,
+  fileNameB: string,
+): Promise<{ jobId: string; pathA: string; pathB: string }> {
+  const jobId = randomUUID();
+
+  const job: TempCompareJob = {
+    id: jobId,
+    userId,
+    createdAt: new Date().toISOString(),
+    status: "processing",
+    fileNameA,
+    fileNameB,
+  };
+  await writeTempCompareJob(job);
+
+  return {
+    jobId,
+    pathA: filePathA(jobId),
+    pathB: filePathB(jobId),
+  };
+}
+
+export async function completeTempCompareJob(
+  jobId: string,
+  userId: string,
+): Promise<TempCompareJob> {
+  const job = await readTempCompareJob(jobId);
+  if (!job) {
+    throw new Error("Jobb hittades inte");
+  }
+  if (job.userId !== userId) {
+    throw new Error("Otillåten åtkomst till jobbet");
+  }
+
+  const [existsA, existsB] = await Promise.all([
+    fileExists(filePathA(jobId)),
+    fileExists(filePathB(jobId)),
+  ]);
+
+  if (!existsA || !existsB) {
+    throw new Error("En eller båda filerna saknas i lagringen");
+  }
+
+  return job;
+}
+
+export function isTempCompareJobStale(job: TempCompareJob): boolean {
+  const startedAt = job.processingStartedAt ?? job.createdAt;
+  return Date.now() - new Date(startedAt).getTime() > TEMP_COMPARE_STALE_MS;
+}
+
+/** Markera utgånget jobb som fel — anropas vid polling innan svar skickas. */
+export async function failStaleTempCompareJob(job: TempCompareJob): Promise<TempCompareJob> {
+  const failed: TempCompareJob = {
+    ...job,
+    status: "error",
+    error:
+      "Jämförelsen tog för lång tid. Försök igen — om problemet kvarstår kan filerna vara för stora eller skadade.",
+  };
+  await writeTempCompareJob(failed);
+  return failed;
+}
+
 export async function processTempCompareJob(jobId: string): Promise<void> {
   const job = await readTempCompareJob(jobId);
   if (!job || job.status !== "processing") return;
+
+  if (isTempCompareJobStale(job)) {
+    await failStaleTempCompareJob(job);
+    return;
+  }
+
+  if (job.processingStartedAt) {
+    const leaseAge = Date.now() - new Date(job.processingStartedAt).getTime();
+    if (leaseAge < PROCESSING_LEASE_MS) return;
+  }
+
+  await writeTempCompareJob({
+    ...job,
+    processingStartedAt: new Date().toISOString(),
+  });
+
+  const activeJob = (await readTempCompareJob(jobId)) ?? job;
 
   try {
     const [bufferA, bufferB] = await Promise.all([
@@ -105,16 +197,16 @@ export async function processTempCompareJob(jobId: string): Promise<void> {
     ]);
 
     const [summaryA, summaryB] = await Promise.all([
-      parseOcadBuffer(bufferA, job.fileNameA),
-      parseOcadBuffer(bufferB, job.fileNameB),
+      parseOcadBuffer(bufferA, activeJob.fileNameA),
+      parseOcadBuffer(bufferB, activeJob.fileNameB),
     ]);
 
     const diff = compareOcadObjects(
       summaryA.objects,
       summaryB.objects,
       {
-        fileNameA: job.fileNameA,
-        fileNameB: job.fileNameB,
+        fileNameA: activeJob.fileNameA,
+        fileNameB: activeJob.fileNameB,
       },
       { toleranceMeters: TOLERANCE, maxChanges: MAX_STORED_CHANGES },
     );
@@ -139,7 +231,7 @@ export async function processTempCompareJob(jobId: string): Promise<void> {
     }
 
     const updated: TempCompareJob = {
-      ...job,
+      ...activeJob,
       status: "ok",
       summary: {
         coordSpace: "ocad-native",
@@ -160,7 +252,7 @@ export async function processTempCompareJob(jobId: string): Promise<void> {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Jämförelse misslyckades";
     await writeTempCompareJob({
-      ...job,
+      ...activeJob,
       status: "error",
       error: message,
     });

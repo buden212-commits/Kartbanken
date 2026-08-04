@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { auth, signOut } from "@/auth";
 import { roleLabel } from "@/lib/auth/permissions";
@@ -8,18 +9,28 @@ export async function AppHeader() {
 
   return (
     <header className="border-b border-ifk-blue bg-ifk-blue text-white shadow-sm">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3.5">
-        <Link href="/" className="flex items-center gap-3">
-          <span className="text-base font-semibold tracking-tight">kartor.ifkmora.se</span>
-          <span className="hidden text-xs font-medium uppercase tracking-wider text-white/60 sm:inline">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 sm:px-6 sm:py-3.5">
+        <Link href="/" className="flex min-w-0 items-center gap-3">
+          <Image
+            src="/ifk-mora-logo.png"
+            alt="IFK Mora OK"
+            width={33}
+            height={36}
+            className="h-8 w-auto shrink-0"
+            priority
+          />
+          <span className="truncate text-sm font-semibold tracking-tight sm:text-base">
+            kartor.ifkmora.se
+          </span>
+          <span className="hidden text-xs font-medium uppercase tracking-wider text-white/60 lg:inline">
             IFK Mora OK
           </span>
         </Link>
-        <nav className="flex items-center gap-4 text-sm">
+        <nav className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
           {session?.user && (
             <>
               <Link href="/" className="text-white/80 transition hover:text-white">
-                Kartfiler
+                Område
               </Link>
               <Link href="/verifiera" className="text-white/80 transition hover:text-white">
                 Verifiera
@@ -29,8 +40,14 @@ export async function AppHeader() {
                   Admin
                 </Link>
               )}
-              <span className="hidden text-white/50 sm:inline">
-                {session.user.email} · {roleLabel(session.user.role)}
+              <Link href="/hjalp" className="text-white/80 transition hover:text-white">
+                Hjälp
+              </Link>
+              <span
+                className="hidden cursor-default text-white/50 lg:inline"
+                title={roleLabel(session.user.role)}
+              >
+                {session.user.name?.trim() || session.user.email}
               </span>
               <form
                 action={async () => {
@@ -40,7 +57,7 @@ export async function AppHeader() {
               >
                 <button
                   type="submit"
-                  className="rounded-md border border-white/25 px-3 py-1.5 text-white/90 transition hover:bg-white/10"
+                  className="rounded-md border border-white/25 px-2.5 py-1.5 text-xs text-white/90 transition hover:bg-white/10 sm:px-3 sm:text-sm"
                 >
                   Logga ut
                 </button>

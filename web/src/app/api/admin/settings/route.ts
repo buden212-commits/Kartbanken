@@ -1,0 +1,79 @@
+import { requireAdmin } from "@/lib/auth/api";
+import { resetEmailTransport } from "@/lib/email";
+import {
+  getSmtpSettingsPublic,
+  shouldUpdateSmtpPassword,
+  upsertSmtpSettings,
+  type SmtpSettingsInput,
+} from "@/lib/settings/app-settings";
+import { NextResponse } from "next/server";
+
+export async function GET() {
+  const session = await requireAdmin();
+  if (session instanceof NextResponse) {
+    return session;
+  }
+
+  const settings = await getSmtpSettingsPublic();
+  return NextResponse.json(settings);
+}
+
+export async function PUT(request: Request) {
+  const session = await requireAdmin();
+  if (session instanceof NextResponse) {
+    return session;
+  }
+
+  let body: Partial<SmtpSettingsInput>;
+  try {
+    body = (await request.json()) as Partial<SmtpSettingsInput>;
+  } catch {
+    return NextResponse.json({ error: "Ogiltig JSON" }, { status: 400 });
+  }
+
+  const smtpPort = Number(body.smtpPort ?? 587);
+  if (!Number.isFinite(smtpPort) || smtpPort < 1 || smtpPort > 65535) {
+    return NextResponse.json({ error: "Ogiltig SMTP-port" }, { status: 400 });
+  }
+
+  const existing = await getSmtpSettingsPublic();
+  const enabled = body.enabled === true;
+
+  if (enabled) {
+    const smtpUser = body.smtpUser?.trim();
+    const hasPassword = existing.hasPassword || shouldUpdateSmtpPassword(body.smtpPass);
+
+    if (!smtpUser) {
+      return NextResponse.json(
+        { error: "SMTP-användare krävs när e-post är aktiverat" },
+        { status: 400 },
+      );
+    }
+
+    if (!hasPassword) {
+      return NextResponse.json(
+        { error: "App-lösenord krävs när e-post är aktiverat" },
+        { status: 400 },
+      );
+    }
+  }
+
+  try {
+    const settings = await upsertSmtpSettings({
+      smtpHost: body.smtpHost?.trim() || "smtp.gmail.com",
+      smtpPort,
+      smtpUser: body.smtpUser?.trim() || "",
+      smtpPass: body.smtpPass,
+      adminNotificationEmail: body.adminNotificationEmail?.trim() || "",
+      enabled,
+    });
+
+    resetEmailTransport();
+
+    return NextResponse.json(settings);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Kunde inte spara inställningarna";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}

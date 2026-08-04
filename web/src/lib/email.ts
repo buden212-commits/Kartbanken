@@ -2,18 +2,30 @@ import nodemailer from "nodemailer";
 import type { Transporter } from "nodemailer";
 import { getAppBaseUrl } from "@/lib/app-url";
 import {
+  resolveNotificationRecipients,
+  resolveOcdAttachmentRecipients,
+} from "@/lib/settings/notification-recipients";
+import {
   resolveAdminNotificationEmail,
   resolveSmtpConfig,
   type SmtpConfig,
 } from "@/lib/settings/app-settings";
+import { readStoredFile } from "@/lib/storage";
 
 const APP_NAME = "IFK Mora Kartor";
+
+type MailAttachment = {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
+};
 
 type SendMailOptions = {
   to: string;
   subject: string;
   text: string;
   html: string;
+  attachments?: MailAttachment[];
 };
 
 let transporter: Transporter | null | undefined;
@@ -150,11 +162,24 @@ export async function sendMail(options: SendMailOptions): Promise<void> {
     subject: options.subject,
     text: options.text,
     html: options.html,
+    attachments: options.attachments,
     headers: {
       "Content-Language": "sv",
       "X-Mailer": APP_NAME,
     },
   });
+}
+
+async function sendMailToNotificationRecipients(
+  options: Omit<SendMailOptions, "to">,
+): Promise<void> {
+  const recipients = await resolveNotificationRecipients();
+  if (recipients.length === 0) {
+    console.warn("[email] No notification recipients configured — skipping email");
+    return;
+  }
+
+  await Promise.all(recipients.map((to) => sendMail({ ...options, to })));
 }
 
 export async function sendTestEmail(to: string): Promise<void> {
@@ -188,14 +213,6 @@ export async function notifyAdminOfNewRegistration(user: {
   name: string;
   email: string;
 }): Promise<void> {
-  const adminEmail = await getAdminNotificationEmail();
-  if (!adminEmail) {
-    console.warn(
-      "[email] ADMIN_NOTIFICATION_EMAIL or INITIAL_ADMIN_EMAIL not set — skipping new user notification",
-    );
-    return;
-  }
-
   if (!(await isEmailConfigured())) {
     console.warn("[email] SMTP not configured — skipping new user notification");
     return;
@@ -234,7 +251,7 @@ export async function notifyAdminOfNewRegistration(user: {
     bodyHtml,
   });
 
-  await sendMail({ to: adminEmail, subject, text, html });
+  await sendMailToNotificationRecipients({ subject, text, html });
 }
 
 export async function notifyAdminOfNewUpload(upload: {
@@ -245,92 +262,107 @@ export async function notifyAdminOfNewUpload(upload: {
     versionNumber: number;
     originalFilename: string;
     comment?: string | null;
+    storagePath: string;
   };
 }): Promise<void> {
-  const adminEmail = await getAdminNotificationEmail();
-  if (!adminEmail) {
-    console.warn(
-      "[email] ADMIN_NOTIFICATION_EMAIL or INITIAL_ADMIN_EMAIL not set — skipping upload notification",
-    );
-    return;
-  }
-
   if (!(await isEmailConfigured())) {
     console.warn("[email] SMTP not configured — skipping upload notification");
     return;
   }
 
+  const recipients = await resolveNotificationRecipients();
+  if (recipients.length === 0) {
+    console.warn("[email] No notification recipients configured — skipping upload notification");
+    return;
+  }
+
+  const ocdRecipients = await resolveOcdAttachmentRecipients();
   const uploaderName = upload.uploader.name?.trim() || upload.uploader.email;
   const mapUrl = `${getAppBaseUrl()}/maps/${upload.map.slug}`;
   const versionUrl = `${mapUrl}/versions/${upload.version.id}`;
-  const subject = `Ny kartversion uppladdad — ${APP_NAME}`;
+  const commentText = upload.version.comment?.trim() || "Ingen kommentar angiven";
+  const subject = `Ny version av ${upload.map.title} — ${APP_NAME}`;
 
   const textLines = [
-    `En ny kartversion har laddats upp på ${APP_NAME}.`,
-    "",
-    `Uppladdad av: ${uploaderName}`,
-    `E-post: ${upload.uploader.email}`,
-    "",
+    `Hej!`,
+    ``,
+    `Det finns en ny version av kartan «${upload.map.title}» i ${APP_NAME}.`,
+    ``,
     `Karta: ${upload.map.title}`,
-    `Slug: ${upload.map.slug}`,
-    `Version: ${upload.version.versionNumber}`,
-    `Filnamn: ${upload.version.originalFilename}`,
+    `Kommentar: ${commentText}`,
+    `Version: v${upload.version.versionNumber}`,
+    `Uppladdad av: ${uploaderName}`,
+    ``,
+    `Visa versionen: ${versionUrl}`,
+    `Visa kartan: ${mapUrl}`,
   ];
-
-  if (upload.version.comment) {
-    textLines.push(`Kommentar: ${upload.version.comment}`);
-  }
-
-  textLines.push("", `Visa versionen: ${versionUrl}`, `Visa kartan: ${mapUrl}`);
 
   const text = textLines.join("\n");
 
-  const commentRow = upload.version.comment
-    ? `
-      <tr>
-        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;">Kommentar</td>
-        <td style="padding:4px 0;color:#0f172a;">${escapeHtml(upload.version.comment)}</td>
-      </tr>`
-    : "";
-
   const bodyHtml = `
-    <p style="margin:0 0 16px;">En ny kartversion har laddats upp.</p>
+    <p style="margin:0 0 16px;">Hej!</p>
+    <p style="margin:0 0 16px;">Det finns en ny version av kartan <strong>${escapeHtml(upload.map.title)}</strong> i ${escapeHtml(APP_NAME)}.</p>
     <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 20px;width:100%;font-size:15px;">
       <tr>
-        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;width:110px;">Uppladdad av</td>
-        <td style="padding:4px 0;color:#0f172a;">${escapeHtml(uploaderName)}</td>
-      </tr>
-      <tr>
-        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;">E-post</td>
-        <td style="padding:4px 0;color:#0f172a;">${escapeHtml(upload.uploader.email)}</td>
-      </tr>
-      <tr>
-        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;">Karta</td>
+        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;width:110px;">Karta</td>
         <td style="padding:4px 0;color:#0f172a;">${escapeHtml(upload.map.title)}</td>
       </tr>
       <tr>
-        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;">Version</td>
-        <td style="padding:4px 0;color:#0f172a;">${upload.version.versionNumber}</td>
+        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;">Kommentar</td>
+        <td style="padding:4px 0;color:#0f172a;">${escapeHtml(commentText)}</td>
       </tr>
       <tr>
-        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;">Filnamn</td>
-        <td style="padding:4px 0;color:#0f172a;">${escapeHtml(upload.version.originalFilename)}</td>
-      </tr>${commentRow}
+        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;">Version</td>
+        <td style="padding:4px 0;color:#0f172a;">v${upload.version.versionNumber}</td>
+      </tr>
+      <tr>
+        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;">Uppladdad av</td>
+        <td style="padding:4px 0;color:#0f172a;">${escapeHtml(uploaderName)}</td>
+      </tr>
     </table>
     <p style="margin:0 0 12px;">
-      <a href="${escapeHtml(versionUrl)}" style="display:inline-block;padding:10px 18px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:500;">Visa versionen</a>
+      <a href="${escapeHtml(versionUrl)}" style="display:inline-block;padding:10px 18px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:500;">Visa versionen på webben</a>
     </p>
-    <p style="margin:0;">
-      <a href="${escapeHtml(mapUrl)}" style="color:#2563eb;text-decoration:none;">Visa kartan</a>
-    </p>
+    <p style="margin:0;">Med vänliga hälsningar,<br>${escapeHtml(APP_NAME)}</p>
   `.trim();
 
-  const html = buildHtmlEmail({
-    title: subject,
-    bodyHtml,
-  });
+  let mapAttachment: MailAttachment | null = null;
+  if (ocdRecipients.size > 0) {
+    try {
+      const fileBuffer = await readStoredFile(upload.version.storagePath);
+      mapAttachment = {
+        filename: upload.version.originalFilename.endsWith(".ocd")
+          ? upload.version.originalFilename
+          : `${upload.map.title.replace(/\s+/g, "-")}-v${upload.version.versionNumber}.ocd`,
+        content: fileBuffer,
+        contentType: "application/octet-stream",
+      };
+    } catch (err) {
+      console.error("[email] Could not read map file for email attachment:", err);
+    }
+  }
 
-  await sendMail({ to: adminEmail, subject, text, html });
+  await Promise.all(
+    recipients.map(async (to) => {
+      const includeAttachment = mapAttachment !== null && ocdRecipients.has(to);
+
+      const recipientText = includeAttachment
+        ? `${text}\n\nKartfilen (.ocd) är bifogad till detta meddelande.`
+        : text;
+
+      const recipientBodyHtml = includeAttachment
+        ? `${bodyHtml}<p style="margin:16px 0 0;">Kartfilen (.ocd) är bifogad till detta meddelande.</p>`
+        : bodyHtml;
+
+      await sendMail({
+        to,
+        subject,
+        text: recipientText,
+        html: buildHtmlEmail({ title: subject, bodyHtml: recipientBodyHtml }),
+        attachments: includeAttachment && mapAttachment ? [mapAttachment] : undefined,
+      });
+    }),
+  );
 }
 
 type CheckoutMailContext = {
@@ -348,11 +380,12 @@ function ownerLabel(owner: CheckoutMailContext["owner"]): string {
 }
 
 async function resolveCheckoutRecipients(ownerEmail: string): Promise<string[]> {
-  const adminEmail = await getAdminNotificationEmail();
   const envAdmin = process.env.CHECKOUT_ADMIN_NOTIFY_EMAIL?.trim();
-  const recipients = new Set<string>([ownerEmail]);
-  if (adminEmail) recipients.add(adminEmail);
-  if (envAdmin) recipients.add(envAdmin);
+  const recipients = new Set<string>([
+    ownerEmail.trim().toLowerCase(),
+    ...(await resolveNotificationRecipients()),
+  ]);
+  if (envAdmin) recipients.add(envAdmin.toLowerCase());
   return [...recipients];
 }
 
@@ -435,9 +468,7 @@ async function notifyCheckoutUserConfirmedAsync(ctx: CheckoutMailContext): Promi
   `.trim();
 
   const html = buildHtmlEmail({ title: subject, bodyHtml });
-  const adminEmail = await getAdminNotificationEmail();
-  if (!adminEmail) return;
-  await sendMail({ to: adminEmail, subject, text, html });
+  await sendMailToNotificationRecipients({ subject, text, html });
 }
 
 export function notifyCheckoutIntegrated(

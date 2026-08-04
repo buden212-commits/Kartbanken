@@ -26,6 +26,7 @@ import { uploadCheckoutCheckin } from "@/lib/upload-client";
 
 import {
   buildAddedNotIntegratedWarning,
+  hasIntegrationResultStored,
   parseIntegrationWarningsFromDiffJson,
   type IntegrationWarning,
 } from "@/lib/checkout/integration-warnings";
@@ -87,6 +88,8 @@ type CheckoutData = {
   selection: CheckoutSelection;
 
   diffSummaryJson?: unknown;
+
+  integrationComment?: string | null;
 
   user: { id: string; name: string | null; email: string };
 
@@ -506,7 +509,12 @@ export function CheckoutDetailClient({
 
 
 
-    const res = await uploadCheckoutCheckin(mapSlug, checkout.id, file);
+    const res = await uploadCheckoutCheckin(
+      mapSlug,
+      checkout.id,
+      file,
+      form.get("comment")?.toString().trim() || undefined,
+    );
 
     setPendingAction(null);
 
@@ -710,6 +718,9 @@ export function CheckoutDetailClient({
 
     if (checkout.status !== CheckoutStatus.INTEGRATED || !diff?.changes) return [];
 
+    // Newer integrations store integrationWarnings (empty array = all added objects appended).
+    if (hasIntegrationResultStored(checkout.diffSummaryJson)) return [];
+
     const addedWarning = buildAddedNotIntegratedWarning(
 
       diff.changes.filter((change) => change.changeType === "added"),
@@ -718,7 +729,7 @@ export function CheckoutDetailClient({
 
     return addedWarning ? [addedWarning] : [];
 
-  }, [checkout.status, diff?.changes, integrationWarnings]);
+  }, [checkout.status, checkout.diffSummaryJson, diff?.changes, integrationWarnings]);
 
 
 
@@ -819,6 +830,20 @@ export function CheckoutDetailClient({
           <form onSubmit={handleCheckin} className="mt-4 space-y-3">
 
             <input name="file" type="file" accept=".ocd" required className="form-file" />
+
+            <div>
+              <label htmlFor="checkin-comment" className="form-label">
+                Kommentar
+              </label>
+              <input
+                id="checkin-comment"
+                name="comment"
+                type="text"
+                defaultValue={checkout.integrationComment ?? ""}
+                placeholder="t.ex. Justerat stigar vid sjön"
+                className="form-input"
+              />
+            </div>
 
             <button
 
@@ -1088,6 +1113,18 @@ export function CheckoutDetailClient({
 
           </p>
 
+          {checkout.integrationComment && (
+
+            <p className="mt-2 text-sm text-slate-700">
+
+              <span className="font-medium">Versionskommentar:</span>{" "}
+
+              {checkout.integrationComment}
+
+            </p>
+
+          )}
+
           <button
 
             type="button"
@@ -1153,6 +1190,12 @@ export function CheckoutDetailClient({
           warnings={displayedIntegrationWarnings}
 
           versionNumber={integratedVersionNumber}
+
+          mapSlug={mapSlug}
+
+          checkoutId={checkout.id}
+
+          headVersionId={diffHeadVersionId}
 
         />
 

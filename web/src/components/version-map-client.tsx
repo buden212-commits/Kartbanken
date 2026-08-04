@@ -1,0 +1,65 @@
+"use client";
+
+import Link from "next/link";
+import { DiffMapPanel } from "@/components/diff-map-panel";
+
+type Props = {
+  mapSlug: string;
+  mapTitle: string;
+  versionId: string;
+  versionNumber: number;
+  fileName: string;
+  objectCount: number | null;
+};
+
+export function VersionMapClient({
+  mapSlug,
+  mapTitle,
+  versionId,
+  versionNumber,
+  fileName,
+  objectCount,
+}: Props) {
+  const viewerUrl = `/maps/${mapSlug}/versions/${versionId}/viewer`;
+
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+      <Link href={`/maps/${mapSlug}`} className="link-muted text-sm">
+        ← {mapTitle}
+      </Link>
+
+      <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">Visa karta</h1>
+          <p className="mt-2 break-words text-sm text-slate-600 sm:text-base">
+            v{versionNumber} · {fileName}
+            {objectCount != null && (
+              <> · {objectCount.toLocaleString("sv-SE")} objekt</>
+            )}
+          </p>
+          <p className="mt-1 text-sm text-slate-500">
+            Dra för att panorera, nyp eller använd +/− för att zooma.
+          </p>
+        </div>
+        <a
+          href={viewerUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded-lg border border-ifk-blue/30 bg-ifk-blue-pale px-4 py-2 text-sm font-medium text-ifk-blue transition hover:border-ifk-blue"
+        >
+          Öppna i nytt fönster
+        </a>
+      </div>
+
+      <div className="mt-6 sm:mt-8">
+        <DiffMapPanel
+          previewUrl={`/api/maps/${mapSlug}/versions/${versionId}/preview`}
+          title="Hela kartan"
+          mapSlug={mapSlug}
+          versionId={versionId}
+          exportEnabled
+        />
+      </div>
+    </div>
+  );
+}

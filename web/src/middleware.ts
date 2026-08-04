@@ -8,13 +8,13 @@ export default auth((req) => {
   const session = req.auth;
 
   const isAuthRoute = pathname.startsWith("/api/auth");
-  const isLogin = pathname === "/login";
+  const isPublicAuth = pathname === "/login" || pathname === "/register";
 
   if (isAuthRoute) {
     return NextResponse.next();
   }
 
-  if (isLogin) {
+  if (isPublicAuth) {
     if (session) {
       if (session.user.role === Role.PENDING || session.user.role === Role.REJECTED) {
         return NextResponse.redirect(new URL("/pending", req.url));
@@ -49,7 +49,12 @@ export default auth((req) => {
     return NextResponse.redirect(new URL("/", req.url));
   }
 
-  return NextResponse.next();
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set("x-pathname", pathname);
+
+  return NextResponse.next({
+    request: { headers: requestHeaders },
+  });
 });
 
 export const config = {

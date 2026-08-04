@@ -1,5 +1,11 @@
 import { requireSession } from "@/lib/auth/api";
-import { readTempCompareJob } from "@/lib/ocad/temp-compare";
+import { runAfterResponse } from "@/lib/background";
+import {
+  failStaleTempCompareJob,
+  isTempCompareJobStale,
+  processTempCompareJob,
+  readTempCompareJob,
+} from "@/lib/ocad/temp-compare";
 import { NextResponse } from "next/server";
 
 export const maxDuration = 300;
@@ -22,6 +28,17 @@ export async function GET(_request: Request, { params }: RouteParams) {
   }
 
   if (job.status === "processing") {
+    if (isTempCompareJobStale(job)) {
+      const failed = await failStaleTempCompareJob(job);
+      return NextResponse.json({
+        status: "error",
+        error: failed.error ?? "Jämförelsen tog för lång tid",
+      });
+    }
+
+    // Säkerställ att bakgrundsarbete körs även om initial after()-callback aldrig startade (Vercel).
+    runAfterResponse(() => processTempCompareJob(jobId));
+
     return NextResponse.json({
       status: "processing",
       fileNameA: job.fileNameA,

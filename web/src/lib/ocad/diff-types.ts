@@ -37,4 +37,9 @@ export type OcadDiffResult = {
 export type OcadDiffOptions = {
   toleranceMeters?: number;
   maxChanges?: number;
+  /**
+   * Prefer pairing objects with the same OCAD objectIndex before spatial matching.
+   * Use for checkout export↔checkin where indices are stable across edits.
+   */
+  matchByObjectIndex?: boolean;
 };

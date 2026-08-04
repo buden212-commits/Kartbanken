@@ -1,9 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DiffViewClient, type DiffSummary, type LayerPaths } from "@/components/diff-view-client";
 import { VerifyCompareForm } from "@/components/verify-compare-form";
 import type { OcadObjectChange } from "@/lib/ocad/diff-types";
+
+const SLOW_PROCESSING_MS = 3 * 60 * 1000;
+const STUCK_PROCESSING_MS = 8 * 60 * 1000;
 
 type VerifyCompareResponse =
   | {
@@ -25,6 +28,9 @@ export function VerifyCompareClient() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [data, setData] = useState<VerifyCompareResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [processingStartedAt, setProcessingStartedAt] = useState<number | null>(null);
+  const [processingElapsedMs, setProcessingElapsedMs] = useState(0);
+  const processingStartedAtRef = useRef<number | null>(null);
 
   const fetchCompare = useCallback(async () => {
     if (!jobId) return;
@@ -32,11 +38,19 @@ export function VerifyCompareClient() {
     const json = (await res.json()) as VerifyCompareResponse;
     setData(json);
     setLoading(false);
+    if (json.status !== "processing") {
+      processingStartedAtRef.current = null;
+      setProcessingStartedAt(null);
+      setProcessingElapsedMs(0);
+    }
   }, [jobId]);
 
   useEffect(() => {
     if (!jobId) return;
     setLoading(true);
+    processingStartedAtRef.current = Date.now();
+    setProcessingStartedAt(Date.now());
+    setProcessingElapsedMs(0);
     void fetchCompare();
   }, [jobId, fetchCompare]);
 
@@ -47,6 +61,14 @@ export function VerifyCompareClient() {
     }, 3000);
     return () => clearInterval(timer);
   }, [data?.status, fetchCompare]);
+
+  useEffect(() => {
+    if (data?.status !== "processing" || processingStartedAt === null) return;
+    const timer = setInterval(() => {
+      setProcessingElapsedMs(Date.now() - processingStartedAt);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [data?.status, processingStartedAt]);
 
   const previewUrls = useMemo(() => {
     if (!jobId) return undefined;
@@ -62,7 +84,14 @@ export function VerifyCompareClient() {
     setJobId(null);
     setData(null);
     setLoading(false);
+    processingStartedAtRef.current = null;
+    setProcessingStartedAt(null);
+    setProcessingElapsedMs(0);
   }
+
+  const processingMinutes = Math.floor(processingElapsedMs / 60_000);
+  const isSlowProcessing = processingElapsedMs >= SLOW_PROCESSING_MS;
+  const isStuckProcessing = processingElapsedMs >= STUCK_PROCESSING_MS;
 
   if (!jobId) {
     return <VerifyCompareForm onJobCreated={setJobId} />;
@@ -100,6 +129,35 @@ export function VerifyCompareClient() {
           <p className="mt-2 text-sm text-slate-600">
             Parsar OCAD-filer, beräknar diff och skapar kartlager. Sidan uppdateras automatiskt.
           </p>
+          {processingMinutes > 0 && (
+            <p className="mt-2 text-xs text-slate-500">
+              Pågått i {processingMinutes} {processingMinutes === 1 ? "minut" : "minuter"}…
+            </p>
+          )}
+          {isSlowProcessing && !isStuckProcessing && (
+            <p className="mt-3 text-sm text-amber-900">
+              Det tar längre tid än vanligt. Stora kartfiler kan behöva några minuter — vi försöker
+              igen automatiskt.
+            </p>
+          )}
+          {isStuckProcessing && (
+            <div className="mt-4 space-y-3">
+              <p className="text-sm text-amber-900">
+                Jämförelsen verkar ha fastnat. Prova att starta om den — vi triggar om
+                bearbetningen vid varje uppdatering.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setLoading(true);
+                  void fetchCompare();
+                }}
+                className="rounded-lg border border-amber-300 px-4 py-2 text-sm text-amber-900 transition hover:bg-amber-100"
+              >
+                Uppdatera / försök igen
+              </button>
+            </div>
+          )}
         </div>
       )}
 

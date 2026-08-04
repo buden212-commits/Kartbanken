@@ -384,10 +384,11 @@ export async function HelpPageContent() {
           </p>
           <HelpList
             items={[
+              "Välj vilken bana som ska exporteras",
               "Välj pappersformat: A4 eller A3",
               "Välj orientering: stående eller liggande",
               "Välj skala (t.ex. 1:10 000, 1:7 500, 1:5 000)",
-              "Utskriftsområdet centreras automatiskt på banans objekt",
+              "Utskriftsområdet centreras automatiskt på den valda banans utbredning",
               "PDF roteras +7° enligt IOF-utskriftsstandard",
               "Bannamn och banlängd skrivs ut nederst till vänster i magenta",
             ]}

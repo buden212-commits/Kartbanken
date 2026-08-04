@@ -8,6 +8,8 @@ export type IntegrationObjectDetail = {
   type: OcadObjectType;
   typeLabel: string;
   location: string;
+  centroid?: [number, number];
+  bbox?: [number, number, number, number];
   text?: string;
 };
 
@@ -42,8 +44,68 @@ export function changeToObjectDetail(change: OcadObjectChange): IntegrationObjec
     type: change.type,
     typeLabel: objectTypeLabel(change.type),
     location: formatObjectLocation(change.centroid),
+    centroid: change.centroid,
+    bbox: change.bbox,
     text: change.text,
   };
+}
+
+/** Parse "(x, y)" location strings from older stored warnings. */
+export function parseLocationCentroid(location: string): [number, number] | null {
+  const match = location.match(/^\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)$/);
+  if (!match) return null;
+  return [Number(match[1]), Number(match[2])];
+}
+
+export function resolveObjectCentroid(
+  obj: IntegrationObjectDetail,
+): [number, number] | null {
+  if (obj.centroid) return obj.centroid;
+  return parseLocationCentroid(obj.location);
+}
+
+export function resolveObjectBbox(
+  obj: IntegrationObjectDetail,
+): [number, number, number, number] | null {
+  if (obj.bbox) return obj.bbox;
+  const centroid = resolveObjectCentroid(obj);
+  if (!centroid) return null;
+  const pad = obj.type === "point" || obj.type === "text" ? 15 : 40;
+  return [centroid[0] - pad, centroid[1] - pad, centroid[0] + pad, centroid[1] + pad];
+}
+
+export function collectWarningObjectIndices(warnings: IntegrationWarning[]): number[] {
+  const indices = new Set<number>();
+  for (const warning of warnings) {
+    for (const obj of warning.objects) {
+      indices.add(obj.objectIndex);
+    }
+  }
+  return [...indices];
+}
+
+export function warningObjectsToChanges(
+  warnings: IntegrationWarning[],
+): OcadObjectChange[] {
+  const changes: OcadObjectChange[] = [];
+  for (const warning of warnings) {
+    for (const obj of warning.objects) {
+      const centroid = resolveObjectCentroid(obj);
+      const bbox = resolveObjectBbox(obj);
+      if (!centroid || !bbox) continue;
+      changes.push({
+        changeType: warning.code === "modified_copy_skipped" ? "modified" : "added",
+        objectIndex: obj.objectIndex,
+        symbolNumber: obj.symbolNumber,
+        symbolName: obj.symbolName,
+        type: obj.type,
+        centroid,
+        bbox,
+        text: obj.text,
+      });
+    }
+  }
+  return changes;
 }
 
 export function buildAppendFailedWarning(
@@ -90,7 +152,7 @@ export function buildAddedNotIntegratedWarning(
         ? "1 nytt objekt kunde inte läggas till automatiskt"
         : `${addedChanges.length} nya objekt kunde inte läggas till automatiskt`,
     reason:
-      "Systemet kan uppdatera och ta bort befintliga objekt i aktuella versionen, men saknar stöd för att skapa helt nya OCAD-objekt. " +
+      "Dessa objekt kunde inte kopieras in automatiskt vid integration (äldre integration utan objekt-append). " +
       "Kopiera objekten manuellt från checkin-filen till aktuell version i OCAD Desktop (eller rita om dem).",
     objects: addedChanges.map(changeToObjectDetail),
   };
@@ -186,4 +248,22 @@ export function parseIntegrationWarningsFromDiffJson(raw: unknown): IntegrationW
       typeof (w as IntegrationWarning).reason === "string" &&
       Array.isArray((w as IntegrationWarning).objects),
   );
+}
+
+/** True when checkout was integrated with stored warnings metadata (incl. empty = success). */
+export function hasIntegrationResultStored(raw: unknown): boolean {
+  if (!raw) return false;
+
+  let parsed: unknown = raw;
+  if (typeof raw === "string") {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return false;
+    }
+  }
+
+  if (!parsed || typeof parsed !== "object") return false;
+  const record = parsed as Record<string, unknown>;
+  return "integratedVersionNumber" in record || "integrationWarnings" in record;
 }

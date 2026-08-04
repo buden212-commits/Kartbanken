@@ -1,5 +1,7 @@
 import { requireSession } from "@/lib/auth/api";
 import { logAction } from "@/lib/audit";
+import { runAfterResponse } from "@/lib/background";
+import { assertVersionViewAccess } from "@/lib/maps/version-lookup";
 import {
   computeVersionDiff,
   ensureDiffLayers,
@@ -39,13 +41,24 @@ export async function GET(request: Request, { params }: RouteParams) {
   }
 
   const [versionA, versionB] = await Promise.all([
-    prisma.mapVersion.findFirst({ where: { id: v1, mapFileId: map.id } }),
-    prisma.mapVersion.findFirst({ where: { id: v2, mapFileId: map.id } }),
+    prisma.mapVersion.findFirst({
+      where: { id: v1, mapFileId: map.id },
+      select: { id: true, versionNumber: true, isPublished: true, originalFilename: true },
+    }),
+    prisma.mapVersion.findFirst({
+      where: { id: v2, mapFileId: map.id },
+      select: { id: true, versionNumber: true, isPublished: true, originalFilename: true },
+    }),
   ]);
 
   if (!versionA || !versionB) {
     return NextResponse.json({ error: "Version hittades inte" }, { status: 404 });
   }
+
+  const deniedA = assertVersionViewAccess(session, versionA);
+  if (deniedA) return deniedA;
+  const deniedB = assertVersionViewAccess(session, versionB);
+  if (deniedB) return deniedB;
 
   if (versionA.versionNumber >= versionB.versionNumber) {
     return NextResponse.json(
@@ -59,7 +72,7 @@ export async function GET(request: Request, { params }: RouteParams) {
   });
 
   if (!diffRecord || diffRecord.status === "PENDING" || diffRecord.status === "PROCESSING") {
-    void processVersionAfterUpload(map.id, v2, v1).catch(console.error);
+    runAfterResponse(() => processVersionAfterUpload(map.id, v2, v1));
     return NextResponse.json({
       status: "processing",
       versionA: { id: versionA.id, versionNumber: versionA.versionNumber },

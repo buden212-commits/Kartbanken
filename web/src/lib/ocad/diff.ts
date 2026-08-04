@@ -45,33 +45,83 @@ function neighborCellKeys(x: number, y: number, cellSize: number): string[] {
   return keys;
 }
 
+function matchByObjectIndexFirst(
+  groupA: IndexedObject[],
+  groupB: IndexedObject[],
+): {
+  matched: Array<{ a: IndexedObject; b: IndexedObject; modified: boolean }>;
+  remainingA: IndexedObject[];
+  remainingB: IndexedObject[];
+} {
+  const byIndexA = new Map<number, IndexedObject[]>();
+  for (const obj of groupA) {
+    if (obj.objectIndex < 0) continue;
+    const bucket = byIndexA.get(obj.objectIndex) ?? [];
+    bucket.push(obj);
+    byIndexA.set(obj.objectIndex, bucket);
+  }
+
+  const matched: Array<{ a: IndexedObject; b: IndexedObject; modified: boolean }> = [];
+  const usedA = new Set<number>();
+  const usedB = new Set<number>();
+
+  for (const objB of groupB) {
+    if (objB.objectIndex < 0) continue;
+    const candidates = byIndexA.get(objB.objectIndex);
+    if (!candidates?.length) continue;
+    const objA = candidates.find((candidate) => !usedA.has(candidate.id));
+    if (!objA) continue;
+
+    usedA.add(objA.id);
+    usedB.add(objB.id);
+    const modified =
+      objA.geometryHash !== objB.geometryHash || (objA.text ?? "") !== (objB.text ?? "");
+    matched.push({ a: objA, b: objB, modified });
+  }
+
+  return {
+    matched,
+    remainingA: groupA.filter((obj) => !usedA.has(obj.id)),
+    remainingB: groupB.filter((obj) => !usedB.has(obj.id)),
+  };
+}
+
 function matchSymbolGroup(
   groupA: IndexedObject[],
   groupB: IndexedObject[],
   tolerance: number,
+  preferObjectIndex: boolean,
 ): {
   matched: Array<{ a: IndexedObject; b: IndexedObject; modified: boolean }>;
   unmatchedA: IndexedObject[];
   unmatchedB: IndexedObject[];
 } {
-  const availableA = new Set(groupA.map((o) => o.id));
-  const byIdA = new Map(groupA.map((o) => [o.id, o]));
-  const matched: Array<{ a: IndexedObject; b: IndexedObject; modified: boolean }> = [];
+  let seedMatched: Array<{ a: IndexedObject; b: IndexedObject; modified: boolean }> = [];
+  let workA = groupA;
+  let workB = groupB;
+
+  if (preferObjectIndex) {
+    const indexed = matchByObjectIndexFirst(groupA, groupB);
+    seedMatched = indexed.matched;
+    workA = indexed.remainingA;
+    workB = indexed.remainingB;
+  }
+
+  const availableA = new Set(workA.map((o) => o.id));
+  const byIdA = new Map(workA.map((o) => [o.id, o]));
+  const matched: Array<{ a: IndexedObject; b: IndexedObject; modified: boolean }> = [...seedMatched];
   const unmatchedB: IndexedObject[] = [];
 
   const hashBuckets = new Map<string, number[]>();
-  for (const obj of groupA) {
+  for (const obj of workA) {
     const bucket = hashBuckets.get(obj.geometryHash) ?? [];
     bucket.push(obj.id);
     hashBuckets.set(obj.geometryHash, bucket);
   }
 
-  const index = buildSpatialIndex(
-    groupA.filter((o) => availableA.has(o.id)),
-    tolerance,
-  );
+  const index = buildSpatialIndex(workA, tolerance);
 
-  for (const objB of groupB) {
+  for (const objB of workB) {
     let bestId: number | null = null;
     let bestDist = tolerance;
 
@@ -119,7 +169,7 @@ function matchSymbolGroup(
 
   return {
     matched,
-    unmatchedA: groupA.filter((o) => availableA.has(o.id)),
+    unmatchedA: workA.filter((o) => availableA.has(o.id)),
     unmatchedB,
   };
 }
@@ -182,6 +232,7 @@ export function compareOcadObjects(
   const started = Date.now();
   const tolerance = options.toleranceMeters ?? DEFAULT_TOLERANCE_METERS;
   const maxChanges = options.maxChanges ?? DEFAULT_MAX_CHANGES;
+  const preferObjectIndex = options.matchByObjectIndex ?? false;
 
   const indexedA = objectsA.map((o, id) => ({ ...o, id }));
   const indexedB = objectsB.map((o, id) => ({ ...o, id }));
@@ -199,7 +250,12 @@ export function compareOcadObjects(
   for (const symbolNumber of allSymbols) {
     const groupA = groupsA.get(symbolNumber) ?? [];
     const groupB = groupsB.get(symbolNumber) ?? [];
-    const { matched, unmatchedA, unmatchedB } = matchSymbolGroup(groupA, groupB, tolerance);
+    const { matched, unmatchedA, unmatchedB } = matchSymbolGroup(
+      groupA,
+      groupB,
+      tolerance,
+      preferObjectIndex,
+    );
 
     for (const { a, b, modified: isModified } of matched) {
       if (isModified) {

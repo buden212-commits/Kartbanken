@@ -1,9 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { OcadObjectChange } from "@/lib/ocad/diff-types";
 import type { ChangeType } from "@/lib/ocad/diff-types";
 import { formatChangeCentroid } from "@/lib/ocad/change-utils";
+import {
+  isGeoreferencedCrs,
+  wgs84ToMapCoord,
+  type OcadCrsInfo,
+} from "@/lib/ocad/crs";
 import { findChangeAtPoint, parseViewBoxString, screenToSvgPoint } from "@/lib/ocad/map-hit-test";
 import {
   geoBboxToSvgUser,
@@ -27,6 +32,13 @@ import {
 import { defaultOcadExportVersion } from "@/lib/ocad/ocad-export-shared";
 import { clearPreviewCache, fetchPreviewText } from "@/lib/ocad/preview-fetch";
 import { MapExportControls } from "@/components/map-export-controls";
+
+type GpsFix = {
+  mapCoord: [number, number];
+  accuracyMeters: number;
+  latitude: number;
+  longitude: number;
+};
 
 type Bbox = [number, number, number, number];
 
@@ -61,25 +73,59 @@ type ClickableItem = {
   index: number;
 };
 
+export type MapDrawPointerHandlers = {
+  onPointerDown: (e: React.PointerEvent, svg: SVGSVGElement) => void;
+  onPointerMove: (e: React.PointerEvent, svg: SVGSVGElement) => void;
+  onPointerUp: (e: React.PointerEvent, svg: SVGSVGElement) => void;
+};
+
 type Props = {
   previewUrl: string;
   title: string;
   mapSlug: string;
   versionId: string;
   exportEnabled?: boolean;
+  fullscreen?: boolean;
   focusTarget?: FocusTarget | null;
   selectedChange?: OcadObjectChange | null;
   clickableItems?: ClickableItem[];
   onClearFocus?: () => void;
   onObjectClick?: (changeIndex: number) => void;
+  /** Extra SVG overlay content rendered above map layers (e.g. checkout areas). */
+  renderSvgOverlay?: (rootTransform: SvgRootTransform) => ReactNode;
+  /** When "draw", viewport pointer events call drawPointerHandlers instead of pan. */
+  interactionMode?: "navigate" | "draw";
+  drawPointerHandlers?: MapDrawPointerHandlers;
+  /** Replaces the default map title in the toolbar row. */
+  headerContent?: ReactNode;
+  /** Extra row below the main toolbar (e.g. checkout draw tools). */
+  secondaryHeaderContent?: ReactNode;
+  /** Omit outer border/radius when nested inside another panel. */
+  unboxed?: boolean;
+  showLayerPanel?: boolean;
+  /** Called when OCAD map scale is read from preview metadata. */
+  onOcadMapScale?: (scale: number) => void;
+  /**
+   * Fit the viewport to a geo bbox (no highlight). Bump requestId to re-apply.
+   */
+  fitGeoBbox?: {
+    bbox: Bbox;
+    requestId: number;
+  } | null;
 };
 
 const MAX_ZOOM = 30;
 const MIN_ZOOM = 0.2;
-const INITIAL_ZOOM = 4;
+/** Zoom in/out by 50% per button click or wheel step. */
+const ZOOM_IN_FACTOR = 1.5;
+const ZOOM_OUT_FACTOR = 1 / ZOOM_IN_FACTOR;
+/** Zoom level that shows the entire SVG (same as "Hela kartan"). */
+const FIT_WHOLE_ZOOM = 1;
 const POINT_ZOOM = 30;
 const POINT_HIGHLIGHT_RADIUS_M = 5; // 10 m diameter in map units (meters)
 const DRAG_THRESHOLD_PX = 5;
+/** Fixed screen size for GPS reticle (overlay is outside zoom transform). */
+const GPS_CROSSHAIR_SIZE_PX = 28;
 
 type HighlightShape =
   | { kind: "circle"; cx: number; cy: number; r: number }
@@ -110,18 +156,21 @@ function focusOnTarget(
   viewBox: string,
   containerWidth: number,
   containerHeight: number,
-): { pan: { x: number; y: number }; zoom: number } {
+): { pan: { x: number; y: number }; zoom: number } | null {
+  if (containerWidth < 10 || containerHeight < 10) return null;
+
   const [svgX, svgY] = geoToSvgUserPoint(target.centroid, rootTransform);
   const screen0 = mapPointToScreen(svgX, svgY, viewBox, containerWidth, containerHeight);
 
   let targetZoom = POINT_ZOOM;
-  if (target.objectType !== "point") {
+  if (target.objectType !== "point" && target.objectType !== "text") {
     const [minX, minY, maxX, maxY] = geoBboxToSvgUser(target.bbox, rootTransform);
     const bw = Math.max(maxX - minX, 5) * 1.4;
     const bh = Math.max(maxY - minY, 5) * 1.4;
     const vb = parseViewBoxString(viewBox);
-    if (vb) {
+    if (vb && vb.width > 0 && vb.height > 0) {
       const renderScale = Math.min(containerWidth / vb.width, containerHeight / vb.height);
+      if (!(renderScale > 0)) return null;
       const visibleW = containerWidth / renderScale;
       const visibleH = containerHeight / renderScale;
       targetZoom = Math.min(visibleW / bw, visibleH / bh) * 0.85;
@@ -129,14 +178,18 @@ function focusOnTarget(
     }
   }
 
+  if (!Number.isFinite(targetZoom) || !Number.isFinite(screen0[0]) || !Number.isFinite(screen0[1])) {
+    return null;
+  }
+
   const focalX = containerWidth / 2;
   const focalY = containerHeight / 2;
+  const panX = focalX - screen0[0] * targetZoom;
+  const panY = focalY - screen0[1] * targetZoom;
+  if (!Number.isFinite(panX) || !Number.isFinite(panY)) return null;
 
   return {
-    pan: {
-      x: focalX - screen0[0] * targetZoom,
-      y: focalY - screen0[1] * targetZoom,
-    },
+    pan: { x: panX, y: panY },
     zoom: targetZoom,
   };
 }
@@ -165,11 +218,21 @@ export function DiffMapPanel({
   mapSlug,
   versionId,
   exportEnabled = true,
+  fullscreen = false,
   focusTarget,
   selectedChange,
   clickableItems = [],
   onClearFocus,
   onObjectClick,
+  renderSvgOverlay,
+  interactionMode = "navigate",
+  drawPointerHandlers,
+  headerContent,
+  secondaryHeaderContent,
+  unboxed = false,
+  showLayerPanel = true,
+  onOcadMapScale,
+  fitGeoBbox = null,
 }: Props) {
   const [svgInner, setSvgInner] = useState<string | null>(null);
   const [svgFill, setSvgFill] = useState("transparent");
@@ -177,7 +240,7 @@ export function DiffMapPanel({
   const [rootTransform, setRootTransform] = useState<SvgRootTransform>(IDENTITY_SVG_TRANSFORM);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [zoom, setZoom] = useState(INITIAL_ZOOM);
+  const [zoom, setZoom] = useState(FIT_WHOLE_ZOOM);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [clickHint, setClickHint] = useState<string | null>(null);
   const [fullSvgText, setFullSvgText] = useState<string | null>(null);
@@ -193,14 +256,22 @@ export function DiffMapPanel({
   const [exportFrame, setExportFrame] = useState<ExportFrame | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [ocadCrs, setOcadCrs] = useState<OcadCrsInfo | null>(null);
+  const [gpsEnabled, setGpsEnabled] = useState(false);
+  const [gpsFix, setGpsFix] = useState<GpsFix | null>(null);
+  const [gpsStatus, setGpsStatus] = useState<string | null>(null);
+  const [gpsError, setGpsError] = useState<string | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const gpsWatchIdRef = useRef<number | null>(null);
+  const gpsCenteredOnceRef = useRef(false);
   const dragRef = useRef<{
     startX: number;
     startY: number;
     panX: number;
     panY: number;
     moved: boolean;
+    pointerId: number;
   } | null>(null);
   const frameDragRef = useRef<{
     startSvgX: number;
@@ -208,7 +279,15 @@ export function DiffMapPanel({
     centerX: number;
     centerY: number;
   } | null>(null);
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchRef = useRef<{
+    distance: number;
+    zoom: number;
+    pan: { x: number; y: number };
+  } | null>(null);
   const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const userInteractedRef = useRef(false);
+  const initialFitDoneRef = useRef(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [mapLayers, setMapLayers] = useState<OcadMapLayer[]>([]);
   const [layerVisibility, setLayerVisibility] = useState<Record<string, boolean>>({});
@@ -223,6 +302,18 @@ export function DiffMapPanel({
     setFullSvgText(null);
     setMapLayers([]);
     setLayerVisibility({});
+    setOcadCrs(null);
+    if (gpsWatchIdRef.current != null) {
+      navigator.geolocation.clearWatch(gpsWatchIdRef.current);
+      gpsWatchIdRef.current = null;
+    }
+    setGpsEnabled(false);
+    setGpsFix(null);
+    setGpsError(null);
+    setGpsStatus(null);
+    gpsCenteredOnceRef.current = false;
+    userInteractedRef.current = false;
+    initialFitDoneRef.current = false;
 
     fetchPreviewText(previewUrl, { signal: controller.signal })
       .then((text) => {
@@ -233,6 +324,7 @@ export function DiffMapPanel({
           fill,
           ocadMapScale: mapScale,
           ocadFileVersion,
+          ocadCrs: crs,
           ocadLayers,
           rootTransform: transform,
         } = extractSvgInner(text);
@@ -240,7 +332,10 @@ export function DiffMapPanel({
         setSvgFill(fill ?? "transparent");
         setFullViewBox(viewBox);
         setRootTransform(transform);
-        setOcadMapScale(mapScale ?? 15000);
+        const resolvedScale = mapScale ?? crs?.scale ?? 15000;
+        setOcadMapScale(resolvedScale);
+        onOcadMapScale?.(resolvedScale);
+        setOcadCrs(crs);
         setMapLayers(ocadLayers);
         setLayerVisibility(initialLayerVisibility(ocadLayers));
         setExportSettings((prev) => ({
@@ -398,37 +493,95 @@ export function DiffMapPanel({
     cancelExportMode,
   ]);
 
-  const viewStateRef = useRef({ pan: { x: 0, y: 0 }, zoom: INITIAL_ZOOM });
+  const viewStateRef = useRef({ pan: { x: 0, y: 0 }, zoom: FIT_WHOLE_ZOOM });
   viewStateRef.current = { pan, zoom };
 
-  useEffect(() => {
-    if (!fullViewBox || loading) return;
+  const markUserInteracted = useCallback(() => {
+    userInteractedRef.current = true;
+  }, []);
 
-    if (!focusTarget) {
-      setPan({ x: 0, y: 0 });
-      setZoom(INITIAL_ZOOM);
-      return;
+  const fitWholeMap = useCallback(() => {
+    setZoom(FIT_WHOLE_ZOOM);
+    setPan({ x: 0, y: 0 });
+  }, []);
+
+  useEffect(() => {
+    if (!fullViewBox || loading || initialFitDoneRef.current) return;
+
+    initialFitDoneRef.current = true;
+
+    if (focusTarget || fitGeoBbox) return;
+
+    if (!userInteractedRef.current) {
+      fitWholeMap();
     }
+  }, [fullViewBox, loading, focusTarget, fitGeoBbox, fitWholeMap]);
+
+  useEffect(() => {
+    if (!focusTarget || !fullViewBox || loading) return;
 
     const viewport = viewportRef.current;
     if (!viewport) return;
 
     const rect = viewport.getBoundingClientRect();
-    const { pan: nextPan, zoom: nextZoom } = focusOnTarget(
+    const next = focusOnTarget(
       focusTarget,
       rootTransform,
       fullViewBox,
       rect.width,
       rect.height,
     );
-    setPan(nextPan);
-    setZoom(nextZoom);
+    if (!next) return;
+    setPan(next.pan);
+    setZoom(next.zoom);
   }, [focusTarget, fullViewBox, loading, rootTransform]);
+
+  useEffect(() => {
+    if (!fitGeoBbox || !fullViewBox || loading) return;
+
+    const apply = () => {
+      const viewport = viewportRef.current;
+      if (!viewport) return false;
+      const rect = viewport.getBoundingClientRect();
+      if (rect.width < 10 || rect.height < 10) return false;
+
+      const [minX, minY, maxX, maxY] = fitGeoBbox.bbox;
+      const next = focusOnTarget(
+        {
+          bbox: fitGeoBbox.bbox,
+          centroid: [(minX + maxX) / 2, (minY + maxY) / 2],
+          objectType: "area",
+        },
+        rootTransform,
+        fullViewBox,
+        rect.width,
+        rect.height,
+      );
+      if (!next) return false;
+      setPan(next.pan);
+      setZoom(next.zoom);
+      return true;
+    };
+
+    if (apply()) return;
+
+    // Viewport may not have layout yet (fullscreen flex) — retry next frames.
+    let tries = 0;
+    let raf = 0;
+    const tick = () => {
+      tries += 1;
+      if (apply() || tries >= 20) return;
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [fitGeoBbox, fullViewBox, loading, rootTransform]);
 
   const adjustZoom = useCallback((factor: number, focal?: { x: number; y: number }) => {
     const viewport = viewportRef.current;
     if (!viewport) return;
 
+    markUserInteracted();
     const rect = viewport.getBoundingClientRect();
     const focalX = focal?.x ?? rect.width / 2;
     const focalY = focal?.y ?? rect.height / 2;
@@ -436,7 +589,7 @@ export function DiffMapPanel({
     const next = zoomAtPoint(prevZoom, factor, prevPan, focalX, focalY);
     setZoom(next.zoom);
     setPan(next.pan);
-  }, []);
+  }, [markUserInteracted]);
 
   useEffect(() => {
     return () => {
@@ -450,24 +603,61 @@ export function DiffMapPanel({
     hintTimerRef.current = setTimeout(() => setClickHint(null), 2500);
   }, []);
 
-  const handleWheel = useCallback(
-    (e: React.WheelEvent) => {
-      e.preventDefault();
-      const viewport = viewportRef.current;
-      if (!viewport) return;
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
 
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
       const rect = viewport.getBoundingClientRect();
-      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      const delta = e.deltaY > 0 ? ZOOM_OUT_FACTOR : ZOOM_IN_FACTOR;
       adjustZoom(delta, {
         x: e.clientX - rect.left,
         y: e.clientY - rect.top,
       });
-    },
-    [adjustZoom],
-  );
+    };
 
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
+    viewport.addEventListener("wheel", onWheel, { passive: false });
+    return () => viewport.removeEventListener("wheel", onWheel);
+  }, [adjustZoom]);
+
+  const beginPinch = useCallback(() => {
+    const pts = [...pointersRef.current.values()];
+    if (pts.length < 2) return;
+    const [a, b] = pts;
+    const distance = Math.hypot(a.x - b.x, a.y - b.y);
+    if (distance < 1) return;
+    pinchRef.current = {
+      distance,
+      zoom: viewStateRef.current.zoom,
+      pan: { ...viewStateRef.current.pan },
+    };
+    dragRef.current = null;
+  }, []);
+
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+
+      const viewport = viewportRef.current;
+      if (!viewport) return;
+
+      if (interactionMode === "draw" && drawPointerHandlers && svgRef.current) {
+        viewport.setPointerCapture(e.pointerId);
+        drawPointerHandlers.onPointerDown(e, svgRef.current);
+        e.preventDefault();
+        return;
+      }
+
+      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      viewport.setPointerCapture(e.pointerId);
+
+      if (pointersRef.current.size >= 2) {
+        beginPinch();
+        e.preventDefault();
+        return;
+      }
+
       if (exportMode && exportFrame && svgRef.current) {
         const pt = screenToSvgPoint(svgRef.current, e.clientX, e.clientY);
         if (pt && pointInExportFrame(pt[0], pt[1], exportFrame)) {
@@ -488,13 +678,49 @@ export function DiffMapPanel({
         panX: pan.x,
         panY: pan.y,
         moved: false,
+        pointerId: e.pointerId,
       };
     },
-    [exportMode, exportFrame, pan.x, pan.y],
+    [beginPinch, drawPointerHandlers, exportMode, exportFrame, interactionMode, pan.x, pan.y],
   );
 
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent) => {
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (interactionMode === "draw" && drawPointerHandlers && svgRef.current) {
+        drawPointerHandlers.onPointerMove(e, svgRef.current);
+        e.preventDefault();
+        return;
+      }
+
+      if (!pointersRef.current.has(e.pointerId)) return;
+      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (pinchRef.current && pointersRef.current.size >= 2) {
+        const viewport = viewportRef.current;
+        if (!viewport) return;
+        const pts = [...pointersRef.current.values()];
+        const [a, b] = pts;
+        const distance = Math.hypot(a.x - b.x, a.y - b.y);
+        if (distance < 1) return;
+
+        const rect = viewport.getBoundingClientRect();
+        const focalX = (a.x + b.x) / 2 - rect.left;
+        const focalY = (a.y + b.y) / 2 - rect.top;
+        const factor = distance / pinchRef.current.distance;
+        const next = zoomAtPoint(
+          pinchRef.current.zoom,
+          factor,
+          pinchRef.current.pan,
+          focalX,
+          focalY,
+        );
+        markUserInteracted();
+        setZoom(next.zoom);
+        setPan(next.pan);
+        e.preventDefault();
+        return;
+      }
+
       const frameDrag = frameDragRef.current;
       if (frameDrag && svgRef.current) {
         const pt = screenToSvgPoint(svgRef.current, e.clientX, e.clientY);
@@ -509,29 +735,32 @@ export function DiffMapPanel({
               : prev,
           );
         }
+        e.preventDefault();
         return;
       }
 
-      if (!dragRef.current) return;
+      if (!dragRef.current || dragRef.current.pointerId !== e.pointerId) return;
       const dx = e.clientX - dragRef.current.startX;
       const dy = e.clientY - dragRef.current.startY;
       if (Math.hypot(dx, dy) > DRAG_THRESHOLD_PX) {
         dragRef.current.moved = true;
+        markUserInteracted();
       }
       setPan({
         x: dragRef.current.panX + dx,
         y: dragRef.current.panY + dy,
       });
+      e.preventDefault();
     },
-    [exportSettings, ocadMapScale],
+    [drawPointerHandlers, exportSettings, interactionMode, markUserInteracted, ocadMapScale],
   );
 
   const handleMapClick = useCallback(
-    (e: React.MouseEvent) => {
+    (clientX: number, clientY: number) => {
       if (exportMode) return;
       if (!onObjectClick || !svgRef.current || clickableItems.length === 0) return;
 
-      const mapPoint = screenToSvgPoint(svgRef.current, e.clientX, e.clientY);
+      const mapPoint = screenToSvgPoint(svgRef.current, clientX, clientY);
       if (!mapPoint) return;
 
       const viewBox = parseViewBoxString(fullViewBox);
@@ -552,18 +781,46 @@ export function DiffMapPanel({
     [fullViewBox, clickableItems, onObjectClick, showClickHint, rootTransform, exportMode],
   );
 
-  const handleMouseUp = useCallback(
-    (e: React.MouseEvent) => {
+  const handlePointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      if (interactionMode === "draw" && drawPointerHandlers && svgRef.current) {
+        if (viewportRef.current?.hasPointerCapture(e.pointerId)) {
+          viewportRef.current.releasePointerCapture(e.pointerId);
+        }
+        drawPointerHandlers.onPointerUp(e, svgRef.current);
+        e.preventDefault();
+        return;
+      }
+
+      const hadPointer = pointersRef.current.delete(e.pointerId);
+      if (!hadPointer) return;
+
+      if (viewportRef.current?.hasPointerCapture(e.pointerId)) {
+        viewportRef.current.releasePointerCapture(e.pointerId);
+      }
+
+      if (pointersRef.current.size >= 2) {
+        beginPinch();
+        return;
+      }
+
+      pinchRef.current = null;
+
       if (frameDragRef.current) {
         frameDragRef.current = null;
         return;
       }
-      if (!dragRef.current) return;
+
+      if (!dragRef.current || dragRef.current.pointerId !== e.pointerId) {
+        dragRef.current = null;
+        return;
+      }
+
       const wasClick = !dragRef.current.moved;
       dragRef.current = null;
-      if (wasClick) handleMapClick(e);
+      if (wasClick) handleMapClick(e.clientX, e.clientY);
     },
-    [handleMapClick],
+    [beginPinch, drawPointerHandlers, handleMapClick, interactionMode],
   );
 
   const resetView = useCallback(() => {
@@ -571,44 +828,218 @@ export function DiffMapPanel({
     setPan({ x: 0, y: 0 });
   }, []);
 
+  const canUseGps = isGeoreferencedCrs(ocadCrs);
+
+  const panToMapCoord = useCallback(
+    (mapCoord: [number, number], targetZoom = 8) => {
+      const viewport = viewportRef.current;
+      if (!viewport || !fullViewBox) return;
+      markUserInteracted();
+      const rect = viewport.getBoundingClientRect();
+      const nextZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, targetZoom));
+      const [svgX, svgY] = geoToSvgUserPoint(mapCoord, rootTransform);
+      const [screenX, screenY] = mapPointToScreen(
+        svgX,
+        svgY,
+        fullViewBox,
+        rect.width,
+        rect.height,
+      );
+      setZoom(nextZoom);
+      setPan({
+        x: rect.width / 2 - screenX * nextZoom,
+        y: rect.height / 2 - screenY * nextZoom,
+      });
+    },
+    [fullViewBox, markUserInteracted, rootTransform],
+  );
+
+  const applyGpsPosition = useCallback(
+    (coords: GeolocationCoordinates, autoCenter: boolean) => {
+      if (!ocadCrs) return;
+      const mapCoord = wgs84ToMapCoord(coords.longitude, coords.latitude, ocadCrs);
+      if (!mapCoord) {
+        setGpsError("Kunde inte konvertera GPS-position till kartan.");
+        setGpsStatus(null);
+        return;
+      }
+
+      const accuracyMeters =
+        typeof coords.accuracy === "number" && Number.isFinite(coords.accuracy)
+          ? coords.accuracy
+          : 25;
+
+      setGpsFix({
+        mapCoord,
+        accuracyMeters,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+      });
+      setGpsError(null);
+      setGpsStatus(
+        accuracyMeters <= 20
+          ? `GPS ±${Math.round(accuracyMeters)} m`
+          : `GPS ±${Math.round(accuracyMeters)} m (osäker)`,
+      );
+
+      const vb = parseViewBoxString(fullViewBox);
+      const [svgX, svgY] = geoToSvgUserPoint(mapCoord, rootTransform);
+      const outside =
+        !!vb &&
+        (svgX < vb.x || svgX > vb.x + vb.width || svgY < vb.y || svgY > vb.y + vb.height);
+
+      if (outside) {
+        setGpsStatus("GPS utanför kartområdet");
+      }
+
+      if (autoCenter && !gpsCenteredOnceRef.current) {
+        gpsCenteredOnceRef.current = true;
+        panToMapCoord(mapCoord, outside ? 2 : 10);
+      }
+    },
+    [fullViewBox, ocadCrs, panToMapCoord, rootTransform],
+  );
+
+  const stopGps = useCallback(() => {
+    if (gpsWatchIdRef.current != null && typeof navigator !== "undefined") {
+      navigator.geolocation.clearWatch(gpsWatchIdRef.current);
+      gpsWatchIdRef.current = null;
+    }
+    setGpsEnabled(false);
+    setGpsFix(null);
+    setGpsStatus(null);
+    setGpsError(null);
+    gpsCenteredOnceRef.current = false;
+  }, []);
+
+  const startGps = useCallback(() => {
+    if (!canUseGps) {
+      setGpsError("Kartan saknar georeferering — GPS kan inte visas.");
+      return;
+    }
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setGpsError("Enheten stödjer inte GPS.");
+      return;
+    }
+
+    setGpsEnabled(true);
+    setGpsError(null);
+    setGpsStatus("Hämtar position…");
+    gpsCenteredOnceRef.current = false;
+
+    gpsWatchIdRef.current = navigator.geolocation.watchPosition(
+      (pos) => applyGpsPosition(pos.coords, true),
+      (err) => {
+        setGpsEnabled(false);
+        setGpsStatus(null);
+        if (err.code === err.PERMISSION_DENIED) {
+          setGpsError("Platsåtkomst nekades. Tillåt plats i webbläsaren.");
+        } else if (err.code === err.POSITION_UNAVAILABLE) {
+          setGpsError("Kunde inte hämta GPS-position.");
+        } else if (err.code === err.TIMEOUT) {
+          setGpsError("GPS tog för lång tid. Försök igen.");
+        } else {
+          setGpsError("GPS-fel.");
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 5000,
+        timeout: 20000,
+      },
+    );
+  }, [applyGpsPosition, canUseGps]);
+
+  useEffect(() => {
+    return () => {
+      if (gpsWatchIdRef.current != null && typeof navigator !== "undefined") {
+        navigator.geolocation.clearWatch(gpsWatchIdRef.current);
+      }
+    };
+  }, []);
+
+  const gpsMarker = useMemo(() => {
+    if (!gpsFix || !fullViewBox || !viewportRef.current) return null;
+    const viewport = viewportRef.current;
+    const rect = viewport.getBoundingClientRect();
+    const [svgX, svgY] = geoToSvgUserPoint(gpsFix.mapCoord, rootTransform);
+    const [baseX, baseY] = mapPointToScreen(
+      svgX,
+      svgY,
+      fullViewBox,
+      rect.width,
+      rect.height,
+    );
+    const x = pan.x + baseX * zoom;
+    const y = pan.y + baseY * zoom;
+
+    return { x, y };
+  }, [fullViewBox, gpsFix, pan.x, pan.y, rootTransform, zoom]);
+
   const highlightShape = focusTarget ? buildHighlightShape(focusTarget, rootTransform) : null;
   const exportBbox = exportFrame ? exportFrameBbox(exportFrame) : null;
 
   const infoChange = selectedChange ?? null;
 
+  const toolbarBtn =
+    "min-h-9 min-w-9 rounded-md border border-slate-300 px-2.5 py-1.5 text-sm transition hover:border-ifk-blue hover:text-ifk-blue";
+  const toolbarBtnPrimary =
+    "min-h-9 rounded-md border border-ifk-blue/30 bg-ifk-blue-pale px-2.5 py-1.5 text-sm text-ifk-blue transition hover:border-ifk-blue disabled:opacity-40";
+
   return (
-    <div className="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-2">
-        <h3 className="text-sm font-medium text-slate-800">{title}</h3>
-        <div className="flex items-center gap-2 text-xs text-slate-500">
+    <div
+      className={`flex flex-col overflow-hidden bg-white ${
+        unboxed ? "" : "rounded-xl border border-slate-200 shadow-sm"
+      } ${fullscreen ? "h-full min-h-0" : ""}`}
+    >
+      <div className="flex flex-col gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+        {headerContent ?? <h3 className="text-sm font-medium text-slate-800">{title}</h3>}
+        <div className="flex flex-wrap items-center gap-2 text-slate-600">
           <button
             type="button"
-            onClick={() => adjustZoom(0.8)}
-            className="rounded border border-slate-300 px-2 py-0.5 transition hover:border-ifk-blue hover:text-ifk-blue"
+            onClick={() => adjustZoom(ZOOM_OUT_FACTOR)}
+            className={toolbarBtn}
+            aria-label="Zooma ut"
           >
             −
           </button>
-          <span>{Math.round(zoom * 100)}%</span>
+          <span className="min-w-[3.5rem] text-center text-xs tabular-nums text-slate-500">
+            {Math.round(zoom * 100)}%
+          </span>
           <button
             type="button"
-            onClick={() => adjustZoom(1.25)}
-            className="rounded border border-slate-300 px-2 py-0.5 transition hover:border-ifk-blue hover:text-ifk-blue"
+            onClick={() => adjustZoom(ZOOM_IN_FACTOR)}
+            className={toolbarBtn}
+            aria-label="Zooma in"
           >
             +
           </button>
-          <button
-            type="button"
-            onClick={resetView}
-            className="rounded border border-slate-300 px-2 py-0.5 transition hover:border-ifk-blue hover:text-ifk-blue"
-          >
+          <button type="button" onClick={resetView} className={toolbarBtn}>
             Hela kartan
           </button>
+          {canUseGps && (
+            <>
+              <button
+                type="button"
+                onClick={gpsEnabled ? stopGps : startGps}
+                disabled={loading}
+                className={gpsEnabled ? toolbarBtnPrimary : toolbarBtn}
+              >
+                {gpsEnabled ? "Stoppa GPS" : "Min position"}
+              </button>
+              {gpsFix && (
+                <button
+                  type="button"
+                  onClick={() => panToMapCoord(gpsFix.mapCoord, 10)}
+                  className={toolbarBtnPrimary}
+                >
+                  Panorera hit
+                </button>
+              )}
+            </>
+          )}
           {focusTarget && onClearFocus && (
-            <button
-              type="button"
-              onClick={onClearFocus}
-              className="rounded border border-ifk-blue/30 bg-ifk-blue-pale px-2 py-0.5 text-ifk-blue transition hover:border-ifk-blue"
-            >
+            <button type="button" onClick={onClearFocus} className={toolbarBtnPrimary}>
               Avmarkera
             </button>
           )}
@@ -617,13 +1048,25 @@ export function DiffMapPanel({
               type="button"
               onClick={startExportMode}
               disabled={loading || !fullSvgText}
-              className="rounded border border-ifk-blue/30 bg-ifk-blue-pale px-2 py-0.5 text-ifk-blue transition hover:border-ifk-blue disabled:opacity-40"
+              className={toolbarBtnPrimary}
             >
               Exportera
             </button>
           )}
         </div>
       </div>
+      {secondaryHeaderContent}
+      {(gpsStatus || gpsError) && (
+        <div
+          className={`border-b px-3 py-1.5 text-xs sm:px-4 ${
+            gpsError
+              ? "border-red-200 bg-red-50 text-red-700"
+              : "border-slate-200 bg-slate-50 text-slate-600"
+          }`}
+        >
+          {gpsError ?? gpsStatus}
+        </div>
+      )}
 
       {exportMode && (
         <MapExportControls
@@ -638,12 +1081,19 @@ export function DiffMapPanel({
 
       <div
         ref={viewportRef}
-        className={`relative h-[480px] overflow-hidden bg-white ${exportMode ? "cursor-default" : "cursor-crosshair active:cursor-grabbing"}`}
-        onWheel={handleWheel}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        className={`relative min-h-0 touch-none overflow-hidden bg-white select-none ${
+          fullscreen ? "flex-1" : "h-[min(70dvh,560px)] min-h-[280px]"
+        } ${
+          exportMode
+            ? "cursor-default"
+            : interactionMode === "draw"
+              ? "cursor-crosshair"
+              : "cursor-grab active:cursor-grabbing"
+        }`}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
       >
         {loading && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/90 text-sm text-slate-600">
@@ -715,12 +1165,87 @@ export function DiffMapPanel({
                 />
               )}
               <g dangerouslySetInnerHTML={{ __html: svgInner }} />
+              {renderSvgOverlay?.(rootTransform)}
+            </svg>
+          </div>
+        )}
+
+        {gpsMarker && (
+          <div
+            className="pointer-events-none absolute z-20 drop-shadow-sm"
+            style={{
+              left: gpsMarker.x,
+              top: gpsMarker.y,
+              width: GPS_CROSSHAIR_SIZE_PX,
+              height: GPS_CROSSHAIR_SIZE_PX,
+              transform: "translate(-50%, -50%)",
+            }}
+            aria-hidden
+          >
+            <svg
+              viewBox="0 0 28 28"
+              width={GPS_CROSSHAIR_SIZE_PX}
+              height={GPS_CROSSHAIR_SIZE_PX}
+              className="overflow-visible"
+            >
+              <circle
+                cx="14"
+                cy="14"
+                r="11"
+                fill="none"
+                stroke="white"
+                strokeWidth="3"
+              />
+              <circle
+                cx="14"
+                cy="14"
+                r="11"
+                fill="none"
+                stroke="#64748b"
+                strokeWidth="1.5"
+              />
+              <line
+                x1="9.5"
+                y1="9.5"
+                x2="18.5"
+                y2="18.5"
+                stroke="white"
+                strokeWidth="3"
+                strokeLinecap="round"
+              />
+              <line
+                x1="18.5"
+                y1="9.5"
+                x2="9.5"
+                y2="18.5"
+                stroke="white"
+                strokeWidth="3"
+                strokeLinecap="round"
+              />
+              <line
+                x1="9.5"
+                y1="9.5"
+                x2="18.5"
+                y2="18.5"
+                stroke="#64748b"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+              <line
+                x1="18.5"
+                y1="9.5"
+                x2="9.5"
+                y2="18.5"
+                stroke="#64748b"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
             </svg>
           </div>
         )}
 
         {infoChange && (
-          <div className="pointer-events-none absolute bottom-3 left-3 z-20 max-w-xs rounded-lg border border-slate-200 bg-white/95 p-3 text-sm shadow-lg backdrop-blur">
+          <div className="pointer-events-none absolute bottom-3 left-3 right-3 z-20 max-w-xs rounded-lg border border-slate-200 bg-white/95 p-3 text-sm shadow-lg backdrop-blur sm:right-auto">
             <p className={`font-medium ${CHANGE_COLORS[infoChange.changeType]}`}>
               {CHANGE_LABELS[infoChange.changeType]}
             </p>
@@ -757,20 +1282,24 @@ export function DiffMapPanel({
           </div>
         )}
 
-        {!infoChange && !clickHint && !exportMode && clickableItems.length > 0 && (
-          <div className="pointer-events-none absolute right-3 top-3 z-20 rounded-lg border border-slate-200 bg-white/90 px-2 py-1 text-xs text-slate-500 shadow-sm">
-            Klicka på kartan för objektinfo
+        {!infoChange && !clickHint && !exportMode && (
+          <div className="pointer-events-none absolute right-3 top-3 z-20 max-w-[calc(100%-1.5rem)] rounded-lg border border-slate-200 bg-white/90 px-2 py-1 text-xs text-slate-500 shadow-sm">
+            {clickableItems.length > 0
+              ? "Tryck på kartan för objektinfo · nyp för att zooma"
+              : "Dra för att panorera · nyp eller +/− för att zooma"}
           </div>
         )}
       </div>
 
-      <MapLayerPanel
-        layers={mapLayers}
-        visibility={layerVisibility}
-        onToggle={toggleLayer}
-        onShowAll={showAllLayers}
-        onHideAll={hideAllLayers}
-      />
+      {showLayerPanel && (
+        <MapLayerPanel
+          layers={mapLayers}
+          visibility={layerVisibility}
+          onToggle={toggleLayer}
+          onShowAll={showAllLayers}
+          onHideAll={hideAllLayers}
+        />
+      )}
     </div>
   );
 }

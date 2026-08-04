@@ -1,4 +1,7 @@
+import { formatMapScaleExportLabel } from "@/lib/course/pdf-scale";
+import { buildKartramFrameMarkup, parseKartramFromSvg } from "./kartram";
 import type { OcadExportVersion } from "./ocad-export-shared";
+import { parseOcadMapScale } from "./svg-utils";
 
 export type ExportScale = 5000 | 7500 | 10000;
 export type ExportFormat = "A4" | "A3";
@@ -49,6 +52,44 @@ const PAPER_MM: Record<ExportFormat, { w: number; h: number }> = {
 const OCAD_UNITS_PER_MM = 100;
 
 const EXPORT_DPI = 200;
+
+/** Clockwise rotation applied to all PDF export content (map + overlays). */
+export const PDF_EXPORT_ROTATION_DEG = 7;
+
+/** Course overlay text (704 etc.) — matches PDF export tilt in the editor. */
+export const COURSE_TEXT_ROTATION_DEG = PDF_EXPORT_ROTATION_DEG;
+
+/** Rotate a text anchor in place (editor preview only; export text stays horizontal). */
+export function courseTextRotationTransform(
+  x: number,
+  y: number,
+  deg?: number,
+): string | null {
+  if (deg == null || deg === 0) return null;
+  return `rotate(${deg} ${x} ${y})`;
+}
+
+/** Rotate export content around the export frame center (same as viewBox center). */
+export function pdfExportRotationTransform(frame: ExportFrame): string {
+  return `rotate(${PDF_EXPORT_ROTATION_DEG} ${frame.centerX} ${frame.centerY})`;
+}
+
+/** Rotate a point clockwise around a center (degrees). Used to place horizontal export text. */
+export function rotatePointDeg(
+  x: number,
+  y: number,
+  deg: number,
+  cx: number,
+  cy: number,
+): [number, number] {
+  if (!deg) return [x, y];
+  const rad = (deg * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const dx = x - cx;
+  const dy = y - cy;
+  return [cx + dx * cos - dy * sin, cy + dx * sin + dy * cos];
+}
 
 export function computeExportFrameSize(
   exportScale: ExportScale,
@@ -133,11 +174,56 @@ function validateExportFrame(frame: ExportFrame): void {
   }
 }
 
+/** IOF 704-style export label (magenta Arial 4 mm). */
+const IOF_EXPORT_MAGENTA = "#FF00FF";
+const IOF_EXPORT_FONT_SIZE = 4 * OCAD_UNITS_PER_MM;
+
+function escapeExportXml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/** Bottom-left export text (course name, length, scale, etc.). */
+export function buildExportInfoSvg(
+  frame: ExportFrame,
+  lines: string[],
+  options?: { textRotationDeg?: number },
+): string {
+  const visibleLines = lines.filter((line) => line.trim().length > 0 && line.trim() !== "—");
+  if (visibleLines.length === 0) return "";
+
+  const { x, y, width, height } = exportFrameBbox(frame);
+  const margin = 3 * OCAD_UNITS_PER_MM;
+  const lineHeight = IOF_EXPORT_FONT_SIZE * 1.2;
+  const textX = x + margin;
+  const bottomBaseline = y + height - margin;
+  const firstLineY = bottomBaseline - (visibleLines.length - 1) * lineHeight;
+  const textRotationDeg = options?.textRotationDeg ?? 0;
+
+  const textMarkup = visibleLines
+    .map((line, i) => {
+      const lineY = firstLineY + i * lineHeight;
+      const rotation = courseTextRotationTransform(textX, lineY, textRotationDeg);
+      const textEl = `<text x="${textX}" y="${lineY}" fill="${IOF_EXPORT_MAGENTA}" font-size="${IOF_EXPORT_FONT_SIZE}" font-family="Arial, Helvetica, sans-serif" font-weight="normal" font-style="normal">${escapeExportXml(line)}</text>`;
+      return rotation ? `<g transform="${rotation}">${textEl}</g>` : textEl;
+    })
+    .join("\n");
+
+  return `<g data-export-info="true">\n${textMarkup}\n</g>`;
+}
+
+export function buildMapScaleInfoSvg(frame: ExportFrame, mapScale: number): string {
+  return buildExportInfoSvg(frame, [formatMapScaleExportLabel(mapScale)]);
+}
+
 export function buildClippedExportSvg(
   fullSvgText: string,
   frame: ExportFrame,
   pixelWidth: number,
   pixelHeight: number,
+  bottomLeftMarkup?: string,
 ): string {
   const fillMatch = fullSvgText.match(/<svg[^>]*\bfill=["']([^"']+)["']/i);
   const fill = fillMatch?.[1] ?? "transparent";
@@ -150,11 +236,24 @@ export function buildClippedExportSvg(
     .replace(/<defs[\s\S]*?<\/defs>/i, "");
 
   const { x, y, width, height } = exportFrameBbox(frame);
+  const isPrebuiltExport = /<svg[^>]*\bdata-pdf-export=["']true["']/i.test(fullSvgText);
+  const kartramMarkup = isPrebuiltExport
+    ? ""
+    : buildKartramFrameMarkup(parseKartramFromSvg(fullSvgText), exportFrameBbox(frame));
+  const infoMarkup =
+    bottomLeftMarkup ??
+    (isPrebuiltExport
+      ? ""
+      : buildMapScaleInfoSvg(frame, parseOcadMapScale(fullSvgText) ?? 15000));
+  const rotatedContent = isPrebuiltExport
+    ? inner
+    : `<g transform="${pdfExportRotationTransform(frame)}">\n${inner}\n${kartramMarkup}\n</g>`;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" fill="${fill}" viewBox="${x} ${y} ${width} ${height}" width="${pixelWidth}" height="${pixelHeight}">
 ${defs}
-${inner}
+${rotatedContent}
+${infoMarkup}
 </svg>`;
 }
 

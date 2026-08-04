@@ -89,25 +89,11 @@ export function CheckoutPageClient({
         versionId={headVersionId}
         existingCheckouts={overlays}
         onSelectionConfirmed={setSelection}
+        onCreateCheckout={handleCreateCheckout}
+        createLoading={loading}
+        createError={error}
         disabled={loading}
       />
-
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          disabled={loading || !selection}
-          onClick={handleCreateCheckout}
-          className="rounded-lg bg-ifk-blue px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-        >
-          {loading ? "Skapar checkout…" : "Checka ut område"}
-        </button>
-      </div>
-
-      {error && (
-        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-          {error}
-        </p>
-      )}
 
       {existingCheckouts.length > 0 && (
         <section className="mt-8">

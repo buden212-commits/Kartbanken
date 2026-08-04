@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IFK Mora Kartor — Produktblad</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 0;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --ifk-blue: #004c88;
+      --ifk-blue-light: #0079d8;
+      --ifk-blue-pale: #d3ebfb;
+      --ifk-blue-muted: #e8f4fc;
+      --slate-900: #0f172a;
+      --slate-700: #334155;
+      --slate-600: #475569;
+      --slate-500: #64748b;
+      --white: #ffffff;
+      --bg: #f7f9fb;
+    }
+
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      color: var(--slate-700);
+      background: var(--bg);
+      line-height: 1.5;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      margin: 0 auto;
+      background: var(--white);
+      overflow: hidden;
+      page-break-after: always;
+      position: relative;
+    }
+
+    .page:last-child {
+      page-break-after: auto;
+    }
+
+    /* ── Page 1 ── */
+    .hero {
+      background: linear-gradient(135deg, var(--ifk-blue) 0%, #003a66 55%, #002847 100%);
+      color: var(--white);
+      padding: 14mm 16mm 12mm;
+      position: relative;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      right: -20mm;
+      top: -15mm;
+      width: 90mm;
+      height: 90mm;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .hero-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10mm;
+      position: relative;
+      z-index: 1;
+    }
+
+    .logo {
+      height: 18mm;
+      width: auto;
+      filter: brightness(0) invert(1);
+    }
+
+    .hero-badge {
+      font-size: 9pt;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      opacity: 0.85;
+    }
+
+    .hero h1 {
+      margin-top: 10mm;
+      font-size: 28pt;
+      font-weight: 700;
+      line-height: 1.15;
+      max-width: 145mm;
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero-sub {
+      margin-top: 5mm;
+      font-size: 12.5pt;
+      max-width: 150mm;
+      opacity: 0.92;
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero-url {
+      display: inline-block;
+      margin-top: 7mm;
+      padding: 2.5mm 5mm;
+      background: rgba(255, 255, 255, 0.14);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      border-radius: 6px;
+      font-size: 11pt;
+      font-weight: 600;
+      position: relative;
+      z-index: 1;
+    }
+
+    .content {
+      padding: 10mm 16mm 12mm;
+    }
+
+    .lead {
+      font-size: 11.5pt;
+      color: var(--slate-700);
+      margin-bottom: 8mm;
+      max-width: 175mm;
+    }
+
+    .lead strong {
+      color: var(--ifk-blue);
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5mm;
+      margin-bottom: 8mm;
+    }
+
+    .card {
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 5mm;
+      background: var(--white);
+    }
+
+    .card h3 {
+      font-size: 10.5pt;
+      color: var(--slate-900);
+      margin-bottom: 2.5mm;
+    }
+
+    .card p,
+    .card li {
+      font-size: 9.5pt;
+      color: var(--slate-600);
+    }
+
+    .card ul {
+      padding-left: 4.5mm;
+      margin-top: 1.5mm;
+    }
+
+    .card li + li {
+      margin-top: 1mm;
+    }
+
+    .problem-card {
+      background: #fff7ed;
+      border-color: #fed7aa;
+    }
+
+    .solution-card {
+      background: var(--ifk-blue-muted);
+      border-color: #bae6fd;
+    }
+
+    .features {
+      margin-top: 2mm;
+    }
+
+    .features h2 {
+      font-size: 13pt;
+      color: var(--slate-900);
+      margin-bottom: 5mm;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4mm;
+    }
+
+    .feature {
+      display: flex;
+      gap: 3mm;
+      align-items: flex-start;
+      padding: 4mm;
+      border-radius: 8px;
+      background: var(--bg);
+      border: 1px solid #e2e8f0;
+    }
+
+    .feature-icon {
+      flex-shrink: 0;
+      width: 9mm;
+      height: 9mm;
+      border-radius: 6px;
+      background: var(--ifk-blue);
+      color: var(--white);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14pt;
+      font-weight: 700;
+    }
+
+    .feature h4 {
+      font-size: 10pt;
+      color: var(--slate-900);
+      margin-bottom: 1mm;
+    }
+
+    .feature p {
+      font-size: 9pt;
+      color: var(--slate-600);
+    }
+
+    .page-footer {
+      position: absolute;
+      bottom: 8mm;
+      left: 16mm;
+      right: 16mm;
+      display: flex;
+      justify-content: space-between;
+      font-size: 8pt;
+      color: var(--slate-500);
+      border-top: 1px solid #e2e8f0;
+      padding-top: 3mm;
+    }
+
+    /* ── Page 2 ── */
+    .page2-header {
+      background: var(--ifk-blue-pale);
+      padding: 10mm 16mm 8mm;
+      border-bottom: 3px solid var(--ifk-blue);
+    }
+
+    .page2-header h2 {
+      font-size: 16pt;
+      color: var(--ifk-blue);
+    }
+
+    .page2-header p {
+      margin-top: 2mm;
+      font-size: 10pt;
+      color: var(--slate-600);
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 4mm;
+      margin: 8mm 0;
+    }
+
+    .step {
+      text-align: center;
+      padding: 5mm 4mm;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+      background: var(--white);
+    }
+
+    .step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 8mm;
+      height: 8mm;
+      border-radius: 50%;
+      background: var(--ifk-blue);
+      color: var(--white);
+      font-size: 10pt;
+      font-weight: 700;
+      margin-bottom: 2mm;
+    }
+
+    .step h4 {
+      font-size: 10pt;
+      color: var(--slate-900);
+      margin-bottom: 1.5mm;
+    }
+
+    .step p {
+      font-size: 8.5pt;
+      color: var(--slate-600);
+    }
+
+    .audience-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4mm;
+      margin-bottom: 8mm;
+    }
+
+    .audience {
+      padding: 4.5mm;
+      border-left: 3px solid var(--ifk-blue-light);
+      background: var(--ifk-blue-muted);
+      border-radius: 0 8px 8px 0;
+    }
+
+    .audience h4 {
+      font-size: 10pt;
+      color: var(--ifk-blue);
+      margin-bottom: 1mm;
+    }
+
+    .audience p {
+      font-size: 9pt;
+      color: var(--slate-600);
+    }
+
+    .cta-box {
+      margin: 0 16mm 10mm;
+      padding: 8mm;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--ifk-blue) 0%, #003a66 100%);
+      color: var(--white);
+      text-align: center;
+    }
+
+    .cta-box h3 {
+      font-size: 14pt;
+      margin-bottom: 2mm;
+    }
+
+    .cta-box p {
+      font-size: 10pt;
+      opacity: 0.92;
+      max-width: 140mm;
+      margin: 0 auto 4mm;
+    }
+
+    .cta-url {
+      display: inline-block;
+      font-size: 12pt;
+      font-weight: 700;
+      padding: 2.5mm 6mm;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 6px;
+    }
+
+    .tech-note {
+      margin: 0 16mm;
+      padding: 4mm 5mm;
+      border-radius: 8px;
+      background: var(--bg);
+      border: 1px solid #e2e8f0;
+      font-size: 8.5pt;
+      color: var(--slate-500);
+    }
+
+    .tech-note strong {
+      color: var(--slate-700);
+    }
+
+    .benefits-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 3mm;
+      margin-bottom: 8mm;
+    }
+
+    .benefit {
+      text-align: center;
+      padding: 4mm 2mm;
+      border-radius: 8px;
+      background: var(--white);
+      border: 1px solid #e2e8f0;
+    }
+
+    .benefit-value {
+      font-size: 16pt;
+      font-weight: 700;
+      color: var(--ifk-blue);
+      line-height: 1.1;
+    }
+
+    .benefit-label {
+      margin-top: 1mm;
+      font-size: 8pt;
+      color: var(--slate-600);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Sida 1 -->
+  <section class="page">
+    <header class="hero">
+      <div class="hero-top">
+        <img class="logo" src="../web/public/ifk-mora-logo.png" alt="IFK Mora OK" />
+        <span class="hero-badge">Webbaserat · Säkert · För orienteringsklubbar</span>
+      </div>
+      <h1>Kartor i ordning — tillsammans</h1>
+      <p class="hero-sub">
+        En modern plattform för versionshantering, granskning och banplanering av OCAD-kartor.
+        Slipp filnamn med datum i slutet och osäkerheten kring vem som har senaste versionen.
+      </p>
+      <span class="hero-url">kartor.ifkmora.se</span>
+    </header>
+
+    <div class="content">
+      <p class="lead">
+        <strong>IFK Mora Kartor</strong> samlar klubbens orienteringskartor på ett ställe.
+        Flera kartografer kan arbeta parallellt utan att skriva över varandra, ändringar granskas
+        visuellt innan de blir officiella, och banläggare kan planera direkt ovanpå senaste kartan.
+      </p>
+
+      <div class="grid-2">
+        <div class="card problem-card">
+          <h3>Utmaningen idag</h3>
+          <ul>
+            <li>Kartfiler skickas via e-post och moln — vem har senaste?</li>
+            <li>Parallell redigering i OCAD riskerar att skriva över arbete</li>
+            <li>Versionsnummer och datum kodas manuellt i filnamn</li>
+            <li>Granskning kräver manuell öppning i OCAD eller PDF</li>
+            <li>Banplanering sker utan gemensam vy av kartan</li>
+          </ul>
+        </div>
+        <div class="card solution-card">
+          <h3>Lösningen</h3>
+          <ul>
+            <li>Central versionshistorik — inget raderas vid uppladdning</li>
+            <li>Checkout av kartområden med exklusiva lås</li>
+            <li>Visuell diff mellan versioner direkt i webbläsaren</li>
+            <li>Rollstyrd åtkomst med spårbarhet och e-postnotiser</li>
+            <li>Banoverlay med IOF-symboler och PDF-export</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="features">
+        <h2>Det här får ni</h2>
+        <div class="feature-grid">
+          <article class="feature">
+            <div class="feature-icon">V</div>
+            <div>
+              <h4>Versionshantering</h4>
+              <p>Varje uppladdning blir en ny version. Ladda ner valfri historisk version när som helst.</p>
+            </div>
+          </article>
+          <article class="feature">
+            <div class="feature-icon">D</div>
+            <div>
+              <h4>Visuell jämförelse</h4>
+              <p>Se tillagda, borttagna och ändrade kartobjekt i interaktiv kartvy — utan OCAD på plats.</p>
+            </div>
+          </article>
+          <article class="feature">
+            <div class="feature-icon">C</div>
+            <div>
+              <h4>Checkout &amp; checkin</h4>
+              <p>Checka ut ett område, redigera subset i OCAD Desktop, checka in och integrera med dubbel bekräftelse.</p>
+            </div>
+          </article>
+          <article class="feature">
+            <div class="feature-icon">B</div>
+            <div>
+              <h4>Lägg bana</h4>
+              <p>Rita banor med IOF ISOM-symboler 700–709 ovanpå kartan. Privata eller publika banor, export till PDF.</p>
+            </div>
+          </article>
+          <article class="feature">
+            <div class="feature-icon">R</div>
+            <div>
+              <h4>Roller &amp; behörigheter</h4>
+              <p>Läsare, redaktör och administratör. Självregistrering med admin-godkännande.</p>
+            </div>
+          </article>
+          <article class="feature">
+            <div class="feature-icon">E</div>
+            <div>
+              <h4>Export &amp; granskning</h4>
+              <p>Exportera kartutsnitt som PDF eller OCAD. Verifiera-funktion för tillfällig diff utan uppladdning.</p>
+            </div>
+          </article>
+        </div>
+      </div>
+    </div>
+
+    <footer class="page-footer">
+      <span>IFK Mora OK · Kartor</span>
+      <span>Sida 1 av 2</span>
+    </footer>
+  </section>
+
+  <!-- Sida 2 -->
+  <section class="page">
+    <header class="page2-header">
+      <h2>Så fungerar det</h2>
+      <p>Från fältarbete till godkänd karta — ett tydligt flöde för hela klubben</p>
+    </header>
+
+    <div class="content">
+      <div class="steps">
+        <article class="step">
+          <div class="step-num">1</div>
+          <h4>Ladda upp &amp; publicera</h4>
+          <p>Redaktör laddar upp ny .ocd-fil. Admin granskar diff och publicerar när versionen är klar.</p>
+        </article>
+        <article class="step">
+          <div class="step-num">2</div>
+          <h4>Parallell redigering</h4>
+          <p>Flera kartografer checkar ut egna områden, jobbar i OCAD och checkar in utan konflikter.</p>
+        </article>
+        <article class="step">
+          <div class="step-num">3</div>
+          <h4>Planera &amp; dela</h4>
+          <p>Banläggare ritar banor på kartan, delar med kollegor och exporterar PDF inför tävling.</p>
+        </article>
+      </div>
+
+      <div class="benefits-row">
+        <div class="benefit">
+          <div class="benefit-value">100%</div>
+          <div class="benefit-label">Versionshistorik bevaras</div>
+        </div>
+        <div class="benefit">
+          <div class="benefit-value">3</div>
+          <div class="benefit-label">Rollnivåer (läsare, redaktör, admin)</div>
+        </div>
+        <div class="benefit">
+          <div class="benefit-value">IOF</div>
+          <div class="benefit-label">ISOM 2017-2 ban-symboler</div>
+        </div>
+        <div class="benefit">
+          <div class="benefit-value">Webb</div>
+          <div class="benefit-label">Ingen installation — fungerar i webbläsaren</div>
+        </div>
+      </div>
+
+      <h2 style="font-size: 13pt; color: var(--slate-900); margin-bottom: 4mm;">Perfekt för</h2>
+      <div class="audience-grid">
+        <article class="audience">
+          <h4>Orienteringsklubbar</h4>
+          <p>Som vill slippa kaos med kartfiler och få en gemensam sanning för terrängkartor.</p>
+        </article>
+        <article class="audience">
+          <h4>Kartansvariga &amp; kartografer</h4>
+          <p>Som behöver spårbarhet, granskning och parallellt arbete utan att skriva över varandra.</p>
+        </article>
+        <article class="audience">
+          <h4>Banläggare &amp; tävlingsledare</h4>
+          <p>Som vill planera banor direkt på senaste kartan och dela utkast snabbt.</p>
+        </article>
+        <article class="audience">
+          <h4>Arrangörer av större evenemang</h4>
+          <p>Som behöver kontrollerad publicering och tydlig versionshistorik inför mästerskap.</p>
+        </article>
+      </div>
+    </div>
+
+    <div class="cta-box">
+      <h3>Intresserad av en demo?</h3>
+      <p>
+        Plattformen är i drift och används av IFK Mora OK. Vi visar gärna hur den kan
+        anpassas för er klubb — från enstaka terrängkarta till hela kartbiblioteket.
+      </p>
+      <span class="cta-url">https://web-ebon-eight-72.vercel.app</span>
+    </div>
+
+    <p class="tech-note">
+      <strong>Teknik i korthet:</strong> Next.js, säker inloggning, PostgreSQL, molnlagring.
+      Stöd för OCAD 12 .ocd-filer, visuell parser-baserad diff och subset-export vid checkout.
+      Ersätter inte OCAD Desktop — kompletterar det med versionshantering och samarbete.
+    </p>
+
+    <footer class="page-footer">
+      <span>Kontakt: IFK Mora OK · buud212@gmail.com</span>
+      <span>Sida 2 av 2 · 2026</span>
+    </footer>
+  </section>
+
+</body>
+</html>

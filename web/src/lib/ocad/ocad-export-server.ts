@@ -62,6 +62,9 @@ const HEADER_VERSION_OFFSET = 4;
 const HEADER_CURRENT_FILE_VERSION_OFFSET = 20;
 const OBJECT_INDEX_BLOCK_HEADER_SIZE = 4;
 const OBJECT_INDEX_ENTRY_SIZE = 40;
+const OBJECT_INDEX_LEN_OFFSET = 20;
+const OBJECT_INDEX_SYM_OFFSET = 24;
+const OBJECT_INDEX_OBJTYPE_OFFSET = 28;
 const OBJECT_INDEX_STATUS_OFFSET = 30;
 
 const SUPPORTED_SOURCE_VERSIONS = new Set([10, 11, 12, 18]);
@@ -198,22 +201,53 @@ function iterateActiveObjectEntries(
   }
 }
 
-/** Marks OCAD objects deleted by their object index (best-effort integration helper). */
+/** Marks OCAD objects deleted by their object index (mutates buffer in place). */
 export function markObjectsDeletedByIndices(
   buffer: Buffer,
   objectIndices: Set<number>,
 ): { deleted: number } {
-  const output = Buffer.from(buffer);
   let deleted = 0;
 
-  iterateActiveObjectEntries(output, (_entry, statusOffset, objectIndex) => {
+  iterateActiveObjectEntries(buffer, (_entry, statusOffset, objectIndex) => {
     if (objectIndices.has(objectIndex)) {
-      output.writeUInt8(0, statusOffset);
+      buffer.writeUInt8(0, statusOffset);
       deleted++;
     }
   });
 
   return { deleted };
+}
+
+/**
+ * Keeps only the given object indices; all other active objects are marked deleted.
+ * Returns a new buffer suitable for downloading a focused .ocd of problem objects.
+ */
+export function exportObjectsByIndices(
+  sourceBuffer: Buffer,
+  objectIndices: Set<number>,
+): { buffer: Buffer; keptObjects: number; removedObjects: number } {
+  if (objectIndices.size === 0) {
+    throw new Error("Inga objekt angivna för export");
+  }
+
+  const output = Buffer.from(sourceBuffer);
+  let keptObjects = 0;
+  let removedObjects = 0;
+
+  iterateActiveObjectEntries(output, (_entry, statusOffset, objectIndex) => {
+    if (objectIndices.has(objectIndex)) {
+      keptObjects++;
+    } else {
+      output.writeUInt8(0, statusOffset);
+      removedObjects++;
+    }
+  });
+
+  if (keptObjects === 0) {
+    throw new Error("Inga av de angivna objekten fanns i filen");
+  }
+
+  return { buffer: output, keptObjects, removedObjects };
 }
 
 type ObjectEntryRef = {
@@ -259,13 +293,13 @@ export function copySkipReasonText(reason: CopyObjectSkipReason): string {
   return COPY_SKIP_REASON_TEXT[reason];
 }
 
+/** Copies checkin object bytes into headBuffer in place when sizes allow. */
 export function copyMatchingObjectData(
   headBuffer: Buffer,
   checkinBuffer: Buffer,
   objectIndices: Set<number>,
 ): { copied: number; skipped: number; skippedItems: CopyObjectSkipDetail[] } {
-  const output = Buffer.from(headBuffer);
-  const headEntries = collectObjectEntries(output);
+  const headEntries = collectObjectEntries(headBuffer);
   const checkinEntries = collectObjectEntries(checkinBuffer);
 
   let copied = 0;
@@ -286,7 +320,7 @@ export function copyMatchingObjectData(
       continue;
     }
 
-    const headIndexInfo = readObjectIndexEntry(output, index);
+    const headIndexInfo = readObjectIndexEntry(headBuffer, index);
     const checkinIndexInfo = readObjectIndexEntry(checkinBuffer, index);
     if (!headIndexInfo || !checkinIndexInfo) {
       skipped++;
@@ -294,25 +328,45 @@ export function copyMatchingObjectData(
       continue;
     }
 
-    const headSize = measureObjectByteSize(output, headIndexInfo);
+    const headSize = measureObjectByteSize(headBuffer, headIndexInfo);
     const checkinSize = measureObjectByteSize(checkinBuffer, checkinIndexInfo);
-    const copySize = Math.max(headSize, checkinSize);
 
-    if (headEntry.pos + copySize > output.length || checkinEntry.pos + copySize > checkinBuffer.length) {
+    // Same-size overwrite only — growing/shrinking objects need a fuller rewrite.
+    if (headSize !== checkinSize || headSize <= 0) {
       skipped++;
       skippedItems.push({ objectIndex: index, reason: "size_mismatch" });
       continue;
     }
 
-    const headSlice = output.subarray(headEntry.pos, headEntry.pos + copySize);
-    const checkinSlice = checkinBuffer.subarray(checkinEntry.pos, checkinEntry.pos + copySize);
-    if (headSlice.length !== checkinSlice.length) {
+    if (
+      headEntry.pos + headSize > headBuffer.length ||
+      checkinEntry.pos + checkinSize > checkinBuffer.length
+    ) {
       skipped++;
       skippedItems.push({ objectIndex: index, reason: "size_mismatch" });
       continue;
     }
 
-    checkinSlice.copy(output, headEntry.pos);
+    checkinBuffer.copy(headBuffer, headEntry.pos, checkinEntry.pos, checkinEntry.pos + checkinSize);
+    // Keep index metadata (sym/objType/len) aligned with checkin.
+    if (headIndexInfo.len !== checkinIndexInfo.len) {
+      headBuffer.writeInt32LE(
+        checkinIndexInfo.len,
+        headIndexInfo.entryOffset + OBJECT_INDEX_LEN_OFFSET,
+      );
+    }
+    if (headIndexInfo.sym !== checkinIndexInfo.sym) {
+      headBuffer.writeInt32LE(
+        checkinIndexInfo.sym,
+        headIndexInfo.entryOffset + OBJECT_INDEX_SYM_OFFSET,
+      );
+    }
+    if (headIndexInfo.objType !== checkinIndexInfo.objType) {
+      headBuffer.writeUInt8(
+        checkinIndexInfo.objType,
+        headIndexInfo.entryOffset + OBJECT_INDEX_OBJTYPE_OFFSET,
+      );
+    }
     copied++;
   }
 

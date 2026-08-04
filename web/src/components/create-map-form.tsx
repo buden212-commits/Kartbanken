@@ -33,7 +33,7 @@ export function CreateMapForm() {
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      setError(data.error ?? "Kunde inte skapa kartfil");
+      setError(data.error ?? "Kunde inte skapa område");
       return;
     }
 
@@ -46,7 +46,7 @@ export function CreateMapForm() {
     <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2">
       <div className="sm:col-span-2">
         <label htmlFor="title" className="form-label">
-          Kartnamn *
+          Område *
         </label>
         <input
           id="title"
@@ -79,7 +79,7 @@ export function CreateMapForm() {
           disabled={loading}
           className="btn-primary"
         >
-          {loading ? "Skapar…" : "Skapa kartfil"}
+          {loading ? "Skapar…" : "Skapa område"}
         </button>
       </div>
     </form>

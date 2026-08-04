@@ -1,4 +1,4 @@
-import { parseSelectionJson, CheckoutStatus } from "./types";
+import { CheckoutStatus } from "./types";
 import type { CheckoutSubsetDiffResult } from "./subset-diff";
 import { computeCheckoutSubsetDiff } from "./subset-diff";
 import {
@@ -77,15 +77,10 @@ export async function integrateCheckout(
     throw new Error("Aktuell version saknas");
   }
 
-  const selection = parseSelectionJson(checkout.selectionJson);
-  const scopedIdStrings = new Set(selection.objectIds);
-
+  // Subset-diff is already scoped to the checkout selection — apply all removed/modified.
   const removedIndices = new Set(
     diff.changes
-      .filter(
-        (change) =>
-          change.changeType === "removed" && scopedIdStrings.has(String(change.objectIndex)),
-      )
+      .filter((change) => change.changeType === "removed")
       .map((change) => change.objectIndex),
   );
 
@@ -163,7 +158,9 @@ export async function integrateCheckout(
       fileSizeBytes: working.byteLength,
       contentHash,
       uploadedById: integratedById,
-      comment: `Integrerad checkout ${checkout.id.slice(0, 8)}`,
+      comment:
+        checkout.integrationComment?.trim() ||
+        `Integrerad checkout ${checkout.id.slice(0, 8)}`,
       parseStatus: "PENDING",
     },
   });

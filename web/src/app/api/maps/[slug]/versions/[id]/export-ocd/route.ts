@@ -1,5 +1,9 @@
 import { logAction } from "@/lib/audit";
 import { requireDownload } from "@/lib/auth/api";
+import {
+  assertVersionViewAccess,
+  getMapVersionOr404,
+} from "@/lib/maps/version-lookup";
 import { cropOcadBuffer } from "@/lib/ocad/ocad-export-server";
 import {
   svgExportFrameToGeoBbox,
@@ -64,14 +68,14 @@ export async function POST(request: Request, { params }: RouteParams) {
   if (session instanceof NextResponse) return session;
 
   const { slug, id } = await params;
+  const lookup = await getMapVersionOr404(slug, id);
+  if (lookup instanceof NextResponse) return lookup;
 
-  const map = await prisma.mapFile.findUnique({ where: { slug } });
-  if (!map) {
-    return NextResponse.json({ error: "Kartfil hittades inte" }, { status: 404 });
-  }
+  const denied = assertVersionViewAccess(session, lookup.version);
+  if (denied) return denied;
 
-  const version = await prisma.mapVersion.findFirst({
-    where: { id, mapFileId: map.id },
+  const version = await prisma.mapVersion.findUnique({
+    where: { id: lookup.version.id },
   });
 
   if (!version) {

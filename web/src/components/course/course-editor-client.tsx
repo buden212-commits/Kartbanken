@@ -26,6 +26,7 @@ import {
 import {
   computeCourseLengthMeters,
   computeHitTolerance,
+  courseObjectsBbox,
   formatCourseLengthKm,
   hitTestTopObject,
   objectCentroid,
@@ -98,6 +99,11 @@ export function CourseEditorClient({
     centroid: [number, number];
     objectType: "point" | "line" | "area" | "text";
   } | null>(null);
+  const [fitGeoBbox, setFitGeoBbox] = useState<{
+    bbox: [number, number, number, number];
+    requestId: number;
+  } | null>(null);
+  const fitRequestIdRef = useRef(0);
 
   const [lineDraft, setLineDraft] = useState<[number, number][]>([]);
   const [polygonDraft, setPolygonDraft] = useState<[number, number][]>([]);
@@ -142,15 +148,28 @@ export function CourseEditorClient({
         return;
       }
       const data = await res.json();
+      const loadedObjects = migrateLegacyControlNumbers(detailToEditorObjects(data.objects));
       setCourseId(data.id);
       setCourseName(data.name);
       setIsPublic(data.isPublic);
-      setObjects(migrateLegacyControlNumbers(detailToEditorObjects(data.objects)));
+      setObjects(loadedObjects);
       setDirty(false);
       setSelectedId(null);
       setLineDraft([]);
       setPolygonDraft([]);
       setError(null);
+
+      const bbox = courseObjectsBbox(loadedObjects);
+      if (bbox) {
+        fitRequestIdRef.current += 1;
+        setFocusTarget(null);
+        setFitGeoBbox({
+          bbox: [bbox.minX, bbox.minY, bbox.maxX, bbox.maxY],
+          requestId: fitRequestIdRef.current,
+        });
+      } else {
+        setFitGeoBbox(null);
+      }
     },
     [mapSlug],
   );
@@ -802,12 +821,13 @@ export function CourseEditorClient({
             focusTarget={focusTarget}
             onClearFocus={() => setFocusTarget(null)}
             onOcadMapScale={setMapScale}
+            fitGeoBbox={fitGeoBbox}
           />
           <CoursePdfPanel
             mapSlug={mapSlug}
-            courseId={courseId}
-            courseName={courseName}
-            disabled={!courseId}
+            courses={courses}
+            activeCourseId={courseId}
+            disabled={courses.length === 0}
           />
         </div>
         <CourseControlList

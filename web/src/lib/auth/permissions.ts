@@ -12,6 +12,67 @@ export function canAdmin(role: RoleType): boolean {
   return role === Role.ADMIN;
 }
 
+export function canCheckout(role: RoleType): boolean {
+  return role === Role.EDITOR || role === Role.ADMIN;
+}
+
+export function canViewCheckouts(role: RoleType): boolean {
+  return canDownload(role);
+}
+
+export function canCancelCheckout(role: RoleType): boolean {
+  return role === Role.ADMIN;
+}
+
+export function canCheckin(role: RoleType): boolean {
+  return role === Role.EDITOR || role === Role.ADMIN;
+}
+
+export function canConfirmCheckoutIntegration(
+  role: RoleType,
+  checkoutUserId: string,
+  sessionUserId: string,
+): boolean {
+  if (role === Role.ADMIN) return true;
+  return role === Role.EDITOR && checkoutUserId === sessionUserId;
+}
+
+export function canAdminConfirmIntegration(role: RoleType): boolean {
+  return role === Role.ADMIN;
+}
+
+/** All approved users (Reader+) can create courses (COURSE-16). */
+export function canCreateCourse(role: RoleType): boolean {
+  return canDownload(role);
+}
+
+export function canEditCourse(
+  role: RoleType,
+  courseOwnerId: string,
+  sessionUserId: string,
+): boolean {
+  if (role === Role.ADMIN) return true;
+  return courseOwnerId === sessionUserId;
+}
+
+export function canViewCourse(
+  role: RoleType,
+  course: { isPublic: boolean; createdById: string },
+  sessionUserId: string,
+): boolean {
+  if (!canDownload(role)) return false;
+  if (course.isPublic) return true;
+  return course.createdById === sessionUserId;
+}
+
+export function canDeleteCourse(
+  role: RoleType,
+  courseOwnerId: string,
+  sessionUserId: string,
+): boolean {
+  return canEditCourse(role, courseOwnerId, sessionUserId);
+}
+
 export function isApproved(role: RoleType): boolean {
   return canDownload(role);
 }

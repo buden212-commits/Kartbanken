@@ -1,9 +1,10 @@
 import { requireSession } from "@/lib/auth/api";
+import { runAfterResponse } from "@/lib/background";
 import {
   createTempCompareJob,
   processTempCompareJob,
 } from "@/lib/ocad/temp-compare";
-import { validateOcdUpload } from "@/lib/storage";
+import { shouldUseClientUpload } from "@/lib/storage";
 import { NextResponse } from "next/server";
 
 export const maxDuration = 300;
@@ -23,13 +24,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Välj nyare OCAD-fil (fil B)" }, { status: 400 });
   }
 
-  const validA = validateOcdUpload(fileA.name, fileA.size);
-  if (!validA.ok) {
-    return NextResponse.json({ error: `Fil A: ${validA.error}` }, { status: 400 });
-  }
-  const validB = validateOcdUpload(fileB.name, fileB.size);
-  if (!validB.ok) {
-    return NextResponse.json({ error: `Fil B: ${validB.error}` }, { status: 400 });
+  if (shouldUseClientUpload(Math.max(fileA.size, fileB.size))) {
+    return NextResponse.json(
+      {
+        error: "Stora filer kräver client upload via upload-init/upload-complete.",
+        clientUploadRequired: true,
+      },
+      { status: 413 },
+    );
   }
 
   const [bufferA, bufferB] = await Promise.all([
@@ -45,7 +47,7 @@ export async function POST(request: Request) {
     fileB.name,
   );
 
-  void processTempCompareJob(jobId).catch(console.error);
+  runAfterResponse(() => processTempCompareJob(jobId));
 
   return NextResponse.json({
     jobId,

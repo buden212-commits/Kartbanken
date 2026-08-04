@@ -54,12 +54,12 @@ export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
   }, [data?.status, fetchCompare]);
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-12">
+    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
       <Link href={`/maps/${mapSlug}`} className="link-muted text-sm">
         ← {mapTitle}
       </Link>
 
-      <h1 className="mt-4 text-3xl font-semibold text-slate-900">Jämför versioner</h1>
+      <h1 className="mt-4 text-2xl font-semibold text-slate-900 sm:text-3xl">Jämför versioner</h1>
       <p className="mt-2 text-slate-600">
         Granskar skillnader mellan två uppladdade versioner.
       </p>

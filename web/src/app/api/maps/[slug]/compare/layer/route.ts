@@ -1,4 +1,5 @@
 import { requireSession } from "@/lib/auth/api";
+import { assertVersionViewAccess } from "@/lib/maps/version-lookup";
 import { prisma } from "@/lib/prisma";
 import { readStoredFile } from "@/lib/storage";
 import { NextResponse } from "next/server";
@@ -27,6 +28,26 @@ export async function GET(request: Request, { params }: RouteParams) {
   if (!map) {
     return NextResponse.json({ error: "Kartfil hittades inte" }, { status: 404 });
   }
+
+  const [versionA, versionB] = await Promise.all([
+    prisma.mapVersion.findFirst({
+      where: { id: v1, mapFileId: map.id },
+      select: { isPublished: true },
+    }),
+    prisma.mapVersion.findFirst({
+      where: { id: v2, mapFileId: map.id },
+      select: { isPublished: true },
+    }),
+  ]);
+
+  if (!versionA || !versionB) {
+    return NextResponse.json({ error: "Version hittades inte" }, { status: 404 });
+  }
+
+  const deniedA = assertVersionViewAccess(session, versionA);
+  if (deniedA) return deniedA;
+  const deniedB = assertVersionViewAccess(session, versionB);
+  if (deniedB) return deniedB;
 
   const diffRecord = await prisma.versionDiff.findUnique({
     where: { versionAId_versionBId: { versionAId: v1, versionBId: v2 } },
