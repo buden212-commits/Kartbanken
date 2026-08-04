@@ -254,6 +254,59 @@ export async function notifyAdminOfNewRegistration(user: {
   await sendMailToNotificationRecipients({ subject, text, html });
 }
 
+function ocdAttachmentFilename(originalFilename: string, fallbackBase: string): string {
+  return originalFilename.toLowerCase().endsWith(".ocd")
+    ? originalFilename
+    : `${fallbackBase}.ocd`;
+}
+
+async function sendMailsWithOptionalOcdAttachment(options: {
+  recipients: string[];
+  subject: string;
+  text: string;
+  bodyHtml: string;
+  storagePath?: string;
+  attachmentFilename?: string;
+}): Promise<void> {
+  const ocdRecipients = await resolveOcdAttachmentRecipients();
+
+  let mapAttachment: MailAttachment | null = null;
+  if (ocdRecipients.size > 0 && options.storagePath && options.attachmentFilename) {
+    try {
+      const fileBuffer = await readStoredFile(options.storagePath);
+      mapAttachment = {
+        filename: ocdAttachmentFilename(options.attachmentFilename, options.attachmentFilename),
+        content: fileBuffer,
+        contentType: "application/octet-stream",
+      };
+    } catch (err) {
+      console.error("[email] Could not read map file for email attachment:", err);
+    }
+  }
+
+  await Promise.all(
+    options.recipients.map(async (to) => {
+      const includeAttachment = mapAttachment !== null && ocdRecipients.has(to.toLowerCase());
+
+      const recipientText = includeAttachment
+        ? `${options.text}\n\nKartfilen (.ocd) är bifogad till detta meddelande.`
+        : options.text;
+
+      const recipientBodyHtml = includeAttachment
+        ? `${options.bodyHtml}<p style="margin:16px 0 0;">Kartfilen (.ocd) är bifogad till detta meddelande.</p>`
+        : options.bodyHtml;
+
+      await sendMail({
+        to,
+        subject: options.subject,
+        text: recipientText,
+        html: buildHtmlEmail({ title: options.subject, bodyHtml: recipientBodyHtml }),
+        attachments: includeAttachment && mapAttachment ? [mapAttachment] : undefined,
+      });
+    }),
+  );
+}
+
 export async function notifyAdminOfNewUpload(upload: {
   uploader: { name: string | null | undefined; email: string };
   map: { title: string; slug: string };
@@ -276,7 +329,6 @@ export async function notifyAdminOfNewUpload(upload: {
     return;
   }
 
-  const ocdRecipients = await resolveOcdAttachmentRecipients();
   const uploaderName = upload.uploader.name?.trim() || upload.uploader.email;
   const mapUrl = `${getAppBaseUrl()}/maps/${upload.map.slug}`;
   const versionUrl = `${mapUrl}/versions/${upload.version.id}`;
@@ -326,49 +378,27 @@ export async function notifyAdminOfNewUpload(upload: {
     <p style="margin:0;">Med vänliga hälsningar,<br>${escapeHtml(APP_NAME)}</p>
   `.trim();
 
-  let mapAttachment: MailAttachment | null = null;
-  if (ocdRecipients.size > 0) {
-    try {
-      const fileBuffer = await readStoredFile(upload.version.storagePath);
-      mapAttachment = {
-        filename: upload.version.originalFilename.endsWith(".ocd")
-          ? upload.version.originalFilename
-          : `${upload.map.title.replace(/\s+/g, "-")}-v${upload.version.versionNumber}.ocd`,
-        content: fileBuffer,
-        contentType: "application/octet-stream",
-      };
-    } catch (err) {
-      console.error("[email] Could not read map file for email attachment:", err);
-    }
-  }
-
-  await Promise.all(
-    recipients.map(async (to) => {
-      const includeAttachment = mapAttachment !== null && ocdRecipients.has(to);
-
-      const recipientText = includeAttachment
-        ? `${text}\n\nKartfilen (.ocd) är bifogad till detta meddelande.`
-        : text;
-
-      const recipientBodyHtml = includeAttachment
-        ? `${bodyHtml}<p style="margin:16px 0 0;">Kartfilen (.ocd) är bifogad till detta meddelande.</p>`
-        : bodyHtml;
-
-      await sendMail({
-        to,
-        subject,
-        text: recipientText,
-        html: buildHtmlEmail({ title: subject, bodyHtml: recipientBodyHtml }),
-        attachments: includeAttachment && mapAttachment ? [mapAttachment] : undefined,
-      });
-    }),
-  );
+  await sendMailsWithOptionalOcdAttachment({
+    recipients,
+    subject,
+    text,
+    bodyHtml,
+    storagePath: upload.version.storagePath,
+    attachmentFilename: ocdAttachmentFilename(
+      upload.version.originalFilename,
+      `${upload.map.title.replace(/\s+/g, "-")}-v${upload.version.versionNumber}`,
+    ),
+  });
 }
 
 type CheckoutMailContext = {
   checkoutId: string;
   map: { title: string; slug: string };
   owner: { name: string | null | undefined; email: string };
+  checkin?: {
+    storagePath: string;
+    filename: string;
+  };
 };
 
 function checkoutDetailUrl(slug: string, checkoutId: string): string {
@@ -440,9 +470,20 @@ async function notifyCheckinSubmittedAsync(ctx: CheckoutMailContext): Promise<vo
     <p style="margin:0;"><a href="${escapeHtml(url)}" style="display:inline-block;padding:10px 18px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:500;">Granska diff</a></p>
   `.trim();
 
-  const html = buildHtmlEmail({ title: subject, bodyHtml });
   const recipients = await resolveCheckoutRecipients(ctx.owner.email);
-  await Promise.all(recipients.map((to) => sendMail({ to, subject, text, html })));
+  await sendMailsWithOptionalOcdAttachment({
+    recipients,
+    subject,
+    text,
+    bodyHtml,
+    storagePath: ctx.checkin?.storagePath,
+    attachmentFilename: ctx.checkin
+      ? ocdAttachmentFilename(
+          ctx.checkin.filename,
+          `${ctx.map.title.replace(/\s+/g, "-")}-checkin`,
+        )
+      : undefined,
+  });
 }
 
 export function notifyCheckoutUserConfirmed(ctx: CheckoutMailContext): void {

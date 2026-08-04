@@ -74,6 +74,10 @@ export async function POST(request: Request, { params }: RouteParams) {
     checkoutId: checkout.id,
     map: { title: map.title, slug: map.slug },
     owner: { name: checkout.user.name, email: checkout.user.email },
+    checkin: {
+      storagePath: body.blobUrl,
+      filename: `${map.title.replace(/\s+/g, "-")}-checkin.ocd`,
+    },
   });
 
   scheduleCheckoutSubsetDiff(checkout.id);
