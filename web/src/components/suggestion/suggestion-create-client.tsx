@@ -28,6 +28,25 @@ import { uploadSuggestionAttachment } from "@/lib/upload-client";
 
 type DrawTool = "pin" | "rectangle" | "polygon" | "line";
 
+type SubmissionDraft = {
+  category: SuggestionCategoryValue;
+  title: string;
+  comment: string;
+  attachmentFile: File | null;
+  attachmentPreview: string | null;
+};
+
+const EMPTY_SUBMISSION_DRAFT: SubmissionDraft = {
+  category: "FEL_I_TERRANG",
+  title: "",
+  comment: "",
+  attachmentFile: null,
+  attachmentPreview: null,
+};
+
+const NEUTRAL_BTN =
+  "rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50";
+
 type Props = {
   mapSlug: string;
   mapTitle: string;
@@ -145,6 +164,19 @@ export function SuggestionCreateClient({
   const [attachmentPreview, setAttachmentPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [submissionDraft, setSubmissionDraft] = useState<SubmissionDraft>(EMPTY_SUBMISSION_DRAFT);
+
+  const clearFormFields = useCallback(() => {
+    setCategory(EMPTY_SUBMISSION_DRAFT.category);
+    setTitle(EMPTY_SUBMISSION_DRAFT.title);
+    setComment(EMPTY_SUBMISSION_DRAFT.comment);
+    setAttachmentFile(null);
+    setAttachmentPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+  }, []);
 
   const resetDraft = useCallback(() => {
     setPendingPoint(null);
@@ -161,6 +193,7 @@ export function SuggestionCreateClient({
       const geo = svgUserToGeoPoint(pt, rootTransformRef.current);
 
       if (tool === "pin") {
+        setFormOpen(false);
         setPendingPoint(geo);
         setGeometry(null);
         setDraftBbox(null);
@@ -171,6 +204,7 @@ export function SuggestionCreateClient({
       }
 
       if (tool === "rectangle") {
+        setFormOpen(false);
         dragRef.current = { start: pt, current: pt };
         setDraftBbox(null);
         setPolygonPoints([]);
@@ -179,6 +213,7 @@ export function SuggestionCreateClient({
       }
 
       if (tool === "polygon") {
+        setFormOpen(false);
         setPolygonPoints((prev) => [...prev, geo]);
         setDraftBbox(null);
         setLinePoints([]);
@@ -188,6 +223,7 @@ export function SuggestionCreateClient({
       }
 
       if (tool === "line") {
+        setFormOpen(false);
         setLinePoints((prev) => [...prev, geo]);
         setDraftBbox(null);
         setPolygonPoints([]);
@@ -232,10 +268,13 @@ export function SuggestionCreateClient({
   );
 
   const finishDrawing = useCallback(() => {
+    const openForm = () => setFormOpen(true);
+
     if (tool === "pin" && pendingPoint) {
       setGeometry({ type: "Point", coordinates: pendingPoint });
       setPendingPoint(null);
       setError(null);
+      openForm();
       return;
     }
     if (tool === "rectangle" && draftBbox?.type === "Bbox") {
@@ -246,6 +285,7 @@ export function SuggestionCreateClient({
       setGeometry(draftBbox);
       setDraftBbox(null);
       setError(null);
+      openForm();
       return;
     }
     if (tool === "polygon" && polygonPoints.length >= 3) {
@@ -256,6 +296,7 @@ export function SuggestionCreateClient({
       setGeometry({ type: "Polygon", ring: polygonPoints });
       setPolygonPoints([]);
       setError(null);
+      openForm();
       return;
     }
     if (tool === "line" && linePoints.length >= 2) {
@@ -266,6 +307,7 @@ export function SuggestionCreateClient({
       setGeometry({ type: "LineString", coordinates: linePoints });
       setLinePoints([]);
       setError(null);
+      openForm();
     }
   }, [draftBbox, linePoints, pendingPoint, polygonPoints, tool]);
 
@@ -308,12 +350,16 @@ export function SuggestionCreateClient({
     return false;
   }, [draftBbox, linePoints.length, pendingPoint, polygonPoints.length, tool]);
 
+  const hasActiveDrawing = draftGeometry !== null;
   const canAddMarking = Boolean(geometry);
   const totalMarkingCount = markings.length + (geometry ? 1 : 0);
+  const slutforColored = hasActiveDrawing;
+  const laggTillColored = canAddMarking && formOpen;
 
   function handleToolChange(next: DrawTool) {
     setTool(next);
     setGeometry(null);
+    setFormOpen(false);
     resetDraft();
     setError(null);
   }
@@ -324,8 +370,19 @@ export function SuggestionCreateClient({
       setError(`Max ${MAX_SUGGESTION_GEOMETRIES} markeringar per förslag`);
       return;
     }
+    if (comment.trim().length >= 2) {
+      setSubmissionDraft({
+        category,
+        title,
+        comment,
+        attachmentFile,
+        attachmentPreview,
+      });
+    }
     setMarkings((prev) => [...prev, geometry]);
     setGeometry(null);
+    setFormOpen(false);
+    clearFormFields();
     resetDraft();
     setError(null);
   }
@@ -337,8 +394,21 @@ export function SuggestionCreateClient({
   function handleClearAll() {
     setMarkings([]);
     setGeometry(null);
+    setFormOpen(false);
+    setSubmissionDraft(EMPTY_SUBMISSION_DRAFT);
+    clearFormFields();
     resetDraft();
     setError(null);
+  }
+
+  function resolveSubmissionFields() {
+    const useLiveForm = formOpen && comment.trim().length >= 2;
+    return {
+      category: useLiveForm ? category : submissionDraft.category,
+      title: useLiveForm ? title.trim() : submissionDraft.title.trim(),
+      comment: useLiveForm ? comment : submissionDraft.comment,
+      attachmentFile: useLiveForm ? attachmentFile : submissionDraft.attachmentFile,
+    };
   }
 
   function handleAttachmentChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -360,12 +430,17 @@ export function SuggestionCreateClient({
       }
       return;
     }
+    const submission = resolveSubmissionFields();
+    if (submission.comment.trim().length < 2) {
+      setError("Beskrivning krävs (minst 2 tecken) — markera, slutför och fyll i formuläret");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       let attachmentPath: string | undefined;
-      if (attachmentFile) {
-        const uploadRes = await uploadSuggestionAttachment(mapSlug, attachmentFile);
+      if (submission.attachmentFile) {
+        const uploadRes = await uploadSuggestionAttachment(mapSlug, submission.attachmentFile);
         const uploadData = (await uploadRes.json()) as { error?: string; attachmentPath?: string };
         if (!uploadRes.ok) {
           throw new Error(uploadData.error ?? "Kunde inte ladda upp bilden");
@@ -378,9 +453,9 @@ export function SuggestionCreateClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mapVersionId: versionId,
-          category,
-          title: title.trim() || undefined,
-          comment,
+          category: submission.category,
+          title: submission.title || undefined,
+          comment: submission.comment,
           geometries: markings,
           attachmentPath,
         }),
@@ -431,7 +506,11 @@ export function SuggestionCreateClient({
           type="button"
           disabled={!canFinishDrawing}
           onClick={finishDrawing}
-          className="rounded-lg border border-orange-300 bg-orange-50 px-3 py-1.5 text-sm font-medium text-orange-800 disabled:opacity-50"
+          className={
+            slutforColored
+              ? "rounded-lg border border-orange-400 bg-orange-50 px-3 py-1.5 text-sm font-medium text-orange-900 disabled:cursor-not-allowed disabled:opacity-50"
+              : NEUTRAL_BTN
+          }
         >
           Slutför
         </button>
@@ -439,7 +518,11 @@ export function SuggestionCreateClient({
           type="button"
           disabled={!canAddMarking}
           onClick={handleAddMarking}
-          className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+          className={
+            laggTillColored
+              ? "rounded-lg bg-ifk-blue px-3 py-1.5 text-sm font-medium text-white hover:bg-ifk-blue-hover disabled:cursor-not-allowed disabled:opacity-50"
+              : NEUTRAL_BTN
+          }
         >
           Lägg till ändring
         </button>
@@ -452,114 +535,86 @@ export function SuggestionCreateClient({
         </button>
       </div>
 
-      {markings.length > 0 && (
-        <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-          <p className="text-sm font-medium text-slate-800">
-            {markings.length} markering{markings.length === 1 ? "" : "ar"}
-          </p>
-          <ul className="mt-1 space-y-1">
-            {markings.map((marking, index) => (
-              <li key={index} className="flex items-center justify-between gap-2 text-sm text-slate-600">
-                <span>
-                  {index + 1}. {GEOMETRY_TYPE_LABELS[marking.type]}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleRemoveMarking(index)}
-                  className="text-red-600 hover:underline"
-                >
-                  Ta bort
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       <form onSubmit={(e) => void handleSubmit(e)} className="mt-6 space-y-6">
-        <div className="card space-y-4">
-          <div>
-            <label htmlFor="category" className="form-label">
-              Kategori
-            </label>
-            <select
-              id="category"
-              value={category}
-              onChange={(e) => setCategory(e.target.value as SuggestionCategoryValue)}
-              className="form-input"
-            >
-              {Object.entries(SUGGESTION_CATEGORY_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="title" className="form-label">
-              Rubrik (valfritt)
-            </label>
-            <input
-              id="title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              maxLength={120}
-              className="form-input"
-              placeholder="Kort sammanfattning"
-            />
-          </div>
-          <div>
-            <label htmlFor="comment" className="form-label">
-              Beskrivning
-            </label>
-            <textarea
-              id="comment"
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              required
-              minLength={2}
-              rows={4}
-              className="form-input"
-              placeholder="Beskriv vad som är fel, saknas eller bör förklaras (minst 2 tecken)."
-            />
-          </div>
-          <div>
-            <label htmlFor="attachment" className="form-label">
-              Foto (valfritt)
-            </label>
-            <input
-              id="attachment"
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              onChange={handleAttachmentChange}
-              className="form-input"
-            />
-            {attachmentPreview && (
-              <img
-                src={attachmentPreview}
-                alt="Förhandsvisning av bilaga"
-                className="mt-2 max-h-48 rounded-lg border border-slate-200 object-contain"
-              />
-            )}
-          </div>
-          {error && (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-              {error}
+        <section
+          className={`rounded-lg border px-4 py-4 sm:px-6 ${
+            formOpen ? "border-slate-200 bg-white" : "border-slate-200 bg-slate-50 opacity-75"
+          }`}
+        >
+          <h2 className="text-sm font-semibold text-slate-900">Beskriv ändringen</h2>
+          {!formOpen ? (
+            <p className="mt-1 text-sm text-slate-500">
+              Markera på kartan och klicka Slutför för att fylla i kategori, beskrivning och foto.
             </p>
+          ) : (
+            <fieldset disabled={!formOpen} className="mt-4 space-y-4 disabled:opacity-100">
+              <div>
+                <label htmlFor="category" className="form-label">
+                  Kategori
+                </label>
+                <select
+                  id="category"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value as SuggestionCategoryValue)}
+                  className="form-input"
+                >
+                  {Object.entries(SUGGESTION_CATEGORY_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="title" className="form-label">
+                  Rubrik (valfritt)
+                </label>
+                <input
+                  id="title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  maxLength={120}
+                  className="form-input"
+                  placeholder="Kort sammanfattning"
+                />
+              </div>
+              <div>
+                <label htmlFor="comment" className="form-label">
+                  Beskrivning
+                </label>
+                <textarea
+                  id="comment"
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  required
+                  minLength={2}
+                  rows={4}
+                  className="form-input"
+                  placeholder="Beskriv vad som är fel, saknas eller bör förklaras (minst 2 tecken)."
+                />
+              </div>
+              <div>
+                <label htmlFor="attachment" className="form-label">
+                  Foto (valfritt)
+                </label>
+                <input
+                  id="attachment"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={handleAttachmentChange}
+                  className="form-input"
+                />
+                {attachmentPreview && (
+                  <img
+                    src={attachmentPreview}
+                    alt="Förhandsvisning av bilaga"
+                    className="mt-2 max-h-48 rounded-lg border border-slate-200 object-contain"
+                  />
+                )}
+              </div>
+            </fieldset>
           )}
-        </div>
-
-        <SuggestionCreateMapPanel
-          mapSlug={mapSlug}
-          versionId={versionId}
-          drawPointerHandlers={drawPointerHandlers}
-          markings={markings}
-          currentGeometry={geometry}
-          draftGeometry={draftGeometry}
-          drawHint={drawHint}
-          markingCount={totalMarkingCount}
-          rootTransformRef={rootTransformRef}
-        />
+        </section>
 
         <section className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-4 sm:px-6">
           <h2 className="text-sm font-semibold text-slate-900">Skicka kartförslag</h2>
@@ -568,6 +623,32 @@ export function SuggestionCreateClient({
               ? `Du skickar ${markings.length} ändring${markings.length === 1 ? "" : "ar"} tillsammans i ett kartförslag.`
               : "Lägg till minst en ändring på kartan innan du skickar."}
           </p>
+          {markings.length > 0 && (
+            <ul className="mt-3 space-y-1 rounded-lg border border-slate-200 bg-white px-3 py-2">
+              {markings.map((marking, index) => (
+                <li
+                  key={index}
+                  className="flex items-center justify-between gap-2 text-sm text-slate-600"
+                >
+                  <span>
+                    {index + 1}. {GEOMETRY_TYPE_LABELS[marking.type]}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveMarking(index)}
+                    className="text-red-600 hover:underline"
+                  >
+                    Ta bort
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {error && (
+            <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+              {error}
+            </p>
+          )}
           <div className="mt-4 flex flex-wrap gap-2">
             <button type="submit" disabled={loading || markings.length < 1} className="btn-primary">
               {loading
@@ -584,6 +665,18 @@ export function SuggestionCreateClient({
             </Link>
           </div>
         </section>
+
+        <SuggestionCreateMapPanel
+          mapSlug={mapSlug}
+          versionId={versionId}
+          drawPointerHandlers={drawPointerHandlers}
+          markings={markings}
+          currentGeometry={geometry}
+          draftGeometry={draftGeometry}
+          drawHint={drawHint}
+          markingCount={totalMarkingCount}
+          rootTransformRef={rootTransformRef}
+        />
       </form>
     </div>
   );

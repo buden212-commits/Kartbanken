@@ -10,9 +10,10 @@ export const releaseNotes: ReleaseNote[] = [
     date: "2026-08-05",
     title: "Kartförslag — tydligare skapa-vy",
     items: [
-      "Formulär (kategori, beskrivning, foto) ligger ovanför kartan när du skapar kartförslag",
-      "Knappen «Lägg till ändring» aktiveras först efter «Slutför» — då kan du lägga till fler markeringar",
-      "Skicka-knappen visar antal ändringar (t.ex. «Skicka kartförslag (2 st)») i en egen sektion",
+      "Formuläret (kategori, beskrivning, foto) är ihopfällt tills du klickat Slutför efter en markering",
+      "Slutför och Lägg till ändring visar färg först när respektive steg är aktivt — annars neutral stil",
+      "Skicka-sektionen med antal ändringar ligger ovanför kartan, under formuläret",
+      "Efter «Lägg till ändring» rensas formuläret och du markerar nästa plats på kartan",
     ],
   },
   {
