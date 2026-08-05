@@ -15,8 +15,14 @@ export type OcadMapLayer = {
 type SymTreeEntry = {
   _first?: string;
   g?: string | number;
+  /** OCAD 9: first node in subgroup — not visibility */
   f?: string | number;
+  /** OCAD 9: last node in subgroup — not locked */
   l?: string | number;
+  /** OCAD 9/12: visible (1 = visible, 0 = hidden) */
+  v?: string | number;
+  /** OCAD 9/12: tree node expanded */
+  e?: string | number;
   i?: string | number;
 };
 
@@ -131,12 +137,19 @@ function symbolLabel(symbol: OcadSymbol): string {
   return desc ? `${number} ${desc}` : number;
 }
 
-function symtreeVisible(entry: SymTreeEntry): boolean {
-  return entry.f === "1" || entry.f === 1;
+function symtreeFlagOn(value: string | number | undefined): boolean {
+  return value === "1" || value === 1;
 }
 
-function symtreeLocked(entry: SymTreeEntry): boolean {
-  return entry.l === "1" || entry.l === 1;
+function symtreeVisible(entry: SymTreeEntry): boolean {
+  // OCAD stores visibility in `v`. Some files (OCAD 9 symtree layout) omit it;
+  // `f`/`l` are tree-structure markers, not visibility/lock flags.
+  if (entry.v === undefined) return true;
+  return symtreeFlagOn(entry.v);
+}
+
+function symtreeLocked(_entry: SymTreeEntry): boolean {
+  return false;
 }
 
 function buildSymbolSubLayers(

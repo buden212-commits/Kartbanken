@@ -14,6 +14,7 @@ export const releaseNotes: ReleaseNote[] = [
       "Min profil — klicka på ditt namn i menyn för behörighet, notisinställningar och lösenordsbyte",
       "E-post till användare när admin godkänner konto (med tilldelad behörighet)",
       "Användare kan själva styra e-postnotiser och .ocd-bilaga i profilen",
+      "Fix: lager som «Tillagda/Ändrade» och symboler som 301.004 syns nu korrekt (felaktig tolkning av OCAD-lagerflaggor)",
     ],
   },
   {

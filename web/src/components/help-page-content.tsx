@@ -539,6 +539,15 @@ export async function HelpPageContent() {
             ]}
           />
 
+          <h3 className="font-medium text-slate-900">Lager</h3>
+          <p>
+            Under kartan finns panelen <strong>Lager</strong> (kartvy och diff). Synlighet följer
+            OCAD-filens lagerinställningar — lager som är dolda i filen (<code>v=0</code> i
+            symbolträdet) startar avstängda och kan markeras som <em>(dolt)</em>. Saknas
+            synlighetsflagga i filen antas lagret vara synligt, som i OCAD. Använd sök i
+            lagerpanelen (t.ex. <strong>301.004</strong>) och kryssa i lagret om något saknas.
+          </p>
+
           <h3 className="font-medium text-slate-900">Min position (GPS)</h3>
           <p>
             I kartvyn finns knappen <strong>Min position</strong> om kartan är georefererad och din
