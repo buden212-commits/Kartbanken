@@ -196,6 +196,20 @@ export function formatAuditActivity(action: string, metadataRaw: string | null):
       const prefix = forced ? "Lösenord bytt efter tillfälligt lösenord" : "Lösenord bytt";
       return email ? `${prefix} — ${email}` : prefix;
     }
+    case "SUGGESTION_CREATED": {
+      const ref = mapRef(metadata);
+      const category = metaString(metadata, "categoryLabel");
+      if (ref && category) return `Kartförslag skapat — ${ref}, ${category}`;
+      return ref ? `Kartförslag skapat — ${ref}` : "Kartförslag skapat";
+    }
+    case "SUGGESTION_UPDATED":
+      return "Kartförslag uppdaterat";
+    case "SUGGESTION_REVIEWED": {
+      const status = metaString(metadata, "statusLabel");
+      return status ? `Kartförslag granskat — ${status}` : "Kartförslag granskat";
+    }
+    case "SUGGESTION_DELETED":
+      return "Kartförslag raderat";
     default:
       return action;
   }

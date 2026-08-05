@@ -46,6 +46,14 @@ export function canCreateCourse(role: RoleType): boolean {
   return canDownload(role);
 }
 
+export function canCreateMapSuggestion(role: RoleType): boolean {
+  return canDownload(role);
+}
+
+export function canReviewMapSuggestion(role: RoleType): boolean {
+  return canUpload(role);
+}
+
 export function canEditCourse(
   role: RoleType,
   courseOwnerId: string,

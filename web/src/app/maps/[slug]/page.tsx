@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { canAdmin, canCheckout, canCreateCourse, canUpload } from "@/lib/auth/permissions";
+import { canAdmin, canCheckout, canCreateCourse, canCreateMapSuggestion, canReviewMapSuggestion, canUpload } from "@/lib/auth/permissions";
 import { MapTitleEditor } from "@/components/map-title-editor";
 import { findActiveCheckoutsForMap, getHeadVersionId, serializeCheckoutResponse } from "@/lib/checkout/repository";
 import { listCoursesForMap, serializeCourseSummary } from "@/lib/course/repository";
@@ -14,6 +14,8 @@ import { CheckoutAreaCta } from "@/components/checkout-area-cta";
 import { CheckoutListPanel } from "@/components/checkout-list-panel";
 import { CheckoutOverviewMap } from "@/components/checkout-overview-map";
 import { CourseListPanel } from "@/components/course/course-list-panel";
+import { SuggestionListPanel } from "@/components/suggestion/suggestion-list-panel";
+import { listSuggestionsForMap, serializeSuggestionSummary } from "@/lib/suggestion/repository";
 import { Role } from "@/lib/roles";
 
 type PageProps = { params: Promise<{ slug: string }> };
@@ -46,6 +48,11 @@ export default async function MapDetailPage({ params }: PageProps) {
   const courseList =
     session?.user?.id && role && canCreateCourse(role)
       ? (await listCoursesForMap(map.id, session.user.id)).map(serializeCourseSummary)
+      : [];
+
+  const suggestionList =
+    session?.user?.id && role && canCreateMapSuggestion(role)
+      ? (await listSuggestionsForMap(map.id)).map(serializeSuggestionSummary)
       : [];
 
   const uploaderIds = [
@@ -189,6 +196,15 @@ export default async function MapDetailPage({ params }: PageProps) {
           mapSlug={map.slug}
           courses={courseList}
           sessionUserId={session.user.id}
+          isAdmin={role === Role.ADMIN}
+        />
+      )}
+
+      {session?.user?.id && role && canCreateMapSuggestion(role) && (
+        <SuggestionListPanel
+          mapSlug={map.slug}
+          suggestions={suggestionList}
+          canReview={canReviewMapSuggestion(role)}
           isAdmin={role === Role.ADMIN}
         />
       )}

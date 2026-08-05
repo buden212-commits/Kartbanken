@@ -12,6 +12,7 @@ const sections = [
   { id: "versioner", label: "Versionshantering" },
   { id: "checkout", label: "Checka ut och in" },
   { id: "bana", label: "Lägg bana" },
+  { id: "kartforslag", label: "Kartförslag" },
   { id: "publicering", label: "Publicering" },
   { id: "jamfor", label: "Jämföra versioner" },
   { id: "verifiera", label: "Verifiera" },
@@ -440,6 +441,28 @@ export async function HelpPageContent() {
           )}
         </HelpSection>
 
+        <HelpSection id="kartforslag" title="Kartförslag">
+          <p>
+            Med <strong>Kartförslag</strong> kan alla godkända användare markera och beskriva
+            terrängändringar på <strong>publicerade</strong> kartversioner — utan att röra
+            kartfilen. Förslagen granskas av redaktörer och kan kopplas till checkout vid behov.
+          </p>
+          <HelpList
+            items={[
+              "Öppna en publicerad version via Visa karta och klicka Föreslå ändring",
+              "Klicka på kartan för att placera en orange markering",
+              "Välj kategori och skriv en beskrivning (minst 10 tecken)",
+              "Alla ser öppna förslag under Kartförslag på områdessidan",
+              "Redaktörer markerar förslag som Införda eller Avvisade",
+              "Förslag gäller den version du markerade — de arkiveras kvar när ny version publiceras",
+            ]}
+          />
+          <p className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-orange-900">
+            Kartförslag är <strong>förslag</strong>, inte en del av kartan. Terräng ändras fortfarande
+            via checkout och OCAD-redigering.
+          </p>
+        </HelpSection>
+
         <HelpSection id="publicering" title="Publicering">
           <p>
             Nya versioner är <strong>opublicerade</strong> som standard. Det innebär att läsare inte
@@ -653,6 +676,7 @@ export async function HelpPageContent() {
             <HelpList
               items={[
                 "Ny användarregistrering — till admin/prenumeranter",
+                "Nytt kartförslag — till prenumeranter",
                 "Konto godkänt — till användaren med tilldelad behörighet",
                 "Tillfälligt lösenord — till användare som begärt återställning",
                 "Ny kartversion uppladdad — med valfri .ocd-bilaga till berättigade mottagare",

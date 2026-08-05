@@ -8,6 +8,15 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-05",
+    title: "Kartförslag",
+    items: [
+      "Nytt skissverktyg — lämna kartförslag med markering och kommentar på publicerade versioner",
+      "Lista och granska förslag på områdessidan; redaktörer kan markera som införda eller avvisade",
+      "E-postnotis till prenumeranter när nytt kartförslag skapas",
+    ],
+  },
+  {
+    date: "2026-08-05",
     title: "Konto, lösenord och profil",
     items: [
       "Glömt lösenord — tillfälligt lösenord via e-post (giltigt 1 timme) med tvingat byte vid inloggning",

@@ -384,6 +384,54 @@ export async function notifyUserApproved(user: {
   await sendMail({ to: user.email, subject, text, html });
 }
 
+export async function notifyNewMapSuggestion(input: {
+  mapTitle: string;
+  mapSlug: string;
+  suggestionId: string;
+  versionNumber: number;
+  categoryLabel: string;
+  comment: string;
+  authorName: string | null;
+  authorEmail: string;
+}): Promise<void> {
+  if (!(await isEmailConfigured())) {
+    console.warn("[email] SMTP not configured — skipping map suggestion notification");
+    return;
+  }
+
+  const url = `${getAppBaseUrl()}/maps/${input.mapSlug}/suggestions/${input.suggestionId}`;
+  const author = input.authorName?.trim() || input.authorEmail;
+  const subject = `Nytt kartförslag — ${input.mapTitle}`;
+  const text = [
+    `${author} har lämnat ett kartförslag på ${input.mapTitle} (v${input.versionNumber}).`,
+    "",
+    `Kategori: ${input.categoryLabel}`,
+    input.comment,
+    "",
+    `Visa förslag: ${url}`,
+  ].join("\n");
+
+  const bodyHtml = `
+    <p style="margin:0 0 16px;">${escapeHtml(author)} har lämnat ett kartförslag på <strong>${escapeHtml(input.mapTitle)}</strong> (v${input.versionNumber}).</p>
+    <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 20px;width:100%;font-size:15px;">
+      <tr>
+        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;width:90px;">Kategori</td>
+        <td style="padding:4px 0;color:#0f172a;">${escapeHtml(input.categoryLabel)}</td>
+      </tr>
+      <tr>
+        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;">Kommentar</td>
+        <td style="padding:4px 0;color:#0f172a;">${escapeHtml(input.comment)}</td>
+      </tr>
+    </table>
+    <p style="margin:0;">
+      <a href="${escapeHtml(url)}" style="display:inline-block;padding:10px 18px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:500;">Visa kartförslag</a>
+    </p>
+  `.trim();
+
+  const html = buildHtmlEmail({ title: subject, bodyHtml });
+  await sendMailToNotificationRecipients({ subject, text, html });
+}
+
 export async function notifyAdminOfNewRegistration(user: {
   name: string;
   email: string;
@@ -677,6 +725,12 @@ export function queueNotifyUserApproved(
   user: Parameters<typeof notifyUserApproved>[0],
 ): void {
   scheduleEmail(() => notifyUserApproved(user), "account approved");
+}
+
+export function queueNotifyNewMapSuggestion(
+  input: Parameters<typeof notifyNewMapSuggestion>[0],
+): void {
+  scheduleEmail(() => notifyNewMapSuggestion(input), "map suggestion");
 }
 
 export function notifyCheckoutCreated(ctx: CheckoutMailContext): void {

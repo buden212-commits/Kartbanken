@@ -25,7 +25,11 @@ export type AuditAction =
   | "COURSE_PDF_EXPORT"
   | "EMAIL_SENT"
   | "PASSWORD_RESET_REQUESTED"
-  | "PASSWORD_CHANGED";
+  | "PASSWORD_CHANGED"
+  | "SUGGESTION_CREATED"
+  | "SUGGESTION_UPDATED"
+  | "SUGGESTION_REVIEWED"
+  | "SUGGESTION_DELETED";
 
 export type EmailSentAuditMetadata = {
   kind: "checkin" | "new_upload" | "test";
