@@ -14,6 +14,7 @@ import {
   isValidSuggestionBbox,
   isValidSuggestionLineCoordinates,
   isValidSuggestionPolygonRing,
+  LIVE_MAP_STROKE_SCALE,
   normalizeSuggestionBbox,
   renderSuggestionGeometrySvg,
 } from "@/lib/suggestion/geometry";
@@ -76,7 +77,12 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
       rootTransformRef.current = rootTransform;
       const parts: string[] = [];
       for (const marking of markings) {
-        parts.push(renderSuggestionGeometrySvg(marking, rootTransform, { label: "FÖRSLAG" }));
+        parts.push(
+          renderSuggestionGeometrySvg(marking, rootTransform, {
+            label: "FÖRSLAG",
+            strokeScale: LIVE_MAP_STROKE_SCALE,
+          }),
+        );
       }
       const overlay = draftGeometry ?? currentGeometry;
       if (overlay) {
@@ -84,6 +90,7 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
           renderSuggestionGeometrySvg(overlay, rootTransform, {
             label: "FÖRSLAG",
             draft: Boolean(draftGeometry && !currentGeometry),
+            strokeScale: LIVE_MAP_STROKE_SCALE,
           }),
         );
       }

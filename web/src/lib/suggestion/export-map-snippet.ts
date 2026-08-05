@@ -4,12 +4,29 @@ import { suggestionObjectTypeForGeometry } from "@/lib/suggestion/access";
 import {
   bboxFromSuggestionGeometries,
   renderSuggestionObjectsSvg,
+  type SuggestionGeoBbox,
 } from "@/lib/suggestion/geometry";
 import type { SuggestionGeometry } from "@/lib/suggestion/types";
 
 const SNIPPET_DPI = 150;
 const SNIPPET_PADDING_M = 50;
+const SNIPPET_MIN_EXTENT_M = 200;
 const SNIPPET_MAX_PX = 520;
+/** Overlay stroke/pin scale in PDF snippets — map is small so markings must read clearly. */
+const SNIPPET_STROKE_SCALE = 5;
+
+function expandGeoBboxToMinExtent(
+  [minGx, minGy, maxGx, maxGy]: SuggestionGeoBbox,
+  minM: number,
+): SuggestionGeoBbox {
+  const width = maxGx - minGx;
+  const height = maxGy - minGy;
+  const cx = (minGx + maxGx) / 2;
+  const cy = (minGy + maxGy) / 2;
+  const halfW = Math.max(width / 2, minM / 2);
+  const halfH = Math.max(height / 2, minM / 2);
+  return [cx - halfW, cy - halfH, cx + halfW, cy + halfH];
+}
 
 export function buildSuggestionMapSnippetSvg(
   fullSvgText: string,
@@ -20,7 +37,10 @@ export function buildSuggestionMapSnippetSvg(
   const geoBbox = bboxFromSuggestionGeometries(geometries);
   if (!geoBbox) return null;
 
-  const [minGx, minGy, maxGx, maxGy] = geoBbox;
+  const [minGx, minGy, maxGx, maxGy] = expandGeoBboxToMinExtent(
+    geoBbox,
+    SNIPPET_MIN_EXTENT_M,
+  );
   const [svgMinX, svgMinY, svgMaxX, svgMaxY] = geoBboxToSvgUser(
     [minGx - paddingM, minGy - paddingM, maxGx + paddingM, maxGy + paddingM],
     rootTransform,
@@ -61,6 +81,7 @@ export function buildSuggestionMapSnippetSvg(
 
   const overlay = renderSuggestionObjectsSvg(objects, rootTransform, {
     selected: true,
+    strokeScale: SNIPPET_STROKE_SCALE,
   });
 
   return `<?xml version="1.0" encoding="UTF-8"?>

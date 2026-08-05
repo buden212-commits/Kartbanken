@@ -4,17 +4,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { DiffMapPanel } from "@/components/diff-map-panel";
+import { type SvgRootTransform } from "@/lib/ocad/svg-coords";
 import {
-  geoBboxToSvgUser,
-  geoToSvgUserPoint,
-  type SvgRootTransform,
-} from "@/lib/ocad/svg-coords";
-import {
-  geoRingToSvgPoints,
-  SUGGESTION_ORANGE,
-  SUGGESTION_ORANGE_STROKE,
+  LIVE_MAP_STROKE_SCALE,
+  renderSuggestionGeometrySvg,
 } from "@/lib/suggestion/geometry";
-import type { SuggestionGeometry, SuggestionOverlayItem } from "@/lib/suggestion/types";
+import type { SuggestionOverlayItem } from "@/lib/suggestion/types";
 
 export function useSuggestionOverlays(mapSlug: string, mapVersionId: string) {
   const [overlays, setOverlays] = useState<SuggestionOverlayItem[]>([]);
@@ -54,84 +49,19 @@ function SuggestionOverlayShape({
   rootTransform: SvgRootTransform;
   onClick: () => void;
 }) {
-  const { geometry } = item;
-  const commonProps = {
-    onClick: (e: React.MouseEvent) => {
-      e.stopPropagation();
-      onClick();
-    },
-    style: { cursor: "pointer" as const },
-    "data-suggestion-id": item.id,
-  };
-
-  if (geometry.type === "Point") {
-    const [x, y] = geoToSvgUserPoint(geometry.coordinates, rootTransform);
-    return (
-      <g {...commonProps}>
-        <circle cx={x} cy={y} r={14} fill={SUGGESTION_ORANGE} fillOpacity={0.25} stroke="none" />
-        <circle
-          cx={x}
-          cy={y}
-          r={10}
-          fill={SUGGESTION_ORANGE}
-          fillOpacity={0.9}
-          stroke={SUGGESTION_ORANGE_STROKE}
-          strokeWidth={2}
-        />
-      </g>
-    );
-  }
-
-  if (geometry.type === "Bbox") {
-    const { minX, minY, maxX, maxY } = geometry.bbox;
-    const [svgMinX, svgMinY, svgMaxX, svgMaxY] = geoBboxToSvgUser(
-      [minX, minY, maxX, maxY],
-      rootTransform,
-    );
-    const x = Math.min(svgMinX, svgMaxX);
-    const y = Math.min(svgMinY, svgMaxY);
-    const width = Math.abs(svgMaxX - svgMinX);
-    const height = Math.abs(svgMaxY - svgMinY);
-    return (
-      <rect
-        {...commonProps}
-        x={x}
-        y={y}
-        width={width}
-        height={height}
-        fill={SUGGESTION_ORANGE}
-        fillOpacity={0.25}
-        stroke={SUGGESTION_ORANGE_STROKE}
-        strokeWidth={2}
-        strokeDasharray="6 4"
-      />
-    );
-  }
-
-  if (geometry.type === "Polygon") {
-    return (
-      <polygon
-        {...commonProps}
-        points={geoRingToSvgPoints(geometry.ring, rootTransform)}
-        fill={SUGGESTION_ORANGE}
-        fillOpacity={0.25}
-        stroke={SUGGESTION_ORANGE_STROKE}
-        strokeWidth={2}
-        strokeDasharray="6 4"
-      />
-    );
-  }
-
   return (
-    <polyline
-      {...commonProps}
-      points={geoRingToSvgPoints(geometry.coordinates, rootTransform)}
-      fill="none"
-      stroke={SUGGESTION_ORANGE_STROKE}
-      strokeWidth={2}
-      strokeDasharray="6 4"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+    <g
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      style={{ cursor: "pointer" }}
+      data-suggestion-id={item.id}
+      dangerouslySetInnerHTML={{
+        __html: renderSuggestionGeometrySvg(item.geometry, rootTransform, {
+          strokeScale: LIVE_MAP_STROKE_SCALE,
+        }),
+      }}
     />
   );
 }

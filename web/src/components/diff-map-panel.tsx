@@ -115,7 +115,7 @@ type Props = {
   } | null;
 };
 
-const MAX_ZOOM = 30;
+const MAX_ZOOM = 40;
 const MIN_ZOOM = 0.2;
 /** Zoom in/out by 50% per button click or wheel step. */
 const ZOOM_IN_FACTOR = 1.5;

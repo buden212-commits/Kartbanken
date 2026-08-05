@@ -460,6 +460,7 @@ export async function HelpPageContent() {
               "Du kan redigera egna öppna förslag (text och markering) via Redigera på detaljsidan",
               "Förslag gäller den version du markerade — vid ny publicerad version visas «Gäller version N»",
               "Exportera PDF med alla öppna och pågående förslag via knappen i listan (text, foto och kartutklipp per förslag)",
+              "Kartutklipp i PDF-rapporten visar minst 200×200 meter med tydligt markerade linjer och punkter",
             ]}
           />
           <p className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-orange-900">
@@ -562,6 +563,7 @@ export async function HelpPageContent() {
             items={[
               "Knapparna + och − zoomar in respektive ut med 50 % per klick",
               "Mushjul zoomar också i 50 %-steg",
+              "Maxzoom är 4000 %",
               "Hela kartan — återställer vyn så att hela kartan syns",
               "Dra i kartan för att panorera",
             ]}

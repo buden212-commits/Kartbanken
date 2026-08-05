@@ -8,6 +8,22 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-05",
+    title: "Kartvy — högre maxzoom",
+    items: [
+      "Alla kartor kan nu zoomas in till 4000 % (tidigare 3000 %)",
+    ],
+  },
+  {
+    date: "2026-08-05",
+    title: "Kartförslag — tydligare markeringar på kartan",
+    items: [
+      "Linjer och punkter i kartvyn (översikt, skapa och detalj) ritas tjockare så de syns bättre mot kartan",
+      "Kartutklipp i PDF-rapporten visar minst 200×200 meter runt varje förslag",
+      "Markeringar i PDF-kartbilden ritas 5× tjockare än standard så de syns tydligt i utskriften",
+    ],
+  },
+  {
+    date: "2026-08-05",
     title: "Export — kartförslagsrapport och GeoTIFF",
     items: [
       "Exportera alla öppna och pågående kartförslag som PDF från listan på områdessidan (text, foto och kartutklipp per förslag)",

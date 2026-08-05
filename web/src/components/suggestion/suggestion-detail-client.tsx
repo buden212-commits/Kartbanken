@@ -15,6 +15,7 @@ import {
   isValidSuggestionBbox,
   isValidSuggestionLineCoordinates,
   isValidSuggestionPolygonRing,
+  LIVE_MAP_STROKE_SCALE,
   normalizeSuggestionBbox,
   renderSuggestionGeometrySvg,
   renderSuggestionObjectsSvg,
@@ -549,6 +550,7 @@ export function SuggestionDetailClient({
                       label: overlayLabel,
                       selected: true,
                       draft: Boolean(draftGeometry),
+                      strokeScale: LIVE_MAP_STROKE_SCALE,
                     }),
                   }}
                 />
@@ -565,7 +567,7 @@ export function SuggestionDetailClient({
                       sortOrder: obj.sortOrder,
                     })),
                     rootTransform,
-                    { label: overlayLabel, selected: true },
+                    { label: overlayLabel, selected: true, strokeScale: LIVE_MAP_STROKE_SCALE },
                   ),
                 }}
               />
