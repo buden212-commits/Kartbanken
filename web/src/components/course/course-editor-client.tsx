@@ -17,6 +17,7 @@ import type { CourseSummary, EditorObject, EditorTool } from "@/lib/course/types
 import { CourseObjectType } from "@/lib/course/types";
 import {
   defaultControlNumberForControl,
+  ensureControlNumbers,
   findControlNumberObject,
   getControlsSorted,
   isControlNumberObject,
@@ -29,6 +30,7 @@ import {
   courseObjectsBbox,
   formatCourseLengthKm,
   hitTestTopObject,
+  hitTestTopObjectForDelete,
   objectCentroid,
   renderCourseOverlaySvg,
   renumberSortOrder,
@@ -225,7 +227,7 @@ export function CourseEditorClient({
           next = next.filter((o) => o.clientId !== linked.clientId);
         }
       }
-      return resyncControlNumberIndices(renumberSortOrder(next));
+      return ensureControlNumbers(renumberSortOrder(next));
     });
     setSelectedId(null);
     setDirty(true);
@@ -271,7 +273,7 @@ export function CourseEditorClient({
       if (tool === "delete") {
         const vb = parseViewBoxString(viewBoxRef.current);
         const tol = computeHitTolerance(vb?.width ?? 1000, vb?.height ?? 1000);
-        const hit = hitTestTopObject(geo, objects, tol);
+        const hit = hitTestTopObjectForDelete(geo, objects, tol);
         if (hit && window.confirm("Radera detta objekt?")) {
           removeObject(hit.clientId);
         }
@@ -568,10 +570,20 @@ export function CourseEditorClient({
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error ?? "Radering misslyckades");
       }
-      router.push(`/maps/${mapSlug}`);
+      setCourseId(null);
+      setCourseName("Ny bana");
+      setIsPublic(false);
+      setObjects([]);
+      setDirty(false);
+      setSelectedId(null);
+      setLineDraft([]);
+      setPolygonDraft([]);
+      setSuccess("Banan raderades");
+      await loadCourses();
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Radering misslyckades");
+    } finally {
       setDeleting(false);
     }
   }
@@ -841,7 +853,6 @@ export function CourseEditorClient({
         <CourseSymbolPanel
           selectedNr={selectedSymbol}
           onSelect={setSelectedSymbol}
-          activeGeometry={activeGeometry}
         />
       </div>
 

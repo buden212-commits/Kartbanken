@@ -8,6 +8,16 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-05",
+    title: "Lägg bana — förbättrad banredigering",
+    items: [
+      "Alla valbara IOF-symboler (701–709, utom borttagna 700/702/708) går att välja direkt — ingen gråtonad symbol längre",
+      "Kontrollista visar start och mål utöver numrerade kontroller",
+      "Radera-verktyget tar bort kontroller korrekt och numrerar om efterföljande kontroller",
+      "Efter radering av bana stannar du kvar i banredigeraren",
+    ],
+  },
+  {
+    date: "2026-08-05",
     title: "Navigation — ditt namn i menyn",
     items: [
       "Sidhuvudet visar ditt namn mellan Hjälp och Logga ut (e-post som reserv om namn saknas)",

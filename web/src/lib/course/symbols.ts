@@ -136,6 +136,14 @@ export const COURSE_SYMBOLS: CourseSymbolDef[] = [
 export const COURSE_SYMBOL_MIN = 700;
 export const COURSE_SYMBOL_MAX = 709;
 
+/** Symbols hidden from the editor palette (still valid for legacy saved courses). */
+export const COURSE_PALETTE_EXCLUDED = new Set([700, 702, 708]);
+
+/** Selectable symbols in the banläggning editor. */
+export const COURSE_PALETTE_SYMBOLS = COURSE_SYMBOLS.filter(
+  (s) => !COURSE_PALETTE_EXCLUDED.has(s.nr),
+);
+
 /** Point symbols connected by auto-drawn course legs (701 → 703 → 706). */
 export const COURSE_LEG_SYMBOLS = new Set([701, 703, 706]);
 

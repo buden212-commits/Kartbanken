@@ -100,7 +100,7 @@ export async function HelpPageContent() {
           <p className="mt-4">Banplanering:</p>
           <ol className="list-decimal space-y-2 pl-5">
             <li>Öppna Lägg bana på områdessidan.</li>
-            <li>Rita start, kontroller och mål med IOF-symboler 700–709.</li>
+            <li>Rita start, kontroller och mål med IOF-symboler 701–709.</li>
             <li>Spara banan och exportera som PDF vid behov.</li>
           </ol>
         </HelpSection>
@@ -352,22 +352,19 @@ export async function HelpPageContent() {
             gå direkt till <code className="rounded bg-slate-100 px-1">/maps/[slug]/bana</code>.
           </p>
 
-          <h3 className="font-medium text-slate-900">IOF-symboler 700–709</h3>
+          <h3 className="font-medium text-slate-900">IOF-symboler 701–709</h3>
           <p>
             Banor ritas med IOF:s banplaneringssymboler (magenta/lila) enligt ISOM. Tillgängliga
-            symboler:
+            symboler i redigeraren:
           </p>
           <HelpList
             items={[
-              "700 Övrig — punkt, linje, yta eller text",
               "701 Start — triangel (punkt)",
-              "702 Kartutlämning — cirkel (punkt)",
               "703 Kontroll — cirkel (punkt); banlinjer dras automatiskt mellan start, kontroller och mål",
               "704 Kontrollnummer — text; nummer sätts automatiskt vid nya kontroller",
               "705 Banlinje — linje",
               "706 Mål — dubbelcirkel (punkt)",
               "707 Markerad sträcka — streckad linje",
-              "708 Förbudslinje — dubbellinje",
               "709 Förbudsområde — yta med skraffering",
             ]}
           />
@@ -388,10 +385,9 @@ export async function HelpPageContent() {
 
           <h3 className="font-medium text-slate-900">Kontrollista och banlängd</h3>
           <p>
-            Kontrollistan till höger visar alla kontroller med automatisk numrering. Banlängd
-            (banlängd) beräknas live utifrån banlinjerna mellan start, kontroller och mål, och
-            visas både i verktygsraden och i kontrollistan. Klicka på en kontroll i listan för att
-            zooma in på den.
+            Kontrollistan visar start, alla numrerade kontroller och mål i banordning. Banlängd
+            beräknas live utifrån banlinjerna mellan start, kontroller och mål, och visas både i
+            verktygsraden och i kontrollistan. Klicka på en punkt i listan för att zooma in på den.
           </p>
 
           <h3 className="font-medium text-slate-900">Spara och dela</h3>
@@ -753,7 +749,7 @@ export async function HelpPageContent() {
               <h3 className="font-medium text-slate-900">Vad är Lägg bana?</h3>
               <p className="mt-1">
                 Lägg bana är ett verktyg för att rita orienteringsbanor ovanpå kartan med IOF-symboler
-                700–709. Banor sparas separat och påverkar inte kartfilen. Du kan spara privata eller
+                701–709. Banor sparas separat och påverkar inte kartfilen. Du kan spara privata eller
                 publika banor, jämföra med skuggbana och exportera som PDF.
               </p>
             </div>

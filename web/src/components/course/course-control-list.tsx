@@ -1,7 +1,7 @@
 "use client";
 
 import type { EditorObject } from "@/lib/course/types";
-import { getCourseSymbol } from "@/lib/course/symbols";
+import { COURSE_LEG_SYMBOLS, getCourseSymbol } from "@/lib/course/symbols";
 import { findControlNumberObject } from "@/lib/course/control-numbers";
 
 type Props = {
@@ -13,6 +13,25 @@ type Props = {
   onFocus: (clientId: string) => void;
 };
 
+function listBadgeLabel(symbolNr: number, controlNumber?: number): string {
+  if (symbolNr === 701) return "S";
+  if (symbolNr === 706) return "M";
+  if (controlNumber != null) return String(controlNumber);
+  return "?";
+}
+
+function listItemLabel(
+  obj: EditorObject,
+  sym: ReturnType<typeof getCourseSymbol>,
+  controlNumber?: number,
+): string {
+  if (obj.textContent?.trim()) return obj.textContent;
+  if (obj.symbolNr === 701) return "Start";
+  if (obj.symbolNr === 706) return "Mål";
+  if (controlNumber != null) return `Kontroll ${controlNumber}`;
+  return sym?.label ?? `#${obj.symbolNr}`;
+}
+
 export function CourseControlList({
   objects,
   controlNumbers,
@@ -21,25 +40,32 @@ export function CourseControlList({
   onSelect,
   onFocus,
 }: Props) {
-  const controls = objects
+  const coursePoints = objects
     .slice()
     .sort((a, b) => a.sortOrder - b.sortOrder)
-    .filter((obj) => controlNumbers.has(obj.clientId));
+    .filter((obj) => COURSE_LEG_SYMBOLS.has(obj.symbolNr));
+
+  const controlCount = coursePoints.filter((obj) => obj.symbolNr === 703).length;
 
   return (
     <aside className="flex w-48 shrink-0 flex-col border-l border-slate-200 bg-white">
       <div className="border-b border-slate-200 px-3 py-2">
         <h2 className="text-sm font-medium text-slate-900">Kontrollista</h2>
-        <p className="text-xs text-slate-500">{controls.length} kontroller</p>
+        <p className="text-xs text-slate-500">
+          {controlCount} kontroll{controlCount === 1 ? "" : "er"}
+          {coursePoints.some((o) => o.symbolNr === 701) || coursePoints.some((o) => o.symbolNr === 706)
+            ? " · start/mål"
+            : ""}
+        </p>
         <p className="mt-1 text-xs font-medium text-slate-700">Banlängd: {courseLengthLabel}</p>
       </div>
-      {controls.length === 0 ? (
+      {coursePoints.length === 0 ? (
         <p className="p-3 text-xs text-slate-500">Inga kontroller ännu.</p>
       ) : (
         <ol className="flex-1 overflow-y-auto p-2">
-          {controls.map((obj) => {
-            const num = controlNumbers.get(obj.clientId)!;
+          {coursePoints.map((obj) => {
             const sym = getCourseSymbol(obj.symbolNr);
+            const controlNumber = controlNumbers.get(obj.clientId);
             const numberObj = findControlNumberObject(objects, obj.clientId);
             const selected =
               selectedId === obj.clientId ||
@@ -63,10 +89,10 @@ export function CourseControlList({
                       className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
                       style={{ backgroundColor: sym?.color ?? "#dc2626" }}
                     >
-                      {num}
+                      {listBadgeLabel(obj.symbolNr, controlNumber)}
                     </span>
                     <span className="min-w-0 truncate text-slate-700">
-                      {obj.textContent || sym?.label || `#${obj.symbolNr}`}
+                      {listItemLabel(obj, sym, controlNumber)}
                     </span>
                   </button>
                   {numberObj && (

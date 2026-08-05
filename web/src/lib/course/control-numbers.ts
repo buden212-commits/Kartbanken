@@ -118,39 +118,7 @@ export function ensureControlNumbers(objects: EditorObject[]): EditorObject[] {
 
 /** Reassign linkedControlIndex on all 704 objects after control add/delete. */
 export function resyncControlNumberIndices(objects: EditorObject[]): EditorObject[] {
-  const controls = getControlsSorted(objects);
-  let changed = false;
-
-  const next = objects.map((obj) => {
-    if (obj.symbolNr !== 704 || !isPointGeometry(obj.geometry)) return obj;
-    const control = findControlForNumberObject(objects, obj.clientId);
-    const index = control ? controlIndexFor(objects, control.clientId) : obj.geometry.linkedControlIndex;
-    const label = index ? String(index) : obj.textContent;
-    if (
-      obj.geometry.linkedControlIndex === index &&
-      obj.textContent === label
-    ) {
-      return obj;
-    }
-    changed = true;
-    return {
-      ...obj,
-      geometry: { ...obj.geometry, linkedControlIndex: index },
-      textContent: label,
-    };
-  });
-
-  // Drop orphaned 704 objects whose control was deleted
-  const controlIndices = new Set(controls.map((_, i) => i + 1));
-  const filtered = next.filter((obj) => {
-    if (obj.symbolNr !== 704 || !isPointGeometry(obj.geometry)) return true;
-    const idx = obj.geometry.linkedControlIndex;
-    if (idx && controlIndices.has(idx)) return true;
-    changed = true;
-    return false;
-  });
-
-  return changed ? filtered : objects;
+  return ensureControlNumbers(objects);
 }
 
 export function isControlNumberObject(obj: EditorObject): boolean {
