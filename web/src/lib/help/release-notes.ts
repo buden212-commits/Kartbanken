@@ -8,6 +8,13 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-05",
+    title: "Kartförslag — zoom till markering",
+    items: [
+      "Knappen «Zooma till markering» på detaljsidan zoomar kartan till förslagets markering(ar)",
+    ],
+  },
+  {
+    date: "2026-08-05",
     title: "Kartförslag — förbättrad skapande",
     items: [
       "Snabbare textinmatning när du skriver beskrivning vid kartförslag",

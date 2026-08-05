@@ -188,3 +188,50 @@ export function isValidSuggestionPolygonRing(ring: [number, number][]): boolean 
 export function isValidSuggestionLineCoordinates(coordinates: [number, number][]): boolean {
   return coordinates.length >= 2;
 }
+
+const POINT_ZOOM_PADDING_M = 20;
+
+export type SuggestionGeoBbox = [number, number, number, number];
+
+export function bboxFromSuggestionGeometry(
+  geometry: SuggestionGeometry,
+): SuggestionBboxGeometry["bbox"] {
+  switch (geometry.type) {
+    case "Point": {
+      const [x, y] = geometry.coordinates;
+      return {
+        minX: x - POINT_ZOOM_PADDING_M,
+        minY: y - POINT_ZOOM_PADDING_M,
+        maxX: x + POINT_ZOOM_PADDING_M,
+        maxY: y + POINT_ZOOM_PADDING_M,
+      };
+    }
+    case "Bbox":
+      return geometry.bbox;
+    case "Polygon":
+      return bboxFromRing(geometry.ring);
+    case "LineString":
+      return bboxFromRing(geometry.coordinates);
+  }
+}
+
+export function bboxFromSuggestionGeometries(
+  geometries: SuggestionGeometry[],
+): SuggestionGeoBbox | null {
+  if (geometries.length === 0) return null;
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  for (const geometry of geometries) {
+    const bbox = bboxFromSuggestionGeometry(geometry);
+    minX = Math.min(minX, bbox.minX);
+    minY = Math.min(minY, bbox.minY);
+    maxX = Math.max(maxX, bbox.maxX);
+    maxY = Math.max(maxY, bbox.maxY);
+  }
+
+  return [minX, minY, maxX, maxY];
+}

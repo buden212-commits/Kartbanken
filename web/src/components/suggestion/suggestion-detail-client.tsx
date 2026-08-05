@@ -11,6 +11,7 @@ import {
   type SvgRootTransform,
 } from "@/lib/ocad/svg-coords";
 import {
+  bboxFromSuggestionGeometries,
   isValidSuggestionBbox,
   isValidSuggestionLineCoordinates,
   isValidSuggestionPolygonRing,
@@ -86,6 +87,11 @@ export function SuggestionDetailClient({
   const router = useRouter();
   const rootTransformRef = useRef<SvgRootTransform>(IDENTITY_SVG_TRANSFORM);
   const dragRef = useRef<{ start: [number, number]; current: [number, number] } | null>(null);
+  const fitRequestIdRef = useRef(0);
+  const [fitGeoBbox, setFitGeoBbox] = useState<{
+    bbox: [number, number, number, number];
+    requestId: number;
+  } | null>(null);
 
   const [suggestion, setSuggestion] = useState(initial);
   const [reviewComment, setReviewComment] = useState("");
@@ -234,6 +240,13 @@ export function SuggestionDetailClient({
     }
     return allMarkings.map((obj) => obj.geometry);
   }, [allMarkings, draftGeometry, editGeometry, editMode, redrawMarking]);
+
+  const zoomToMarkings = useCallback(() => {
+    const bbox = bboxFromSuggestionGeometries(displayGeometries);
+    if (!bbox) return;
+    fitRequestIdRef.current += 1;
+    setFitGeoBbox({ bbox, requestId: fitRequestIdRef.current });
+  }, [displayGeometries]);
 
   async function patchSuggestion(body: Record<string, unknown>) {
     setLoading(true);
@@ -510,6 +523,21 @@ export function SuggestionDetailClient({
           versionId={suggestion.mapVersionId}
           interactionMode={editMode && redrawMarking ? "draw" : "navigate"}
           drawPointerHandlers={editMode && redrawMarking ? drawPointerHandlers : undefined}
+          fitGeoBbox={fitGeoBbox}
+          secondaryHeaderContent={
+            displayGeometries.length > 0 ? (
+              <button
+                type="button"
+                onClick={zoomToMarkings}
+                className="rounded-lg border border-orange-300 bg-orange-50 px-3 py-1.5 text-sm font-medium text-orange-800 hover:bg-orange-100"
+              >
+                Zooma till markering
+                {displayGeometries.length > 1
+                  ? ` (${displayGeometries.length})`
+                  : ""}
+              </button>
+            ) : null
+          }
           renderSvgOverlay={(rootTransform) => {
             rootTransformRef.current = rootTransform;
             if (displayGeometries.length === 0) return null;
