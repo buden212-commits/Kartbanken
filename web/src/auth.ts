@@ -60,6 +60,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id;
+        token.name = user.name;
+        token.email = user.email;
         token.role = (user as { role?: RoleType }).role ?? Role.PENDING;
         token.mustChangePassword = (user as { mustChangePassword?: boolean }).mustChangePassword ?? false;
       }
@@ -71,6 +73,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
+        session.user.name = token.name ?? null;
+        if (token.email) {
+          session.user.email = token.email;
+        }
         session.user.role = (token.role as RoleType) ?? Role.PENDING;
         session.user.mustChangePassword = token.mustChangePassword === true;
       }

@@ -8,10 +8,15 @@ import type { Role } from "@/lib/roles";
 
 export async function AppHeader() {
   const session = await auth();
-  const notificationPrefs = session?.user?.id
+  const profile = session?.user?.id
     ? await prisma.user.findUnique({
         where: { id: session.user.id },
-        select: { receiveNotifications: true, receiveOcdAttachment: true },
+        select: {
+          name: true,
+          email: true,
+          receiveNotifications: true,
+          receiveOcdAttachment: true,
+        },
       })
     : null;
 
@@ -52,11 +57,11 @@ export async function AppHeader() {
                 Hjälp
               </Link>
               <AppHeaderUserMenu
-                name={session.user.name}
-                email={session.user.email ?? ""}
+                name={profile?.name ?? session.user.name}
+                email={profile?.email ?? session.user.email ?? ""}
                 role={session.user.role as Role}
-                receiveNotifications={notificationPrefs?.receiveNotifications ?? false}
-                receiveOcdAttachment={notificationPrefs?.receiveOcdAttachment ?? false}
+                receiveNotifications={profile?.receiveNotifications ?? false}
+                receiveOcdAttachment={profile?.receiveOcdAttachment ?? false}
               />
               <form
                 action={async () => {

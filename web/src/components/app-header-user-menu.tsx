@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { UserProfileDialog } from "@/components/user-profile-dialog";
-import { roleLabel } from "@/lib/auth/permissions";
 import type { Role } from "@/lib/roles";
 
 type Props = {
@@ -29,7 +28,7 @@ export function AppHeaderUserMenu({
         type="button"
         onClick={() => setOpen(true)}
         className="cursor-pointer rounded-md px-1 py-0.5 text-white/80 transition hover:bg-white/10 hover:text-white"
-        title={`${displayName} (${roleLabel(role)}) — öppna profil`}
+        title={`${displayName} — öppna profil`}
       >
         {displayName}
       </button>

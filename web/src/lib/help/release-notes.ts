@@ -8,6 +8,13 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-05",
+    title: "Navigation — ditt namn i menyn",
+    items: [
+      "Sidhuvudet visar ditt namn mellan Hjälp och Logga ut (e-post som reserv om namn saknas)",
+    ],
+  },
+  {
+    date: "2026-08-05",
     title: "Export — kartförslag i OCD",
     items: [
       "OCD-export kan inkludera öppna och pågående kartförslag som riktiga OCAD-objekt (kryssruta + val av symbol per punkt, linje och yta)",
