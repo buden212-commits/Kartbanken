@@ -8,6 +8,18 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-05",
+    title: "Kartförslag — fas 2",
+    items: [
+      "Markera rektangel/yta utöver punkt när du lämnar kartförslag",
+      "Ny status «Pågår» mellan öppen och införd/avvisad",
+      "Valfritt foto kan bifogas vid skapande — visas som miniatyr på detaljsidan",
+      "Skaparen får e-post när förslaget granskas (om notiser är påslagna i profilen)",
+      "Redaktörer kan koppla checkout och införd version vid granskning",
+      "Äldre förslag visar «Gäller version N» när en nyare version publicerats",
+    ],
+  },
+  {
+    date: "2026-08-05",
     title: "Kartförslag",
     items: [
       "Nytt skissverktyg — lämna kartförslag med markering och kommentar på publicerade versioner",

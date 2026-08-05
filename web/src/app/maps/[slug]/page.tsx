@@ -15,7 +15,7 @@ import { CheckoutListPanel } from "@/components/checkout-list-panel";
 import { CheckoutOverviewMap } from "@/components/checkout-overview-map";
 import { CourseListPanel } from "@/components/course/course-list-panel";
 import { SuggestionListPanel } from "@/components/suggestion/suggestion-list-panel";
-import { listSuggestionsForMap, serializeSuggestionSummary } from "@/lib/suggestion/repository";
+import { listSuggestionsForMap, serializeSuggestionSummary, getLatestPublishedVersionNumber } from "@/lib/suggestion/repository";
 import { Role } from "@/lib/roles";
 
 type PageProps = { params: Promise<{ slug: string }> };
@@ -52,7 +52,13 @@ export default async function MapDetailPage({ params }: PageProps) {
 
   const suggestionList =
     session?.user?.id && role && canCreateMapSuggestion(role)
-      ? (await listSuggestionsForMap(map.id)).map(serializeSuggestionSummary)
+      ? await (async () => {
+          const [rows, latestPublished] = await Promise.all([
+            listSuggestionsForMap(map.id),
+            getLatestPublishedVersionNumber(map.id),
+          ]);
+          return rows.map((s) => serializeSuggestionSummary(s, latestPublished));
+        })()
       : [];
 
   const uploaderIds = [

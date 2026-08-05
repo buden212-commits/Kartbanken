@@ -1,5 +1,11 @@
 import { prisma } from "@/lib/prisma";
-import { SuggestionStatus, type SuggestionDetail, type SuggestionSummary } from "./types";
+import { suggestionObjectTypeForGeometry } from "./access";
+import {
+  SuggestionStatus,
+  type SuggestionDetail,
+  type SuggestionSummary,
+  type SuggestionGeometry,
+} from "./types";
 
 const suggestionWithUserSelect = {
   id: true,
@@ -14,6 +20,7 @@ const suggestionWithUserSelect = {
   reviewedAt: true,
   checkoutId: true,
   integratedVersionId: true,
+  attachmentPath: true,
   createdAt: true,
   updatedAt: true,
   createdBy: { select: { id: true, name: true, email: true } },
@@ -27,6 +34,25 @@ function parseGeometryJson(json: string) {
   return JSON.parse(json) as SuggestionDetail["objects"][0]["geometry"];
 }
 
+export async function getLatestPublishedVersionNumber(
+  mapFileId: string,
+): Promise<number | null> {
+  const latest = await prisma.mapVersion.findFirst({
+    where: { mapFileId, isPublished: true },
+    orderBy: { versionNumber: "desc" },
+    select: { versionNumber: true },
+  });
+  return latest?.versionNumber ?? null;
+}
+
+export function appliesToOlderVersion(
+  suggestionVersionNumber: number,
+  latestPublishedVersionNumber: number | null,
+): boolean {
+  if (latestPublishedVersionNumber == null) return false;
+  return suggestionVersionNumber < latestPublishedVersionNumber;
+}
+
 export function serializeSuggestionSummary(
   suggestion: {
     id: string;
@@ -37,10 +63,12 @@ export function serializeSuggestionSummary(
     createdAt: Date;
     updatedAt: Date;
     mapVersionId: string;
+    attachmentPath: string | null;
     createdBy: { id: string; name: string | null; email: string };
     mapVersion: { versionNumber: number };
     _count: { objects: number };
   },
+  latestPublishedVersionNumber: number | null,
 ): SuggestionSummary {
   return {
     id: suggestion.id,
@@ -52,6 +80,11 @@ export function serializeSuggestionSummary(
     updatedAt: suggestion.updatedAt.toISOString(),
     mapVersionId: suggestion.mapVersionId,
     versionNumber: suggestion.mapVersion.versionNumber,
+    appliesToOlderVersion: appliesToOlderVersion(
+      suggestion.mapVersion.versionNumber,
+      latestPublishedVersionNumber,
+    ),
+    hasAttachment: Boolean(suggestion.attachmentPath),
     createdBy: suggestion.createdBy,
     objectCount: suggestion._count.objects,
   };
@@ -68,6 +101,7 @@ export function serializeSuggestionDetail(
     reviewedAt: Date | null;
     checkoutId: string | null;
     integratedVersionId: string | null;
+    attachmentPath: string | null;
     createdAt: Date;
     updatedAt: Date;
     mapVersionId: string;
@@ -83,6 +117,7 @@ export function serializeSuggestionDetail(
     }>;
     _count?: { objects: number };
   },
+  latestPublishedVersionNumber: number | null,
 ): SuggestionDetail {
   const objects = suggestion.objects
     .slice()
@@ -95,10 +130,13 @@ export function serializeSuggestionDetail(
     }));
 
   return {
-    ...serializeSuggestionSummary({
-      ...suggestion,
-      _count: suggestion._count ?? { objects: objects.length },
-    }),
+    ...serializeSuggestionSummary(
+      {
+        ...suggestion,
+        _count: suggestion._count ?? { objects: objects.length },
+      },
+      latestPublishedVersionNumber,
+    ),
     reviewComment: suggestion.reviewComment,
     reviewedAt: suggestion.reviewedAt?.toISOString() ?? null,
     reviewedBy: suggestion.reviewedBy,
@@ -135,7 +173,7 @@ export async function getSuggestionById(suggestionId: string) {
   return prisma.mapSuggestion.findUnique({
     where: { id: suggestionId },
     include: {
-      createdBy: { select: { id: true, name: true, email: true } },
+      createdBy: { select: { id: true, name: true, email: true, receiveNotifications: true } },
       reviewedBy: { select: { id: true, name: true, email: true } },
       mapVersion: { select: { id: true, versionNumber: true, isPublished: true } },
       integratedVersion: { select: { versionNumber: true } },
@@ -152,8 +190,11 @@ export async function createSuggestion(params: {
   category: string;
   title: string | null;
   comment: string;
-  geometryJson: string;
+  geometry: SuggestionGeometry;
+  attachmentPath?: string | null;
 }) {
+  const objectType = suggestionObjectTypeForGeometry(params.geometry);
+
   return prisma.mapSuggestion.create({
     data: {
       mapFileId: params.mapFileId,
@@ -162,10 +203,11 @@ export async function createSuggestion(params: {
       category: params.category,
       title: params.title,
       comment: params.comment,
+      attachmentPath: params.attachmentPath ?? null,
       objects: {
         create: {
-          objectType: "POINT",
-          geometryJson: params.geometryJson,
+          objectType,
+          geometryJson: JSON.stringify(params.geometry),
           sortOrder: 0,
         },
       },
@@ -193,29 +235,30 @@ export async function updateSuggestion(
     reviewedAt?: Date | null;
     checkoutId?: string | null;
     integratedVersionId?: string | null;
-    geometryJson?: string;
+    geometry?: SuggestionGeometry;
   },
 ) {
   return prisma.$transaction(async (tx) => {
-    if (data.geometryJson) {
+    if (data.geometry) {
+      const objectType = suggestionObjectTypeForGeometry(data.geometry);
       await tx.mapSuggestionObject.deleteMany({ where: { suggestionId } });
       await tx.mapSuggestionObject.create({
         data: {
           suggestionId,
-          objectType: "POINT",
-          geometryJson: data.geometryJson,
+          objectType,
+          geometryJson: JSON.stringify(data.geometry),
           sortOrder: 0,
         },
       });
     }
 
-    const { geometryJson: _g, ...updateData } = data;
+    const { geometry: _g, ...updateData } = data;
 
     return tx.mapSuggestion.update({
       where: { id: suggestionId },
       data: updateData,
       include: {
-        createdBy: { select: { id: true, name: true, email: true } },
+        createdBy: { select: { id: true, name: true, email: true, receiveNotifications: true } },
         reviewedBy: { select: { id: true, name: true, email: true } },
         mapVersion: { select: { id: true, versionNumber: true, isPublished: true } },
         integratedVersion: { select: { versionNumber: true } },

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { DiffMapPanel } from "@/components/diff-map-panel";
-import { renderSuggestionPinSvg } from "@/lib/suggestion/geometry";
+import { renderSuggestionGeometrySvg } from "@/lib/suggestion/geometry";
 import {
   SUGGESTION_CATEGORY_LABELS,
   SUGGESTION_STATUS_LABELS,
@@ -14,6 +14,17 @@ import {
 } from "@/lib/suggestion/types";
 import { formatDate } from "@/lib/format";
 
+type CheckoutOption = {
+  id: string;
+  label: string;
+  integratedVersionId: string | null;
+};
+
+type VersionOption = {
+  id: string;
+  versionNumber: number;
+};
+
 type Props = {
   mapSlug: string;
   mapTitle: string;
@@ -21,7 +32,22 @@ type Props = {
   canReview: boolean;
   isOwner: boolean;
   isAdmin: boolean;
+  checkoutOptions: CheckoutOption[];
+  publishedVersions: VersionOption[];
 };
+
+function statusBadgeClass(status: SuggestionStatusValue): string {
+  switch (status) {
+    case SuggestionStatus.OPEN:
+      return "bg-amber-50 text-amber-800 border-amber-200";
+    case SuggestionStatus.IN_PROGRESS:
+      return "bg-sky-50 text-sky-800 border-sky-200";
+    case SuggestionStatus.IMPLEMENTED:
+      return "bg-emerald-50 text-emerald-800 border-emerald-200";
+    default:
+      return "bg-slate-100 text-slate-700 border-slate-200";
+  }
+}
 
 export function SuggestionDetailClient({
   mapSlug,
@@ -30,23 +56,24 @@ export function SuggestionDetailClient({
   canReview,
   isOwner,
   isAdmin,
+  checkoutOptions,
+  publishedVersions,
 }: Props) {
   const router = useRouter();
   const [suggestion, setSuggestion] = useState(initial);
   const [reviewComment, setReviewComment] = useState("");
+  const [selectedCheckoutId, setSelectedCheckoutId] = useState("");
+  const [selectedIntegratedVersionId, setSelectedIntegratedVersionId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const pin = suggestion.objects[0]?.geometry;
+  const marking = suggestion.objects[0]?.geometry;
   const canDelete =
     isAdmin || (isOwner && suggestion.status === SuggestionStatus.OPEN);
-
-  const statusClass =
-    suggestion.status === SuggestionStatus.OPEN
-      ? "bg-amber-50 text-amber-800 border-amber-200"
-      : suggestion.status === SuggestionStatus.IMPLEMENTED
-        ? "bg-emerald-50 text-emerald-800 border-emerald-200"
-        : "bg-slate-100 text-slate-700 border-slate-200";
+  const canReviewNow =
+    canReview &&
+    (suggestion.status === SuggestionStatus.OPEN ||
+      suggestion.status === SuggestionStatus.IN_PROGRESS);
 
   const overlayLabel = useMemo(
     () => SUGGESTION_CATEGORY_LABELS[suggestion.category],
@@ -76,10 +103,17 @@ export function SuggestionDetailClient({
   }
 
   async function handleReview(status: SuggestionStatusValue) {
-    await patchSuggestion({
+    const body: Record<string, unknown> = {
       status,
       reviewComment: reviewComment.trim() || undefined,
-    });
+    };
+    if (status === SuggestionStatus.IMPLEMENTED) {
+      if (selectedCheckoutId) body.checkoutId = selectedCheckoutId;
+      if (selectedIntegratedVersionId) {
+        body.integratedVersionId = selectedIntegratedVersionId;
+      }
+    }
+    await patchSuggestion(body);
   }
 
   async function handleDelete() {
@@ -114,8 +148,15 @@ export function SuggestionDetailClient({
             v{suggestion.versionNumber} · {SUGGESTION_CATEGORY_LABELS[suggestion.category]} ·{" "}
             {formatDate(suggestion.createdAt)}
           </p>
+          {suggestion.appliesToOlderVersion && (
+            <p className="mt-1 text-sm font-medium text-violet-700">
+              Gäller version {suggestion.versionNumber}
+            </p>
+          )}
         </div>
-        <span className={`rounded-full border px-3 py-1 text-sm font-medium ${statusClass}`}>
+        <span
+          className={`rounded-full border px-3 py-1 text-sm font-medium ${statusBadgeClass(suggestion.status)}`}
+        >
           {SUGGESTION_STATUS_LABELS[suggestion.status]}
         </span>
       </div>
@@ -138,6 +179,16 @@ export function SuggestionDetailClient({
             {suggestion.integratedVersionNumber}
           </p>
         )}
+        {suggestion.hasAttachment && (
+          <div>
+            <span className="font-medium text-slate-900">Foto:</span>
+            <img
+              src={`/api/maps/${mapSlug}/suggestions/${suggestion.id}/attachment`}
+              alt="Bilaga till kartförslag"
+              className="mt-2 max-h-64 rounded-lg border border-slate-200 object-contain"
+            />
+          </div>
+        )}
       </div>
 
       <div className="mt-6">
@@ -147,11 +198,11 @@ export function SuggestionDetailClient({
           mapSlug={mapSlug}
           versionId={suggestion.mapVersionId}
           renderSvgOverlay={(rootTransform) => {
-            if (!pin || pin.type !== "Point") return null;
+            if (!marking) return null;
             return (
               <g
                 dangerouslySetInnerHTML={{
-                  __html: renderSuggestionPinSvg(pin, rootTransform, {
+                  __html: renderSuggestionGeometrySvg(marking, rootTransform, {
                     label: overlayLabel,
                     selected: true,
                   }),
@@ -162,7 +213,7 @@ export function SuggestionDetailClient({
         />
       </div>
 
-      {canReview && suggestion.status === SuggestionStatus.OPEN && (
+      {canReviewNow && (
         <div className="card mt-6 space-y-4">
           <h2 className="text-lg font-medium text-slate-900">Granska förslag</h2>
           <div>
@@ -177,7 +228,65 @@ export function SuggestionDetailClient({
               className="form-input"
             />
           </div>
+
+          {checkoutOptions.length > 0 && (
+            <div>
+              <label htmlFor="checkoutId" className="form-label">
+                Koppla checkout (valfritt, vid införande)
+              </label>
+              <select
+                id="checkoutId"
+                value={selectedCheckoutId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setSelectedCheckoutId(id);
+                  const match = checkoutOptions.find((c) => c.id === id);
+                  if (match?.integratedVersionId) {
+                    setSelectedIntegratedVersionId(match.integratedVersionId);
+                  }
+                }}
+                className="form-input"
+              >
+                <option value="">— Ingen checkout —</option>
+                {checkoutOptions.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {publishedVersions.length > 0 && (
+            <div>
+              <label htmlFor="integratedVersionId" className="form-label">
+                Införd i version (valfritt)
+              </label>
+              <select
+                id="integratedVersionId"
+                value={selectedIntegratedVersionId}
+                onChange={(e) => setSelectedIntegratedVersionId(e.target.value)}
+                className="form-input"
+              >
+                <option value="">— Välj version —</option>
+                {publishedVersions.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    v{v.versionNumber}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => void handleReview(SuggestionStatus.IN_PROGRESS)}
+              className="rounded-lg border border-sky-300 px-4 py-2 text-sm text-sky-800 hover:bg-sky-50"
+            >
+              Markera som pågår
+            </button>
             <button
               type="button"
               disabled={loading}

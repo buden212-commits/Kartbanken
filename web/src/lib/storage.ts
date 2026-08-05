@@ -120,6 +120,18 @@ export function buildCheckoutCheckinPath(mapFileId: string, checkoutId: string):
   return `maps/${mapFileId}/checkouts/${checkoutId}/checkin-${randomUUID()}.ocd`;
 }
 
+export function buildSuggestionAttachmentPath(mapFileId: string, filename: string): string {
+  const ext = filename.includes(".") ? filename.slice(filename.lastIndexOf(".")).toLowerCase() : ".jpg";
+  return `maps/${mapFileId}/suggestion-attachments/${randomUUID()}${ext}`;
+}
+
+export function contentTypeForAttachmentPath(storagePath: string): string {
+  const lower = storagePath.toLowerCase();
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".webp")) return "image/webp";
+  return "image/jpeg";
+}
+
 export function validateOcdUpload(
   filename: string,
   sizeBytes: number,

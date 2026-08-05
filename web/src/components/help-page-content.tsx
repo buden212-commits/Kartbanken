@@ -450,11 +450,11 @@ export async function HelpPageContent() {
           <HelpList
             items={[
               "Öppna en publicerad version via Visa karta och klicka Föreslå ändring",
-              "Klicka på kartan för att placera en orange markering",
-              "Välj kategori och skriv en beskrivning (minst 10 tecken)",
-              "Alla ser öppna förslag under Kartförslag på områdessidan",
-              "Redaktörer markerar förslag som Införda eller Avvisade",
-              "Förslag gäller den version du markerade — de arkiveras kvar när ny version publiceras",
+              "Välj punkt eller rektangel och markera plats/område på kartan (orange overlay)",
+              "Välj kategori, skriv beskrivning (minst 10 tecken) och bifoga valfritt foto",
+              "Alla ser förslag under Kartförslag på områdessidan — filtrera på öppna, pågår, införda m.m.",
+              "Redaktörer markerar som Pågår, Införd eller Avvisad och kan koppla checkout",
+              "Förslag gäller den version du markerade — vid ny publicerad version visas «Gäller version N»",
             ]}
           />
           <p className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-orange-900">
@@ -677,6 +677,7 @@ export async function HelpPageContent() {
               items={[
                 "Ny användarregistrering — till admin/prenumeranter",
                 "Nytt kartförslag — till prenumeranter",
+                "Kartförslag granskat — till skaparen (om notiser påslagna)",
                 "Konto godkänt — till användaren med tilldelad behörighet",
                 "Tillfälligt lösenord — till användare som begärt återställning",
                 "Ny kartversion uppladdad — med valfri .ocd-bilaga till berättigade mottagare",

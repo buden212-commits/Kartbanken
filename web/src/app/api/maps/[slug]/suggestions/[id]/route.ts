@@ -8,19 +8,22 @@ import {
   validateSuggestionCategory,
   validateSuggestionComment,
   validateSuggestionGeometry,
-  validateSuggestionStatus,
+  validateSuggestionReviewStatus,
   validateSuggestionTitle,
 } from "@/lib/suggestion/access";
 import {
   deleteSuggestion,
+  getLatestPublishedVersionNumber,
   getSuggestionById,
   serializeSuggestionDetail,
   updateSuggestion,
 } from "@/lib/suggestion/repository";
 import {
+  SUGGESTION_CATEGORY_LABELS,
   SUGGESTION_STATUS_LABELS,
   SuggestionStatus,
 } from "@/lib/suggestion/types";
+import { queueNotifyMapSuggestionReviewed } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -29,7 +32,7 @@ type RouteParams = { params: Promise<{ slug: string; id: string }> };
 async function loadSuggestion(slug: string, suggestionId: string) {
   const map = await prisma.mapFile.findUnique({
     where: { slug },
-    select: { id: true },
+    select: { id: true, title: true, slug: true },
   });
   if (!map) return { error: NextResponse.json({ error: "Kartfil hittades inte" }, { status: 404 }) };
 
@@ -40,6 +43,8 @@ async function loadSuggestion(slug: string, suggestionId: string) {
 
   return { suggestion, map };
 }
+
+const REVIEWABLE_STATUSES = [SuggestionStatus.OPEN, SuggestionStatus.IN_PROGRESS] as const;
 
 export async function GET(_request: Request, { params }: RouteParams) {
   const session = await requireSession();
@@ -52,7 +57,10 @@ export async function GET(_request: Request, { params }: RouteParams) {
   const denied = assertSuggestionViewAccess(session, result.suggestion!);
   if (denied) return denied;
 
-  return NextResponse.json(serializeSuggestionDetail(result.suggestion!));
+  const latestPublishedVersionNumber = await getLatestPublishedVersionNumber(result.map!.id);
+  return NextResponse.json(
+    serializeSuggestionDetail(result.suggestion!, latestPublishedVersionNumber),
+  );
 }
 
 export async function PATCH(request: Request, { params }: RouteParams) {
@@ -64,6 +72,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   if ("error" in result && result.error) return result.error;
 
   const suggestion = result.suggestion!;
+  const map = result.map!;
 
   let body: unknown;
   try {
@@ -83,8 +92,15 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     const reviewDenied = assertSuggestionReviewAccess(session);
     if (reviewDenied) return reviewDenied;
 
-    const status = validateSuggestionStatus(record.status);
-    if (!status || status === SuggestionStatus.OPEN) {
+    if (!REVIEWABLE_STATUSES.includes(suggestion.status as (typeof REVIEWABLE_STATUSES)[number])) {
+      return NextResponse.json(
+        { error: "Förslaget kan inte granskas i nuvarande status" },
+        { status: 400 },
+      );
+    }
+
+    const status = validateSuggestionReviewStatus(record.status);
+    if (!status) {
       return NextResponse.json({ error: "Ogiltig status" }, { status: 400 });
     }
 
@@ -100,14 +116,33 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     let checkoutId: string | null | undefined;
     if ("checkoutId" in record) {
       checkoutId = typeof record.checkoutId === "string" ? record.checkoutId : null;
+      if (checkoutId) {
+        const checkout = await prisma.mapCheckout.findFirst({
+          where: { id: checkoutId, mapFileId: map.id },
+          select: { id: true },
+        });
+        if (!checkout) {
+          return NextResponse.json({ error: "Checkout hittades inte" }, { status: 400 });
+        }
+      }
     }
 
     let integratedVersionId: string | null | undefined;
     if ("integratedVersionId" in record) {
       integratedVersionId =
         typeof record.integratedVersionId === "string" ? record.integratedVersionId : null;
+      if (integratedVersionId) {
+        const version = await prisma.mapVersion.findFirst({
+          where: { id: integratedVersionId, mapFileId: map.id, isPublished: true },
+          select: { id: true },
+        });
+        if (!version) {
+          return NextResponse.json({ error: "Ogiltig integrerad version" }, { status: 400 });
+        }
+      }
     }
 
+    const previousStatus = suggestion.status;
     const updated = await updateSuggestion(id, {
       status,
       reviewComment: reviewComment || null,
@@ -123,7 +158,31 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       statusLabel: SUGGESTION_STATUS_LABELS[status],
     });
 
-    return NextResponse.json(serializeSuggestionDetail(updated));
+    if (
+      previousStatus === SuggestionStatus.OPEN &&
+      (status === SuggestionStatus.IN_PROGRESS ||
+        status === SuggestionStatus.IMPLEMENTED ||
+        status === SuggestionStatus.REJECTED)
+    ) {
+      queueNotifyMapSuggestionReviewed({
+        mapTitle: map.title,
+        mapSlug: map.slug,
+        suggestionId: id,
+        versionNumber: suggestion.mapVersion.versionNumber,
+        categoryLabel: SUGGESTION_CATEGORY_LABELS[suggestion.category as keyof typeof SUGGESTION_CATEGORY_LABELS],
+        comment: suggestion.comment,
+        statusLabel: SUGGESTION_STATUS_LABELS[status],
+        reviewComment: reviewComment || null,
+        creatorEmail: suggestion.createdBy.email,
+        creatorName: suggestion.createdBy.name,
+        receiveNotifications: suggestion.createdBy.receiveNotifications,
+      });
+    }
+
+    const latestPublishedVersionNumber = await getLatestPublishedVersionNumber(map.id);
+    return NextResponse.json(
+      serializeSuggestionDetail(updated, latestPublishedVersionNumber),
+    );
   }
 
   const editDenied = assertSuggestionEditAccess(session, suggestion);
@@ -133,7 +192,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     category?: string;
     title?: string | null;
     comment?: string;
-    geometryJson?: string;
+    geometry?: NonNullable<ReturnType<typeof validateSuggestionGeometry>>;
   } = {};
 
   if ("category" in record) {
@@ -167,7 +226,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     if (!geometry) {
       return NextResponse.json({ error: "Ogiltig markering på kartan" }, { status: 400 });
     }
-    updates.geometryJson = JSON.stringify(geometry);
+    updates.geometry = geometry;
   }
 
   if (Object.keys(updates).length === 0) {
@@ -180,7 +239,10 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     mapSlug: slug,
   });
 
-  return NextResponse.json(serializeSuggestionDetail(updated));
+  const latestPublishedVersionNumber = await getLatestPublishedVersionNumber(map.id);
+  return NextResponse.json(
+    serializeSuggestionDetail(updated, latestPublishedVersionNumber),
+  );
 }
 
 export async function DELETE(_request: Request, { params }: RouteParams) {

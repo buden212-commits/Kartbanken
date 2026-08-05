@@ -18,6 +18,19 @@ type Props = {
   isAdmin: boolean;
 };
 
+function statusBadgeClass(status: SuggestionSummary["status"]): string {
+  switch (status) {
+    case SuggestionStatus.OPEN:
+      return "text-amber-700";
+    case SuggestionStatus.IN_PROGRESS:
+      return "text-sky-700";
+    case SuggestionStatus.IMPLEMENTED:
+      return "text-emerald-700";
+    default:
+      return "text-slate-600";
+  }
+}
+
 export function SuggestionListPanel({
   mapSlug,
   suggestions,
@@ -31,6 +44,9 @@ export function SuggestionListPanel({
 
   const filtered = suggestions.filter((s) => (filter === "ALL" ? true : s.status === filter));
   const openCount = suggestions.filter((s) => s.status === SuggestionStatus.OPEN).length;
+  const inProgressCount = suggestions.filter(
+    (s) => s.status === SuggestionStatus.IN_PROGRESS,
+  ).length;
 
   async function handleDelete(id: string) {
     if (!window.confirm("Radera detta kartförslag?")) return;
@@ -50,7 +66,8 @@ export function SuggestionListPanel({
     <section className="mt-10">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-medium text-slate-900">
-          Kartförslag ({openCount} öppna)
+          Kartförslag ({openCount} öppna
+          {inProgressCount > 0 ? `, ${inProgressCount} pågår` : ""})
         </h2>
         <select
           value={filter}
@@ -58,6 +75,7 @@ export function SuggestionListPanel({
           className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
         >
           <option value="OPEN">Öppna</option>
+          <option value="IN_PROGRESS">Pågår</option>
           <option value="IMPLEMENTED">Införda</option>
           <option value="REJECTED">Avvisade</option>
           <option value="ALL">Alla</option>
@@ -85,10 +103,18 @@ export function SuggestionListPanel({
                   className="font-medium text-ifk-blue hover:underline"
                 >
                   {s.title?.trim() || SUGGESTION_CATEGORY_LABELS[s.category]}
+                  {s.hasAttachment ? " 📷" : ""}
                 </Link>
                 <p className="mt-1 line-clamp-2 text-sm text-slate-600">{s.comment}</p>
-                <p className="mt-1 text-xs text-slate-500">
-                  v{s.versionNumber} · {SUGGESTION_STATUS_LABELS[s.status]} ·{" "}
+                <p className={`mt-1 text-xs ${statusBadgeClass(s.status)}`}>
+                  v{s.versionNumber}
+                  {s.appliesToOlderVersion && (
+                    <span className="ml-1 font-medium text-violet-700">
+                      · Gäller version {s.versionNumber}
+                    </span>
+                  )}
+                  {" · "}
+                  {SUGGESTION_STATUS_LABELS[s.status]} ·{" "}
                   {s.createdBy.name?.trim() || s.createdBy.email} · {formatDateOnly(s.createdAt)}
                 </p>
               </div>

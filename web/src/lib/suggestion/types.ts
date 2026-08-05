@@ -1,5 +1,6 @@
 export const SuggestionStatus = {
   OPEN: "OPEN",
+  IN_PROGRESS: "IN_PROGRESS",
   IMPLEMENTED: "IMPLEMENTED",
   REJECTED: "REJECTED",
 } as const;
@@ -26,12 +27,14 @@ export const SUGGESTION_CATEGORY_LABELS: Record<SuggestionCategoryValue, string>
 
 export const SUGGESTION_STATUS_LABELS: Record<SuggestionStatusValue, string> = {
   OPEN: "Öppen",
+  IN_PROGRESS: "Pågår",
   IMPLEMENTED: "Införd",
   REJECTED: "Avvisad",
 };
 
 export const SuggestionObjectType = {
   POINT: "POINT",
+  BBOX: "BBOX",
 } as const;
 
 export type SuggestionObjectTypeValue =
@@ -42,7 +45,19 @@ export type SuggestionPointGeometry = {
   coordinates: [number, number];
 };
 
-export type SuggestionGeometry = SuggestionPointGeometry;
+export type SuggestionBbox = {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+};
+
+export type SuggestionBboxGeometry = {
+  type: "Bbox";
+  bbox: SuggestionBbox;
+};
+
+export type SuggestionGeometry = SuggestionPointGeometry | SuggestionBboxGeometry;
 
 export type SuggestionObjectDto = {
   id: string;
@@ -61,6 +76,9 @@ export type SuggestionSummary = {
   updatedAt: string;
   versionNumber: number;
   mapVersionId: string;
+  /** True when suggestion targets an older published version than the latest */
+  appliesToOlderVersion: boolean;
+  hasAttachment: boolean;
   createdBy: {
     id: string;
     name: string | null;
@@ -84,3 +102,7 @@ export type SuggestionDetail = SuggestionSummary & {
 };
 
 export const MAX_OPEN_SUGGESTIONS_PER_USER_PER_MAP = 10;
+
+export const MAX_SUGGESTION_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+
+export const SUGGESTION_ATTACHMENT_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"] as const;

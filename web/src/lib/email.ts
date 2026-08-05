@@ -432,6 +432,72 @@ export async function notifyNewMapSuggestion(input: {
   await sendMailToNotificationRecipients({ subject, text, html });
 }
 
+export async function notifyMapSuggestionReviewed(input: {
+  mapTitle: string;
+  mapSlug: string;
+  suggestionId: string;
+  versionNumber: number;
+  categoryLabel: string;
+  comment: string;
+  statusLabel: string;
+  reviewComment: string | null;
+  creatorEmail: string;
+  creatorName: string | null;
+  receiveNotifications: boolean;
+}): Promise<void> {
+  if (!(await isEmailConfigured())) {
+    console.warn("[email] SMTP not configured — skipping map suggestion review notification");
+    return;
+  }
+
+  if (!input.receiveNotifications) {
+    return;
+  }
+
+  const url = `${getAppBaseUrl()}/maps/${input.mapSlug}/suggestions/${input.suggestionId}`;
+  const subject = `Kartförslag granskat — ${input.mapTitle}`;
+  const textLines = [
+    `Ditt kartförslag på ${input.mapTitle} (v${input.versionNumber}) har granskats.`,
+    "",
+    `Status: ${input.statusLabel}`,
+    `Kategori: ${input.categoryLabel}`,
+    input.comment,
+  ];
+  if (input.reviewComment) {
+    textLines.push("", `Kommentar från redaktör: ${input.reviewComment}`);
+  }
+  textLines.push("", `Visa förslag: ${url}`);
+  const text = textLines.join("\n");
+
+  const reviewRow = input.reviewComment
+    ? `<tr>
+        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;">Kommentar</td>
+        <td style="padding:4px 0;color:#0f172a;">${escapeHtml(input.reviewComment)}</td>
+      </tr>`
+    : "";
+
+  const bodyHtml = `
+    <p style="margin:0 0 16px;">Ditt kartförslag på <strong>${escapeHtml(input.mapTitle)}</strong> (v${input.versionNumber}) har granskats.</p>
+    <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 20px;width:100%;font-size:15px;">
+      <tr>
+        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;width:90px;">Status</td>
+        <td style="padding:4px 0;color:#0f172a;font-weight:600;">${escapeHtml(input.statusLabel)}</td>
+      </tr>
+      <tr>
+        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;">Kategori</td>
+        <td style="padding:4px 0;color:#0f172a;">${escapeHtml(input.categoryLabel)}</td>
+      </tr>
+      ${reviewRow}
+    </table>
+    <p style="margin:0;">
+      <a href="${escapeHtml(url)}" style="display:inline-block;padding:10px 18px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:500;">Visa kartförslag</a>
+    </p>
+  `.trim();
+
+  const html = buildHtmlEmail({ title: subject, bodyHtml });
+  await sendMail({ to: input.creatorEmail, subject, text, html });
+}
+
 export async function notifyAdminOfNewRegistration(user: {
   name: string;
   email: string;
@@ -731,6 +797,12 @@ export function queueNotifyNewMapSuggestion(
   input: Parameters<typeof notifyNewMapSuggestion>[0],
 ): void {
   scheduleEmail(() => notifyNewMapSuggestion(input), "map suggestion");
+}
+
+export function queueNotifyMapSuggestionReviewed(
+  input: Parameters<typeof notifyMapSuggestionReviewed>[0],
+): void {
+  scheduleEmail(() => notifyMapSuggestionReviewed(input), "map suggestion reviewed");
 }
 
 export function notifyCheckoutCreated(ctx: CheckoutMailContext): void {

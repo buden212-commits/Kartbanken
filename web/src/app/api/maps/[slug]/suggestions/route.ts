@@ -7,10 +7,12 @@ import {
   validateSuggestionComment,
   validateSuggestionGeometry,
   validateSuggestionTitle,
+  validateSuggestionAttachmentFilename,
 } from "@/lib/suggestion/access";
 import {
   countOpenSuggestionsForUser,
   createSuggestion,
+  getLatestPublishedVersionNumber,
   listSuggestionsForMap,
   serializeSuggestionDetail,
   serializeSuggestionSummary,
@@ -18,6 +20,13 @@ import {
 import { SUGGESTION_CATEGORY_LABELS } from "@/lib/suggestion/types";
 import { queueNotifyNewMapSuggestion } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
+import {
+  buildSuggestionAttachmentPath,
+  deleteFile,
+  fileExists,
+  shouldUseClientUpload,
+  uploadFile,
+} from "@/lib/storage";
 import { NextResponse } from "next/server";
 
 type RouteParams = { params: Promise<{ slug: string }> };
@@ -41,9 +50,15 @@ export async function GET(request: Request, { params }: RouteParams) {
   const url = new URL(request.url);
   const status = url.searchParams.get("status") ?? undefined;
 
-  const suggestions = await listSuggestionsForMap(map.id, status);
+  const [suggestions, latestPublishedVersionNumber] = await Promise.all([
+    listSuggestionsForMap(map.id, status),
+    getLatestPublishedVersionNumber(map.id),
+  ]);
+
   return NextResponse.json({
-    suggestions: suggestions.map(serializeSuggestionSummary),
+    suggestions: suggestions.map((s) =>
+      serializeSuggestionSummary(s, latestPublishedVersionNumber),
+    ),
   });
 }
 
@@ -63,23 +78,88 @@ export async function POST(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Kartfil hittades inte" }, { status: 404 });
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Ogiltig JSON" }, { status: 400 });
-  }
+  const contentType = request.headers.get("content-type") ?? "";
+  let mapVersionId: string | null = null;
+  let category: ReturnType<typeof validateSuggestionCategory> = null;
+  let comment: ReturnType<typeof validateSuggestionComment> = null;
+  let title: ReturnType<typeof validateSuggestionTitle> = null;
+  let geometry: ReturnType<typeof validateSuggestionGeometry> = null;
+  let attachmentPath: string | null = null;
 
-  if (!body || typeof body !== "object") {
-    return NextResponse.json({ error: "Ogiltig begäran" }, { status: 400 });
-  }
+  if (contentType.includes("multipart/form-data")) {
+    let formData: FormData;
+    try {
+      formData = await request.formData();
+    } catch {
+      return NextResponse.json({ error: "Ogiltig uppladdning" }, { status: 400 });
+    }
 
-  const record = body as Record<string, unknown>;
-  const mapVersionId = typeof record.mapVersionId === "string" ? record.mapVersionId : null;
-  const category = validateSuggestionCategory(record.category);
-  const comment = validateSuggestionComment(record.comment);
-  const title = validateSuggestionTitle(record.title);
-  const geometry = validateSuggestionGeometry(record.geometry);
+    mapVersionId = formData.get("mapVersionId")?.toString() ?? null;
+    category = validateSuggestionCategory(formData.get("category"));
+    comment = validateSuggestionComment(formData.get("comment"));
+    title = validateSuggestionTitle(formData.get("title"));
+    try {
+      const geometryRaw = formData.get("geometry")?.toString();
+      geometry = geometryRaw ? validateSuggestionGeometry(JSON.parse(geometryRaw)) : null;
+    } catch {
+      geometry = null;
+    }
+
+    const file = formData.get("attachment");
+    if (file instanceof File && file.size > 0) {
+      const validation = validateSuggestionAttachmentFilename(file.name, file.size);
+      if (!validation.ok) {
+        return NextResponse.json({ error: validation.error }, { status: 400 });
+      }
+      if (shouldUseClientUpload(file.size)) {
+        return NextResponse.json(
+          {
+            error: "Bilden är för stor för direktuppladdning. Minska filstorleken.",
+            clientUploadRequired: true,
+          },
+          { status: 413 },
+        );
+      }
+      const storagePath = buildSuggestionAttachmentPath(map.id, file.name);
+      const buffer = Buffer.from(await file.arrayBuffer());
+      try {
+        attachmentPath = await uploadFile(storagePath, buffer);
+      } catch (err) {
+        console.error("Suggestion attachment upload failed:", err);
+        return NextResponse.json({ error: "Kunde inte ladda upp bilden" }, { status: 500 });
+      }
+    }
+  } else {
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Ogiltig JSON" }, { status: 400 });
+    }
+
+    if (!body || typeof body !== "object") {
+      return NextResponse.json({ error: "Ogiltig begäran" }, { status: 400 });
+    }
+
+    const record = body as Record<string, unknown>;
+    mapVersionId = typeof record.mapVersionId === "string" ? record.mapVersionId : null;
+    category = validateSuggestionCategory(record.category);
+    comment = validateSuggestionComment(record.comment);
+    title = validateSuggestionTitle(record.title);
+    geometry = validateSuggestionGeometry(record.geometry);
+
+    if (typeof record.attachmentPath === "string" && record.attachmentPath.trim()) {
+      const candidate = record.attachmentPath.trim();
+      const prefix = `maps/${map.id}/suggestion-attachments/`;
+      if (!candidate.includes(prefix)) {
+        return NextResponse.json({ error: "Ogiltig bilagesökväg" }, { status: 400 });
+      }
+      if (!(await fileExists(candidate))) {
+        return NextResponse.json({ error: "Bilagan hittades inte" }, { status: 400 });
+      }
+      attachmentPath = candidate;
+    }
+  }
 
   if (!mapVersionId) {
     return NextResponse.json({ error: "Kartversion krävs" }, { status: 400 });
@@ -118,15 +198,24 @@ export async function POST(request: Request, { params }: RouteParams) {
   );
   if (quotaDenied) return quotaDenied;
 
-  const suggestion = await createSuggestion({
-    mapFileId: map.id,
-    mapVersionId: version.id,
-    createdById: session.user.id,
-    category,
-    title,
-    comment,
-    geometryJson: JSON.stringify(geometry),
-  });
+  let suggestion;
+  try {
+    suggestion = await createSuggestion({
+      mapFileId: map.id,
+      mapVersionId: version.id,
+      createdById: session.user.id,
+      category,
+      title,
+      comment,
+      geometry,
+      attachmentPath,
+    });
+  } catch (err) {
+    if (attachmentPath) {
+      await deleteFile(attachmentPath).catch(() => undefined);
+    }
+    throw err;
+  }
 
   await logAction(session.user.id, "SUGGESTION_CREATED", "MapSuggestion", suggestion.id, {
     mapSlug: slug,
@@ -146,5 +235,9 @@ export async function POST(request: Request, { params }: RouteParams) {
     authorEmail: session.user.email ?? "",
   });
 
-  return NextResponse.json(serializeSuggestionDetail(suggestion), { status: 201 });
+  const latestPublishedVersionNumber = await getLatestPublishedVersionNumber(map.id);
+  return NextResponse.json(
+    serializeSuggestionDetail(suggestion, latestPublishedVersionNumber),
+    { status: 201 },
+  );
 }
