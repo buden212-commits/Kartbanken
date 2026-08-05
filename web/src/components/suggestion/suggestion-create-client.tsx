@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { DiffMapPanel, type MapDrawPointerHandlers } from "@/components/diff-map-panel";
 import { screenToSvgPoint } from "@/lib/ocad/map-hit-test";
 import {
@@ -18,6 +18,7 @@ import {
   renderSuggestionGeometrySvg,
 } from "@/lib/suggestion/geometry";
 import {
+  MAX_SUGGESTION_GEOMETRIES,
   SUGGESTION_CATEGORY_LABELS,
   type SuggestionCategoryValue,
   type SuggestionGeometry,
@@ -40,6 +41,79 @@ const TOOL_LABELS: Record<DrawTool, string> = {
   line: "Linje",
 };
 
+const GEOMETRY_TYPE_LABELS: Record<SuggestionGeometry["type"], string> = {
+  Point: "Punkt",
+  Bbox: "Rektangel",
+  Polygon: "Polygon",
+  LineString: "Linje",
+};
+
+type CreateMapPanelProps = {
+  mapSlug: string;
+  versionId: string;
+  drawPointerHandlers: MapDrawPointerHandlers;
+  markings: SuggestionGeometry[];
+  currentGeometry: SuggestionGeometry | null;
+  draftGeometry: SuggestionGeometry | null;
+  drawHint: string;
+  markingCount: number;
+  rootTransformRef: MutableRefObject<SvgRootTransform>;
+};
+
+const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
+  mapSlug,
+  versionId,
+  drawPointerHandlers,
+  markings,
+  currentGeometry,
+  draftGeometry,
+  drawHint,
+  markingCount,
+  rootTransformRef,
+}: CreateMapPanelProps) {
+  const renderSvgOverlay = useCallback(
+    (rootTransform: SvgRootTransform) => {
+      rootTransformRef.current = rootTransform;
+      const parts: string[] = [];
+      for (const marking of markings) {
+        parts.push(renderSuggestionGeometrySvg(marking, rootTransform, { label: "FÖRSLAG" }));
+      }
+      const overlay = draftGeometry ?? currentGeometry;
+      if (overlay) {
+        parts.push(
+          renderSuggestionGeometrySvg(overlay, rootTransform, {
+            label: "FÖRSLAG",
+            draft: Boolean(draftGeometry && !currentGeometry),
+          }),
+        );
+      }
+      if (parts.length === 0) return null;
+      return <g dangerouslySetInnerHTML={{ __html: parts.join("") }} />;
+    },
+    [markings, currentGeometry, draftGeometry, rootTransformRef],
+  );
+
+  return (
+    <DiffMapPanel
+      previewUrl={`/api/maps/${mapSlug}/versions/${versionId}/preview`}
+      title="Markera plats"
+      mapSlug={mapSlug}
+      versionId={versionId}
+      interactionMode="draw"
+      drawPointerHandlers={drawPointerHandlers}
+      renderSvgOverlay={renderSvgOverlay}
+      secondaryHeaderContent={
+        <p className="text-xs text-amber-700">
+          {drawHint}
+          {markingCount > 0
+            ? ` ${markingCount} markering${markingCount === 1 ? "" : "ar"}.`
+            : " Ingen markering ännu."}
+        </p>
+      }
+    />
+  );
+});
+
 export function SuggestionCreateClient({
   mapSlug,
   mapTitle,
@@ -51,6 +125,7 @@ export function SuggestionCreateClient({
   const dragRef = useRef<{ start: [number, number]; current: [number, number] } | null>(null);
 
   const [tool, setTool] = useState<DrawTool>("pin");
+  const [markings, setMarkings] = useState<SuggestionGeometry[]>([]);
   const [geometry, setGeometry] = useState<SuggestionGeometry | null>(null);
   const [draftBbox, setDraftBbox] = useState<SuggestionGeometry | null>(null);
   const [polygonPoints, setPolygonPoints] = useState<[number, number][]>([]);
@@ -182,8 +257,46 @@ export function SuggestionCreateClient({
     [handlePointerDown, handlePointerMove, handlePointerUp],
   );
 
+  const drawHint = useMemo(
+    () =>
+      tool === "pin"
+        ? "Ritläge — klicka på kartan för att placera markeringen."
+        : tool === "rectangle"
+          ? "Ritläge — dra en rektangel på kartan."
+          : tool === "polygon"
+            ? "Ritläge — klicka hörn, minst 3 punkter, sedan Slutför polygon."
+            : "Ritläge — klicka punkter längs linjen, minst 2, sedan Slutför linje.",
+    [tool],
+  );
+
+  const canAddMarking = Boolean(geometry);
+  const totalMarkingCount = markings.length + (geometry ? 1 : 0);
+
   function handleToolChange(next: DrawTool) {
     setTool(next);
+    setGeometry(null);
+    resetDraft();
+    setError(null);
+  }
+
+  function handleAddMarking() {
+    if (!geometry) return;
+    if (markings.length >= MAX_SUGGESTION_GEOMETRIES) {
+      setError(`Max ${MAX_SUGGESTION_GEOMETRIES} markeringar per förslag`);
+      return;
+    }
+    setMarkings((prev) => [...prev, geometry]);
+    setGeometry(null);
+    resetDraft();
+    setError(null);
+  }
+
+  function handleRemoveMarking(index: number) {
+    setMarkings((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function handleClearAll() {
+    setMarkings([]);
     setGeometry(null);
     resetDraft();
     setError(null);
@@ -200,16 +313,12 @@ export function SuggestionCreateClient({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!geometry) {
-      setError(
-        tool === "pin"
-          ? "Klicka på kartan för att placera en markering"
-          : tool === "rectangle"
-            ? "Dra en rektangel på kartan för att markera området"
-            : tool === "polygon"
-              ? "Klicka hörn på kartan och klicka Slutför polygon"
-              : "Klicka punkter på kartan och klicka Slutför linje",
-      );
+    if (markings.length < 1) {
+      if (geometry) {
+        setError("Klicka «Lägg till markering» innan du skickar, eller rensa den aktuella ritningen");
+      } else {
+        setError("Lägg till minst en markering på kartan");
+      }
       return;
     }
     setLoading(true);
@@ -233,7 +342,7 @@ export function SuggestionCreateClient({
           category,
           title: title.trim() || undefined,
           comment,
-          geometry,
+          geometries: markings,
           attachmentPath,
         }),
       });
@@ -249,18 +358,6 @@ export function SuggestionCreateClient({
       setLoading(false);
     }
   }
-
-  const overlayGeometry = draftGeometry ?? geometry;
-  const hasMarking = Boolean(geometry);
-
-  const drawHint =
-    tool === "pin"
-      ? "Ritläge — klicka på kartan för att placera markeringen."
-      : tool === "rectangle"
-        ? "Ritläge — dra en rektangel på kartan."
-        : tool === "polygon"
-          ? "Ritläge — klicka hörn, minst 3 punkter, sedan Slutför polygon."
-          : "Ritläge — klicka punkter längs linjen, minst 2, sedan Slutför linje.";
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
@@ -293,10 +390,15 @@ export function SuggestionCreateClient({
         ))}
         <button
           type="button"
-          onClick={() => {
-            setGeometry(null);
-            resetDraft();
-          }}
+          disabled={!canAddMarking}
+          onClick={handleAddMarking}
+          className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+        >
+          Lägg till markering
+        </button>
+        <button
+          type="button"
+          onClick={handleClearAll}
           className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
         >
           Rensa
@@ -308,41 +410,48 @@ export function SuggestionCreateClient({
               tool === "polygon" ? polygonPoints.length < 3 : linePoints.length < 2
             }
             onClick={confirmDraft}
-            className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+            className="rounded-lg border border-orange-300 bg-orange-50 px-3 py-1.5 text-sm font-medium text-orange-800 disabled:opacity-50"
           >
             {tool === "polygon" ? "Slutför polygon" : "Slutför linje"}
           </button>
         )}
       </div>
 
+      {markings.length > 0 && (
+        <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+          <p className="text-sm font-medium text-slate-800">
+            {markings.length} markering{markings.length === 1 ? "" : "ar"}
+          </p>
+          <ul className="mt-1 space-y-1">
+            {markings.map((marking, index) => (
+              <li key={index} className="flex items-center justify-between gap-2 text-sm text-slate-600">
+                <span>
+                  {index + 1}. {GEOMETRY_TYPE_LABELS[marking.type]}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveMarking(index)}
+                  className="text-red-600 hover:underline"
+                >
+                  Ta bort
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="mt-4">
-        <DiffMapPanel
-          previewUrl={`/api/maps/${mapSlug}/versions/${versionId}/preview`}
-          title="Markera plats"
+        <SuggestionCreateMapPanel
           mapSlug={mapSlug}
           versionId={versionId}
-          interactionMode="draw"
           drawPointerHandlers={drawPointerHandlers}
-          renderSvgOverlay={(rootTransform) => {
-            rootTransformRef.current = rootTransform;
-            if (!overlayGeometry) return null;
-            return (
-              <g
-                dangerouslySetInnerHTML={{
-                  __html: renderSuggestionGeometrySvg(overlayGeometry, rootTransform, {
-                    label: "FÖRSLAG",
-                    draft: Boolean(draftGeometry && !geometry),
-                  }),
-                }}
-              />
-            );
-          }}
-          secondaryHeaderContent={
-            <p className="text-xs text-amber-700">
-              {drawHint}
-              {hasMarking ? " Markering klar." : " Ingen markering ännu."}
-            </p>
-          }
+          markings={markings}
+          currentGeometry={geometry}
+          draftGeometry={draftGeometry}
+          drawHint={drawHint}
+          markingCount={totalMarkingCount}
+          rootTransformRef={rootTransformRef}
         />
       </div>
 
@@ -386,10 +495,10 @@ export function SuggestionCreateClient({
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             required
-            minLength={10}
+            minLength={2}
             rows={4}
             className="form-input"
-            placeholder="Beskriv vad som är fel, saknas eller bör förklaras (minst 10 tecken)."
+            placeholder="Beskriv vad som är fel, saknas eller bör förklaras (minst 2 tecken)."
           />
         </div>
         <div>

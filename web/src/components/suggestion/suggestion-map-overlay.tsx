@@ -173,9 +173,9 @@ export function useSuggestionMapOverlayControls(
       if (!showSuggestions || overlays.length === 0) return null;
       return (
         <g data-suggestion-overlay-layer="true">
-          {overlays.map((item) => (
+          {overlays.map((item, index) => (
             <SuggestionOverlayShape
-              key={item.id}
+              key={`${item.id}-${index}`}
               item={item}
               rootTransform={rootTransform}
               onClick={() => router.push(`/maps/${mapSlug}/suggestions/${item.id}`)}

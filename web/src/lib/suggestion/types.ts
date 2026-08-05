@@ -126,6 +126,8 @@ export type SuggestionDetail = SuggestionSummary & {
 
 export const MAX_OPEN_SUGGESTIONS_PER_USER_PER_MAP = 10;
 
+export const MAX_SUGGESTION_GEOMETRIES = 20;
+
 export const MAX_SUGGESTION_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
 export const SUGGESTION_ATTACHMENT_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"] as const;

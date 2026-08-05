@@ -176,21 +176,20 @@ export async function listSuggestionOverlaysForVersion(
       category: true,
       objects: {
         orderBy: { sortOrder: "asc" },
-        take: 1,
         select: { geometryJson: true },
       },
     },
     orderBy: { createdAt: "asc" },
   });
 
-  return rows
-    .filter((row) => row.objects[0])
-    .map((row) => ({
+  return rows.flatMap((row) =>
+    row.objects.map((obj) => ({
       id: row.id,
       status: row.status as SuggestionSummary["status"],
       category: row.category as SuggestionSummary["category"],
-      geometry: parseGeometryJson(row.objects[0]!.geometryJson),
-    }));
+      geometry: parseGeometryJson(obj.geometryJson),
+    })),
+  );
 }
 
 export async function countOpenSuggestionsForUser(mapFileId: string, userId: string) {
@@ -224,11 +223,9 @@ export async function createSuggestion(params: {
   category: string;
   title: string | null;
   comment: string;
-  geometry: SuggestionGeometry;
+  geometries: SuggestionGeometry[];
   attachmentPath?: string | null;
 }) {
-  const objectType = suggestionObjectTypeForGeometry(params.geometry);
-
   return prisma.mapSuggestion.create({
     data: {
       mapFileId: params.mapFileId,
@@ -239,11 +236,11 @@ export async function createSuggestion(params: {
       comment: params.comment,
       attachmentPath: params.attachmentPath ?? null,
       objects: {
-        create: {
-          objectType,
-          geometryJson: JSON.stringify(params.geometry),
-          sortOrder: 0,
-        },
+        create: params.geometries.map((geometry, sortOrder) => ({
+          objectType: suggestionObjectTypeForGeometry(geometry),
+          geometryJson: JSON.stringify(geometry),
+          sortOrder,
+        })),
       },
     },
     include: {

@@ -8,6 +8,16 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-05",
+    title: "Kartförslag — förbättrad skapande",
+    items: [
+      "Snabbare textinmatning när du skriver beskrivning vid kartförslag",
+      "Lägg till flera markeringar (punkter, ytor, linjer) i samma förslag innan du skickar",
+      "Beskrivningen räcker med minst 2 tecken",
+      "Alla markeringar i ett förslag syns på kartan",
+    ],
+  },
+  {
+    date: "2026-08-05",
     title: "Kartförslag — fas 3",
     items: [
       "Rita polygon eller linje utöver punkt och rektangel när du lämnar kartförslag",

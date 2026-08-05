@@ -214,7 +214,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     const comment = validateSuggestionComment(record.comment);
     if (!comment) {
       return NextResponse.json(
-        { error: "Kommentar krävs (minst 10 tecken)" },
+        { error: "Kommentar krävs (minst 2 tecken)" },
         { status: 400 },
       );
     }

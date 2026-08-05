@@ -451,7 +451,8 @@ export async function HelpPageContent() {
             items={[
               "Öppna en publicerad version via Visa karta och klicka Föreslå ändring",
               "Välj punkt, rektangel, polygon eller linje och markera på kartan (orange overlay)",
-              "Välj kategori, skriv beskrivning (minst 10 tecken) och bifoga valfritt foto",
+              "Lägg till flera markeringar med «Lägg till markering» innan du skickar",
+              "Välj kategori, skriv beskrivning (minst 2 tecken) och bifoga valfritt foto",
               "Öppna och pågående förslag visas på kartan — klicka markeringen eller använd listan på områdessidan",
               "Växla «Visa kartförslag» i kartvyn för att dölja lagret",
               "Redaktörer markerar som Pågår, Införd eller Avvisad och kan koppla checkout",

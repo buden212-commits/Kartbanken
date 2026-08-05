@@ -16,6 +16,7 @@ import {
   isValidSuggestionPolygonRing,
   normalizeSuggestionBbox,
   renderSuggestionGeometrySvg,
+  renderSuggestionObjectsSvg,
 } from "@/lib/suggestion/geometry";
 import {
   SUGGESTION_CATEGORY_LABELS,
@@ -106,7 +107,7 @@ export function SuggestionDetailClient({
   const [polygonPoints, setPolygonPoints] = useState<[number, number][]>([]);
   const [linePoints, setLinePoints] = useState<[number, number][]>([]);
 
-  const marking = suggestion.objects[0]?.geometry;
+  const allMarkings = suggestion.objects;
   const canEdit = isOwner && suggestion.status === SuggestionStatus.OPEN;
   const canDelete =
     isAdmin || (isOwner && suggestion.status === SuggestionStatus.OPEN);
@@ -226,8 +227,13 @@ export function SuggestionDetailClient({
     [handlePointerDown, handlePointerMove, handlePointerUp],
   );
 
-  const displayGeometry =
-    editMode && redrawMarking ? (draftGeometry ?? editGeometry) : marking;
+  const displayGeometries = useMemo((): SuggestionGeometry[] => {
+    if (editMode && redrawMarking) {
+      const overlay = draftGeometry ?? editGeometry;
+      return overlay ? [overlay] : [];
+    }
+    return allMarkings.map((obj) => obj.geometry);
+  }, [allMarkings, draftGeometry, editGeometry, editMode, redrawMarking]);
 
   async function patchSuggestion(body: Record<string, unknown>) {
     setLoading(true);
@@ -399,7 +405,7 @@ export function SuggestionDetailClient({
               value={editComment}
               onChange={(e) => setEditComment(e.target.value)}
               required
-              minLength={10}
+              minLength={2}
               rows={4}
               className="form-input"
             />
@@ -506,15 +512,33 @@ export function SuggestionDetailClient({
           drawPointerHandlers={editMode && redrawMarking ? drawPointerHandlers : undefined}
           renderSvgOverlay={(rootTransform) => {
             rootTransformRef.current = rootTransform;
-            if (!displayGeometry) return null;
+            if (displayGeometries.length === 0) return null;
+            if (editMode && redrawMarking) {
+              return (
+                <g
+                  dangerouslySetInnerHTML={{
+                    __html: renderSuggestionGeometrySvg(displayGeometries[0]!, rootTransform, {
+                      label: overlayLabel,
+                      selected: true,
+                      draft: Boolean(draftGeometry),
+                    }),
+                  }}
+                />
+              );
+            }
             return (
               <g
                 dangerouslySetInnerHTML={{
-                  __html: renderSuggestionGeometrySvg(displayGeometry, rootTransform, {
-                    label: overlayLabel,
-                    selected: true,
-                    draft: Boolean(editMode && redrawMarking && draftGeometry),
-                  }),
+                  __html: renderSuggestionObjectsSvg(
+                    allMarkings.map((obj) => ({
+                      id: obj.id,
+                      objectType: obj.objectType,
+                      geometry: obj.geometry,
+                      sortOrder: obj.sortOrder,
+                    })),
+                    rootTransform,
+                    { label: overlayLabel, selected: true },
+                  ),
                 }}
               />
             );

@@ -3,9 +3,10 @@ import { logAction } from "@/lib/audit";
 import {
   assertOpenSuggestionQuota,
   assertSuggestionCreateAccess,
+  parseSuggestionGeometriesFromRecord,
   validateSuggestionCategory,
   validateSuggestionComment,
-  validateSuggestionGeometry,
+  validateSuggestionGeometries,
   validateSuggestionTitle,
   validateSuggestionAttachmentFilename,
 } from "@/lib/suggestion/access";
@@ -108,7 +109,7 @@ export async function POST(request: Request, { params }: RouteParams) {
   let category: ReturnType<typeof validateSuggestionCategory> = null;
   let comment: ReturnType<typeof validateSuggestionComment> = null;
   let title: ReturnType<typeof validateSuggestionTitle> = null;
-  let geometry: ReturnType<typeof validateSuggestionGeometry> = null;
+  let geometries: ReturnType<typeof validateSuggestionGeometries> = null;
   let attachmentPath: string | null = null;
 
   if (contentType.includes("multipart/form-data")) {
@@ -124,10 +125,17 @@ export async function POST(request: Request, { params }: RouteParams) {
     comment = validateSuggestionComment(formData.get("comment"));
     title = validateSuggestionTitle(formData.get("title"));
     try {
-      const geometryRaw = formData.get("geometry")?.toString();
-      geometry = geometryRaw ? validateSuggestionGeometry(JSON.parse(geometryRaw)) : null;
+      const geometriesRaw = formData.get("geometries")?.toString();
+      if (geometriesRaw) {
+        geometries = validateSuggestionGeometries(JSON.parse(geometriesRaw));
+      } else {
+        const geometryRaw = formData.get("geometry")?.toString();
+        geometries = geometryRaw
+          ? validateSuggestionGeometries([JSON.parse(geometryRaw)])
+          : null;
+      }
     } catch {
-      geometry = null;
+      geometries = null;
     }
 
     const file = formData.get("attachment");
@@ -171,7 +179,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     category = validateSuggestionCategory(record.category);
     comment = validateSuggestionComment(record.comment);
     title = validateSuggestionTitle(record.title);
-    geometry = validateSuggestionGeometry(record.geometry);
+    geometries = parseSuggestionGeometriesFromRecord(record);
 
     if (typeof record.attachmentPath === "string" && record.attachmentPath.trim()) {
       const candidate = record.attachmentPath.trim();
@@ -194,11 +202,11 @@ export async function POST(request: Request, { params }: RouteParams) {
   }
   if (!comment) {
     return NextResponse.json(
-      { error: "Kommentar krävs (minst 10 tecken)" },
+      { error: "Kommentar krävs (minst 2 tecken)" },
       { status: 400 },
     );
   }
-  if (!geometry) {
+  if (!geometries) {
     return NextResponse.json({ error: "Ogiltig markering på kartan" }, { status: 400 });
   }
 
@@ -232,7 +240,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       category,
       title,
       comment,
-      geometry,
+      geometries,
       attachmentPath,
     });
   } catch (err) {

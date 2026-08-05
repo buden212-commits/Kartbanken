@@ -10,6 +10,7 @@ import {
   type SuggestionLineGeometry,
   MAX_OPEN_SUGGESTIONS_PER_USER_PER_MAP,
   MAX_SUGGESTION_ATTACHMENT_BYTES,
+  MAX_SUGGESTION_GEOMETRIES,
   SUGGESTION_ATTACHMENT_EXTENSIONS,
 } from "@/lib/suggestion/types";
 import { isValidSuggestionBbox, isValidSuggestionLineCoordinates, isValidSuggestionPolygonRing } from "@/lib/suggestion/geometry";
@@ -93,7 +94,7 @@ export function validateSuggestionReviewStatus(value: unknown): SuggestionStatus
 export function validateSuggestionComment(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
-  if (trimmed.length < 10 || trimmed.length > 2000) return null;
+  if (trimmed.length < 2 || trimmed.length > 2000) return null;
   return trimmed;
 }
 
@@ -165,6 +166,32 @@ export function validateSuggestionGeometry(value: unknown): SuggestionGeometry |
   if (record.type === "Bbox") return validateBboxGeometry(record);
   if (record.type === "Polygon") return validatePolygonGeometry(record);
   if (record.type === "LineString") return validateLineGeometry(record);
+  return null;
+}
+
+export function validateSuggestionGeometries(value: unknown): SuggestionGeometry[] | null {
+  if (!Array.isArray(value)) return null;
+  if (value.length < 1 || value.length > MAX_SUGGESTION_GEOMETRIES) return null;
+  const geometries: SuggestionGeometry[] = [];
+  for (const item of value) {
+    const geometry = validateSuggestionGeometry(item);
+    if (!geometry) return null;
+    geometries.push(geometry);
+  }
+  return geometries;
+}
+
+/** Accepts `geometries` array or legacy single `geometry`. */
+export function parseSuggestionGeometriesFromRecord(
+  record: Record<string, unknown>,
+): SuggestionGeometry[] | null {
+  if (record.geometries != null) {
+    return validateSuggestionGeometries(record.geometries);
+  }
+  if (record.geometry != null) {
+    const geometry = validateSuggestionGeometry(record.geometry);
+    return geometry ? [geometry] : null;
+  }
   return null;
 }
 
