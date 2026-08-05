@@ -29,7 +29,9 @@ export type AuditAction =
   | "SUGGESTION_CREATED"
   | "SUGGESTION_UPDATED"
   | "SUGGESTION_REVIEWED"
-  | "SUGGESTION_DELETED";
+  | "SUGGESTION_DELETED"
+  | "SUGGESTION_REPORT_EXPORT"
+  | "MAP_GEOTIFF_EXPORT";
 
 export type EmailSentAuditMetadata = {
   kind: "checkin" | "new_upload" | "test";

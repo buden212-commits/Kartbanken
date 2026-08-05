@@ -6,7 +6,7 @@ import { parseOcadMapScale } from "./svg-utils";
 export type ExportScale = 5000 | 7500 | 10000;
 export type ExportFormat = "A4" | "A3";
 export type ExportOrientation = "portrait" | "landscape";
-export type ExportOutputFormat = "pdf" | "ocd";
+export type ExportOutputFormat = "pdf" | "ocd" | "geotiff";
 
 export type ExportSettings = {
   scale: ExportScale;
@@ -357,11 +357,64 @@ export async function downloadMapOcd(
   return { versionWarning };
 }
 
+export async function downloadMapGeoTiff(
+  mapSlug: string,
+  versionId: string,
+  fullSvgText: string,
+  frame: ExportFrame,
+  fileName: string,
+): Promise<void> {
+  validateExportFrame(frame);
+
+  const pixelWidth = mmToPx(frame.widthMm);
+  const pixelHeight = mmToPx(frame.heightMm);
+  const exportSvg = buildClippedExportSvg(fullSvgText, frame, pixelWidth, pixelHeight);
+  const img = await loadSvgImage(exportSvg);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = pixelWidth;
+  canvas.height = pixelHeight;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    throw new Error("Kunde inte skapa exportyta");
+  }
+
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, pixelWidth, pixelHeight);
+  ctx.drawImage(img, 0, 0, pixelWidth, pixelHeight);
+
+  const imageBase64 = canvas.toDataURL("image/png");
+
+  const response = await fetch(`/api/maps/${mapSlug}/versions/${versionId}/export-geotiff`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ frame, imageBase64 }),
+  });
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(payload?.error ?? "GeoTIFF-export misslyckades");
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName.endsWith(".tif") ? fileName : `${fileName}.tif`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export function formatExportLabel(settings: ExportSettings): string {
   const scaleLabel = EXPORT_SCALES.find((s) => s.value === settings.scale)?.label ?? "";
   const formatLabel = settings.format;
   const orientLabel =
     EXPORT_ORIENTATIONS.find((o) => o.value === settings.orientation)?.label ?? "";
-  const outputLabel = settings.outputFormat === "ocd" ? "OCD" : "PDF";
+  const outputLabel =
+    settings.outputFormat === "ocd"
+      ? "OCD"
+      : settings.outputFormat === "geotiff"
+        ? "GeoTIFF"
+        : "PDF";
   return `${scaleLabel} · ${formatLabel} ${orientLabel} · ${outputLabel}`;
 }

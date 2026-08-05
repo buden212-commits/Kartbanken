@@ -29,6 +29,7 @@
     "@prisma/client": "^5.22.0",
     "@vercel/blob": "^2.6.1",
     "bcryptjs": "^3.0.3",
+    "geotiff": "^3.0.5",
     "jspdf": "^4.2.1",
     "next": "16.2.12",
     "next-auth": "^5.0.0-beta.32",
@@ -36,7 +37,8 @@
     "ocad2geojson": "^2.1.23",
     "proj4": "^2.21.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "sharp": "^0.35.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

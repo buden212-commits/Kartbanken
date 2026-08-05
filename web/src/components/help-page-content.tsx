@@ -459,6 +459,7 @@ export async function HelpPageContent() {
               "Redaktörer markerar som Pågår, Införd eller Avvisad och kan koppla checkout",
               "Du kan redigera egna öppna förslag (text och markering) via Redigera på detaljsidan",
               "Förslag gäller den version du markerade — vid ny publicerad version visas «Gäller version N»",
+              "Exportera PDF med alla öppna och pågående förslag via knappen i listan (text, foto och kartutklipp per förslag)",
             ]}
           />
           <p className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-orange-900">
@@ -605,7 +606,8 @@ export async function HelpPageContent() {
               "Välj skala: 1:10 000, 1:7 500 eller 1:5 000",
               "Välj pappersformat: A4 eller A3",
               "Välj orientering: stående eller liggande",
-              "Välj utdataformat: PDF eller OCAD (.ocd)",
+              "Välj utdataformat: PDF, OCAD (.ocd) eller GeoTIFF (.tif)",
+              "GeoTIFF sparas med kartans projicerade koordinatsystem (EPSG) — kräver georefererad karta",
               "Dra exportramen på kartan till önskat utsnitt innan du exporterar",
             ]}
           />

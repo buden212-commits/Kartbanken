@@ -150,6 +150,49 @@ function rotate(coord: [number, number], theta: number): [number, number] {
   return [coord[0] * cos - coord[1] * sin, coord[0] * sin + coord[1] * cos];
 }
 
+/** OCAD paper coordinates → projected CRS meters (inverse of projectedToMapCoord). */
+export function mapCoordToProjected(
+  mapX: number,
+  mapY: number,
+  crs: OcadCrsInfo,
+): [number, number] {
+  const [mx, my] = rotate([mapX, mapY], -crs.grivation);
+  const easting = crs.easting + mx * HUNDREDS_MM_TO_METER * crs.scale;
+  const northing = crs.northing + my * HUNDREDS_MM_TO_METER * crs.scale;
+  return [easting, northing];
+}
+
+export type ProjectedExtent = {
+  minE: number;
+  maxE: number;
+  minN: number;
+  maxN: number;
+};
+
+/** Projected CRS bounds for an axis-aligned export frame in map coordinates. */
+export function exportFrameProjectedExtent(
+  frame: { centerX: number; centerY: number; widthUnits: number; heightUnits: number },
+  crs: OcadCrsInfo,
+): ProjectedExtent {
+  const minX = frame.centerX - frame.widthUnits / 2;
+  const maxX = frame.centerX + frame.widthUnits / 2;
+  const minY = frame.centerY - frame.heightUnits / 2;
+  const maxY = frame.centerY + frame.heightUnits / 2;
+  const corners: [number, number][] = [
+    [minX, minY],
+    [maxX, minY],
+    [minX, maxY],
+    [maxX, maxY],
+  ];
+  const projected = corners.map(([x, y]) => mapCoordToProjected(x, y, crs));
+  return {
+    minE: Math.min(...projected.map((p) => p[0])),
+    maxE: Math.max(...projected.map((p) => p[0])),
+    minN: Math.min(...projected.map((p) => p[1])),
+    maxN: Math.max(...projected.map((p) => p[1])),
+  };
+}
+
 /** Projected CRS meters → OCAD paper coordinates (inverse of ocad2geojson Crs.toProjectedCoord). */
 export function projectedToMapCoord(
   easting: number,

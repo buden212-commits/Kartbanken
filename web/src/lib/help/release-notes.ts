@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-05",
+    title: "Export — kartförslagsrapport och GeoTIFF",
+    items: [
+      "Exportera alla öppna och pågående kartförslag som PDF från listan på områdessidan (text, foto och kartutklipp per förslag)",
+      "Exportera kartutsnitt som georefererad GeoTIFF (.tif) i samma exportmeny som PDF och OCD (kräver EPSG i kartfilen)",
+    ],
+  },
+  {
+    date: "2026-08-05",
     title: "Kartförslag — zoom till markering",
     items: [
       "Knappen «Zooma till markering» på detaljsidan zoomar kartan till förslagets markering(ar)",

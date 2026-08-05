@@ -41,12 +41,40 @@ export function SuggestionListPanel({
   const [filter, setFilter] = useState<string>("OPEN");
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   const filtered = suggestions.filter((s) => (filter === "ALL" ? true : s.status === filter));
   const openCount = suggestions.filter((s) => s.status === SuggestionStatus.OPEN).length;
   const inProgressCount = suggestions.filter(
     (s) => s.status === SuggestionStatus.IN_PROGRESS,
   ).length;
+  const exportableCount = openCount + inProgressCount;
+
+  async function handleExportPdf() {
+    setExportingPdf(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/maps/${mapSlug}/suggestions/export/pdf`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "PDF-export misslyckades");
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition") ?? "";
+      const match = disposition.match(/filename="([^"]+)"/);
+      const fileName = match?.[1] ?? "kartforslag-rapport.pdf";
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "PDF-export misslyckades");
+    } finally {
+      setExportingPdf(false);
+    }
+  }
 
   async function handleDelete(id: string) {
     if (!window.confirm("Radera detta kartförslag?")) return;
@@ -69,17 +97,29 @@ export function SuggestionListPanel({
           Kartförslag ({openCount} öppna
           {inProgressCount > 0 ? `, ${inProgressCount} pågår` : ""})
         </h2>
-        <select
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
-        >
+        <div className="flex flex-wrap items-center gap-2">
+          {exportableCount > 0 && (
+            <button
+              type="button"
+              disabled={exportingPdf}
+              onClick={() => void handleExportPdf()}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              {exportingPdf ? "Exporterar…" : `Exportera PDF (${exportableCount})`}
+            </button>
+          )}
+          <select
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+          >
           <option value="OPEN">Öppna</option>
           <option value="IN_PROGRESS">Pågår</option>
           <option value="IMPLEMENTED">Införda</option>
           <option value="REJECTED">Avvisade</option>
           <option value="ALL">Alla</option>
         </select>
+        </div>
       </div>
       <p className="mt-1 text-sm text-slate-600">
         Förslag på ändringar i terrängen. Syns på publicerade versioner och granskas av redaktörer.

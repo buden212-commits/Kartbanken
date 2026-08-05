@@ -24,6 +24,7 @@ import {
   createExportFrame,
   downloadMapOcd,
   downloadMapPdf,
+  downloadMapGeoTiff,
   exportFrameBbox,
   pointInExportFrame,
   type ExportFrame,
@@ -472,6 +473,20 @@ export function DiffMapPanel({
         if (versionWarning) {
           window.alert(versionWarning);
         }
+      } else if (exportSettings.outputFormat === "geotiff") {
+        if (!fullSvgText) return;
+        if (!isGeoreferencedCrs(ocadCrs)) {
+          throw new Error(
+            "Kartan saknar georeferering — GeoTIFF-export kräver EPSG-koordinater i filen.",
+          );
+        }
+        await downloadMapGeoTiff(
+          mapSlug,
+          versionId,
+          fullSvgText,
+          exportFrame,
+          `${safeTitle}-${exportSettings.scale}`,
+        );
       } else {
         if (!fullSvgText) return;
         await downloadMapPdf(fullSvgText, exportFrame, `${safeTitle}-${exportSettings.scale}`);
@@ -491,6 +506,7 @@ export function DiffMapPanel({
     mapSlug,
     versionId,
     cancelExportMode,
+    ocadCrs,
   ]);
 
   const viewStateRef = useRef({ pan: { x: 0, y: 0 }, zoom: FIT_WHOLE_ZOOM });

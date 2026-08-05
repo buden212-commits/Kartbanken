@@ -37,9 +37,13 @@ export function MapExportControls({
       ? exporting
         ? "Exporterar…"
         : "Ladda ner OCD"
-      : exporting
-        ? "Exporterar…"
-        : "Ladda ner PDF";
+      : settings.outputFormat === "geotiff"
+        ? exporting
+          ? "Exporterar…"
+          : "Ladda ner GeoTIFF"
+        : exporting
+          ? "Exporterar…"
+          : "Ladda ner PDF";
 
   return (
     <div className="border-b border-slate-200 bg-ifk-blue-muted px-4 py-3">
@@ -58,6 +62,7 @@ export function MapExportControls({
           >
             <option value="pdf">PDF</option>
             <option value="ocd">OCAD (.ocd)</option>
+            <option value="geotiff">GeoTIFF (.tif)</option>
           </select>
         </div>
 
@@ -163,6 +168,8 @@ export function MapExportControls({
         Dra ramen på kartan till önskat utsnitt innan du exporterar.
         {settings.outputFormat === "ocd" &&
           " OCD-exporten sparar objekt inom ramen och behåller symboler och inställningar från originalfilen."}
+        {settings.outputFormat === "geotiff" &&
+          " GeoTIFF sparas med kartans projicerade koordinatsystem (EPSG) för det valda utsnittet."}
       </p>
 
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}

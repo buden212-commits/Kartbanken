@@ -210,6 +210,20 @@ export function formatAuditActivity(action: string, metadataRaw: string | null):
     }
     case "SUGGESTION_DELETED":
       return "Kartförslag raderat";
+    case "SUGGESTION_REPORT_EXPORT": {
+      const count = metadata?.count;
+      const ref = mapRef(metadata);
+      if (typeof count === "number" && ref) {
+        return `Kartförslagsrapport exporterad — ${ref}, ${count} st`;
+      }
+      return ref ? `Kartförslagsrapport exporterad — ${ref}` : "Kartförslagsrapport exporterad";
+    }
+    case "MAP_GEOTIFF_EXPORT": {
+      const ref = mapRef(metadata);
+      const epsg = metaString(metadata, "epsg");
+      if (ref && epsg) return `GeoTIFF exporterad — ${ref}, ${epsg}`;
+      return ref ? `GeoTIFF exporterad — ${ref}` : "GeoTIFF exporterad";
+    }
     default:
       return action;
   }
