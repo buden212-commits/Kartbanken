@@ -1,10 +1,10 @@
-# Kartförslag — produktspec (Fas 1)
+# Kartförslag — produktspec
 
-Status: **Beslut låsta**, Fas 1 under implementation.
+Status: **Fas 1 + Fas 2 implementerade** (2026-08-05).
 
 ## Syfte
 
-Godkända användare kan markera och beskriva terrängändringar på **publicerade** kartversioner utan OCAD. Redaktörer granskar och markerar förslag som införda eller avvisade.
+Godkända användare kan markera och beskriva terrängändringar på **publicerade** kartversioner utan OCAD. Redaktörer granskar och markerar förslag som pågående, införda eller avvisade.
 
 ## Beslut (2026-08-05)
 
@@ -15,7 +15,7 @@ Godkända användare kan markera och beskriva terrängändringar på **publicera
 | Checkout-koppling | **Frivillig** vid införande |
 | Livscykel vid ny version | **Arkiveras kvar** med «Gäller version N», status oförändrad |
 
-## MVP (Fas 1)
+## Fas 1 (MVP)
 
 - Pin (punkt) + obligatorisk kommentar + kategori
 - Status: `OPEN`, `IMPLEMENTED`, `REJECTED`
@@ -23,9 +23,20 @@ Godkända användare kan markera och beskriva terrängändringar på **publicera
 - E-post till notismottagare vid nytt förslag
 - Orange overlay, skilt från banor (magenta) och checkout
 
+## Fas 2
+
+- Rektangel/yta som alternativ till pin vid skapande
+- Status `IN_PROGRESS` (pågår) mellan öppen och införd
+- E-post till skapare vid granskning (respekterar notisinställning)
+- Frivillig foto-bilaga (Vercel Blob)
+- Checkout- och versionskoppling i granskningsformuläret
+- «Gäller version N» när förslaget gäller äldre publicerad version
+
 ## Datamodell
 
 Se `web/prisma/schema.prisma`: `MapSuggestion`, `MapSuggestionObject`.
+
+Fält: `attachmentPath`, `checkoutId`, `integratedVersionId`, objekttyper `POINT` och `BBOX`.
 
 ## Behörigheter
 
@@ -41,14 +52,15 @@ Se `web/prisma/schema.prisma`: `MapSuggestion`, `MapSuggestionObject`.
 
 - `GET/POST /api/maps/[slug]/suggestions`
 - `GET/PATCH/DELETE /api/maps/[slug]/suggestions/[id]`
+- `GET /api/maps/[slug]/suggestions/[id]/attachment` — foto
 
 ## UI
 
 - Områdessida: `SuggestionListPanel`
-- Skapa: `/maps/[slug]/versions/[id]/suggest`
+- Skapa: `/maps/[slug]/versions/[id]/suggest` (pin eller rektangel)
 - Visa/granska: `/maps/[slug]/suggestions/[id]`
 - Knapp «Föreslå ändring» i kartvy (publicerade versioner)
 
-## Fas 2 (ej i scope)
+## Kända begränsningar
 
-- Rektangel/yta, `IN_PROGRESS`, notis till skapare, foto-bilaga
+- Foto-uppladdning >4,5 MB via direkt FormData — större filer kräver framtida upload-init-flöde (som checkin).
