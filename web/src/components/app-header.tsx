@@ -3,9 +3,17 @@ import Link from "next/link";
 import { auth, signOut } from "@/auth";
 import { AppHeaderUserMenu } from "@/components/app-header-user-menu";
 import { canAdmin } from "@/lib/auth/permissions";
+import { prisma } from "@/lib/prisma";
+import type { Role } from "@/lib/roles";
 
 export async function AppHeader() {
   const session = await auth();
+  const notificationPrefs = session?.user?.id
+    ? await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { receiveNotifications: true, receiveOcdAttachment: true },
+      })
+    : null;
 
   return (
     <header className="border-b border-ifk-blue bg-ifk-blue text-white shadow-sm">
@@ -46,7 +54,9 @@ export async function AppHeader() {
               <AppHeaderUserMenu
                 name={session.user.name}
                 email={session.user.email ?? ""}
-                role={session.user.role}
+                role={session.user.role as Role}
+                receiveNotifications={notificationPrefs?.receiveNotifications ?? false}
+                receiveOcdAttachment={notificationPrefs?.receiveOcdAttachment ?? false}
               />
               <form
                 action={async () => {

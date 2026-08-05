@@ -6,6 +6,7 @@ import { AdminUserNotificationToggle } from "@/components/admin-user-notificatio
 import { logAction } from "@/lib/audit";
 import { hashPassword } from "@/lib/auth/password";
 import { canAdmin, roleLabel } from "@/lib/auth/permissions";
+import { queueNotifyUserApproved } from "@/lib/email";
 import { formatDate } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import { Role, type Role as RoleType } from "@/lib/roles";
@@ -118,7 +119,7 @@ async function approveUser(formData: FormData) {
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, role: true },
+    select: { id: true, role: true, email: true, name: true },
   });
   if (!user || user.role !== Role.PENDING) return;
 
@@ -130,6 +131,8 @@ async function approveUser(formData: FormData) {
       approvedById: session.user.id,
     },
   });
+
+  queueNotifyUserApproved({ email: user.email, name: user.name, role });
 
   await logAction(session.user.id, "ROLE_CHANGE", "User", userId, {
     from: Role.PENDING,
@@ -306,6 +309,13 @@ async function updateUser(formData: FormData): Promise<{ ok: true } | { ok: fals
     where: { id: userId },
     data,
   });
+
+  if (
+    becomingApproved &&
+    (user.role === Role.PENDING || user.role === Role.REJECTED)
+  ) {
+    queueNotifyUserApproved({ email, name, role: nextRole });
+  }
 
   await logAction(session.user.id, "USER_UPDATED", "User", userId, {
     previous: {

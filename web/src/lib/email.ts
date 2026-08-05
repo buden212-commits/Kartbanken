@@ -12,7 +12,9 @@ import {
 } from "@/lib/settings/app-settings";
 import { runAfterResponse } from "@/lib/background";
 import { logEmailSent, type EmailSentAuditMetadata } from "@/lib/audit";
+import { roleDescription, roleLabel } from "@/lib/auth/permissions";
 import { readStoredFile } from "@/lib/storage";
+import { Role, type Role as RoleType } from "@/lib/roles";
 
 const APP_NAME = "IFK Mora Kartor";
 
@@ -327,6 +329,61 @@ export async function sendTemporaryPasswordEmail(options: {
   await sendMail({ to: options.to, subject, text, html });
 }
 
+export async function notifyUserApproved(user: {
+  email: string;
+  name: string | null | undefined;
+  role: string;
+}): Promise<void> {
+  if (!(await isEmailConfigured())) {
+    console.warn("[email] SMTP not configured — skipping account approved notification");
+    return;
+  }
+
+  const role = user.role as RoleType;
+  if (role !== Role.READER && role !== Role.EDITOR && role !== Role.ADMIN) {
+    return;
+  }
+
+  const loginUrl = `${getAppBaseUrl()}/login`;
+  const greeting = user.name?.trim() ? `Hej ${user.name.trim()}!` : "Hej!";
+  const permissionLabel = roleLabel(role);
+  const permissionText = roleDescription(role);
+  const subject = `Ditt konto är godkänt — ${APP_NAME}`;
+
+  const text = [
+    greeting,
+    "",
+    `Ditt konto på ${APP_NAME} har godkänts och du kan nu logga in.`,
+    "",
+    `Behörighet: ${permissionLabel}`,
+    permissionText,
+    "",
+    `Logga in: ${loginUrl}`,
+  ].join("\n");
+
+  const bodyHtml = `
+    <p style="margin:0 0 16px;">${escapeHtml(greeting)}</p>
+    <p style="margin:0 0 16px;">Ditt konto har godkänts och du kan nu logga in i ${escapeHtml(APP_NAME)}.</p>
+    <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 20px;width:100%;font-size:15px;">
+      <tr>
+        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;width:100px;">Behörighet</td>
+        <td style="padding:4px 0;color:#0f172a;font-weight:600;">${escapeHtml(permissionLabel)}</td>
+      </tr>
+      <tr>
+        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;">Du kan</td>
+        <td style="padding:4px 0;color:#0f172a;">${escapeHtml(permissionText)}</td>
+      </tr>
+    </table>
+    <p style="margin:0;">
+      <a href="${escapeHtml(loginUrl)}" style="display:inline-block;padding:10px 18px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:500;">Logga in</a>
+    </p>
+  `.trim();
+
+  const html = buildHtmlEmail({ title: subject, bodyHtml });
+
+  await sendMail({ to: user.email, subject, text, html });
+}
+
 export async function notifyAdminOfNewRegistration(user: {
   name: string;
   email: string;
@@ -614,6 +671,12 @@ export function queueNotifyAdminOfNewUpload(
   upload: Parameters<typeof notifyAdminOfNewUpload>[0],
 ): void {
   scheduleEmail(() => notifyAdminOfNewUpload(upload), "new upload");
+}
+
+export function queueNotifyUserApproved(
+  user: Parameters<typeof notifyUserApproved>[0],
+): void {
+  scheduleEmail(() => notifyUserApproved(user), "account approved");
 }
 
 export function notifyCheckoutCreated(ctx: CheckoutMailContext): void {
