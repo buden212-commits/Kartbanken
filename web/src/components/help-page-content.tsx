@@ -117,8 +117,31 @@ export async function HelpPageContent() {
           <p>
             Använd e-post och lösenord på inloggningssidan. Om kontot ännu inte godkänts kan du
             inte logga in — du får meddelandet att kontot väntar på godkännande. Kontakta klubbens
-            administratör om det dröjer.
+            administratör om det dröjer. När administratören godkänner ditt konto skickas ett
+            e-postmeddelande med vilken behörighet du fått och länk till inloggning (kräver
+            konfigurerad SMTP).
           </p>
+
+          <h3 className="font-medium text-slate-900">Glömt lösenord</h3>
+          <p>
+            På inloggningssidan, klicka <strong>Glömt lösenord?</strong> och ange din e-postadress.
+            Om adressen finns registrerad skickas ett tillfälligt lösenord som gäller i en timme.
+            Logga in med det tillfälliga lösenordet — du omdirigeras då till att välja ett nytt
+            eget lösenord innan du kan använda systemet.
+          </p>
+
+          <h3 className="font-medium text-slate-900">Min profil</h3>
+          <p>
+            Klicka på <strong>ditt namn</strong> i sidhuvudet för att öppna profildialogen. Där ser
+            du din behörighet (roll), kan styra e-postnotiser och byta lösenord.
+          </p>
+          <HelpList
+            items={[
+              "Behörighet — visar din roll (läsare, redaktör eller administratör) och vad den innebär",
+              "Notiser — kryssa i e-postnotiser vid nya versioner, checkout och incheckning; valfritt bifoga .ocd",
+              "Lösenord — byt lösenord med nuvarande lösenord som bekräftelse",
+            ]}
+          />
 
           <h3 className="font-medium text-slate-900">Navigation</h3>
           <HelpList
@@ -570,10 +593,11 @@ export async function HelpPageContent() {
             <HelpList
               items={[
                 "Godkänn väntande konton och tilldela roll (läsare, redaktör eller administratör)",
+                "Vid godkännande skickas e-post till användaren med behörighet och inloggningslänk",
                 "Avvisa konton som inte ska få tillgång",
                 "Skapa konton manuellt med e-post, namn, lösenord och roll",
                 "Redigera befintliga användare (namn, e-post, roll)",
-                "Notis — prenumerera på e-post vid nya versioner och checkout-händelser",
+                "Notis — prenumerera på e-post vid nya versioner och checkout-händelser (användare kan också styra detta i Min profil)",
                 "Bifoga .ocd — få kartfilen som bilaga i notiser (kräver Notis)",
                 "Senaste inloggning visas i listan",
               ]}
@@ -620,6 +644,8 @@ export async function HelpPageContent() {
             <HelpList
               items={[
                 "Ny användarregistrering — till admin/prenumeranter",
+                "Konto godkänt — till användaren med tilldelad behörighet",
+                "Tillfälligt lösenord — till användare som begärt återställning",
                 "Ny kartversion uppladdad — med valfri .ocd-bilaga till berättigade mottagare",
                 "Ny checkout skapad — till checkout-ägare och prenumeranter",
                 "Checkin inskickad — med .ocd-bilaga till admin och prenumeranter med «Bifoga .ocd»",
@@ -646,16 +672,18 @@ export async function HelpPageContent() {
               <h3 className="font-medium text-slate-900">Jag kan inte logga in</h3>
               <p className="mt-1">
                 Kontot kan vänta på godkännande eller ha avvisats. Skapa konto om du saknar konto
-                och kontakta klubbens administratör. Godkända konton kan logga in direkt.
+                och kontakta klubbens administratör. Godkända konton kan logga in direkt. Har du
+                glömt lösenordet, använd <strong>Glömt lösenord?</strong> på inloggningssidan.
               </p>
             </div>
             <div>
               <h3 className="font-medium text-slate-900">Jag får inga e-postnotiser</h3>
               <p className="mt-1">
                 SMTP måste vara konfigurerat under Admin → Inställningar med Gmail app-lösenord.
-                Kontrollera att du prenumererar under Admin → Användare (Notis ikryssad). För
-                .ocd-bilaga krävs även «Bifoga .ocd». Skicka testmail för att verifiera. Kontrollera
-                skräppost och att utskick loggas under Admin → Loggning.
+                Aktivera notiser under <strong>Min profil</strong> (klicka ditt namn i menyn) eller
+                be administratören kryssa i Notis under Admin → Användare. För .ocd-bilaga krävs
+                även «Bifoga .ocd». Skicka testmail för att verifiera. Kontrollera skräppost och
+                att utskick loggas under Admin → Loggning.
               </p>
             </div>
             <div>

@@ -7,6 +7,16 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-08-05",
+    title: "Konto, lösenord och profil",
+    items: [
+      "Glömt lösenord — tillfälligt lösenord via e-post (giltigt 1 timme) med tvingat byte vid inloggning",
+      "Min profil — klicka på ditt namn i menyn för behörighet, notisinställningar och lösenordsbyte",
+      "E-post till användare när admin godkänner konto (med tilldelad behörighet)",
+      "Användare kan själva styra e-postnotiser och .ocd-bilaga i profilen",
+    ],
+  },
+  {
     date: "2026-08-04",
     title: "Lagring, e-post och admin",
     items: [
