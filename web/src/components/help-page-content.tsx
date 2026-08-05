@@ -450,9 +450,9 @@ export async function HelpPageContent() {
           <HelpList
             items={[
               "Öppna en publicerad version via Visa karta och klicka Föreslå ändring",
-              "Välj punkt, rektangel, polygon eller linje och markera på kartan (orange overlay)",
-              "Lägg till flera markeringar med «Lägg till markering» innan du skickar",
-              "Välj kategori, skriv beskrivning (minst 2 tecken) och bifoga valfritt foto",
+              "Välj punkt, rektangel, polygon eller linje, markera på kartan och klicka Slutför",
+              "Lägg till flera ändringar med «Lägg till ändring» innan du skickar — alla skickas tillsammans",
+              "Fyll i kategori, beskrivning (minst 2 tecken) och valfritt foto ovanför kartan",
               "Öppna och pågående förslag visas på kartan — klicka markeringen eller ett förslag i listan på områdessidan (zoomar kartan till markeringen)",
               "På detaljsidan zoomas kartan automatiskt till markeringen; «Zooma till markering» finns kvar om du vill fokusera om",
               "Växla «Visa kartförslag» i kartvyn för att dölja lagret",

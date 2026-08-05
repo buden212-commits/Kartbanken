@@ -8,9 +8,18 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-05",
+    title: "Kartförslag — tydligare skapa-vy",
+    items: [
+      "Formulär (kategori, beskrivning, foto) ligger ovanför kartan när du skapar kartförslag",
+      "Knappen «Lägg till ändring» aktiveras först efter «Slutför» — då kan du lägga till fler markeringar",
+      "Skicka-knappen visar antal ändringar (t.ex. «Skicka kartförslag (2 st)») i en egen sektion",
+    ],
+  },
+  {
+    date: "2026-08-05",
     title: "Kartförslag — kartvy och lager",
     items: [
-      "Etiketter på kartförslag (kategori/rubrik) syns 10× tydligare på kartan",
+      "Etiketter på kartförslag (kategori/rubrik) syns tydligt på kartan utan att ta över",
       "Klicka på ett kartförslag i listan på områdessidan för att zooma kartan till markeringen",
       "Detaljsidan zoomar automatiskt till markeringen när du öppnar förslaget",
       "Lagerpanelen under kartan är ihopfälld som standard — klicka «Lager» för att expandera",
@@ -28,7 +37,7 @@ export const releaseNotes: ReleaseNote[] = [
     title: "Kartförslag — tydligare markeringar på kartan",
     items: [
       "Linjer och punkter i kartvyn (översikt, skapa och detalj) ritas tjockare så de syns bättre mot kartan",
-      "Kartutklipp i PDF-rapporten visar minst 200×200 meter runt varje förslag",
+      "Kartutklipp i PDF-rapporten visar minst 200×200 meter i terräng runt varje förslag, även punktmarkeringar",
       "Markeringar i PDF-kartbilden ritas 5× tjockare än standard så de syns tydligt i utskriften",
     ],
   },

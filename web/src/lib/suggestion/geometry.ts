@@ -17,7 +17,7 @@ export const SUGGESTION_ORANGE_STROKE = "#c2410c";
 /** Stroke/pin scale for interactive map views (detail, create, overview overlay). */
 export const LIVE_MAP_STROKE_SCALE = 2.5;
 /** Label text scale for interactive map views (relative to stroke scale). */
-export const LIVE_MAP_LABEL_SCALE = 10;
+export const LIVE_MAP_LABEL_SCALE = 6;
 
 export function liveMapRenderOptions(
   options?: Omit<SuggestionRenderOptions, "strokeScale" | "labelScale">,

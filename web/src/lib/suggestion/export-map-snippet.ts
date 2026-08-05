@@ -1,3 +1,4 @@
+import { metersToMapUnits } from "@/lib/ocad/crs";
 import { geoBboxToSvgUser, type SvgRootTransform } from "@/lib/ocad/svg-coords";
 import { parseOcadMapScale } from "@/lib/ocad/svg-utils";
 import { suggestionObjectTypeForGeometry } from "@/lib/suggestion/access";
@@ -9,22 +10,26 @@ import {
 import type { SuggestionGeometry } from "@/lib/suggestion/types";
 
 const SNIPPET_DPI = 150;
-const SNIPPET_PADDING_M = 50;
-const SNIPPET_MIN_EXTENT_M = 200;
+/** Padding around snippet bbox in real-world meters. */
+const SNIPPET_PADDING_METERS = 50;
+/** Minimum snippet width/height in real-world meters (OCAD paper units vary by map scale). */
+const SNIPPET_MIN_EXTENT_METERS = 200;
 const SNIPPET_MAX_PX = 520;
+const DEFAULT_MAP_SCALE = 15000;
 /** Overlay stroke/pin scale in PDF snippets — map is small so markings must read clearly. */
 const SNIPPET_STROKE_SCALE = 5;
 
-function expandGeoBboxToMinExtent(
+/** Expand geo bbox so both axes span at least minMapUnits (OCAD paper coordinates). */
+export function expandGeoBboxToMinExtent(
   [minGx, minGy, maxGx, maxGy]: SuggestionGeoBbox,
-  minM: number,
+  minMapUnits: number,
 ): SuggestionGeoBbox {
   const width = maxGx - minGx;
   const height = maxGy - minGy;
   const cx = (minGx + maxGx) / 2;
   const cy = (minGy + maxGy) / 2;
-  const halfW = Math.max(width / 2, minM / 2);
-  const halfH = Math.max(height / 2, minM / 2);
+  const halfW = Math.max(width / 2, minMapUnits / 2);
+  const halfH = Math.max(height / 2, minMapUnits / 2);
   return [cx - halfW, cy - halfH, cx + halfW, cy + halfH];
 }
 
@@ -32,17 +37,26 @@ export function buildSuggestionMapSnippetSvg(
   fullSvgText: string,
   geometries: SuggestionGeometry[],
   rootTransform: SvgRootTransform,
-  paddingM = SNIPPET_PADDING_M,
+  paddingMeters = SNIPPET_PADDING_METERS,
 ): string | null {
   const geoBbox = bboxFromSuggestionGeometries(geometries);
   if (!geoBbox) return null;
 
+  const mapScale = parseOcadMapScale(fullSvgText) ?? DEFAULT_MAP_SCALE;
+  const minExtentUnits = metersToMapUnits(SNIPPET_MIN_EXTENT_METERS, mapScale);
+  const paddingUnits = metersToMapUnits(paddingMeters, mapScale);
+
   const [minGx, minGy, maxGx, maxGy] = expandGeoBboxToMinExtent(
     geoBbox,
-    SNIPPET_MIN_EXTENT_M,
+    minExtentUnits,
   );
   const [svgMinX, svgMinY, svgMaxX, svgMaxY] = geoBboxToSvgUser(
-    [minGx - paddingM, minGy - paddingM, maxGx + paddingM, maxGy + paddingM],
+    [
+      minGx - paddingUnits,
+      minGy - paddingUnits,
+      maxGx + paddingUnits,
+      maxGy + paddingUnits,
+    ],
     rootTransform,
   );
 
