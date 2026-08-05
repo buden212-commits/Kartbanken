@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DiffMapPanel, type MapDrawPointerHandlers } from "@/components/diff-map-panel";
 import { screenToSvgPoint } from "@/lib/ocad/map-hit-test";
 import {
@@ -15,7 +15,7 @@ import {
   isValidSuggestionBbox,
   isValidSuggestionLineCoordinates,
   isValidSuggestionPolygonRing,
-  LIVE_MAP_STROKE_SCALE,
+  liveMapRenderOptions,
   normalizeSuggestionBbox,
   renderSuggestionGeometrySvg,
   renderSuggestionObjectsSvg,
@@ -89,6 +89,7 @@ export function SuggestionDetailClient({
   const rootTransformRef = useRef<SvgRootTransform>(IDENTITY_SVG_TRANSFORM);
   const dragRef = useRef<{ start: [number, number]; current: [number, number] } | null>(null);
   const fitRequestIdRef = useRef(0);
+  const autoZoomDoneRef = useRef(false);
   const [fitGeoBbox, setFitGeoBbox] = useState<{
     bbox: [number, number, number, number];
     requestId: number;
@@ -248,6 +249,12 @@ export function SuggestionDetailClient({
     fitRequestIdRef.current += 1;
     setFitGeoBbox({ bbox, requestId: fitRequestIdRef.current });
   }, [displayGeometries]);
+
+  useEffect(() => {
+    if (autoZoomDoneRef.current || editMode || displayGeometries.length === 0) return;
+    autoZoomDoneRef.current = true;
+    zoomToMarkings();
+  }, [displayGeometries, editMode, zoomToMarkings]);
 
   async function patchSuggestion(body: Record<string, unknown>) {
     setLoading(true);
@@ -550,7 +557,7 @@ export function SuggestionDetailClient({
                       label: overlayLabel,
                       selected: true,
                       draft: Boolean(draftGeometry),
-                      strokeScale: LIVE_MAP_STROKE_SCALE,
+                      ...liveMapRenderOptions(),
                     }),
                   }}
                 />
@@ -567,7 +574,7 @@ export function SuggestionDetailClient({
                       sortOrder: obj.sortOrder,
                     })),
                     rootTransform,
-                    { label: overlayLabel, selected: true, strokeScale: LIVE_MAP_STROKE_SCALE },
+                    { label: overlayLabel, selected: true, ...liveMapRenderOptions() },
                   ),
                 }}
               />

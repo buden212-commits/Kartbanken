@@ -16,6 +16,9 @@ type Props = {
   suggestions: SuggestionSummary[];
   canReview: boolean;
   isAdmin: boolean;
+  /** Zoom the area overview map to this suggestion (områdessidan). */
+  onZoomToSuggestion?: (id: string) => void;
+  highlightedSuggestionId?: string | null;
 };
 
 function statusBadgeClass(status: SuggestionSummary["status"]): string {
@@ -36,6 +39,8 @@ export function SuggestionListPanel({
   suggestions,
   canReview,
   isAdmin,
+  onZoomToSuggestion,
+  highlightedSuggestionId = null,
 }: Props) {
   const router = useRouter();
   const [filter, setFilter] = useState<string>("OPEN");
@@ -136,11 +141,34 @@ export function SuggestionListPanel({
       ) : (
         <ul className="mt-4 divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white">
           {filtered.map((s) => (
-            <li key={s.id} className="flex flex-wrap items-start justify-between gap-3 px-4 py-3">
+            <li
+              key={s.id}
+              className={`flex flex-wrap items-start justify-between gap-3 px-4 py-3 ${
+                onZoomToSuggestion ? "cursor-pointer hover:bg-slate-50" : ""
+              } ${highlightedSuggestionId === s.id ? "bg-orange-50/80" : ""}`}
+              onClick={
+                onZoomToSuggestion
+                  ? () => onZoomToSuggestion(s.id)
+                  : undefined
+              }
+              onKeyDown={
+                onZoomToSuggestion
+                  ? (e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onZoomToSuggestion(s.id);
+                      }
+                    }
+                  : undefined
+              }
+              role={onZoomToSuggestion ? "button" : undefined}
+              tabIndex={onZoomToSuggestion ? 0 : undefined}
+            >
               <div className="min-w-0 flex-1">
                 <Link
                   href={`/maps/${mapSlug}/suggestions/${s.id}`}
                   className="font-medium text-ifk-blue hover:underline"
+                  onClick={(e) => e.stopPropagation()}
                 >
                   {s.title?.trim() || SUGGESTION_CATEGORY_LABELS[s.category]}
                   {s.hasAttachment ? " 📷" : ""}
@@ -162,7 +190,10 @@ export function SuggestionListPanel({
                 <button
                   type="button"
                   disabled={deleting === s.id}
-                  onClick={() => void handleDelete(s.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void handleDelete(s.id);
+                  }}
                   className="text-xs text-red-600 hover:underline disabled:opacity-50"
                 >
                   Radera

@@ -13,9 +13,8 @@ import { VersionHistoryList } from "@/components/version-history-list";
 import { CheckoutAreaCta } from "@/components/checkout-area-cta";
 import { CheckoutListPanel } from "@/components/checkout-list-panel";
 import { CheckoutOverviewMap } from "@/components/checkout-overview-map";
-import { SuggestionOverviewMap } from "@/components/suggestion/suggestion-map-overlay";
+import { SuggestionAreaSection } from "@/components/suggestion/suggestion-map-overlay";
 import { CourseListPanel } from "@/components/course/course-list-panel";
-import { SuggestionListPanel } from "@/components/suggestion/suggestion-list-panel";
 import { listSuggestionsForMap, serializeSuggestionSummary, getLatestPublishedVersionNumber } from "@/lib/suggestion/repository";
 import { Role } from "@/lib/roles";
 
@@ -178,14 +177,14 @@ export default async function MapDetailPage({ params }: PageProps) {
         session?.user?.id &&
         role &&
         canCreateMapSuggestion(role) && (
-        <section className="mt-10">
-          <h2 className="text-lg font-medium text-slate-900">Kartförslag på kartan</h2>
-          <SuggestionOverviewMap
-            mapSlug={map.slug}
-            versionId={latestPublishedVersion.id}
-            versionNumber={latestPublishedVersion.versionNumber}
-          />
-        </section>
+        <SuggestionAreaSection
+          mapSlug={map.slug}
+          versionId={latestPublishedVersion.id}
+          versionNumber={latestPublishedVersion.versionNumber}
+          suggestions={suggestionList}
+          canReview={canReviewMapSuggestion(role)}
+          isAdmin={role === Role.ADMIN}
+        />
       )}
 
       {headVersionId && activeCheckouts.length > 0 && (
@@ -218,15 +217,6 @@ export default async function MapDetailPage({ params }: PageProps) {
           mapSlug={map.slug}
           courses={courseList}
           sessionUserId={session.user.id}
-          isAdmin={role === Role.ADMIN}
-        />
-      )}
-
-      {session?.user?.id && role && canCreateMapSuggestion(role) && (
-        <SuggestionListPanel
-          mapSlug={map.slug}
-          suggestions={suggestionList}
-          canReview={canReviewMapSuggestion(role)}
           isAdmin={role === Role.ADMIN}
         />
       )}

@@ -16,6 +16,18 @@ export const SUGGESTION_ORANGE = "#f97316";
 export const SUGGESTION_ORANGE_STROKE = "#c2410c";
 /** Stroke/pin scale for interactive map views (detail, create, overview overlay). */
 export const LIVE_MAP_STROKE_SCALE = 2.5;
+/** Label text scale for interactive map views (relative to stroke scale). */
+export const LIVE_MAP_LABEL_SCALE = 10;
+
+export function liveMapRenderOptions(
+  options?: Omit<SuggestionRenderOptions, "strokeScale" | "labelScale">,
+): SuggestionRenderOptions {
+  return {
+    ...options,
+    strokeScale: LIVE_MAP_STROKE_SCALE,
+    labelScale: LIVE_MAP_LABEL_SCALE,
+  };
+}
 /** Halo stroke for lines/polygons — improves contrast on busy maps. */
 const SUGGESTION_HALO = "#ffffff";
 
@@ -33,10 +45,17 @@ export type SuggestionRenderOptions = {
   draft?: boolean;
   /** Multiplier for stroke widths and pin size (e.g. PDF snippets). */
   strokeScale?: number;
+  /** Multiplier for label font size and label offsets (live map overlays). */
+  labelScale?: number;
 };
 
 function strokeScale(options?: SuggestionRenderOptions): number {
   const scale = options?.strokeScale ?? 1;
+  return scale > 0 ? scale : 1;
+}
+
+function labelScale(options?: SuggestionRenderOptions): number {
+  const scale = options?.labelScale ?? 1;
   return scale > 0 ? scale : 1;
 }
 
@@ -47,9 +66,10 @@ export function renderSuggestionPinSvg(
 ): string {
   const [x, y] = geoToSvgUserPoint(geometry.coordinates, rootTransform);
   const s = strokeScale(options);
+  const ls = labelScale(options);
   const r = (options?.selected ? 22 : 16) * s;
-  const labelOffset = 8 * s;
-  const labelSize = 13 * s;
+  const labelOffset = 8 * s * ls;
+  const labelSize = 13 * s * ls;
   const label = options?.label
     ? `<text x="${x}" y="${y - r - labelOffset}" text-anchor="middle" font-size="${labelSize}" font-weight="700" fill="${SUGGESTION_ORANGE_STROKE}">${escapeXml(options.label)}</text>`
     : "";
@@ -76,10 +96,11 @@ export function renderSuggestionBboxSvg(
   const width = Math.abs(svgMaxX - svgMinX);
   const height = Math.abs(svgMaxY - svgMinY);
   const s = strokeScale(options);
+  const ls = labelScale(options);
   const strokeWidth = (options?.selected ? 6 : 5) * s;
   const fillOpacity = options?.draft ? 0.2 : 0.3;
   const label = options?.label
-    ? `<text x="${x + width / 2}" y="${y - 6 * s}" text-anchor="middle" font-size="${11 * s}" font-weight="600" fill="${SUGGESTION_ORANGE_STROKE}">${escapeXml(options.label)}</text>`
+    ? `<text x="${x + width / 2}" y="${y - 6 * s * ls}" text-anchor="middle" font-size="${11 * s * ls}" font-weight="600" fill="${SUGGESTION_ORANGE_STROKE}">${escapeXml(options.label)}</text>`
     : "";
   return `<g data-suggestion-bbox="true">
     <rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${SUGGESTION_ORANGE}" fill-opacity="${fillOpacity}" stroke="${SUGGESTION_HALO}" stroke-width="${strokeWidth + 3 * s}"/>
@@ -107,13 +128,14 @@ export function renderSuggestionPolygonSvg(
 ): string {
   const points = geoRingToSvgPoints(geometry.ring, rootTransform);
   const s = strokeScale(options);
+  const ls = labelScale(options);
   const strokeWidth = (options?.selected ? 6 : 5) * s;
   const fillOpacity = options?.draft ? 0.2 : 0.3;
   const svgPts = geometry.ring.map(([x, y]) => geoToSvgUserPoint([x, y], rootTransform));
   const cx = svgPts.reduce((sum, [x]) => sum + x, 0) / svgPts.length;
   const cy = svgPts.reduce((sum, [, y]) => sum + y, 0) / svgPts.length;
   const label = options?.label
-    ? `<text x="${cx}" y="${cy - 6 * s}" text-anchor="middle" font-size="${11 * s}" font-weight="600" fill="${SUGGESTION_ORANGE_STROKE}">${escapeXml(options.label)}</text>`
+    ? `<text x="${cx}" y="${cy - 6 * s * ls}" text-anchor="middle" font-size="${11 * s * ls}" font-weight="600" fill="${SUGGESTION_ORANGE_STROKE}">${escapeXml(options.label)}</text>`
     : "";
   return `<g data-suggestion-polygon="true">
     <polygon points="${points}" fill="${SUGGESTION_ORANGE}" fill-opacity="${fillOpacity}" stroke="${SUGGESTION_HALO}" stroke-width="${strokeWidth + 3 * s}" stroke-linejoin="round"/>
@@ -129,11 +151,12 @@ export function renderSuggestionLineSvg(
 ): string {
   const points = geoRingToSvgPoints(geometry.coordinates, rootTransform);
   const s = strokeScale(options);
+  const ls = labelScale(options);
   const strokeWidth = (options?.selected ? 8 : 6) * s;
   const mid = geometry.coordinates[Math.floor(geometry.coordinates.length / 2)]!;
   const [lx, ly] = geoToSvgUserPoint(mid, rootTransform);
   const label = options?.label
-    ? `<text x="${lx}" y="${ly - 10 * s}" text-anchor="middle" font-size="${13 * s}" font-weight="700" fill="${SUGGESTION_ORANGE_STROKE}">${escapeXml(options.label)}</text>`
+    ? `<text x="${lx}" y="${ly - 10 * s * ls}" text-anchor="middle" font-size="${13 * s * ls}" font-weight="700" fill="${SUGGESTION_ORANGE_STROKE}">${escapeXml(options.label)}</text>`
     : "";
   return `<g data-suggestion-line="true">
     <polyline points="${points}" fill="none" stroke="${SUGGESTION_HALO}" stroke-width="${strokeWidth + 5 * s}" stroke-linecap="round" stroke-linejoin="round"/>

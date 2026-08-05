@@ -153,8 +153,10 @@ export function MapLayerPanel({
   onToggle,
   onShowAll,
   onHideAll,
-}: Props) {
+  defaultCollapsed = true,
+}: Props & { defaultCollapsed?: boolean }) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
 
   const filteredLayers = useMemo(
     () => filterLayerTree(layers, searchQuery),
@@ -168,50 +170,62 @@ export function MapLayerPanel({
   const searching = searchQuery.trim().length > 0;
 
   return (
-    <div className="border-t border-slate-200 bg-slate-50 px-3 py-2">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <h4 className="text-xs font-medium text-slate-700">
+    <div className="border-t border-slate-200 bg-slate-50">
+      <button
+        type="button"
+        onClick={() => setCollapsed((value) => !value)}
+        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-slate-100/80"
+        aria-expanded={!collapsed}
+      >
+        <span className="text-xs font-medium text-slate-700">
           Lager ({visibleCount}/{flat.length})
-        </h4>
-        <div className="flex gap-1 text-[11px]">
-          <button
-            type="button"
-            onClick={onShowAll}
-            className="rounded border border-slate-300 px-1.5 py-0.5 text-slate-600 transition hover:border-ifk-blue hover:text-ifk-blue"
-          >
-            Visa alla
-          </button>
-          <button
-            type="button"
-            onClick={onHideAll}
-            className="rounded border border-slate-300 px-1.5 py-0.5 text-slate-600 transition hover:border-ifk-blue hover:text-ifk-blue"
-          >
-            Dölj alla
-          </button>
+        </span>
+        <span className="text-[10px] text-slate-400" aria-hidden>
+          {collapsed ? "▸" : "▾"}
+        </span>
+      </button>
+      {!collapsed && (
+        <div className="border-t border-slate-200 px-3 pb-2 pt-2">
+          <div className="mb-2 flex justify-end gap-1 text-[11px]">
+            <button
+              type="button"
+              onClick={onShowAll}
+              className="rounded border border-slate-300 px-1.5 py-0.5 text-slate-600 transition hover:border-ifk-blue hover:text-ifk-blue"
+            >
+              Visa alla
+            </button>
+            <button
+              type="button"
+              onClick={onHideAll}
+              className="rounded border border-slate-300 px-1.5 py-0.5 text-slate-600 transition hover:border-ifk-blue hover:text-ifk-blue"
+            >
+              Dölj alla
+            </button>
+          </div>
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Sök symbol, t.ex. 601.002 eller magnetisk…"
+            className="form-input mb-2 w-full py-1 text-xs"
+          />
+          {filteredLayers.length === 0 ? (
+            <p className="py-2 text-xs text-slate-500">Inga lager matchar sökningen.</p>
+          ) : (
+            <ul className="max-h-48 space-y-1 overflow-y-auto text-xs">
+              {filteredLayers.map((layer) => (
+                <LayerTreeItem
+                  key={layer.id}
+                  layer={layer}
+                  visibility={visibility}
+                  onToggle={onToggle}
+                  depth={0}
+                  forceExpanded={searching}
+                />
+              ))}
+            </ul>
+          )}
         </div>
-      </div>
-      <input
-        type="search"
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        placeholder="Sök symbol, t.ex. 601.002 eller magnetisk…"
-        className="form-input mb-2 w-full py-1 text-xs"
-      />
-      {filteredLayers.length === 0 ? (
-        <p className="py-2 text-xs text-slate-500">Inga lager matchar sökningen.</p>
-      ) : (
-        <ul className="max-h-48 space-y-1 overflow-y-auto text-xs">
-          {filteredLayers.map((layer) => (
-            <LayerTreeItem
-              key={layer.id}
-              layer={layer}
-              visibility={visibility}
-              onToggle={onToggle}
-              depth={0}
-              forceExpanded={searching}
-            />
-          ))}
-        </ul>
       )}
     </div>
   );

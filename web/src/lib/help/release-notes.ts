@@ -8,6 +8,16 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-05",
+    title: "Kartförslag — kartvy och lager",
+    items: [
+      "Etiketter på kartförslag (kategori/rubrik) syns 10× tydligare på kartan",
+      "Klicka på ett kartförslag i listan på områdessidan för att zooma kartan till markeringen",
+      "Detaljsidan zoomar automatiskt till markeringen när du öppnar förslaget",
+      "Lagerpanelen under kartan är ihopfälld som standard — klicka «Lager» för att expandera",
+    ],
+  },
+  {
+    date: "2026-08-05",
     title: "Kartvy — högre maxzoom",
     items: [
       "Alla kartor kan nu zoomas in till 4000 % (tidigare 3000 %)",

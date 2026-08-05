@@ -1,15 +1,16 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { DiffMapPanel } from "@/components/diff-map-panel";
 import { type SvgRootTransform } from "@/lib/ocad/svg-coords";
 import {
-  LIVE_MAP_STROKE_SCALE,
+  bboxFromSuggestionGeometries,
+  liveMapRenderOptions,
   renderSuggestionGeometrySvg,
 } from "@/lib/suggestion/geometry";
-import type { SuggestionOverlayItem } from "@/lib/suggestion/types";
+import type { SuggestionOverlayItem, SuggestionSummary } from "@/lib/suggestion/types";
+import { SuggestionListPanel } from "@/components/suggestion/suggestion-list-panel";
 
 export function useSuggestionOverlays(mapSlug: string, mapVersionId: string) {
   const [overlays, setOverlays] = useState<SuggestionOverlayItem[]>([]);
@@ -58,9 +59,11 @@ function SuggestionOverlayShape({
       style={{ cursor: "pointer" }}
       data-suggestion-id={item.id}
       dangerouslySetInnerHTML={{
-        __html: renderSuggestionGeometrySvg(item.geometry, rootTransform, {
-          strokeScale: LIVE_MAP_STROKE_SCALE,
-        }),
+        __html: renderSuggestionGeometrySvg(
+          item.geometry,
+          rootTransform,
+          liveMapRenderOptions({ label: item.categoryLabel }),
+        ),
       }}
     />
   );
@@ -132,10 +135,15 @@ export function SuggestionOverviewMap({
   mapSlug,
   versionId,
   versionNumber,
+  fitGeoBbox = null,
 }: {
   mapSlug: string;
   versionId: string;
   versionNumber: number;
+  fitGeoBbox?: {
+    bbox: [number, number, number, number];
+    requestId: number;
+  } | null;
 }) {
   const { renderOverlay, toggle } = useSuggestionMapOverlayControls(mapSlug, versionId);
 
@@ -154,7 +162,74 @@ export function SuggestionOverviewMap({
         mapSlug={mapSlug}
         versionId={versionId}
         renderSvgOverlay={renderOverlay}
+        fitGeoBbox={fitGeoBbox}
       />
     </div>
+  );
+}
+
+export function SuggestionAreaSection({
+  mapSlug,
+  versionId,
+  versionNumber,
+  suggestions,
+  canReview,
+  isAdmin,
+}: {
+  mapSlug: string;
+  versionId: string;
+  versionNumber: number;
+  suggestions: SuggestionSummary[];
+  canReview: boolean;
+  isAdmin: boolean;
+}) {
+  const { overlays } = useSuggestionOverlays(mapSlug, versionId);
+  const fitRequestIdRef = useRef(0);
+  const [fitGeoBbox, setFitGeoBbox] = useState<{
+    bbox: [number, number, number, number];
+    requestId: number;
+  } | null>(null);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+
+  const zoomToSuggestion = useCallback(
+    (suggestionId: string) => {
+      const geometries = overlays
+        .filter((item) => item.id === suggestionId)
+        .map((item) => item.geometry);
+      const bbox = bboxFromSuggestionGeometries(geometries);
+      if (!bbox) return;
+      fitRequestIdRef.current += 1;
+      setFitGeoBbox({ bbox, requestId: fitRequestIdRef.current });
+      setHighlightedId(suggestionId);
+    },
+    [overlays],
+  );
+
+  return (
+    <>
+      <section className="mt-10">
+        <h2 className="text-lg font-medium text-slate-900">Kartförslag på kartan</h2>
+        <div className="mt-2">
+          <SuggestionOverviewMap
+            mapSlug={mapSlug}
+            versionId={versionId}
+            versionNumber={versionNumber}
+            fitGeoBbox={fitGeoBbox}
+          />
+        </div>
+        <p className="mt-2 text-xs text-slate-500">
+          Klicka på ett kartförslag i listan nedan för att zooma kartan till markeringen.
+        </p>
+      </section>
+
+      <SuggestionListPanel
+        mapSlug={mapSlug}
+        suggestions={suggestions}
+        canReview={canReview}
+        isAdmin={isAdmin}
+        onZoomToSuggestion={zoomToSuggestion}
+        highlightedSuggestionId={highlightedId}
+      />
+    </>
   );
 }

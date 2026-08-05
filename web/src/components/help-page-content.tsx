@@ -453,8 +453,8 @@ export async function HelpPageContent() {
               "Välj punkt, rektangel, polygon eller linje och markera på kartan (orange overlay)",
               "Lägg till flera markeringar med «Lägg till markering» innan du skickar",
               "Välj kategori, skriv beskrivning (minst 2 tecken) och bifoga valfritt foto",
-              "Öppna och pågående förslag visas på kartan — klicka markeringen eller använd listan på områdessidan",
-              "På detaljsidan: «Zooma till markering» fokuserar kartan på förslagets markering(ar)",
+              "Öppna och pågående förslag visas på kartan — klicka markeringen eller ett förslag i listan på områdessidan (zoomar kartan till markeringen)",
+              "På detaljsidan zoomas kartan automatiskt till markeringen; «Zooma till markering» finns kvar om du vill fokusera om",
               "Växla «Visa kartförslag» i kartvyn för att dölja lagret",
               "Redaktörer markerar som Pågår, Införd eller Avvisad och kan koppla checkout",
               "Du kan redigera egna öppna förslag (text och markering) via Redigera på detaljsidan",
@@ -571,11 +571,13 @@ export async function HelpPageContent() {
 
           <h3 className="font-medium text-slate-900">Lager</h3>
           <p>
-            Under kartan finns panelen <strong>Lager</strong> (kartvy och diff). Synlighet följer
-            OCAD-filens lagerinställningar — lager som är dolda i filen (<code>v=0</code> i
-            symbolträdet) startar avstängda och kan markeras som <em>(dolt)</em>. Saknas
-            synlighetsflagga i filen antas lagret vara synligt, som i OCAD. Använd sök i
-            lagerpanelen (t.ex. <strong>301.004</strong>) och kryssa i lagret om något saknas.
+            Under kartan finns panelen <strong>Lager</strong> (kartvy och diff). Den är{" "}
+            <strong>ihopfälld som standard</strong> — klicka på raden «Lager» för att visa
+            sökning och kryssrutor. Synlighet följer OCAD-filens lagerinställningar — lager som är
+            dolda i filen (<code>v=0</code> i symbolträdet) startar avstängda och kan markeras som{" "}
+            <em>(dolt)</em>. Saknas synlighetsflagga i filen antas lagret vara synligt, som i OCAD.
+            Använd sök i lagerpanelen (t.ex. <strong>301.004</strong>) och kryssa i lagret om något
+            saknas.
           </p>
 
           <h3 className="font-medium text-slate-900">Min position (GPS)</h3>
