@@ -14,6 +14,7 @@ export const releaseNotes: ReleaseNote[] = [
       "Kontrollista visar start och mål utöver numrerade kontroller",
       "Radera-verktyget tar bort kontroller korrekt och numrerar om efterföljande kontroller",
       "Efter radering av bana stannar du kvar i banredigeraren",
+      "Snabbare textinmatning när du skriver banans namn",
     ],
   },
   {

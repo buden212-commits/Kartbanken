@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { DiffMapPanel, type MapDrawPointerHandlers } from "@/components/diff-map-panel";
 import { CourseControlList } from "@/components/course/course-control-list";
 import { CoursePdfPanel } from "@/components/course/course-pdf-panel";
@@ -54,6 +54,42 @@ function newClientId(): string {
   return `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
+function CourseNameInput({
+  value,
+  disabled,
+  onLiveChange,
+  onDirty,
+}: {
+  value: string;
+  disabled: boolean;
+  onLiveChange: (name: string) => void;
+  onDirty: () => void;
+}) {
+  const [local, setLocal] = useState(value);
+
+  useEffect(() => {
+    setLocal(value);
+  }, [value]);
+
+  function handleChange(e: ChangeEvent<HTMLInputElement>) {
+    const next = e.target.value;
+    setLocal(next);
+    onLiveChange(next);
+    onDirty();
+  }
+
+  return (
+    <input
+      type="text"
+      value={local}
+      onChange={handleChange}
+      disabled={disabled}
+      className="rounded border border-slate-300 px-2 py-1 text-sm"
+      placeholder="Bannamn"
+    />
+  );
+}
+
 function detailToEditorObjects(
   objects: Array<{
     id: string;
@@ -82,6 +118,7 @@ export function CourseEditorClient({
   const router = useRouter();
   const [courseId, setCourseId] = useState<string | null>(initialCourseId ?? null);
   const [courseName, setCourseName] = useState("Ny bana");
+  const courseNameRef = useRef("Ny bana");
   const [isPublic, setIsPublic] = useState(false);
   const [objects, setObjects] = useState<EditorObject[]>([]);
   const [courses, setCourses] = useState<CourseSummary[]>([]);
@@ -153,6 +190,7 @@ export function CourseEditorClient({
       const loadedObjects = migrateLegacyControlNumbers(detailToEditorObjects(data.objects));
       setCourseId(data.id);
       setCourseName(data.name);
+      courseNameRef.current = data.name;
       setIsPublic(data.isPublic);
       setObjects(loadedObjects);
       setDirty(false);
@@ -492,7 +530,7 @@ export function CourseEditorClient({
         const createRes = await fetch(`/api/maps/${mapSlug}/courses`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: courseName.trim() || "Ny bana", isPublic }),
+          body: JSON.stringify({ name: courseNameRef.current.trim() || "Ny bana", isPublic }),
         });
         if (!createRes.ok) {
           const data = await createRes.json().catch(() => ({}));
@@ -505,7 +543,7 @@ export function CourseEditorClient({
         const patchRes = await fetch(`/api/maps/${mapSlug}/courses/${id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: courseName.trim(), isPublic }),
+          body: JSON.stringify({ name: courseNameRef.current.trim(), isPublic }),
         });
         if (!patchRes.ok) {
           const data = await patchRes.json().catch(() => ({}));
@@ -550,6 +588,7 @@ export function CourseEditorClient({
     if (dirty && !window.confirm("Osparade ändringar går förlorade. Fortsätta?")) return;
     setCourseId(null);
     setCourseName("Ny bana");
+    courseNameRef.current = "Ny bana";
     setIsPublic(false);
     setObjects([]);
     setDirty(false);
@@ -572,6 +611,7 @@ export function CourseEditorClient({
       }
       setCourseId(null);
       setCourseName("Ny bana");
+      courseNameRef.current = "Ny bana";
       setIsPublic(false);
       setObjects([]);
       setDirty(false);
@@ -714,16 +754,13 @@ export function CourseEditorClient({
 
   const saveBar = (
     <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2">
-      <input
-        type="text"
+      <CourseNameInput
         value={courseName}
-        onChange={(e) => {
-          setCourseName(e.target.value);
-          setDirty(true);
-        }}
         disabled={!canEdit}
-        className="rounded border border-slate-300 px-2 py-1 text-sm"
-        placeholder="Bannamn"
+        onLiveChange={(name) => {
+          courseNameRef.current = name;
+        }}
+        onDirty={() => setDirty(true)}
       />
       <label className="flex items-center gap-1 text-xs text-slate-600">
         <input
