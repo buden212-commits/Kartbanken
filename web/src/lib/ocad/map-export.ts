@@ -1,4 +1,5 @@
 import { formatMapScaleExportLabel } from "@/lib/course/pdf-scale";
+import type { OcdSuggestionSymbolMapping } from "@/lib/ocad/ocad-suggestion-export";
 import { buildKartramFrameMarkup, parseKartramFromSvg } from "./kartram";
 import type { OcadExportVersion } from "./ocad-export-shared";
 import { parseOcadMapScale } from "./svg-utils";
@@ -14,6 +15,8 @@ export type ExportSettings = {
   orientation: ExportOrientation;
   outputFormat: ExportOutputFormat;
   ocadVersion: OcadExportVersion;
+  /** Include open/in-progress kartförslag overlays in PDF and GeoTIFF exports. */
+  includeSuggestions: boolean;
 };
 
 export type ExportFrame = {
@@ -224,6 +227,7 @@ export function buildClippedExportSvg(
   pixelWidth: number,
   pixelHeight: number,
   bottomLeftMarkup?: string,
+  rotatedOverlayMarkup?: string,
 ): string {
   const fillMatch = fullSvgText.match(/<svg[^>]*\bfill=["']([^"']+)["']/i);
   const fill = fillMatch?.[1] ?? "transparent";
@@ -245,9 +249,10 @@ export function buildClippedExportSvg(
     (isPrebuiltExport
       ? ""
       : buildMapScaleInfoSvg(frame, parseOcadMapScale(fullSvgText) ?? 15000));
+  const overlayMarkup = rotatedOverlayMarkup?.trim() ? `\n${rotatedOverlayMarkup}\n` : "";
   const rotatedContent = isPrebuiltExport
     ? inner
-    : `<g transform="${pdfExportRotationTransform(frame)}">\n${inner}\n${kartramMarkup}\n</g>`;
+    : `<g transform="${pdfExportRotationTransform(frame)}">\n${inner}\n${kartramMarkup}${overlayMarkup}</g>`;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" fill="${fill}" viewBox="${x} ${y} ${width} ${height}" width="${pixelWidth}" height="${pixelHeight}">
@@ -278,12 +283,20 @@ export async function downloadMapPdf(
   fullSvgText: string,
   frame: ExportFrame,
   fileName: string,
+  options?: { suggestionOverlaySvg?: string },
 ): Promise<void> {
   validateExportFrame(frame);
 
   const pixelWidth = mmToPx(frame.widthMm);
   const pixelHeight = mmToPx(frame.heightMm);
-  const exportSvg = buildClippedExportSvg(fullSvgText, frame, pixelWidth, pixelHeight);
+  const exportSvg = buildClippedExportSvg(
+    fullSvgText,
+    frame,
+    pixelWidth,
+    pixelHeight,
+    undefined,
+    options?.suggestionOverlaySvg,
+  );
   const img = await loadSvgImage(exportSvg);
 
   const canvas = document.createElement("canvas");
@@ -319,7 +332,11 @@ export async function downloadMapOcd(
   frame: ExportFrame,
   ocadVersion: OcadExportVersion,
   fileName: string,
-): Promise<{ versionWarning?: string }> {
+  options?: {
+    includeSuggestions?: boolean;
+    suggestionSymbols?: OcdSuggestionSymbolMapping;
+  },
+): Promise<{ versionWarning?: string; suggestionWarnings?: string }> {
   validateExportFrame(frame);
 
   const response = await fetch(`/api/maps/${mapSlug}/versions/${versionId}/export-ocd`, {
@@ -333,6 +350,8 @@ export async function downloadMapOcd(
         heightUnits: frame.heightUnits,
       },
       ocadVersion,
+      includeSuggestions: options?.includeSuggestions,
+      suggestionSymbols: options?.suggestionSymbols,
     }),
   });
 
@@ -346,6 +365,10 @@ export async function downloadMapOcd(
   const versionWarning = versionWarningHeader
     ? decodeURIComponent(versionWarningHeader)
     : undefined;
+  const suggestionWarningsHeader = response.headers.get("X-Ocad-Suggestion-Warnings");
+  const suggestionWarnings = suggestionWarningsHeader
+    ? decodeURIComponent(suggestionWarningsHeader)
+    : undefined;
 
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -354,7 +377,7 @@ export async function downloadMapOcd(
   link.click();
   URL.revokeObjectURL(url);
 
-  return { versionWarning };
+  return { versionWarning, suggestionWarnings };
 }
 
 export async function downloadMapGeoTiff(
@@ -363,12 +386,20 @@ export async function downloadMapGeoTiff(
   fullSvgText: string,
   frame: ExportFrame,
   fileName: string,
+  options?: { suggestionOverlaySvg?: string },
 ): Promise<void> {
   validateExportFrame(frame);
 
   const pixelWidth = mmToPx(frame.widthMm);
   const pixelHeight = mmToPx(frame.heightMm);
-  const exportSvg = buildClippedExportSvg(fullSvgText, frame, pixelWidth, pixelHeight);
+  const exportSvg = buildClippedExportSvg(
+    fullSvgText,
+    frame,
+    pixelWidth,
+    pixelHeight,
+    undefined,
+    options?.suggestionOverlaySvg,
+  );
   const img = await loadSvgImage(exportSvg);
 
   const canvas = document.createElement("canvas");

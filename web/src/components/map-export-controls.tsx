@@ -22,6 +22,8 @@ type Props = {
   onCancel: () => void;
   exporting: boolean;
   error: string | null;
+  /** When set, shows checkbox to include kartförslag in PDF/GeoTIFF (count may be unknown until export). */
+  suggestionOverlayCount?: number;
 };
 
 export function MapExportControls({
@@ -31,7 +33,12 @@ export function MapExportControls({
   onCancel,
   exporting,
   error,
+  suggestionOverlayCount,
 }: Props) {
+  const showSuggestionOption =
+    settings.outputFormat === "pdf" ||
+    settings.outputFormat === "geotiff" ||
+    settings.outputFormat === "ocd";
   const exportButtonLabel =
     settings.outputFormat === "ocd"
       ? exporting
@@ -144,6 +151,23 @@ export function MapExportControls({
 
         <p className="text-xs text-slate-400">{formatExportLabel(settings)}</p>
 
+        {showSuggestionOption && (
+          <label className="flex cursor-pointer items-center gap-2 self-end pb-1 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={settings.includeSuggestions}
+              onChange={(e) =>
+                onChange({ ...settings, includeSuggestions: e.target.checked })
+              }
+              className="rounded border-slate-300"
+            />
+            Inkludera kartförslag
+            {suggestionOverlayCount != null && suggestionOverlayCount > 0 && (
+              <span className="text-xs text-slate-400">({suggestionOverlayCount})</span>
+            )}
+          </label>
+        )}
+
         <div className="ml-auto flex gap-2">
           <button
             type="button"
@@ -167,9 +191,14 @@ export function MapExportControls({
       <p className="mt-2 text-xs text-slate-500">
         Dra ramen på kartan till önskat utsnitt innan du exporterar.
         {settings.outputFormat === "ocd" &&
-          " OCD-exporten sparar objekt inom ramen och behåller symboler och inställningar från originalfilen."}
+          (settings.includeSuggestions
+            ? " OCD-exporten sparar objekt inom ramen. Med «Inkludera kartförslag» läggs markeringar till som OCAD-objekt — du väljer symbol/lager i dialogen (OCAD 12/2018)."
+            : " OCD-exporten sparar objekt inom ramen och behåller symboler och inställningar från originalfilen.")}
         {settings.outputFormat === "geotiff" &&
           " GeoTIFF sparas med kartans projicerade koordinatsystem (EPSG) för det valda utsnittet."}
+        {showSuggestionOption &&
+          settings.includeSuggestions &&
+          " Öppna och pågående kartförslag för versionen ritas ovanpå kartan i exporten."}
       </p>
 
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}

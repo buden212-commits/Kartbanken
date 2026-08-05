@@ -8,6 +8,7 @@ import type {
   SuggestionGeometry,
   SuggestionLineGeometry,
   SuggestionObjectDto,
+  SuggestionOverlayItem,
   SuggestionPointGeometry,
   SuggestionPolygonGeometry,
 } from "./types";
@@ -191,6 +192,26 @@ export function renderSuggestionObjectsSvg(
   return objects
     .map((obj) => renderSuggestionGeometrySvg(obj.geometry, rootTransform, options))
     .join("");
+}
+
+/** Orange kartförslag overlay for PDF/GeoTIFF export (same styling as live map). */
+export function buildSuggestionExportOverlaySvg(
+  overlays: SuggestionOverlayItem[],
+  rootTransform: SvgRootTransform,
+): string {
+  if (overlays.length === 0) return "";
+
+  const markup = overlays
+    .map((item) =>
+      renderSuggestionGeometrySvg(
+        item.geometry,
+        rootTransform,
+        liveMapRenderOptions({ label: item.categoryLabel }),
+      ),
+    )
+    .join("");
+
+  return `<g data-suggestion-export-overlay="true">\n${markup}\n</g>`;
 }
 
 /** Minimum bbox side length in map coordinates (meters). */

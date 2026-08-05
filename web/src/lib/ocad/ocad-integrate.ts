@@ -1,4 +1,5 @@
 import { createRequire } from "module";
+import { encodeTdPoly } from "./ocad-object-create";
 
 const require = createRequire(import.meta.url);
 const FileHeader = require("ocad2geojson/src/ocad-reader/file-header") as new (
@@ -55,6 +56,14 @@ const OBJECT_INDEX_LEN_OFFSET = 20;
 const OBJECT_INDEX_SYM_OFFSET = 24;
 const OBJECT_INDEX_OBJTYPE_OFFSET = 28;
 const OBJECT_INDEX_STATUS_OFFSET = 30;
+
+export type NewObjectSpec = {
+  objectBytes: Buffer;
+  sym: number;
+  objType: number;
+  len: number;
+  rc: { minX: number; minY: number; maxX: number; maxY: number };
+};
 
 export type ObjectIndexEntryInfo = {
   objectIndex: number;
@@ -361,6 +370,79 @@ export function appendObjectsFromCheckin(
   }
 
   return { buffer, appended, failed, indexMap };
+}
+
+function findIndexEntryTemplateOffset(buffer: Buffer): number | null {
+  let templateOffset: number | null = null;
+  iterateAllIndexSlots(buffer, (slot) => {
+    if (templateOffset != null) return;
+    const status = buffer.readUInt8(slot.entryOffset + OBJECT_INDEX_STATUS_OFFSET);
+    const pos = buffer.readInt32LE(slot.entryOffset + OBJECT_INDEX_POS_OFFSET);
+    if (status > 0 && status < 3 && pos > 0) {
+      templateOffset = slot.entryOffset;
+    }
+  });
+  return templateOffset;
+}
+
+function writeObjectIndexRc(
+  buffer: Buffer,
+  entryOffset: number,
+  rc: NewObjectSpec["rc"],
+): void {
+  const [minXEnc, minYEnc] = encodeTdPoly(rc.minX, rc.minY);
+  const [maxXEnc, maxYEnc] = encodeTdPoly(rc.maxX, rc.maxY);
+  buffer.writeInt32LE(minXEnc, entryOffset);
+  buffer.writeInt32LE(minYEnc, entryOffset + 4);
+  buffer.writeInt32LE(maxXEnc, entryOffset + 8);
+  buffer.writeInt32LE(maxYEnc, entryOffset + 12);
+}
+
+/** Appends newly serialized object bytes and registers them in the object index. */
+export function appendNewObjects(
+  headBuffer: Buffer,
+  objects: NewObjectSpec[],
+): { buffer: Buffer; appended: number; objectIndices: number[] } {
+  if (objects.length === 0) {
+    return { buffer: headBuffer, appended: 0, objectIndices: [] };
+  }
+
+  let buffer = Buffer.from(headBuffer);
+  const templateEntryOffset = findIndexEntryTemplateOffset(buffer);
+  const objectIndices: number[] = [];
+  let appended = 0;
+
+  for (const spec of objects) {
+    const allocated = allocateIndexSlot(buffer);
+    buffer = Buffer.from(allocated.buffer);
+    const slot = allocated.slot;
+
+    const newPos = buffer.length;
+    buffer = Buffer.concat([buffer, spec.objectBytes]);
+
+    if (templateEntryOffset != null) {
+      buffer.copy(
+        buffer,
+        slot.entryOffset,
+        templateEntryOffset,
+        templateEntryOffset + OBJECT_INDEX_ENTRY_SIZE,
+      );
+    } else {
+      buffer.fill(0, slot.entryOffset, slot.entryOffset + OBJECT_INDEX_ENTRY_SIZE);
+    }
+
+    writeObjectIndexRc(buffer, slot.entryOffset, spec.rc);
+    buffer.writeInt32LE(newPos, slot.entryOffset + OBJECT_INDEX_POS_OFFSET);
+    buffer.writeInt32LE(spec.len, slot.entryOffset + OBJECT_INDEX_LEN_OFFSET);
+    buffer.writeInt32LE(spec.sym, slot.entryOffset + OBJECT_INDEX_SYM_OFFSET);
+    buffer.writeUInt8(spec.objType, slot.entryOffset + OBJECT_INDEX_OBJTYPE_OFFSET);
+    buffer.writeUInt8(1, slot.entryOffset + OBJECT_INDEX_STATUS_OFFSET);
+
+    objectIndices.push(slot.objectIndex);
+    appended++;
+  }
+
+  return { buffer, appended, objectIndices };
 }
 
 export function readActiveObjectIndices(buffer: Buffer): Set<number> {

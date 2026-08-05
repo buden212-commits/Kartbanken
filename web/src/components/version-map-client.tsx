@@ -26,7 +26,7 @@ export function VersionMapClient({
   canSuggest,
 }: Props) {
   const viewerUrl = `/maps/${mapSlug}/versions/${versionId}/viewer`;
-  const { renderOverlay, toggle } = useSuggestionMapOverlayControls(mapSlug, versionId);
+  const { renderOverlay, toggle, overlays } = useSuggestionMapOverlayControls(mapSlug, versionId);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
@@ -77,6 +77,7 @@ export function VersionMapClient({
           versionId={versionId}
           exportEnabled
           renderSvgOverlay={renderOverlay}
+          suggestionOverlays={overlays}
         />
       </div>
     </div>

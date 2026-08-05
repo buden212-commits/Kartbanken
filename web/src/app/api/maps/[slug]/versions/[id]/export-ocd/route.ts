@@ -6,10 +6,16 @@ import {
 } from "@/lib/maps/version-lookup";
 import { cropOcadBuffer } from "@/lib/ocad/ocad-export-server";
 import {
+  appendSuggestionsToOcadBuffer,
+  validateOcdSuggestionSymbolMapping,
+  type OcdSuggestionSymbolMapping,
+} from "@/lib/ocad/ocad-suggestion-export";
+import {
   svgExportFrameToGeoBbox,
   type OcadExportVersion,
   type SvgExportFrame,
 } from "@/lib/ocad/ocad-export-shared";
+import { listSuggestionOverlaysForVersion } from "@/lib/suggestion/repository";
 import { prisma } from "@/lib/prisma";
 import { readStoredFile } from "@/lib/storage";
 import { createRequire } from "module";
@@ -32,6 +38,8 @@ type RouteParams = { params: Promise<{ slug: string; id: string }> };
 type ExportOcdRequest = {
   svgFrame: SvgExportFrame;
   ocadVersion: OcadExportVersion;
+  includeSuggestions?: boolean;
+  suggestionSymbols?: OcdSuggestionSymbolMapping;
 };
 
 function parseExportRequest(body: unknown): ExportOcdRequest {
@@ -39,7 +47,7 @@ function parseExportRequest(body: unknown): ExportOcdRequest {
     throw new Error("Ogiltig exportförfrågan");
   }
 
-  const { svgFrame, ocadVersion } = body as ExportOcdRequest;
+  const { svgFrame, ocadVersion, includeSuggestions, suggestionSymbols } = body as ExportOcdRequest;
   if (!svgFrame || typeof svgFrame !== "object") {
     throw new Error("Exportområde saknas");
   }
@@ -60,7 +68,11 @@ function parseExportRequest(body: unknown): ExportOcdRequest {
     throw new Error("Exportområdet har ogiltig storlek");
   }
 
-  return { svgFrame, ocadVersion };
+  if (includeSuggestions && !validateOcdSuggestionSymbolMapping(suggestionSymbols)) {
+    throw new Error("Ogiltig symbolmappning för kartförslag");
+  }
+
+  return { svgFrame, ocadVersion, includeSuggestions: !!includeSuggestions, suggestionSymbols };
 }
 
 export async function POST(request: Request, { params }: RouteParams) {
@@ -102,6 +114,27 @@ export async function POST(request: Request, { params }: RouteParams) {
       targetVersion: exportRequest.ocadVersion,
     });
 
+    let outputBuffer = result.buffer;
+    let appendedSuggestions = 0;
+    const suggestionWarnings: string[] = [];
+
+    if (exportRequest.includeSuggestions && exportRequest.suggestionSymbols) {
+      const overlays = await listSuggestionOverlaysForVersion(lookup.map.id, version.id);
+      const geometries = overlays.map((item) => item.geometry);
+      if (geometries.length === 0) {
+        throw new Error("Inga öppna eller pågående kartförslag att exportera.");
+      }
+
+      const appendResult = await appendSuggestionsToOcadBuffer(
+        outputBuffer,
+        geometries,
+        exportRequest.suggestionSymbols,
+      );
+      outputBuffer = appendResult.buffer;
+      appendedSuggestions = appendResult.appended;
+      suggestionWarnings.push(...appendResult.warnings);
+    }
+
     const baseName = version.originalFilename.replace(/\.ocd$/i, "") || "karta";
     const fileName = `${baseName}-export-v${exportRequest.ocadVersion}.ocd`;
 
@@ -111,21 +144,32 @@ export async function POST(request: Request, { params }: RouteParams) {
       ocadVersion: exportRequest.ocadVersion,
       keptObjects: result.keptObjects,
       removedObjects: result.removedObjects,
+      appendedSuggestions,
     });
 
     const headers: Record<string, string> = {
       "Content-Type": "application/octet-stream",
       "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"`,
-      "Content-Length": String(result.buffer.byteLength),
+      "Content-Length": String(outputBuffer.byteLength),
       "X-Ocad-Kept-Objects": String(result.keptObjects),
       "X-Ocad-Removed-Objects": String(result.removedObjects),
     };
+
+    if (appendedSuggestions > 0) {
+      headers["X-Ocad-Appended-Suggestions"] = String(appendedSuggestions);
+    }
+
+    if (suggestionWarnings.length > 0) {
+      headers["X-Ocad-Suggestion-Warnings"] = encodeURIComponent(
+        suggestionWarnings.slice(0, 5).join(" "),
+      );
+    }
 
     if (result.versionWarning) {
       headers["X-Ocad-Version-Warning"] = encodeURIComponent(result.versionWarning);
     }
 
-    return new NextResponse(new Uint8Array(result.buffer), { headers });
+    return new NextResponse(new Uint8Array(outputBuffer), { headers });
   } catch (err) {
     console.error("OCD export failed:", err);
     return NextResponse.json(

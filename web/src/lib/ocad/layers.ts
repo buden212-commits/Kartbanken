@@ -7,6 +7,8 @@ export type OcadMapLayer = {
   objectCount: number;
   kind: "group" | "symbol";
   symbolNum?: number;
+  /** OCAD symbol type: 1 point, 2 line, 3 area, 7 rectangle */
+  symbolType?: number;
   drawOrder?: number;
   minObjectIndex?: number;
   children?: OcadMapLayer[];
@@ -35,6 +37,7 @@ type OcadSymbol = {
   number?: string;
   description?: string;
   group?: number;
+  type?: number;
   colors?: number[];
   symbolTreeGroup?: number[];
   isHidden: () => boolean;
@@ -181,6 +184,7 @@ function buildSymbolSubLayers(
       id: `g${groupId}-s${symNum}`,
       groupId,
       symbolNum: symNum,
+      symbolType: sym.type,
       kind: "symbol",
       name: symbolLabel(sym),
       visible: groupVisible && !sym.isHidden(),
@@ -329,7 +333,7 @@ export function collectSymbolLayersForRender(layers: OcadMapLayer[]): OcadMapLay
     .sort(compareSymbolLayers);
 }
 
-export const OCAD_LAYERS_FORMAT_VERSION = 5;
+export const OCAD_LAYERS_FORMAT_VERSION = 6;
 
 export function layersMetadataForSvg(layers: OcadMapLayer[]): OcadMapLayer[] {
   return layers.map((layer) => ({
@@ -341,6 +345,7 @@ export function layersMetadataForSvg(layers: OcadMapLayer[]): OcadMapLayer[] {
     objectCount: layer.objectCount,
     kind: layer.kind,
     symbolNum: layer.symbolNum,
+    symbolType: layer.symbolType,
     children: layer.children?.map((child) => ({
       id: child.id,
       groupId: child.groupId,
@@ -350,6 +355,7 @@ export function layersMetadataForSvg(layers: OcadMapLayer[]): OcadMapLayer[] {
       objectCount: child.objectCount,
       kind: child.kind,
       symbolNum: child.symbolNum,
+      symbolType: child.symbolType,
       drawOrder: child.drawOrder,
     })),
   }));

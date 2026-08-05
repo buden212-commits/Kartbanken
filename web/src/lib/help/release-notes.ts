@@ -8,6 +8,23 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-05",
+    title: "Export — kartförslag i OCD",
+    items: [
+      "OCD-export kan inkludera öppna och pågående kartförslag som riktiga OCAD-objekt (kryssruta + val av symbol per punkt, linje och yta)",
+      "Symbolerna hämtas från kartans befintliga lager — inga nya symboler skapas automatiskt",
+      "Stöd för OCAD 12 och OCAD 2018; äldre filformat ger felmeddelande vid kartförslag i export",
+    ],
+  },
+  {
+    date: "2026-08-05",
+    title: "Export — kartförslag i PDF och GeoTIFF",
+    items: [
+      "PDF- och GeoTIFF-export kan inkludera öppna och pågående kartförslag för versionen (kryssruta i exportmenyn)",
+      "Markeringarna ritas i samma orange stil som på kartan",
+    ],
+  },
+  {
+    date: "2026-08-05",
     title: "Kartförslag — tydligare skapa-vy",
     items: [
       "Formuläret (kategori, beskrivning, foto) är ihopfällt tills du klickat Slutför efter en markering",

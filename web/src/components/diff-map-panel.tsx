@@ -33,6 +33,10 @@ import {
 import { defaultOcadExportVersion } from "@/lib/ocad/ocad-export-shared";
 import { clearPreviewCache, fetchPreviewText } from "@/lib/ocad/preview-fetch";
 import { MapExportControls } from "@/components/map-export-controls";
+import { OcdSuggestionSymbolDialog } from "@/components/ocd-suggestion-symbol-dialog";
+import type { OcdSuggestionSymbolMapping } from "@/lib/ocad/ocad-suggestion-export";
+import { buildSuggestionExportOverlaySvg } from "@/lib/suggestion/geometry";
+import type { SuggestionOverlayItem } from "@/lib/suggestion/types";
 
 type GpsFix = {
   mapCoord: [number, number];
@@ -94,6 +98,8 @@ type Props = {
   onObjectClick?: (changeIndex: number) => void;
   /** Extra SVG overlay content rendered above map layers (e.g. checkout areas). */
   renderSvgOverlay?: (rootTransform: SvgRootTransform) => ReactNode;
+  /** Open/in-progress kartförslag for raster export (PDF/GeoTIFF). Fetched on export if omitted. */
+  suggestionOverlays?: SuggestionOverlayItem[];
   /** When "draw", viewport pointer events call drawPointerHandlers instead of pan. */
   interactionMode?: "navigate" | "draw";
   drawPointerHandlers?: MapDrawPointerHandlers;
@@ -226,6 +232,7 @@ export function DiffMapPanel({
   onClearFocus,
   onObjectClick,
   renderSvgOverlay,
+  suggestionOverlays,
   interactionMode = "navigate",
   drawPointerHandlers,
   headerContent,
@@ -253,10 +260,12 @@ export function DiffMapPanel({
     orientation: "portrait",
     outputFormat: "pdf",
     ocadVersion: 12,
+    includeSuggestions: true,
   });
   const [exportFrame, setExportFrame] = useState<ExportFrame | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [ocdSymbolDialogOpen, setOcdSymbolDialogOpen] = useState(false);
   const [ocadCrs, setOcadCrs] = useState<OcadCrsInfo | null>(null);
   const [gpsEnabled, setGpsEnabled] = useState(false);
   const [gpsFix, setGpsFix] = useState<GpsFix | null>(null);
@@ -455,59 +464,111 @@ export function DiffMapPanel({
     });
   }, [exportSettings, exportMode, ocadMapScale]);
 
+  const performExport = useCallback(
+    async (ocdSuggestionSymbols?: OcdSuggestionSymbolMapping) => {
+      if (!exportFrame) return;
+      setExporting(true);
+      setExportError(null);
+      setOcdSymbolDialogOpen(false);
+      try {
+        const safeTitle = title.replace(/[^\w\s-åäöÅÄÖ]/g, "").trim() || "karta";
+
+        const rasterExport =
+          exportSettings.outputFormat === "geotiff" || exportSettings.outputFormat === "pdf";
+        let suggestionOverlaySvg: string | undefined;
+        if (rasterExport && exportSettings.includeSuggestions) {
+          let overlays: SuggestionOverlayItem[];
+          if (suggestionOverlays !== undefined) {
+            overlays = suggestionOverlays;
+          } else {
+            overlays = [];
+            try {
+              const res = await fetch(
+                `/api/maps/${mapSlug}/suggestions?overlay=1&mapVersionId=${encodeURIComponent(versionId)}`,
+              );
+              if (res.ok) {
+                const data = (await res.json()) as { overlays?: SuggestionOverlayItem[] };
+                overlays = data.overlays ?? [];
+              }
+            } catch {
+              overlays = [];
+            }
+          }
+          if (overlays.length > 0) {
+            suggestionOverlaySvg = buildSuggestionExportOverlaySvg(overlays, rootTransform);
+          }
+        }
+
+        if (exportSettings.outputFormat === "ocd") {
+          const { versionWarning, suggestionWarnings } = await downloadMapOcd(
+            mapSlug,
+            versionId,
+            exportFrame,
+            exportSettings.ocadVersion,
+            `${safeTitle}-${exportSettings.scale}`,
+            exportSettings.includeSuggestions
+              ? { includeSuggestions: true, suggestionSymbols: ocdSuggestionSymbols }
+              : undefined,
+          );
+          if (versionWarning) {
+            window.alert(versionWarning);
+          }
+          if (suggestionWarnings) {
+            window.alert(suggestionWarnings);
+          }
+        } else if (exportSettings.outputFormat === "geotiff") {
+          if (!fullSvgText) return;
+          if (!isGeoreferencedCrs(ocadCrs)) {
+            throw new Error(
+              "Kartan saknar georeferering — GeoTIFF-export kräver EPSG-koordinater i filen.",
+            );
+          }
+          await downloadMapGeoTiff(
+            mapSlug,
+            versionId,
+            fullSvgText,
+            exportFrame,
+            `${safeTitle}-${exportSettings.scale}`,
+            { suggestionOverlaySvg },
+          );
+        } else {
+          if (!fullSvgText) return;
+          await downloadMapPdf(fullSvgText, exportFrame, `${safeTitle}-${exportSettings.scale}`, {
+            suggestionOverlaySvg,
+          });
+        }
+
+        cancelExportMode();
+      } catch (err) {
+        setExportError(err instanceof Error ? err.message : "Export misslyckades");
+      } finally {
+        setExporting(false);
+      }
+    },
+    [
+      fullSvgText,
+      exportFrame,
+      title,
+      exportSettings,
+      mapSlug,
+      versionId,
+      cancelExportMode,
+      ocadCrs,
+      suggestionOverlays,
+      rootTransform,
+    ],
+  );
+
   const handleExport = useCallback(async () => {
     if (!exportFrame) return;
-    setExporting(true);
-    setExportError(null);
-    try {
-      const safeTitle = title.replace(/[^\w\s-åäöÅÄÖ]/g, "").trim() || "karta";
 
-      if (exportSettings.outputFormat === "ocd") {
-        const { versionWarning } = await downloadMapOcd(
-          mapSlug,
-          versionId,
-          exportFrame,
-          exportSettings.ocadVersion,
-          `${safeTitle}-${exportSettings.scale}`,
-        );
-        if (versionWarning) {
-          window.alert(versionWarning);
-        }
-      } else if (exportSettings.outputFormat === "geotiff") {
-        if (!fullSvgText) return;
-        if (!isGeoreferencedCrs(ocadCrs)) {
-          throw new Error(
-            "Kartan saknar georeferering — GeoTIFF-export kräver EPSG-koordinater i filen.",
-          );
-        }
-        await downloadMapGeoTiff(
-          mapSlug,
-          versionId,
-          fullSvgText,
-          exportFrame,
-          `${safeTitle}-${exportSettings.scale}`,
-        );
-      } else {
-        if (!fullSvgText) return;
-        await downloadMapPdf(fullSvgText, exportFrame, `${safeTitle}-${exportSettings.scale}`);
-      }
-
-      cancelExportMode();
-    } catch (err) {
-      setExportError(err instanceof Error ? err.message : "Export misslyckades");
-    } finally {
-      setExporting(false);
+    if (exportSettings.outputFormat === "ocd" && exportSettings.includeSuggestions) {
+      setOcdSymbolDialogOpen(true);
+      return;
     }
-  }, [
-    fullSvgText,
-    exportFrame,
-    title,
-    exportSettings,
-    mapSlug,
-    versionId,
-    cancelExportMode,
-    ocadCrs,
-  ]);
+
+    await performExport();
+  }, [exportFrame, exportSettings.outputFormat, exportSettings.includeSuggestions, performExport]);
 
   const viewStateRef = useRef({ pan: { x: 0, y: 0 }, zoom: FIT_WHOLE_ZOOM });
   viewStateRef.current = { pan, zoom };
@@ -1092,8 +1153,18 @@ export function DiffMapPanel({
           onCancel={cancelExportMode}
           exporting={exporting}
           error={exportError}
+          suggestionOverlayCount={suggestionOverlays?.length}
         />
       )}
+
+      <OcdSuggestionSymbolDialog
+        layers={mapLayers}
+        open={ocdSymbolDialogOpen}
+        onCancel={() => setOcdSymbolDialogOpen(false)}
+        onConfirm={(mapping) => {
+          void performExport(mapping);
+        }}
+      />
 
       <div
         ref={viewportRef}
