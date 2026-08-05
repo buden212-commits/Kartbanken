@@ -10,6 +10,8 @@ import {
   resolveSmtpConfig,
   type SmtpConfig,
 } from "@/lib/settings/app-settings";
+import { runAfterResponse } from "@/lib/background";
+import { logEmailSent, type EmailSentAuditMetadata } from "@/lib/audit";
 import { readStoredFile } from "@/lib/storage";
 
 const APP_NAME = "IFK Mora Kartor";
@@ -79,6 +81,24 @@ export async function isEmailConfigured(): Promise<boolean> {
 
 export async function getAdminNotificationEmail(): Promise<string | null> {
   return resolveAdminNotificationEmail();
+}
+
+export function formatSmtpErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (/application-specific password required|InvalidSecondFactor|534-5\.7\.9/i.test(message)) {
+    return [
+      "Gmail kräver ett app-lösenord — vanligt kontolösenord fungerar inte.",
+      "Skapa ett under Google-konto → Säkerhet → Verifiering i två steg → App-lösenord.",
+      "Klistra in app-lösenordet (16 tecken) i fältet App-lösenord och spara.",
+    ].join(" ");
+  }
+
+  if (/535|authentication failed|invalid credentials|username and password not accepted/i.test(message)) {
+    return "SMTP-inloggning misslyckades. Kontrollera Gmail-adress och app-lösenord.";
+  }
+
+  return message;
 }
 
 function formatFromAddress(smtpUser: string): string {
@@ -182,20 +202,46 @@ async function sendMailToNotificationRecipients(
   await Promise.all(recipients.map((to) => sendMail({ ...options, to })));
 }
 
-export async function sendTestEmail(to: string): Promise<void> {
+const TEST_ATTACHMENT_FILENAME = "test-bifogning.ocd";
+
+function buildTestAttachment(): MailAttachment {
+  return {
+    filename: TEST_ATTACHMENT_FILENAME,
+    content: Buffer.from(
+      "IFK Mora Kartor — testbilaga. Detta är inte en riktig OCAD-fil, utan verifierar att bifogningar fungerar.\n",
+      "utf-8",
+    ),
+    contentType: "application/octet-stream",
+  };
+}
+
+export async function sendTestEmail(
+  to: string,
+  options?: { withAttachment?: boolean; triggeredByUserId?: string | null },
+): Promise<void> {
   const baseUrl = getAppBaseUrl();
-  const subject = `Testmail — ${APP_NAME}`;
-  const text = [
+  const withAttachment = options?.withAttachment === true;
+  const subject = withAttachment
+    ? `Testmail med bifogad fil — ${APP_NAME}`
+    : `Testmail — ${APP_NAME}`;
+  const textLines = [
     `Detta är ett testmail från ${APP_NAME}.`,
     "",
-    "Om du läser detta fungerar SMTP-inställningarna.",
+    withAttachment
+      ? "En testfil (.ocd) är bifogad för att verifiera att bilagor fungerar."
+      : "Om du läser detta fungerar SMTP-inställningarna.",
     "",
     `Webbplats: ${baseUrl}`,
-  ].join("\n");
+  ];
+  const text = textLines.join("\n");
 
   const bodyHtml = `
     <p style="margin:0 0 16px;">Detta är ett testmail från ${escapeHtml(APP_NAME)}.</p>
-    <p style="margin:0 0 16px;">Om du läser detta fungerar SMTP-inställningarna.</p>
+    <p style="margin:0 0 16px;">${
+      withAttachment
+        ? "En testfil (.ocd) är bifogad för att verifiera att bilagor fungerar."
+        : "Om du läser detta fungerar SMTP-inställningarna."
+    }</p>
     <p style="margin:0;">
       <a href="${escapeHtml(baseUrl)}" style="color:#2563eb;text-decoration:none;">${escapeHtml(baseUrl.replace(/^https?:\/\//, ""))}</a>
     </p>
@@ -206,7 +252,79 @@ export async function sendTestEmail(to: string): Promise<void> {
     bodyHtml,
   });
 
-  await sendMail({ to, subject, text, html });
+  await sendMail({
+    to,
+    subject,
+    text,
+    html,
+    attachments: withAttachment ? [buildTestAttachment()] : undefined,
+  });
+
+  if (withAttachment) {
+    await recordEmailAudit(
+      {
+        kind: "test",
+        subject,
+        withAttachment: true,
+        attachmentFilename: TEST_ATTACHMENT_FILENAME,
+        recipientsWithAttachment: [to],
+        recipientsWithoutAttachment: [],
+      },
+      { userId: options?.triggeredByUserId ?? null },
+    );
+  }
+}
+
+export async function sendTemporaryPasswordEmail(options: {
+  to: string;
+  name: string | null | undefined;
+  temporaryPassword: string;
+  expiresAt: Date;
+}): Promise<void> {
+  const loginUrl = `${getAppBaseUrl()}/login`;
+  const expiresText = options.expiresAt.toLocaleString("sv-SE", {
+    timeZone: "Europe/Stockholm",
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+  const greeting = options.name?.trim() ? `Hej ${options.name.trim()}!` : "Hej!";
+  const subject = `Tillfälligt lösenord — ${APP_NAME}`;
+
+  const text = [
+    greeting,
+    "",
+    "Du har begärt återställning av lösenord.",
+    "",
+    `Tillfälligt lösenord: ${options.temporaryPassword}`,
+    `Giltigt till: ${expiresText}`,
+    "",
+    "Logga in och byt till ett eget lösenord innan tiden går ut.",
+    "",
+    `Logga in: ${loginUrl}`,
+  ].join("\n");
+
+  const bodyHtml = `
+    <p style="margin:0 0 16px;">${escapeHtml(greeting)}</p>
+    <p style="margin:0 0 16px;">Du har begärt återställning av lösenord. Använd lösenordet nedan för att logga in.</p>
+    <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 20px;width:100%;font-size:15px;">
+      <tr>
+        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;width:140px;">Tillfälligt lösenord</td>
+        <td style="padding:4px 0;color:#0f172a;font-family:monospace;font-size:16px;">${escapeHtml(options.temporaryPassword)}</td>
+      </tr>
+      <tr>
+        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;">Giltigt till</td>
+        <td style="padding:4px 0;color:#0f172a;">${escapeHtml(expiresText)}</td>
+      </tr>
+    </table>
+    <p style="margin:0 0 16px;">Du måste byta till ett eget lösenord direkt efter inloggning.</p>
+    <p style="margin:0;">
+      <a href="${escapeHtml(loginUrl)}" style="display:inline-block;padding:10px 18px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:500;">Logga in</a>
+    </p>
+  `.trim();
+
+  const html = buildHtmlEmail({ title: subject, bodyHtml });
+
+  await sendMail({ to: options.to, subject, text, html });
 }
 
 export async function notifyAdminOfNewRegistration(user: {
@@ -260,6 +378,31 @@ function ocdAttachmentFilename(originalFilename: string, fallbackBase: string): 
     : `${fallbackBase}.ocd`;
 }
 
+async function recordEmailAudit(
+  metadata: EmailSentAuditMetadata,
+  options?: {
+    userId?: string | null;
+    targetType?: string;
+    targetId?: string;
+  },
+): Promise<void> {
+  try {
+    await logEmailSent(metadata, options);
+  } catch (err) {
+    console.error("[email] Failed to write email audit log:", err);
+  }
+}
+
+type EmailAuditContext = {
+  kind: EmailSentAuditMetadata["kind"];
+  mapSlug?: string;
+  mapTitle?: string;
+  versionNumber?: number;
+  targetType?: string;
+  targetId?: string;
+  userId?: string | null;
+};
+
 async function sendMailsWithOptionalOcdAttachment(options: {
   recipients: string[];
   subject: string;
@@ -267,10 +410,12 @@ async function sendMailsWithOptionalOcdAttachment(options: {
   bodyHtml: string;
   storagePath?: string;
   attachmentFilename?: string;
+  audit?: EmailAuditContext;
 }): Promise<void> {
   const ocdRecipients = await resolveOcdAttachmentRecipients();
 
   let mapAttachment: MailAttachment | null = null;
+  let attachmentError: string | undefined;
   if (ocdRecipients.size > 0 && options.storagePath && options.attachmentFilename) {
     try {
       const fileBuffer = await readStoredFile(options.storagePath);
@@ -280,13 +425,19 @@ async function sendMailsWithOptionalOcdAttachment(options: {
         contentType: "application/octet-stream",
       };
     } catch (err) {
+      attachmentError = err instanceof Error ? err.message : "Kunde inte läsa kartfil";
       console.error("[email] Could not read map file for email attachment:", err);
     }
   }
 
+  const recipientsWithAttachment: string[] = [];
+  const recipientsWithoutAttachment: string[] = [];
+
   await Promise.all(
     options.recipients.map(async (to) => {
       const includeAttachment = mapAttachment !== null && ocdRecipients.has(to.toLowerCase());
+      if (includeAttachment) recipientsWithAttachment.push(to);
+      else recipientsWithoutAttachment.push(to);
 
       const recipientText = includeAttachment
         ? `${options.text}\n\nKartfilen (.ocd) är bifogad till detta meddelande.`
@@ -305,6 +456,28 @@ async function sendMailsWithOptionalOcdAttachment(options: {
       });
     }),
   );
+
+  if (options.audit) {
+    await recordEmailAudit(
+      {
+        kind: options.audit.kind,
+        subject: options.subject,
+        withAttachment: recipientsWithAttachment.length > 0,
+        attachmentFilename: mapAttachment?.filename ?? options.attachmentFilename,
+        attachmentError,
+        recipientsWithAttachment,
+        recipientsWithoutAttachment,
+        mapSlug: options.audit.mapSlug,
+        mapTitle: options.audit.mapTitle,
+        versionNumber: options.audit.versionNumber,
+      },
+      {
+        userId: options.audit.userId ?? null,
+        targetType: options.audit.targetType,
+        targetId: options.audit.targetId,
+      },
+    );
+  }
 }
 
 export async function notifyAdminOfNewUpload(upload: {
@@ -388,6 +561,14 @@ export async function notifyAdminOfNewUpload(upload: {
       upload.version.originalFilename,
       `${upload.map.title.replace(/\s+/g, "-")}-v${upload.version.versionNumber}`,
     ),
+    audit: {
+      kind: "new_upload",
+      mapSlug: upload.map.slug,
+      mapTitle: upload.map.title,
+      versionNumber: upload.version.versionNumber,
+      targetType: "MapVersion",
+      targetId: upload.version.id,
+    },
   });
 }
 
@@ -419,14 +600,24 @@ async function resolveCheckoutRecipients(ownerEmail: string): Promise<string[]> 
   return [...recipients];
 }
 
-function fireAndForget(promise: Promise<void>, label: string): void {
-  void promise.catch((err) => {
-    console.error(`[email] Failed to send ${label}:`, err);
+function scheduleEmail(task: () => Promise<void>, label: string): void {
+  runAfterResponse(async () => {
+    try {
+      await task();
+    } catch (err) {
+      console.error(`[email] Failed to send ${label}:`, err);
+    }
   });
 }
 
+export function queueNotifyAdminOfNewUpload(
+  upload: Parameters<typeof notifyAdminOfNewUpload>[0],
+): void {
+  scheduleEmail(() => notifyAdminOfNewUpload(upload), "new upload");
+}
+
 export function notifyCheckoutCreated(ctx: CheckoutMailContext): void {
-  fireAndForget(notifyCheckoutCreatedAsync(ctx), "checkout created");
+  scheduleEmail(() => notifyCheckoutCreatedAsync(ctx), "checkout created");
 }
 
 async function notifyCheckoutCreatedAsync(ctx: CheckoutMailContext): Promise<void> {
@@ -451,7 +642,7 @@ async function notifyCheckoutCreatedAsync(ctx: CheckoutMailContext): Promise<voi
 }
 
 export function notifyCheckinSubmitted(ctx: CheckoutMailContext): void {
-  fireAndForget(notifyCheckinSubmittedAsync(ctx), "checkin submitted");
+  scheduleEmail(() => notifyCheckinSubmittedAsync(ctx), "checkin submitted");
 }
 
 async function notifyCheckinSubmittedAsync(ctx: CheckoutMailContext): Promise<void> {
@@ -483,11 +674,18 @@ async function notifyCheckinSubmittedAsync(ctx: CheckoutMailContext): Promise<vo
           `${ctx.map.title.replace(/\s+/g, "-")}-checkin`,
         )
       : undefined,
+    audit: {
+      kind: "checkin",
+      mapSlug: ctx.map.slug,
+      mapTitle: ctx.map.title,
+      targetType: "MapCheckout",
+      targetId: ctx.checkoutId,
+    },
   });
 }
 
 export function notifyCheckoutUserConfirmed(ctx: CheckoutMailContext): void {
-  fireAndForget(notifyCheckoutUserConfirmedAsync(ctx), "checkout user confirmed");
+  scheduleEmail(() => notifyCheckoutUserConfirmedAsync(ctx), "checkout user confirmed");
 }
 
 async function notifyCheckoutUserConfirmedAsync(ctx: CheckoutMailContext): Promise<void> {
@@ -515,7 +713,7 @@ async function notifyCheckoutUserConfirmedAsync(ctx: CheckoutMailContext): Promi
 export function notifyCheckoutIntegrated(
   ctx: CheckoutMailContext & { versionNumber: number },
 ): void {
-  fireAndForget(notifyCheckoutIntegratedAsync(ctx), "checkout integrated");
+  scheduleEmail(() => notifyCheckoutIntegratedAsync(ctx), "checkout integrated");
 }
 
 async function notifyCheckoutIntegratedAsync(
@@ -544,7 +742,7 @@ async function notifyCheckoutIntegratedAsync(
 export function notifyCheckoutCancelled(
   ctx: CheckoutMailContext & { reason?: string | null },
 ): void {
-  fireAndForget(notifyCheckoutCancelledAsync(ctx), "checkout cancelled");
+  scheduleEmail(() => notifyCheckoutCancelledAsync(ctx), "checkout cancelled");
 }
 
 async function notifyCheckoutCancelledAsync(
@@ -577,7 +775,7 @@ async function notifyCheckoutCancelledAsync(
 }
 
 export function notifyCheckoutReminder(ctx: CheckoutMailContext & { days: number }): void {
-  fireAndForget(notifyCheckoutReminderAsync(ctx), "checkout reminder");
+  scheduleEmail(() => notifyCheckoutReminderAsync(ctx), "checkout reminder");
 }
 
 async function notifyCheckoutReminderAsync(

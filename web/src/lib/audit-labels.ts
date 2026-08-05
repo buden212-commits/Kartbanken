@@ -147,6 +147,55 @@ export function formatAuditActivity(action: string, metadataRaw: string | null):
       if (ref && scale) return `PDF-export av bana — ${ref}, skala 1:${scale}`;
       return ref ? `PDF-export av bana — ${ref}` : "PDF-export av bana";
     }
+    case "EMAIL_SENT": {
+      const kind = metaString(metadata, "kind");
+      const kindLabel =
+        kind === "checkin"
+          ? "E-post vid incheckning"
+          : kind === "new_upload"
+            ? "E-post om ny version"
+            : kind === "test"
+              ? "Testmail"
+              : "E-post skickad";
+      const mapTitle = metaString(metadata, "mapTitle");
+      const withAttachment = metadata?.withAttachment === true;
+      const filename = metaString(metadata, "attachmentFilename");
+      const withList = Array.isArray(metadata?.recipientsWithAttachment)
+        ? metadata.recipientsWithAttachment.filter((entry): entry is string => typeof entry === "string")
+        : [];
+      const withoutList = Array.isArray(metadata?.recipientsWithoutAttachment)
+        ? metadata.recipientsWithoutAttachment.filter((entry): entry is string => typeof entry === "string")
+        : [];
+      const attachmentError = metaString(metadata, "attachmentError");
+
+      const parts: string[] = [kindLabel];
+      if (mapTitle) parts.push(mapTitle);
+
+      if (withAttachment && withList.length > 0) {
+        const fileLabel = filename ? filename : ".ocd-fil";
+        parts.push(`med bifogad ${fileLabel} till ${withList.join(", ")}`);
+      } else if (attachmentError) {
+        parts.push(`bilaga misslyckades (${attachmentError})`);
+      } else if (withList.length === 0 && withoutList.length > 0) {
+        parts.push("utan bifogad fil");
+      }
+
+      if (withoutList.length > 0) {
+        parts.push(`övriga mottagare: ${withoutList.join(", ")}`);
+      }
+
+      return parts.join(" — ");
+    }
+    case "PASSWORD_RESET_REQUESTED": {
+      const email = metaString(metadata, "email");
+      return email ? `Lösenordsåterställning begärd — ${email}` : "Lösenordsåterställning begärd";
+    }
+    case "PASSWORD_CHANGED": {
+      const email = metaString(metadata, "email");
+      const forced = metadata?.forced === true;
+      const prefix = forced ? "Lösenord bytt efter tillfälligt lösenord" : "Lösenord bytt";
+      return email ? `${prefix} — ${email}` : prefix;
+    }
     default:
       return action;
   }

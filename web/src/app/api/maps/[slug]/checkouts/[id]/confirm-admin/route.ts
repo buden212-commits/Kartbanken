@@ -4,7 +4,7 @@ import { canAdminConfirmIntegration } from "@/lib/auth/permissions";
 import { integrateCheckout } from "@/lib/checkout/integrate";
 import { getCheckoutById } from "@/lib/checkout/repository";
 import { CheckoutStatus } from "@/lib/checkout/types";
-import { notifyAdminOfNewUpload, notifyCheckoutIntegrated } from "@/lib/email";
+import { notifyCheckoutIntegrated, queueNotifyAdminOfNewUpload } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -70,12 +70,10 @@ export async function POST(_request: Request, { params }: RouteParams) {
     });
 
     if (integratedVersion) {
-      void notifyAdminOfNewUpload({
+      queueNotifyAdminOfNewUpload({
         uploader: { name: session.user.name, email: session.user.email },
         map: { title: map.title, slug: map.slug },
         version: integratedVersion,
-      }).catch((err) => {
-        console.error("[email] Failed to send integration upload notification:", err);
       });
     }
 

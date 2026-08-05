@@ -17,8 +17,10 @@ export function SmtpSettingsForm({ initialSettings }: Props) {
   const [settings, setSettings] = useState(initialSettings);
   const [saveState, setSaveState] = useState<SaveState>(null);
   const [testState, setTestState] = useState<SaveState>(null);
+  const [testAttachmentState, setTestAttachmentState] = useState<SaveState>(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [testingAttachment, setTestingAttachment] = useState(false);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -62,13 +64,18 @@ export function SmtpSettingsForm({ initialSettings }: Props) {
     }
   }
 
-  async function handleTestEmail() {
-    setTesting(true);
-    setTestState(null);
+  async function handleTestEmail(withAttachment: boolean) {
+    const setState = withAttachment ? setTestAttachmentState : setTestState;
+    const setLoading = withAttachment ? setTestingAttachment : setTesting;
+
+    setLoading(true);
+    setState(null);
 
     try {
       const res = await fetch("/api/admin/settings/test-email", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ withAttachment }),
       });
 
       const data = (await res.json()) as { error?: string; message?: string };
@@ -77,17 +84,17 @@ export function SmtpSettingsForm({ initialSettings }: Props) {
         throw new Error(data.error ?? "Kunde inte skicka testmail");
       }
 
-      setTestState({
+      setState({
         ok: true,
         message: data.message ?? "Testmail skickades.",
       });
     } catch (error) {
-      setTestState({
+      setState({
         ok: false,
         message: error instanceof Error ? error.message : "Kunde inte skicka testmail",
       });
     } finally {
-      setTesting(false);
+      setLoading(false);
     }
   }
 
@@ -208,6 +215,21 @@ export function SmtpSettingsForm({ initialSettings }: Props) {
         </div>
       </form>
 
+      <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+        <h3 className="text-sm font-medium text-blue-950">Gmail — app-lösenord krävs</h3>
+        <ol className="mt-2 list-inside list-decimal space-y-1 text-sm text-blue-900">
+          <li>Logga in på ditt Google-konto → Säkerhet</li>
+          <li>Aktivera verifiering i två steg (om den inte redan är på)</li>
+          <li>Sök efter «App-lösenord» och skapa ett nytt för «Mail»</li>
+          <li>Kopiera de 16 tecknen (utan mellanslag) till fältet App-lösenord ovan</li>
+          <li>SMTP-användare ska vara samma Gmail-adress som app-lösenordet skapades för</li>
+        </ol>
+        <p className="mt-2 text-sm text-blue-900">
+          Felmeddelandet «Application-specific password required» betyder att vanligt lösenord
+          används i stället för app-lösenord.
+        </p>
+      </div>
+
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
         <h3 className="text-sm font-medium text-amber-950">Hamnar mailet i skräppost?</h3>
         <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-amber-900">
@@ -223,20 +245,36 @@ export function SmtpSettingsForm({ initialSettings }: Props) {
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
         <h3 className="text-sm font-medium text-slate-900">Testa e-post</h3>
         <p className="mt-1 text-sm text-slate-600">
-          Skickar ett testmail till admin-notisadressen med aktuella inställningar.
+          Skickar testmail till admin-notisadressen. Använd bifogningstestet för att verifiera att
+          .ocd-filer följer med i notiser.
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <button
             type="button"
-            onClick={() => void handleTestEmail()}
-            disabled={testing}
+            onClick={() => void handleTestEmail(false)}
+            disabled={testing || testingAttachment}
             className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
           >
             {testing ? "Skickar…" : "Skicka testmail"}
           </button>
+          <button
+            type="button"
+            onClick={() => void handleTestEmail(true)}
+            disabled={testing || testingAttachment}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+          >
+            {testingAttachment ? "Skickar…" : "Skicka testmail med bifogad fil"}
+          </button>
           {testState && (
             <p className={`text-sm ${testState.ok ? "text-emerald-700" : "text-red-600"}`}>
               {testState.message}
+            </p>
+          )}
+          {testAttachmentState && (
+            <p
+              className={`text-sm ${testAttachmentState.ok ? "text-emerald-700" : "text-red-600"}`}
+            >
+              {testAttachmentState.message}
             </p>
           )}
         </div>

@@ -1,0 +1,2 @@
+ALTER TABLE "User" ADD COLUMN "mustChangePassword" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "User" ADD COLUMN "passwordExpiresAt" TIMESTAMP(3);

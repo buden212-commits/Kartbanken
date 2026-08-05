@@ -8,7 +8,7 @@ export default function HelpPage() {
         Så fungerar kartor.ifkmora.se
       </h1>
       <p className="mt-3 max-w-2xl text-slate-600">
-        Guide till versionshantering, checkout, jämförelse och export av orienteringskartor.
+        Guide till områden, versionshantering, checkout, jämförelse och export av orienteringskartor.
       </p>
 
       <div className="mt-10">

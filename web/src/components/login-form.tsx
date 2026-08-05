@@ -3,13 +3,21 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { ForgotPasswordForm } from "@/components/forgot-password-form";
 import { getLoginBlockReason } from "@/lib/auth/login-status";
+
+type LoginView = "login" | "forgot";
 
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [view, setView] = useState<LoginView>("login");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  if (view === "forgot") {
+    return <ForgotPasswordForm onBack={() => setView("login")} />;
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -34,6 +42,10 @@ export function LoginForm() {
         setError("Ditt konto väntar på godkännande av administratör.");
       } else if (blockReason === "rejected") {
         setError("Ditt konto har avvisats. Kontakta administratören om du tror att detta är fel.");
+      } else if (blockReason === "expired_temp_password") {
+        setError(
+          "Det tillfälliga lösenordet har gått ut. Begär ett nytt under «Glömt lösenord?».",
+        );
       } else {
         setError("Fel e-post eller lösenord.");
       }
@@ -61,16 +73,25 @@ export function LoginForm() {
         />
       </div>
       <div>
-        <label htmlFor="password" className="form-label">
-          Lösenord
-        </label>
+        <div className="flex items-center justify-between gap-2">
+          <label htmlFor="password" className="form-label">
+            Lösenord
+          </label>
+          <button
+            type="button"
+            onClick={() => setView("forgot")}
+            className="text-xs font-medium text-ifk-blue hover:text-ifk-blue-hover"
+          >
+            Glömt lösenord?
+          </button>
+        </div>
         <input
           id="password"
           name="password"
           type="password"
           required
           autoComplete="current-password"
-          className="form-input"
+          className="form-input mt-1"
         />
       </div>
       {error && (

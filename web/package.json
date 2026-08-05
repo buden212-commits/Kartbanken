@@ -16,6 +16,7 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
+    "env:sync-local": "tsx scripts/sync-local-env.mts",
     "postinstall": "prisma generate"
   },
   "prisma": {

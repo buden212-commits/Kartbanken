@@ -9,8 +9,22 @@ export default auth((req) => {
 
   const isAuthRoute = pathname.startsWith("/api/auth");
   const isPublicAuth = pathname === "/login" || pathname === "/register";
+  const isChangePasswordPage = pathname === "/byt-losenord";
 
   if (isAuthRoute) {
+    return NextResponse.next();
+  }
+
+  if (isChangePasswordPage) {
+    if (!session) {
+      return NextResponse.redirect(new URL("/login", req.url));
+    }
+    if (session.user.role === Role.PENDING || session.user.role === Role.REJECTED) {
+      return NextResponse.redirect(new URL("/pending", req.url));
+    }
+    if (!session.user.mustChangePassword) {
+      return NextResponse.redirect(new URL("/", req.url));
+    }
     return NextResponse.next();
   }
 
@@ -18,6 +32,9 @@ export default auth((req) => {
     if (session) {
       if (session.user.role === Role.PENDING || session.user.role === Role.REJECTED) {
         return NextResponse.redirect(new URL("/pending", req.url));
+      }
+      if (session.user.mustChangePassword) {
+        return NextResponse.redirect(new URL("/byt-losenord", req.url));
       }
       if (isApproved(session.user.role)) {
         return NextResponse.redirect(new URL("/", req.url));
@@ -43,6 +60,14 @@ export default auth((req) => {
 
   if (pathname === "/pending") {
     return NextResponse.redirect(new URL("/", req.url));
+  }
+
+  if (session.user.mustChangePassword && pathname !== "/byt-losenord") {
+    const changeUrl = new URL("/byt-losenord", req.url);
+    if (pathname !== "/") {
+      changeUrl.searchParams.set("callbackUrl", pathname);
+    }
+    return NextResponse.redirect(changeUrl);
   }
 
   if (pathname.startsWith("/admin") && role !== Role.ADMIN) {

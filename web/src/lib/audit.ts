@@ -22,7 +22,36 @@ export type AuditAction =
   | "COURSE_CREATED"
   | "COURSE_UPDATED"
   | "COURSE_DELETED"
-  | "COURSE_PDF_EXPORT";
+  | "COURSE_PDF_EXPORT"
+  | "EMAIL_SENT"
+  | "PASSWORD_RESET_REQUESTED"
+  | "PASSWORD_CHANGED";
+
+export type EmailSentAuditMetadata = {
+  kind: "checkin" | "new_upload" | "test";
+  subject: string;
+  withAttachment: boolean;
+  attachmentFilename?: string;
+  attachmentError?: string;
+  recipientsWithAttachment: string[];
+  recipientsWithoutAttachment: string[];
+  mapSlug?: string;
+  mapTitle?: string;
+  versionNumber?: number;
+};
+
+export async function logEmailSent(
+  metadata: EmailSentAuditMetadata,
+  options?: {
+    userId?: string | null;
+    targetType?: string;
+    targetId?: string;
+  },
+): Promise<void> {
+  await logAction(options?.userId ?? null, "EMAIL_SENT", options?.targetType, options?.targetId, {
+    ...metadata,
+  });
+}
 
 export async function logAction(
   userId: string | null | undefined,

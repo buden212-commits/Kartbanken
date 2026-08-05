@@ -21,6 +21,8 @@ model User {
   lastLoginAt        DateTime?
   receiveNotifications Boolean       @default(false)
   receiveOcdAttachment Boolean       @default(false)
+  mustChangePassword   Boolean       @default(false)
+  passwordExpiresAt    DateTime?
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
   accounts           Account[]

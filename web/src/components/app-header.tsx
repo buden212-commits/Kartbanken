@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { auth, signOut } from "@/auth";
-import { roleLabel } from "@/lib/auth/permissions";
+import { AppHeaderUserMenu } from "@/components/app-header-user-menu";
 import { canAdmin } from "@/lib/auth/permissions";
 
 export async function AppHeader() {
@@ -43,12 +43,11 @@ export async function AppHeader() {
               <Link href="/hjalp" className="text-white/80 transition hover:text-white">
                 Hjälp
               </Link>
-              <span
-                className="hidden cursor-default text-white/50 lg:inline"
-                title={roleLabel(session.user.role)}
-              >
-                {session.user.name?.trim() || session.user.email}
-              </span>
+              <AppHeaderUserMenu
+                name={session.user.name}
+                email={session.user.email ?? ""}
+                role={session.user.role}
+              />
               <form
                 action={async () => {
                   "use server";

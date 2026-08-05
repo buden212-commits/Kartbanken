@@ -1,6 +1,6 @@
 import { logAction } from "@/lib/audit";
 import { requireUpload } from "@/lib/auth/api";
-import { notifyAdminOfNewUpload } from "@/lib/email";
+import { queueNotifyAdminOfNewUpload } from "@/lib/email";
 import { runAfterResponse } from "@/lib/background";
 import { sha256 } from "@/lib/hash";
 import { processVersionAfterUpload } from "@/lib/ocad/process-version";
@@ -114,7 +114,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     processVersionAfterUpload(map.id, version.id, latest?.id ?? null),
   );
 
-  void notifyAdminOfNewUpload({
+  queueNotifyAdminOfNewUpload({
     uploader: { name: session.user.name, email: session.user.email },
     map: { title: map.title, slug: map.slug },
     version: {
@@ -124,8 +124,6 @@ export async function POST(request: Request, { params }: RouteParams) {
       comment: version.comment,
       storagePath: storageRef,
     },
-  }).catch((err) => {
-    console.error("[email] Failed to send upload notification:", err);
   });
 
   return NextResponse.json(

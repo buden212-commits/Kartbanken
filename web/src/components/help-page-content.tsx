@@ -1,13 +1,14 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { auth } from "@/auth";
+import { HelpReleaseNotes } from "@/components/help-release-notes";
 import { canAdmin, canUpload, roleLabel } from "@/lib/auth/permissions";
 
 const sections = [
   { id: "oversikt", label: "Översikt" },
   { id: "kom-igang", label: "Kom igång" },
   { id: "roller", label: "Roller och behörigheter" },
-  { id: "kartfiler", label: "Kartfiler" },
+  { id: "omraden", label: "Områden" },
   { id: "versioner", label: "Versionshantering" },
   { id: "checkout", label: "Checka ut och in" },
   { id: "bana", label: "Lägg bana" },
@@ -16,6 +17,7 @@ const sections = [
   { id: "verifiera", label: "Verifiera" },
   { id: "kartvy", label: "Visa karta och export" },
   { id: "admin", label: "Administration", adminOnly: true },
+  { id: "release-notes", label: "Release notes" },
   { id: "faq", label: "Vanliga frågor" },
 ] as const;
 
@@ -83,20 +85,20 @@ export async function HelpPageContent() {
           </p>
           <p>Huvudflödet för versionshantering ser ut så här:</p>
           <ol className="list-decimal space-y-2 pl-5">
-            <li>Logga in och välj en kartfil på startsidan.</li>
+            <li>Logga in och välj ett område på startsidan.</li>
             <li>Ladda upp en ny .ocd-fil som skapar en ny version.</li>
             <li>Granska diff mot föregående version.</li>
             <li>Publicera versionen när den ska vara tillgänglig för läsare.</li>
           </ol>
           <p className="mt-4">Parallell redigering via checkout:</p>
           <ol className="list-decimal space-y-2 pl-5">
-            <li>Checka ut ett område på kartfilens sida och ladda ner utcheckning .ocd.</li>
+            <li>Checka ut ett område på områdessidan och ladda ner utcheckning .ocd.</li>
             <li>Redigera i OCAD och checka in filen.</li>
             <li>Granska diff, bekräfta och låt administratör integrera ändringarna.</li>
           </ol>
           <p className="mt-4">Banplanering:</p>
           <ol className="list-decimal space-y-2 pl-5">
-            <li>Öppna Lägg bana på kartfilens sida.</li>
+            <li>Öppna Lägg bana på områdessidan.</li>
             <li>Rita start, kontroller och mål med IOF-symboler 700–709.</li>
             <li>Spara banan och exportera som PDF vid behov.</li>
           </ol>
@@ -121,10 +123,10 @@ export async function HelpPageContent() {
           <h3 className="font-medium text-slate-900">Navigation</h3>
           <HelpList
             items={[
-              "Kartfiler — startsidan med alla kartor",
+              "Område — startsidan med alla kartområden",
               "Verifiera — tillfällig jämförelse utan uppladdning",
-              "Hjälp — den här sidan",
-              "Admin — användar- och systeminställningar (endast administratörer)",
+              "Hjälp — den här sidan (inklusive release notes)",
+              "Admin — användare, lagring, loggning och inställningar (endast administratörer)",
             ]}
           />
         </HelpSection>
@@ -157,8 +159,9 @@ export async function HelpPageContent() {
                 <tr>
                   <td className="px-4 py-3 font-medium">Administratör</td>
                   <td className="px-4 py-3">
-                    Allt redaktör kan, plus skapa kartfiler, redigera kartnamn, godkänna konton,
-                    avbryta checkouts och hantera systeminställningar
+                    Allt redaktör kan, plus skapa områden, redigera områdesnamn, radera områden,
+                    godkänna konton, avbryta checkouts, integrera incheckningar och hantera
+                    systeminställningar
                   </td>
                 </tr>
               </tbody>
@@ -166,26 +169,28 @@ export async function HelpPageContent() {
           </div>
           {role && (
             <p className="rounded-lg border border-ifk-blue/20 bg-ifk-blue-pale px-4 py-3 text-ifk-blue">
-              Du är inloggad som <strong>{session?.user.email}</strong> med rollen{" "}
-              <strong>{roleLabel(role)}</strong>.
+              Du är inloggad som <strong>{session?.user.name?.trim() || session?.user.email}</strong>{" "}
+              med rollen <strong>{roleLabel(role)}</strong>.
             </p>
           )}
         </HelpSection>
 
-        <HelpSection id="kartfiler" title="Kartfiler">
+        <HelpSection id="omraden" title="Områden">
           <p>
-            Startsidan visar alla logiska kartfiler i klubben. Varje rad visar kartnamn, senaste
-            version, uppladdningsdatum, filstorlek och vem som laddade upp.
+            Startsidan visar alla kartområden i klubben. Varje rad visar områdesnamn, senaste
+            version, uppladdningsdatum, filstorlek och vem som laddade upp. Listan visas först;
+            formuläret <strong>Skapa nytt kartområde</strong> finns under listan.
           </p>
-          <p>Klicka på ett kartnamn för att öppna kartfilens detaljsida med full versionshistorik.</p>
+          <p>Klicka på ett områdesnamn för att öppna detaljsidan med full versionshistorik.</p>
           {showAdmin && (
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
               <p className="font-medium text-slate-900">Administratörer</p>
               <p className="mt-1">
-                På startsidan kan du skapa nya kartfiler med namn och valfri beskrivning. En
-                kartfil är en logisk behållare — den första versionen laddas upp på kartfilens
-                detaljsida. På kartfilens sida kan du ändra visningsnamnet via knappen{" "}
-                <strong>Redigera namn</strong> bredvid titeln (URL-adressen ändras inte).
+                Skapa nya områden med namn och valfri beskrivning. Ett område är en logisk
+                behållare — den första versionen laddas upp på områdets detaljsida. Ändra
+                visningsnamnet via ikonen <strong>Redigera namn</strong> bredvid titeln (URL:en
+                ändras inte). Radera område via papperskorg-ikonen — detta tar bort alla versioner
+                och tillhörande data permanent.
               </p>
             </div>
           )}
@@ -201,11 +206,11 @@ export async function HelpPageContent() {
               <h3 className="font-medium text-slate-900">Ladda upp ny version</h3>
               <HelpList
                 items={[
-                  "Öppna kartfilen och välj OCAD-fil (.ocd) i uppladdningsformuläret",
+                  "Öppna området och välj OCAD-fil (.ocd) i uppladdningsformuläret",
                   "Lägg till en valfri kommentar, t.ex. vad som ändrats",
                   "Efter uppladdning jämförs automatiskt mot föregående version",
                   "Nya versioner är opublicerade tills du markerar dem som publicerade",
-                  "Administratören får e-postnotis om ny uppladdning (om SMTP är konfigurerat)",
+                  "Prenumeranter får e-post om ny version (om SMTP och notiser är aktiverade)",
                 ]}
               />
             </>
@@ -216,19 +221,24 @@ export async function HelpPageContent() {
             </p>
           )}
           <h3 className="font-medium text-slate-900">Åtgärder per version</h3>
+          <p>
+            I versionshistoriken finns ikonknappar med tooltips för ladda ner, jämföra, publicera
+            och radera. Klicka på filnamnet för att öppna kartan.
+          </p>
           <HelpList
             items={[
               "Ladda ner — hämta originalfilen (.ocd)",
               "Jämför — diff mot föregående version",
-              "Visa karta — interaktiv kartvy i webbläsaren",
+              "Visa karta — klicka på filnamnet eller öppna via ikonmenyn",
               "Öppna i nytt fönster — helskärmsvy utan sidhuvud",
+              "Publicera — kryssa i Publicerad (redaktör/admin)",
             ]}
           />
           <h3 className="font-medium text-slate-900">Versionshistorik</h3>
           <p>
-            Endast den senaste versionen visas som standard. Klicka{" "}
-            <strong>Visa alla tidigare versioner</strong> för att expandera äldre versioner, och{" "}
-            <strong>Dölj äldre versioner</strong> för att fälla ihop listan igen.
+            Tabellen visar datum (klockslag i tooltip), filnamn, kommentar och åtgärder. Endast den
+            senaste versionen kan vara ihopfälld som standard beroende på vy — expandera för att se
+            alla versioner.
           </p>
         </HelpSection>
 
@@ -245,7 +255,7 @@ export async function HelpPageContent() {
               <h3 className="font-medium text-slate-900">Checka ut område</h3>
               <HelpList
                 items={[
-                  "Öppna kartfilen och klicka Checka ut område (knappen bredvid karttiteln)",
+                  "Öppna området och klicka Checka ut område (knappen bredvid karttiteln)",
                   "Välj verktyg: rektangel eller polygon",
                   "Rita området på kartan och bekräfta urvalet",
                   "Klicka Checka ut område — du kommer till checkout-detaljsidan",
@@ -261,6 +271,7 @@ export async function HelpPageContent() {
                   "Granska utcheckningsdiff mot aktuell version (tillagda, borttagna, ändrade)",
                   "Bekräfta integration — checkout går till admin-bekräftelse",
                   "Administratör bekräftar och integrerar — en ny kartversion skapas",
+                  "Vid incheckning skickas e-post med .ocd-bilaga till admin och prenumeranter med «Bifoga .ocd»",
                 ]}
               />
             </>
@@ -273,7 +284,7 @@ export async function HelpPageContent() {
 
           <h3 className="font-medium text-slate-900">Synliga överlagringar</h3>
           <p>
-            På kartfilens sida visas färgade ytor för alla aktiva checkouts. Varje färg motsvarar
+            På områdessidan visas färgade ytor för alla aktiva checkouts. Varje färg motsvarar
             en användare och visar vem som arbetar i området och när checkout skapades. Det hjälper
             teamet undvika parallella ändringar i samma del av kartan.
           </p>
@@ -313,7 +324,7 @@ export async function HelpPageContent() {
             overlay-lager som kan delas med andra användare.
           </p>
           <p>
-            Öppna banredigeraren via knappen <strong>Lägg bana</strong> på kartfilens sida, eller
+            Öppna banredigeraren via knappen <strong>Lägg bana</strong> på områdessidan, eller
             gå direkt till <code className="rounded bg-slate-100 px-1">/maps/[slug]/bana</code>.
           </p>
 
@@ -365,7 +376,7 @@ export async function HelpPageContent() {
               "Ge banan ett namn och klicka Spara",
               "Nya banor är privata som standard — kryssa i Gör publik för att dela med alla",
               "Privata banor syns bara för dig; publika banor kan öppnas av alla godkända användare",
-              "Öppna befintlig bana via listan Öppna bana… eller från banlistan på kartfilens sida",
+              "Öppna befintlig bana via listan Öppna bana… eller från banlistan på områdessidan",
               "Ny bana — starta om utan att spara ändringar i aktuell bana",
               "Radera bana — tar bort banan permanent (ägare eller administratör)",
             ]}
@@ -544,8 +555,10 @@ export async function HelpPageContent() {
         {showAdmin && (
           <HelpSection id="admin" title="Administration">
             <p>
-              Administratörer hanterar konton och systeminställningar via{" "}
-              <Link href="/admin/users" className="link-primary">Användare</Link> och{" "}
+              Administratörer hanterar systemet via flikarna{" "}
+              <Link href="/admin/users" className="link-primary">Användare</Link>,{" "}
+              <Link href="/admin/lagring" className="link-primary">Lagring</Link>,{" "}
+              <Link href="/admin/loggning" className="link-primary">Loggning</Link> och{" "}
               <Link href="/admin/settings" className="link-primary">Inställningar</Link>.
             </p>
 
@@ -559,9 +572,28 @@ export async function HelpPageContent() {
                 "Godkänn väntande konton och tilldela roll (läsare, redaktör eller administratör)",
                 "Avvisa konton som inte ska få tillgång",
                 "Skapa konton manuellt med e-post, namn, lösenord och roll",
-                "Nya självregistreringar visas som väntande tills du godkänner dem",
+                "Redigera befintliga användare (namn, e-post, roll)",
+                "Notis — prenumerera på e-post vid nya versioner och checkout-händelser",
+                "Bifoga .ocd — få kartfilen som bilaga i notiser (kräver Notis)",
+                "Senaste inloggning visas i listan",
               ]}
             />
+
+            <h3 className="font-medium text-slate-900">Lagring</h3>
+            <p>
+              Under <Link href="/admin/lagring" className="link-primary">Lagring</Link> ser du en
+              dashboard med total lagring (MB), fördelning per område, uppladdningstrend per månad
+              och detaljtabell med versioner, utcheckningsfiler och banor. Siffrorna baseras på
+              registrerade .ocd-storlekar vid uppladdning.
+            </p>
+
+            <h3 className="font-medium text-slate-900">Loggning</h3>
+            <p>
+              <Link href="/admin/loggning" className="link-primary">Loggning</Link> visar
+              händelser i systemet: inloggningar, uppladdningar, utcheckningar, incheckningar,
+              e-postutskick med bifogad fil (och mottagare) med mera. Filtrera på användare eller
+              «System» och sortera på namn, aktivitet eller datum.
+            </p>
 
             <h3 className="font-medium text-slate-900">E-postinställningar (SMTP)</h3>
             <p>
@@ -571,45 +603,42 @@ export async function HelpPageContent() {
             <HelpList
               items={[
                 "SMTP-server och port (Gmail: smtp.gmail.com, port 587)",
-                "Gmail-adress som avsändare och Google App-lösenord (krävs vid tvåfaktorsautentisering)",
-                "Admin-notis e-post — mottagare för administrativa meddelanden",
-                "Skicka testmail för att verifiera att inställningarna fungerar",
-                "Värden kan också sättas i .env som reserv vid uppstart",
+                "Gmail-adress som avsändare och Google App-lösenord (krävs — vanligt lösenord fungerar inte)",
+                "Admin-notis e-post — huvudmottagare; får alltid .ocd-bilaga vid versioner och incheckning",
+                "Skicka testmail — verifiera SMTP utan bilaga",
+                "Skicka testmail med bifogad fil — verifiera att bilagor fungerar",
               ]}
             />
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
-              Hamnar mailet i skräppost? Markera som «Inte skräppost» i Gmail, lägg till avsändaren
-              i kontakter, och överväg Google Workspace med egen domän och SPF/DKIM för produktion.
+              Gmail kräver app-lösenord om tvåfaktorsautentisering är på. Fel «Application-specific
+              password required» betyder att vanligt lösenord används. Hamnar mailet i skräppost?
+              Markera som «Inte skräppost» och lägg till avsändaren i kontakter.
             </p>
 
             <h3 className="font-medium text-slate-900">E-postnotiser</h3>
             <p>När SMTP är konfigurerat skickas automatiskt e-post vid:</p>
             <HelpList
               items={[
-                "Ny användarregistrering — till admin, med länk till användarhantering",
-                "Ny kartversion uppladdad — till admin, med karta och versionsinfo",
-                "Ny checkout skapad — till checkout-ägare och admin",
-                "Checkin inskickad — till checkout-ägare och admin, med länk till diff",
-                "Användare bekräftat integration — till admin",
-                "Checkout integrerad — till checkout-ägare och admin",
-                "Checkout avbruten av admin — till checkout-ägare och admin",
+                "Ny användarregistrering — till admin/prenumeranter",
+                "Ny kartversion uppladdad — med valfri .ocd-bilaga till berättigade mottagare",
+                "Ny checkout skapad — till checkout-ägare och prenumeranter",
+                "Checkin inskickad — med .ocd-bilaga till admin och prenumeranter med «Bifoga .ocd»",
+                "Användare bekräftat integration — till prenumeranter",
+                "Checkout integrerad — till checkout-ägare och prenumeranter",
+                "Checkout avbruten av admin — till checkout-ägare och prenumeranter",
                 "Påminnelse om gammal checkout — till checkout-ägare efter 7 dagar (konfigurerbart)",
               ]}
             />
 
-            <h3 className="font-medium text-slate-900">Skapa kartfiler</h3>
+            <h3 className="font-medium text-slate-900">Skapa och hantera områden</h3>
             <p>
-              Endast administratörer kan skapa nya logiska kartfiler på startsidan. Redaktörer kan
-              sedan ladda upp versioner till befintliga kartfiler.
-            </p>
-
-            <h3 className="font-medium text-slate-900">Redigera kartnamn</h3>
-            <p>
-              På kartfilens detaljsida kan administratörer klicka <strong>Redigera namn</strong>{" "}
-              bredvid titeln för att ändra visningsnamnet. URL-adressen (slug) ändras inte.
+              Endast administratörer kan skapa nya områden på startsidan. Redigera namn och radera
+              område via ikonerna bredvid titeln på områdessidan.
             </p>
           </HelpSection>
         )}
+
+        <HelpReleaseNotes />
 
         <HelpSection id="faq" title="Vanliga frågor">
           <div className="space-y-6">
@@ -623,9 +652,17 @@ export async function HelpPageContent() {
             <div>
               <h3 className="font-medium text-slate-900">Jag får inga e-postnotiser</h3>
               <p className="mt-1">
-                SMTP måste vara konfigurerat under Admin → Inställningar (eller i .env).
-                Administratören kan skicka ett testmail för att verifiera. Kontrollera även
-                skräppostmappen.
+                SMTP måste vara konfigurerat under Admin → Inställningar med Gmail app-lösenord.
+                Kontrollera att du prenumererar under Admin → Användare (Notis ikryssad). För
+                .ocd-bilaga krävs även «Bifoga .ocd». Skicka testmail för att verifiera. Kontrollera
+                skräppost och att utskick loggas under Admin → Loggning.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-slate-900">Var hittar jag release notes?</h3>
+              <p className="mt-1">
+                Scrolla till avsnittet <a href="#release-notes" className="link-primary">Release notes</a>{" "}
+                på den här sidan — där listas nya funktioner med datum.
               </p>
             </div>
             <div>
@@ -655,9 +692,8 @@ export async function HelpPageContent() {
             <div>
               <h3 className="font-medium text-slate-900">Varför ser jag bara en version i historiken?</h3>
               <p className="mt-1">
-                Endast den senaste versionen visas som standard. Klicka{" "}
-                <strong>Visa alla tidigare versioner</strong> på kartfilens sida för att se äldre
-                versioner.
+                Versionshistoriken är en tabell med alla versioner. Om listan verkar kort kan det
+                bero på att färre versioner finns uppladdade — expandera eller scrolla i tabellen.
               </p>
             </div>
             <div>
