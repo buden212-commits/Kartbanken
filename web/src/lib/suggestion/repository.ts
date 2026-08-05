@@ -159,6 +159,40 @@ export async function listSuggestionsForMap(mapFileId: string, status?: string) 
   });
 }
 
+export async function listSuggestionOverlaysForVersion(
+  mapFileId: string,
+  mapVersionId: string,
+) {
+  const rows = await prisma.mapSuggestion.findMany({
+    where: {
+      mapFileId,
+      mapVersionId,
+      status: { in: [SuggestionStatus.OPEN, SuggestionStatus.IN_PROGRESS] },
+      mapVersion: { isPublished: true },
+    },
+    select: {
+      id: true,
+      status: true,
+      category: true,
+      objects: {
+        orderBy: { sortOrder: "asc" },
+        take: 1,
+        select: { geometryJson: true },
+      },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return rows
+    .filter((row) => row.objects[0])
+    .map((row) => ({
+      id: row.id,
+      status: row.status as SuggestionSummary["status"],
+      category: row.category as SuggestionSummary["category"],
+      geometry: parseGeometryJson(row.objects[0]!.geometryJson),
+    }));
+}
+
 export async function countOpenSuggestionsForUser(mapFileId: string, userId: string) {
   return prisma.mapSuggestion.count({
     where: {

@@ -13,6 +13,7 @@ import { VersionHistoryList } from "@/components/version-history-list";
 import { CheckoutAreaCta } from "@/components/checkout-area-cta";
 import { CheckoutListPanel } from "@/components/checkout-list-panel";
 import { CheckoutOverviewMap } from "@/components/checkout-overview-map";
+import { SuggestionOverviewMap } from "@/components/suggestion/suggestion-map-overlay";
 import { CourseListPanel } from "@/components/course/course-list-panel";
 import { SuggestionListPanel } from "@/components/suggestion/suggestion-list-panel";
 import { listSuggestionsForMap, serializeSuggestionSummary, getLatestPublishedVersionNumber } from "@/lib/suggestion/repository";
@@ -91,6 +92,7 @@ export default async function MapDetailPage({ params }: PageProps) {
   });
 
   const publishedVersions = map.versions.filter((v) => v.isPublished);
+  const latestPublishedVersion = publishedVersions[0] ?? null;
   const latestComparePair =
     publishedVersions.length >= 2
       ? [publishedVersions[1]!, publishedVersions[0]!]
@@ -171,6 +173,20 @@ export default async function MapDetailPage({ params }: PageProps) {
           />
         )}
       </section>
+
+      {latestPublishedVersion &&
+        session?.user?.id &&
+        role &&
+        canCreateMapSuggestion(role) && (
+        <section className="mt-10">
+          <h2 className="text-lg font-medium text-slate-900">Kartförslag på kartan</h2>
+          <SuggestionOverviewMap
+            mapSlug={map.slug}
+            versionId={latestPublishedVersion.id}
+            versionNumber={latestPublishedVersion.versionNumber}
+          />
+        </section>
+      )}
 
       {headVersionId && activeCheckouts.length > 0 && (
         <section className="mt-10">

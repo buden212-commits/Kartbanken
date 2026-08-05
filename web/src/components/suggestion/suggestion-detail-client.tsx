@@ -2,17 +2,33 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
-import { DiffMapPanel } from "@/components/diff-map-panel";
-import { renderSuggestionGeometrySvg } from "@/lib/suggestion/geometry";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { DiffMapPanel, type MapDrawPointerHandlers } from "@/components/diff-map-panel";
+import { screenToSvgPoint } from "@/lib/ocad/map-hit-test";
+import {
+  IDENTITY_SVG_TRANSFORM,
+  svgUserToGeoPoint,
+  type SvgRootTransform,
+} from "@/lib/ocad/svg-coords";
+import {
+  isValidSuggestionBbox,
+  isValidSuggestionLineCoordinates,
+  isValidSuggestionPolygonRing,
+  normalizeSuggestionBbox,
+  renderSuggestionGeometrySvg,
+} from "@/lib/suggestion/geometry";
 import {
   SUGGESTION_CATEGORY_LABELS,
   SUGGESTION_STATUS_LABELS,
   SuggestionStatus,
+  type SuggestionCategoryValue,
   type SuggestionDetail,
+  type SuggestionGeometry,
   type SuggestionStatusValue,
 } from "@/lib/suggestion/types";
 import { formatDate } from "@/lib/format";
+
+type DrawTool = "pin" | "rectangle" | "polygon" | "line";
 
 type CheckoutOption = {
   id: string;
@@ -34,6 +50,13 @@ type Props = {
   isAdmin: boolean;
   checkoutOptions: CheckoutOption[];
   publishedVersions: VersionOption[];
+};
+
+const TOOL_LABELS: Record<DrawTool, string> = {
+  pin: "Punkt",
+  rectangle: "Rektangel",
+  polygon: "Polygon",
+  line: "Linje",
 };
 
 function statusBadgeClass(status: SuggestionStatusValue): string {
@@ -60,6 +83,9 @@ export function SuggestionDetailClient({
   publishedVersions,
 }: Props) {
   const router = useRouter();
+  const rootTransformRef = useRef<SvgRootTransform>(IDENTITY_SVG_TRANSFORM);
+  const dragRef = useRef<{ start: [number, number]; current: [number, number] } | null>(null);
+
   const [suggestion, setSuggestion] = useState(initial);
   const [reviewComment, setReviewComment] = useState("");
   const [selectedCheckoutId, setSelectedCheckoutId] = useState("");
@@ -67,7 +93,21 @@ export function SuggestionDetailClient({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const [editMode, setEditMode] = useState(false);
+  const [editCategory, setEditCategory] = useState<SuggestionCategoryValue>(initial.category);
+  const [editTitle, setEditTitle] = useState(initial.title ?? "");
+  const [editComment, setEditComment] = useState(initial.comment);
+  const [editGeometry, setEditGeometry] = useState<SuggestionGeometry | null>(
+    initial.objects[0]?.geometry ?? null,
+  );
+  const [redrawMarking, setRedrawMarking] = useState(false);
+  const [drawTool, setDrawTool] = useState<DrawTool>("pin");
+  const [draftBbox, setDraftBbox] = useState<SuggestionGeometry | null>(null);
+  const [polygonPoints, setPolygonPoints] = useState<[number, number][]>([]);
+  const [linePoints, setLinePoints] = useState<[number, number][]>([]);
+
   const marking = suggestion.objects[0]?.geometry;
+  const canEdit = isOwner && suggestion.status === SuggestionStatus.OPEN;
   const canDelete =
     isAdmin || (isOwner && suggestion.status === SuggestionStatus.OPEN);
   const canReviewNow =
@@ -79,6 +119,115 @@ export function SuggestionDetailClient({
     () => SUGGESTION_CATEGORY_LABELS[suggestion.category],
     [suggestion.category],
   );
+
+  const resetDrawDraft = useCallback(() => {
+    setDraftBbox(null);
+    setPolygonPoints([]);
+    setLinePoints([]);
+    dragRef.current = null;
+  }, []);
+
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent, svg: SVGSVGElement) => {
+      if (!redrawMarking) return;
+      const pt = screenToSvgPoint(svg, e.clientX, e.clientY);
+      if (!pt) return;
+      const geo = svgUserToGeoPoint(pt, rootTransformRef.current);
+
+      if (drawTool === "pin") {
+        setEditGeometry({ type: "Point", coordinates: geo });
+        resetDrawDraft();
+        return;
+      }
+      if (drawTool === "rectangle") {
+        dragRef.current = { start: pt, current: pt };
+        setDraftBbox(null);
+        setPolygonPoints([]);
+        setLinePoints([]);
+        return;
+      }
+      if (drawTool === "polygon") {
+        setPolygonPoints((prev) => [...prev, geo]);
+        setDraftBbox(null);
+        setLinePoints([]);
+        setEditGeometry(null);
+        return;
+      }
+      if (drawTool === "line") {
+        setLinePoints((prev) => [...prev, geo]);
+        setDraftBbox(null);
+        setPolygonPoints([]);
+        setEditGeometry(null);
+      }
+    },
+    [drawTool, redrawMarking, resetDrawDraft],
+  );
+
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent, svg: SVGSVGElement) => {
+      if (!redrawMarking || drawTool !== "rectangle" || !dragRef.current) return;
+      const pt = screenToSvgPoint(svg, e.clientX, e.clientY);
+      if (!pt) return;
+      dragRef.current.current = pt;
+      const startGeo = svgUserToGeoPoint(dragRef.current.start, rootTransformRef.current);
+      const endGeo = svgUserToGeoPoint(pt, rootTransformRef.current);
+      setDraftBbox({ type: "Bbox", bbox: normalizeSuggestionBbox(startGeo, endGeo) });
+    },
+    [drawTool, redrawMarking],
+  );
+
+  const handlePointerUp = useCallback(
+    (_e: React.PointerEvent, _svg: SVGSVGElement) => {
+      if (!redrawMarking || drawTool !== "rectangle" || !dragRef.current) return;
+      const startGeo = svgUserToGeoPoint(dragRef.current.start, rootTransformRef.current);
+      const endGeo = svgUserToGeoPoint(dragRef.current.current, rootTransformRef.current);
+      dragRef.current = null;
+      const bbox = normalizeSuggestionBbox(startGeo, endGeo);
+      if (!isValidSuggestionBbox(bbox)) {
+        setDraftBbox(null);
+        setError("Rektangeln är för liten");
+        return;
+      }
+      setEditGeometry({ type: "Bbox", bbox });
+      setDraftBbox(null);
+    },
+    [drawTool, redrawMarking],
+  );
+
+  const confirmDrawDraft = useCallback(() => {
+    if (drawTool === "polygon" && polygonPoints.length >= 3) {
+      if (!isValidSuggestionPolygonRing(polygonPoints)) {
+        setError("Polygonen är för liten");
+        return;
+      }
+      setEditGeometry({ type: "Polygon", ring: polygonPoints });
+      setPolygonPoints([]);
+      return;
+    }
+    if (drawTool === "line" && linePoints.length >= 2) {
+      setEditGeometry({ type: "LineString", coordinates: linePoints });
+      setLinePoints([]);
+    }
+  }, [drawTool, linePoints, polygonPoints]);
+
+  const draftGeometry = useMemo((): SuggestionGeometry | null => {
+    if (draftBbox) return draftBbox;
+    if (polygonPoints.length >= 2) return { type: "Polygon", ring: polygonPoints };
+    if (linePoints.length >= 1) return { type: "LineString", coordinates: linePoints };
+    return null;
+  }, [draftBbox, linePoints, polygonPoints]);
+
+  const drawPointerHandlers = useMemo<MapDrawPointerHandlers>(
+    () => ({
+      onPointerDown: handlePointerDown,
+      onPointerMove: handlePointerMove,
+      onPointerUp: handlePointerUp,
+    }),
+    [handlePointerDown, handlePointerMove, handlePointerUp],
+  );
+
+  const displayGeometry =
+    editMode && redrawMarking ? (draftGeometry ?? editGeometry) : marking;
 
   async function patchSuggestion(body: Record<string, unknown>) {
     setLoading(true);
@@ -95,8 +244,10 @@ export function SuggestionDetailClient({
       }
       setSuggestion(data);
       router.refresh();
+      return data;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Kunde inte uppdatera förslaget");
+      return null;
     } finally {
       setLoading(false);
     }
@@ -133,6 +284,41 @@ export function SuggestionDetailClient({
     router.refresh();
   }
 
+  function startEdit() {
+    setEditCategory(suggestion.category);
+    setEditTitle(suggestion.title ?? "");
+    setEditComment(suggestion.comment);
+    setEditGeometry(suggestion.objects[0]?.geometry ?? null);
+    setRedrawMarking(false);
+    resetDrawDraft();
+    setEditMode(true);
+    setError(null);
+  }
+
+  function cancelEdit() {
+    setEditMode(false);
+    setRedrawMarking(false);
+    resetDrawDraft();
+    setError(null);
+  }
+
+  async function saveEdit() {
+    const body: Record<string, unknown> = {
+      category: editCategory,
+      title: editTitle.trim() || null,
+      comment: editComment,
+    };
+    if (editGeometry) {
+      body.geometry = editGeometry;
+    }
+    const updated = await patchSuggestion(body);
+    if (updated) {
+      setEditMode(false);
+      setRedrawMarking(false);
+      resetDrawDraft();
+    }
+  }
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
       <Link href={`/maps/${mapSlug}`} className="link-muted text-sm">
@@ -154,42 +340,161 @@ export function SuggestionDetailClient({
             </p>
           )}
         </div>
-        <span
-          className={`rounded-full border px-3 py-1 text-sm font-medium ${statusBadgeClass(suggestion.status)}`}
-        >
-          {SUGGESTION_STATUS_LABELS[suggestion.status]}
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          {canEdit && !editMode && (
+            <button
+              type="button"
+              onClick={startEdit}
+              className="rounded-lg border border-orange-300 bg-orange-50 px-3 py-1.5 text-sm font-medium text-orange-800 hover:bg-orange-100"
+            >
+              Redigera
+            </button>
+          )}
+          <span
+            className={`rounded-full border px-3 py-1 text-sm font-medium ${statusBadgeClass(suggestion.status)}`}
+          >
+            {SUGGESTION_STATUS_LABELS[suggestion.status]}
+          </span>
+        </div>
       </div>
 
-      <div className="card mt-6 space-y-3 text-sm text-slate-700">
-        <p>
-          <span className="font-medium text-slate-900">Skapad av:</span>{" "}
-          {suggestion.createdBy.name?.trim() || suggestion.createdBy.email}
-        </p>
-        <p className="whitespace-pre-wrap">{suggestion.comment}</p>
-        {suggestion.reviewComment && (
-          <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-            <span className="font-medium text-slate-900">Granskning:</span>{" "}
-            {suggestion.reviewComment}
-          </p>
-        )}
-        {suggestion.integratedVersionNumber != null && (
-          <p>
-            <span className="font-medium text-slate-900">Införd i version:</span> v
-            {suggestion.integratedVersionNumber}
-          </p>
-        )}
-        {suggestion.hasAttachment && (
+      {editMode ? (
+        <div className="card mt-6 space-y-4">
+          <h2 className="text-lg font-medium text-slate-900">Redigera kartförslag</h2>
           <div>
-            <span className="font-medium text-slate-900">Foto:</span>
-            <img
-              src={`/api/maps/${mapSlug}/suggestions/${suggestion.id}/attachment`}
-              alt="Bilaga till kartförslag"
-              className="mt-2 max-h-64 rounded-lg border border-slate-200 object-contain"
+            <label htmlFor="editCategory" className="form-label">
+              Kategori
+            </label>
+            <select
+              id="editCategory"
+              value={editCategory}
+              onChange={(e) => setEditCategory(e.target.value as SuggestionCategoryValue)}
+              className="form-input"
+            >
+              {Object.entries(SUGGESTION_CATEGORY_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="editTitle" className="form-label">
+              Rubrik (valfritt)
+            </label>
+            <input
+              id="editTitle"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              maxLength={120}
+              className="form-input"
             />
           </div>
-        )}
-      </div>
+          <div>
+            <label htmlFor="editComment" className="form-label">
+              Beskrivning
+            </label>
+            <textarea
+              id="editComment"
+              value={editComment}
+              onChange={(e) => setEditComment(e.target.value)}
+              required
+              minLength={10}
+              rows={4}
+              className="form-input"
+            />
+          </div>
+          <div>
+            <button
+              type="button"
+              onClick={() => {
+                setRedrawMarking((v) => !v);
+                resetDrawDraft();
+              }}
+              className="text-sm text-orange-700 hover:underline"
+            >
+              {redrawMarking ? "Avbryt omritning" : "Byt markering på kartan"}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" disabled={loading} onClick={() => void saveEdit()} className="btn-primary">
+              {loading ? "Sparar…" : "Spara ändringar"}
+            </button>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={cancelEdit}
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+            >
+              Avbryt
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="card mt-6 space-y-3 text-sm text-slate-700">
+          <p>
+            <span className="font-medium text-slate-900">Skapad av:</span>{" "}
+            {suggestion.createdBy.name?.trim() || suggestion.createdBy.email}
+          </p>
+          <p className="whitespace-pre-wrap">{suggestion.comment}</p>
+          {suggestion.reviewComment && (
+            <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+              <span className="font-medium text-slate-900">Granskning:</span>{" "}
+              {suggestion.reviewComment}
+            </p>
+          )}
+          {suggestion.integratedVersionNumber != null && (
+            <p>
+              <span className="font-medium text-slate-900">Införd i version:</span> v
+              {suggestion.integratedVersionNumber}
+            </p>
+          )}
+          {suggestion.hasAttachment && (
+            <div>
+              <span className="font-medium text-slate-900">Foto:</span>
+              <img
+                src={`/api/maps/${mapSlug}/suggestions/${suggestion.id}/attachment`}
+                alt="Bilaga till kartförslag"
+                className="mt-2 max-h-64 rounded-lg border border-slate-200 object-contain"
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {editMode && redrawMarking && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {(Object.keys(TOOL_LABELS) as DrawTool[]).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => {
+                setDrawTool(t);
+                resetDrawDraft();
+              }}
+              className={`rounded-lg border px-3 py-1.5 text-sm ${
+                drawTool === t
+                  ? "border-orange-400 bg-orange-50 text-orange-900"
+                  : "border-slate-300 text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              {TOOL_LABELS[t]}
+            </button>
+          ))}
+          {(drawTool === "polygon" || drawTool === "line") && (
+            <button
+              type="button"
+              disabled={
+                drawTool === "polygon" ? polygonPoints.length < 3 : linePoints.length < 2
+              }
+              onClick={confirmDrawDraft}
+              className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+            >
+              {drawTool === "polygon" ? "Slutför polygon" : "Slutför linje"}
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="mt-6">
         <DiffMapPanel
@@ -197,14 +502,18 @@ export function SuggestionDetailClient({
           title="Plats på kartan"
           mapSlug={mapSlug}
           versionId={suggestion.mapVersionId}
+          interactionMode={editMode && redrawMarking ? "draw" : "navigate"}
+          drawPointerHandlers={editMode && redrawMarking ? drawPointerHandlers : undefined}
           renderSvgOverlay={(rootTransform) => {
-            if (!marking) return null;
+            rootTransformRef.current = rootTransform;
+            if (!displayGeometry) return null;
             return (
               <g
                 dangerouslySetInnerHTML={{
-                  __html: renderSuggestionGeometrySvg(marking, rootTransform, {
+                  __html: renderSuggestionGeometrySvg(displayGeometry, rootTransform, {
                     label: overlayLabel,
                     selected: true,
+                    draft: Boolean(editMode && redrawMarking && draftGeometry),
                   }),
                 }}
               />
@@ -213,7 +522,7 @@ export function SuggestionDetailClient({
         />
       </div>
 
-      {canReviewNow && (
+      {canReviewNow && !editMode && (
         <div className="card mt-6 space-y-4">
           <h2 className="text-lg font-medium text-slate-900">Granska förslag</h2>
           <div>
@@ -313,7 +622,7 @@ export function SuggestionDetailClient({
         </p>
       )}
 
-      {canDelete && (
+      {canDelete && !editMode && (
         <div className="mt-6">
           <button
             type="button"

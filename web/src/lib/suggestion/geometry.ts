@@ -6,8 +6,10 @@ import {
 import type {
   SuggestionBboxGeometry,
   SuggestionGeometry,
+  SuggestionLineGeometry,
   SuggestionObjectDto,
   SuggestionPointGeometry,
+  SuggestionPolygonGeometry,
 } from "./types";
 
 export const SUGGESTION_ORANGE = "#f97316";
@@ -64,6 +66,56 @@ export function renderSuggestionBboxSvg(
   </g>`;
 }
 
+export function geoRingToSvgPoints(
+  ring: [number, number][],
+  rootTransform: SvgRootTransform,
+): string {
+  return ring
+    .map(([x, y]) => {
+      const [sx, sy] = geoToSvgUserPoint([x, y], rootTransform);
+      return `${sx},${sy}`;
+    })
+    .join(" ");
+}
+
+export function renderSuggestionPolygonSvg(
+  geometry: SuggestionPolygonGeometry,
+  rootTransform: SvgRootTransform,
+  options?: { label?: string; selected?: boolean; draft?: boolean },
+): string {
+  const points = geoRingToSvgPoints(geometry.ring, rootTransform);
+  const strokeWidth = options?.selected ? 3 : 2;
+  const fillOpacity = options?.draft ? 0.15 : 0.25;
+  const svgPts = geometry.ring.map(([x, y]) => geoToSvgUserPoint([x, y], rootTransform));
+  const cx = svgPts.reduce((sum, [x]) => sum + x, 0) / svgPts.length;
+  const cy = svgPts.reduce((sum, [, y]) => sum + y, 0) / svgPts.length;
+  const label = options?.label
+    ? `<text x="${cx}" y="${cy - 6}" text-anchor="middle" font-size="11" font-weight="600" fill="${SUGGESTION_ORANGE_STROKE}">${escapeXml(options.label)}</text>`
+    : "";
+  return `<g data-suggestion-polygon="true">
+    <polygon points="${points}" fill="${SUGGESTION_ORANGE}" fill-opacity="${fillOpacity}" stroke="${SUGGESTION_ORANGE_STROKE}" stroke-width="${strokeWidth}" stroke-dasharray="6 4"/>
+    ${label}
+  </g>`;
+}
+
+export function renderSuggestionLineSvg(
+  geometry: SuggestionLineGeometry,
+  rootTransform: SvgRootTransform,
+  options?: { label?: string; selected?: boolean; draft?: boolean },
+): string {
+  const points = geoRingToSvgPoints(geometry.coordinates, rootTransform);
+  const strokeWidth = options?.selected ? 3 : 2;
+  const mid = geometry.coordinates[Math.floor(geometry.coordinates.length / 2)]!;
+  const [lx, ly] = geoToSvgUserPoint(mid, rootTransform);
+  const label = options?.label
+    ? `<text x="${lx}" y="${ly - 8}" text-anchor="middle" font-size="11" font-weight="600" fill="${SUGGESTION_ORANGE_STROKE}">${escapeXml(options.label)}</text>`
+    : "";
+  return `<g data-suggestion-line="true">
+    <polyline points="${points}" fill="none" stroke="${SUGGESTION_ORANGE_STROKE}" stroke-width="${strokeWidth}" stroke-dasharray="6 4" stroke-linecap="round" stroke-linejoin="round"/>
+    ${label}
+  </g>`;
+}
+
 export function renderSuggestionGeometrySvg(
   geometry: SuggestionGeometry,
   rootTransform: SvgRootTransform,
@@ -72,7 +124,13 @@ export function renderSuggestionGeometrySvg(
   if (geometry.type === "Point") {
     return renderSuggestionPinSvg(geometry, rootTransform, options);
   }
-  return renderSuggestionBboxSvg(geometry, rootTransform, options);
+  if (geometry.type === "Bbox") {
+    return renderSuggestionBboxSvg(geometry, rootTransform, options);
+  }
+  if (geometry.type === "Polygon") {
+    return renderSuggestionPolygonSvg(geometry, rootTransform, options);
+  }
+  return renderSuggestionLineSvg(geometry, rootTransform, options);
 }
 
 export function renderSuggestionObjectsSvg(
@@ -105,4 +163,28 @@ export function isValidSuggestionBbox(bbox: SuggestionBboxGeometry["bbox"]): boo
     bbox.maxX - bbox.minX >= MIN_SUGGESTION_BBOX_SIZE &&
     bbox.maxY - bbox.minY >= MIN_SUGGESTION_BBOX_SIZE
   );
+}
+
+export function bboxFromRing(ring: [number, number][]): SuggestionBboxGeometry["bbox"] {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const [x, y] of ring) {
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+export function isValidSuggestionPolygonRing(ring: [number, number][]): boolean {
+  if (ring.length < 3) return false;
+  const bbox = bboxFromRing(ring);
+  return isValidSuggestionBbox(bbox);
+}
+
+export function isValidSuggestionLineCoordinates(coordinates: [number, number][]): boolean {
+  return coordinates.length >= 2;
 }

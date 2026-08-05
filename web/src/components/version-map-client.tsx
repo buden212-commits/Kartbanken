@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { DiffMapPanel } from "@/components/diff-map-panel";
+import { useSuggestionMapOverlayControls } from "@/components/suggestion/suggestion-map-overlay";
 
 type Props = {
   mapSlug: string;
@@ -25,6 +26,7 @@ export function VersionMapClient({
   canSuggest,
 }: Props) {
   const viewerUrl = `/maps/${mapSlug}/versions/${versionId}/viewer`;
+  const { renderOverlay, toggle } = useSuggestionMapOverlayControls(mapSlug, versionId);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
@@ -65,13 +67,16 @@ export function VersionMapClient({
         </div>
       </div>
 
-      <div className="mt-6 sm:mt-8">
+      <div className="mt-4 flex justify-end">{toggle}</div>
+
+      <div className="mt-2 sm:mt-4">
         <DiffMapPanel
           previewUrl={`/api/maps/${mapSlug}/versions/${versionId}/preview`}
           title="Hela kartan"
           mapSlug={mapSlug}
           versionId={versionId}
           exportEnabled
+          renderSvgOverlay={renderOverlay}
         />
       </div>
     </div>

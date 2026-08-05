@@ -1,6 +1,6 @@
 # Kartförslag — produktspec
 
-Status: **Fas 1 + Fas 2 implementerade** (2026-08-05).
+Status: **Fas 1 + Fas 2 + Fas 3 implementerade** (2026-08-05).
 
 ## Syfte
 
@@ -32,11 +32,20 @@ Godkända användare kan markera och beskriva terrängändringar på **publicera
 - Checkout- och versionskoppling i granskningsformuläret
 - «Gäller version N» när förslaget gäller äldre publicerad version
 
+## Fas 3
+
+- Polygon- och linjeverktyg vid skapande (utöver punkt och rektangel)
+- Objekttyper `POLYGON` och `LINE`; geometrityper `Polygon` (ring) och `LineString`
+- Öppna och pågående förslag visas som orange overlay på kartvy och områdessidan (senaste publicerade version)
+- Klick på overlay → detaljsida; växla visa/dölj kartförslag-lager (standard på)
+- Stora foto (>4,5 MB) via upload-init + Blob client upload (samma mönster som checkin)
+- Ägare kan redigera egna öppna förslag (kategori, rubrik, kommentar, markering)
+
 ## Datamodell
 
 Se `web/prisma/schema.prisma`: `MapSuggestion`, `MapSuggestionObject`.
 
-Fält: `attachmentPath`, `checkoutId`, `integratedVersionId`, objekttyper `POINT` och `BBOX`.
+Fält: `attachmentPath`, `checkoutId`, `integratedVersionId`, objekttyper `POINT`, `BBOX`, `POLYGON` och `LINE`.
 
 ## Behörigheter
 
@@ -50,17 +59,18 @@ Fält: `attachmentPath`, `checkoutId`, `integratedVersionId`, objekttyper `POINT
 
 ## API
 
-- `GET/POST /api/maps/[slug]/suggestions`
+- `GET/POST /api/maps/[slug]/suggestions` — `?overlay=1&mapVersionId=` för lättvikts-overlay
 - `GET/PATCH/DELETE /api/maps/[slug]/suggestions/[id]`
 - `GET /api/maps/[slug]/suggestions/[id]/attachment` — foto
+- `POST /api/maps/[slug]/suggestions/attachment/upload-init` + `upload-complete` — stora bilder
 
 ## UI
 
-- Områdessida: `SuggestionListPanel`
-- Skapa: `/maps/[slug]/versions/[id]/suggest` (pin eller rektangel)
-- Visa/granska: `/maps/[slug]/suggestions/[id]`
-- Knapp «Föreslå ändring» i kartvy (publicerade versioner)
+- Områdessida: `SuggestionListPanel` + kartöversikt med förslag (senaste publicerade version)
+- Skapa: `/maps/[slug]/versions/[id]/suggest` (punkt, rektangel, polygon eller linje)
+- Visa/granska/redigera: `/maps/[slug]/suggestions/[id]`
+- Knapp «Föreslå ändring» i kartvy; kartförslag-lager i versionskarta
 
 ## Kända begränsningar
 
-- Foto-uppladdning >4,5 MB via direkt FormData — större filer kräver framtida upload-init-flöde (som checkin).
+- Ingen mini-OCAD, IOF-symboler, multi-objekt eller GPS i kartförslag

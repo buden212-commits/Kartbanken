@@ -450,10 +450,12 @@ export async function HelpPageContent() {
           <HelpList
             items={[
               "Öppna en publicerad version via Visa karta och klicka Föreslå ändring",
-              "Välj punkt eller rektangel och markera plats/område på kartan (orange overlay)",
+              "Välj punkt, rektangel, polygon eller linje och markera på kartan (orange overlay)",
               "Välj kategori, skriv beskrivning (minst 10 tecken) och bifoga valfritt foto",
-              "Alla ser förslag under Kartförslag på områdessidan — filtrera på öppna, pågår, införda m.m.",
+              "Öppna och pågående förslag visas på kartan — klicka markeringen eller använd listan på områdessidan",
+              "Växla «Visa kartförslag» i kartvyn för att dölja lagret",
               "Redaktörer markerar som Pågår, Införd eller Avvisad och kan koppla checkout",
+              "Du kan redigera egna öppna förslag (text och markering) via Redigera på detaljsidan",
               "Förslag gäller den version du markerade — vid ny publicerad version visas «Gäller version N»",
             ]}
           />

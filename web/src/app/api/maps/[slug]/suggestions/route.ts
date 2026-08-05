@@ -13,6 +13,7 @@ import {
   countOpenSuggestionsForUser,
   createSuggestion,
   getLatestPublishedVersionNumber,
+  listSuggestionOverlaysForVersion,
   listSuggestionsForMap,
   serializeSuggestionDetail,
   serializeSuggestionSummary,
@@ -49,6 +50,30 @@ export async function GET(request: Request, { params }: RouteParams) {
 
   const url = new URL(request.url);
   const status = url.searchParams.get("status") ?? undefined;
+  const overlay = url.searchParams.get("overlay") === "1" || url.searchParams.get("overlay") === "true";
+  const mapVersionId = url.searchParams.get("mapVersionId") ?? undefined;
+
+  if (overlay) {
+    if (!mapVersionId) {
+      return NextResponse.json({ error: "mapVersionId krävs för overlay" }, { status: 400 });
+    }
+    const version = await prisma.mapVersion.findFirst({
+      where: { id: mapVersionId, mapFileId: map.id, isPublished: true },
+      select: { id: true },
+    });
+    if (!version) {
+      return NextResponse.json({ error: "Version hittades inte" }, { status: 404 });
+    }
+    const items = await listSuggestionOverlaysForVersion(map.id, version.id);
+    return NextResponse.json({
+      overlays: items.map((item) => ({
+        id: item.id,
+        status: item.status,
+        categoryLabel: SUGGESTION_CATEGORY_LABELS[item.category],
+        geometry: item.geometry,
+      })),
+    });
+  }
 
   const [suggestions, latestPublishedVersionNumber] = await Promise.all([
     listSuggestionsForMap(map.id, status),

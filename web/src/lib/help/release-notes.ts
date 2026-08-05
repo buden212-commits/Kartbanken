@@ -8,6 +8,17 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-05",
+    title: "Kartförslag — fas 3",
+    items: [
+      "Rita polygon eller linje utöver punkt och rektangel när du lämnar kartförslag",
+      "Öppna och pågående förslag syns som orange markering på kartvy och områdessidan — klicka för att öppna",
+      "Växla «Visa kartförslag» i kartvyn för att dölja eller visa lagret",
+      "Stora foton (över ca 4,5 MB) kan laddas upp utan storleksfel",
+      "Du kan redigera egna öppna förslag — text, kategori och markering på kartan",
+    ],
+  },
+  {
+    date: "2026-08-05",
     title: "Kartförslag — fas 2",
     items: [
       "Markera rektangel/yta utöver punkt när du lämnar kartförslag",

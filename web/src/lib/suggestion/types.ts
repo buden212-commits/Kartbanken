@@ -35,6 +35,8 @@ export const SUGGESTION_STATUS_LABELS: Record<SuggestionStatusValue, string> = {
 export const SuggestionObjectType = {
   POINT: "POINT",
   BBOX: "BBOX",
+  POLYGON: "POLYGON",
+  LINE: "LINE",
 } as const;
 
 export type SuggestionObjectTypeValue =
@@ -57,7 +59,28 @@ export type SuggestionBboxGeometry = {
   bbox: SuggestionBbox;
 };
 
-export type SuggestionGeometry = SuggestionPointGeometry | SuggestionBboxGeometry;
+export type SuggestionPolygonGeometry = {
+  type: "Polygon";
+  ring: [number, number][];
+};
+
+export type SuggestionLineGeometry = {
+  type: "LineString";
+  coordinates: [number, number][];
+};
+
+export type SuggestionGeometry =
+  | SuggestionPointGeometry
+  | SuggestionBboxGeometry
+  | SuggestionPolygonGeometry
+  | SuggestionLineGeometry;
+
+export type SuggestionOverlayItem = {
+  id: string;
+  status: SuggestionStatusValue;
+  categoryLabel: string;
+  geometry: SuggestionGeometry;
+};
 
 export type SuggestionObjectDto = {
   id: string;

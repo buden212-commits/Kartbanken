@@ -12,6 +12,8 @@ import {
 } from "@/lib/ocad/svg-coords";
 import {
   isValidSuggestionBbox,
+  isValidSuggestionLineCoordinates,
+  isValidSuggestionPolygonRing,
   normalizeSuggestionBbox,
   renderSuggestionGeometrySvg,
 } from "@/lib/suggestion/geometry";
@@ -20,14 +22,22 @@ import {
   type SuggestionCategoryValue,
   type SuggestionGeometry,
 } from "@/lib/suggestion/types";
+import { uploadSuggestionAttachment } from "@/lib/upload-client";
 
-type DrawTool = "pin" | "rectangle";
+type DrawTool = "pin" | "rectangle" | "polygon" | "line";
 
 type Props = {
   mapSlug: string;
   mapTitle: string;
   versionId: string;
   versionNumber: number;
+};
+
+const TOOL_LABELS: Record<DrawTool, string> = {
+  pin: "Punkt",
+  rectangle: "Rektangel",
+  polygon: "Polygon",
+  line: "Linje",
 };
 
 export function SuggestionCreateClient({
@@ -43,6 +53,8 @@ export function SuggestionCreateClient({
   const [tool, setTool] = useState<DrawTool>("pin");
   const [geometry, setGeometry] = useState<SuggestionGeometry | null>(null);
   const [draftBbox, setDraftBbox] = useState<SuggestionGeometry | null>(null);
+  const [polygonPoints, setPolygonPoints] = useState<[number, number][]>([]);
+  const [linePoints, setLinePoints] = useState<[number, number][]>([]);
   const [category, setCategory] = useState<SuggestionCategoryValue>("FEL_I_TERRANG");
   const [title, setTitle] = useState("");
   const [comment, setComment] = useState("");
@@ -51,25 +63,52 @@ export function SuggestionCreateClient({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const resetDraft = useCallback(() => {
+    setDraftBbox(null);
+    setPolygonPoints([]);
+    setLinePoints([]);
+    dragRef.current = null;
+  }, []);
+
   const handlePointerDown = useCallback(
     (e: React.PointerEvent, svg: SVGSVGElement) => {
       const pt = screenToSvgPoint(svg, e.clientX, e.clientY);
       if (!pt) return;
+      const geo = svgUserToGeoPoint(pt, rootTransformRef.current);
 
       if (tool === "pin") {
-        const geo = svgUserToGeoPoint(pt, rootTransformRef.current);
         setGeometry({ type: "Point", coordinates: geo });
-        setDraftBbox(null);
+        resetDraft();
         setError(null);
         return;
       }
 
-      dragRef.current = { start: pt, current: pt };
-      setDraftBbox(null);
-      setGeometry(null);
-      setError(null);
+      if (tool === "rectangle") {
+        dragRef.current = { start: pt, current: pt };
+        setDraftBbox(null);
+        setPolygonPoints([]);
+        setLinePoints([]);
+        return;
+      }
+
+      if (tool === "polygon") {
+        setPolygonPoints((prev) => [...prev, geo]);
+        setDraftBbox(null);
+        setLinePoints([]);
+        setGeometry(null);
+        setError(null);
+        return;
+      }
+
+      if (tool === "line") {
+        setLinePoints((prev) => [...prev, geo]);
+        setDraftBbox(null);
+        setPolygonPoints([]);
+        setGeometry(null);
+        setError(null);
+      }
     },
-    [tool],
+    [resetDraft, tool],
   );
 
   const handlePointerMove = useCallback(
@@ -105,6 +144,35 @@ export function SuggestionCreateClient({
     [tool],
   );
 
+  const confirmDraft = useCallback(() => {
+    if (tool === "polygon" && polygonPoints.length >= 3) {
+      if (!isValidSuggestionPolygonRing(polygonPoints)) {
+        setError("Polygonen är för liten — lägg fler hörn");
+        return;
+      }
+      setGeometry({ type: "Polygon", ring: polygonPoints });
+      setPolygonPoints([]);
+      setError(null);
+      return;
+    }
+    if (tool === "line" && linePoints.length >= 2) {
+      if (!isValidSuggestionLineCoordinates(linePoints)) {
+        setError("Linjen kräver minst 2 punkter");
+        return;
+      }
+      setGeometry({ type: "LineString", coordinates: linePoints });
+      setLinePoints([]);
+      setError(null);
+    }
+  }, [linePoints, polygonPoints, tool]);
+
+  const draftGeometry = useMemo((): SuggestionGeometry | null => {
+    if (draftBbox) return draftBbox;
+    if (polygonPoints.length >= 2) return { type: "Polygon", ring: polygonPoints };
+    if (linePoints.length >= 1) return { type: "LineString", coordinates: linePoints };
+    return null;
+  }, [draftBbox, linePoints, polygonPoints]);
+
   const drawPointerHandlers = useMemo<MapDrawPointerHandlers>(
     () => ({
       onPointerDown: handlePointerDown,
@@ -117,8 +185,7 @@ export function SuggestionCreateClient({
   function handleToolChange(next: DrawTool) {
     setTool(next);
     setGeometry(null);
-    setDraftBbox(null);
-    dragRef.current = null;
+    resetDraft();
     setError(null);
   }
 
@@ -137,7 +204,11 @@ export function SuggestionCreateClient({
       setError(
         tool === "pin"
           ? "Klicka på kartan för att placera en markering"
-          : "Dra en rektangel på kartan för att markera området",
+          : tool === "rectangle"
+            ? "Dra en rektangel på kartan för att markera området"
+            : tool === "polygon"
+              ? "Klicka hörn på kartan och klicka Slutför polygon"
+              : "Klicka punkter på kartan och klicka Slutför linje",
       );
       return;
     }
@@ -146,12 +217,7 @@ export function SuggestionCreateClient({
     try {
       let attachmentPath: string | undefined;
       if (attachmentFile) {
-        const uploadForm = new FormData();
-        uploadForm.set("file", attachmentFile);
-        const uploadRes = await fetch(`/api/maps/${mapSlug}/suggestions/attachment`, {
-          method: "POST",
-          body: uploadForm,
-        });
+        const uploadRes = await uploadSuggestionAttachment(mapSlug, attachmentFile);
         const uploadData = (await uploadRes.json()) as { error?: string; attachmentPath?: string };
         if (!uploadRes.ok) {
           throw new Error(uploadData.error ?? "Kunde inte ladda upp bilden");
@@ -184,8 +250,17 @@ export function SuggestionCreateClient({
     }
   }
 
-  const overlayGeometry = draftBbox ?? geometry;
+  const overlayGeometry = draftGeometry ?? geometry;
   const hasMarking = Boolean(geometry);
+
+  const drawHint =
+    tool === "pin"
+      ? "Ritläge — klicka på kartan för att placera markeringen."
+      : tool === "rectangle"
+        ? "Ritläge — dra en rektangel på kartan."
+        : tool === "polygon"
+          ? "Ritläge — klicka hörn, minst 3 punkter, sedan Slutför polygon."
+          : "Ritläge — klicka punkter längs linjen, minst 2, sedan Slutför linje.";
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
@@ -202,28 +277,42 @@ export function SuggestionCreateClient({
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
+        {(Object.keys(TOOL_LABELS) as DrawTool[]).map((t) => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => handleToolChange(t)}
+            className={`rounded-lg border px-3 py-1.5 text-sm ${
+              tool === t
+                ? "border-orange-400 bg-orange-50 text-orange-900"
+                : "border-slate-300 text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            {TOOL_LABELS[t]}
+          </button>
+        ))}
         <button
           type="button"
-          onClick={() => handleToolChange("pin")}
-          className={`rounded-lg border px-3 py-1.5 text-sm ${
-            tool === "pin"
-              ? "border-orange-400 bg-orange-50 text-orange-900"
-              : "border-slate-300 text-slate-700 hover:bg-slate-50"
-          }`}
+          onClick={() => {
+            setGeometry(null);
+            resetDraft();
+          }}
+          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
         >
-          Punkt
+          Rensa
         </button>
-        <button
-          type="button"
-          onClick={() => handleToolChange("rectangle")}
-          className={`rounded-lg border px-3 py-1.5 text-sm ${
-            tool === "rectangle"
-              ? "border-orange-400 bg-orange-50 text-orange-900"
-              : "border-slate-300 text-slate-700 hover:bg-slate-50"
-          }`}
-        >
-          Rektangel
-        </button>
+        {(tool === "polygon" || tool === "line") && (
+          <button
+            type="button"
+            disabled={
+              tool === "polygon" ? polygonPoints.length < 3 : linePoints.length < 2
+            }
+            onClick={confirmDraft}
+            className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+          >
+            {tool === "polygon" ? "Slutför polygon" : "Slutför linje"}
+          </button>
+        )}
       </div>
 
       <div className="mt-4">
@@ -242,7 +331,7 @@ export function SuggestionCreateClient({
                 dangerouslySetInnerHTML={{
                   __html: renderSuggestionGeometrySvg(overlayGeometry, rootTransform, {
                     label: "FÖRSLAG",
-                    draft: Boolean(draftBbox),
+                    draft: Boolean(draftGeometry && !geometry),
                   }),
                 }}
               />
@@ -250,9 +339,7 @@ export function SuggestionCreateClient({
           }}
           secondaryHeaderContent={
             <p className="text-xs text-amber-700">
-              {tool === "pin"
-                ? "Ritläge — klicka på kartan för att placera markeringen."
-                : "Ritläge — dra en rektangel på kartan."}
+              {drawHint}
               {hasMarking ? " Markering klar." : " Ingen markering ännu."}
             </p>
           }

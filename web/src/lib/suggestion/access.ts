@@ -6,11 +6,13 @@ import {
   type SuggestionGeometry,
   type SuggestionBboxGeometry,
   type SuggestionPointGeometry,
+  type SuggestionPolygonGeometry,
+  type SuggestionLineGeometry,
   MAX_OPEN_SUGGESTIONS_PER_USER_PER_MAP,
   MAX_SUGGESTION_ATTACHMENT_BYTES,
   SUGGESTION_ATTACHMENT_EXTENSIONS,
 } from "@/lib/suggestion/types";
-import { isValidSuggestionBbox } from "@/lib/suggestion/geometry";
+import { isValidSuggestionBbox, isValidSuggestionLineCoordinates, isValidSuggestionPolygonRing } from "@/lib/suggestion/geometry";
 import {
   canCreateMapSuggestion,
   canReviewMapSuggestion,
@@ -126,18 +128,59 @@ function validateBboxGeometry(record: Record<string, unknown>): SuggestionBboxGe
   return { type: "Bbox", bbox: normalized };
 }
 
+function validatePolygonGeometry(record: Record<string, unknown>): SuggestionPolygonGeometry | null {
+  if (record.type !== "Polygon" || !Array.isArray(record.ring)) return null;
+  const ring: [number, number][] = [];
+  for (const pt of record.ring) {
+    if (!Array.isArray(pt) || pt.length !== 2) return null;
+    const [x, y] = pt;
+    if (typeof x !== "number" || typeof y !== "number" || !Number.isFinite(x) || !Number.isFinite(y)) {
+      return null;
+    }
+    ring.push([x, y]);
+  }
+  if (!isValidSuggestionPolygonRing(ring)) return null;
+  return { type: "Polygon", ring };
+}
+
+function validateLineGeometry(record: Record<string, unknown>): SuggestionLineGeometry | null {
+  if (record.type !== "LineString" || !Array.isArray(record.coordinates)) return null;
+  const coordinates: [number, number][] = [];
+  for (const pt of record.coordinates) {
+    if (!Array.isArray(pt) || pt.length !== 2) return null;
+    const [x, y] = pt;
+    if (typeof x !== "number" || typeof y !== "number" || !Number.isFinite(x) || !Number.isFinite(y)) {
+      return null;
+    }
+    coordinates.push([x, y]);
+  }
+  if (!isValidSuggestionLineCoordinates(coordinates)) return null;
+  return { type: "LineString", coordinates };
+}
+
 export function validateSuggestionGeometry(value: unknown): SuggestionGeometry | null {
   if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;
   if (record.type === "Point") return validatePointGeometry(record);
   if (record.type === "Bbox") return validateBboxGeometry(record);
+  if (record.type === "Polygon") return validatePolygonGeometry(record);
+  if (record.type === "LineString") return validateLineGeometry(record);
   return null;
 }
 
 export function suggestionObjectTypeForGeometry(
   geometry: SuggestionGeometry,
-): "POINT" | "BBOX" {
-  return geometry.type === "Point" ? "POINT" : "BBOX";
+): "POINT" | "BBOX" | "POLYGON" | "LINE" {
+  switch (geometry.type) {
+    case "Point":
+      return "POINT";
+    case "Bbox":
+      return "BBOX";
+    case "Polygon":
+      return "POLYGON";
+    case "LineString":
+      return "LINE";
+  }
 }
 
 export function validateSuggestionAttachmentFilename(
