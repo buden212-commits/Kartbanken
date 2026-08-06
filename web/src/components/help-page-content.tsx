@@ -454,6 +454,7 @@ export async function HelpPageContent() {
               "På detaljsidan zoomas kartan automatiskt till markeringen; «Zooma till markering» finns kvar om du vill fokusera om",
               "Växla «Visa kartförslag» i kartvyn för att dölja lagret",
               "Redaktörer markerar som Pågår, Införd eller Avvisad och kan koppla checkout",
+              "Vid Pågår, Införd eller Avvisad visas vem som satte statusen och när (detaljsida och lista)",
               "Du kan redigera egna öppna förslag (text och markering) via Redigera på detaljsidan",
               "Förslag gäller den version du markerade — vid ny publicerad version visas «Gäller version N»",
               "Exportera PDF med alla öppna och pågående förslag via knappen i listan (text, foto och kartutklipp per förslag)",
@@ -610,7 +611,7 @@ export async function HelpPageContent() {
               "Välj utdataformat: PDF, OCAD (.ocd) eller GeoTIFF (.tif)",
               "PDF, GeoTIFF och OCD kan inkludera öppna och pågående kartförslag (kryssruta «Inkludera kartförslag»)",
               "GeoTIFF sparas med kartans projicerade koordinatsystem (EPSG) — kräver georefererad karta",
-              "OCD med kartförslag: välj symbol för punkt, linje och yta i dialogen — objekten skrivs med kartans befintliga symboler (OCAD 12/2018)",
+              "OCD med kartförslag: välj symbol för punkt, linje och yta i dialogen — exportfilen innehåller bara förslagens objekt med kartans befintliga symboler (OCAD 12/2018), inte grundkartan",
               "Dra exportramen på kartan till önskat utsnitt innan du exporterar",
             ]}
           />

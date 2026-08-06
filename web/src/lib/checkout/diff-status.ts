@@ -4,8 +4,14 @@ import {
   computeCheckoutSubsetDiff,
   storeCheckoutDiffSummary,
 } from "./subset-diff";
+import type { CheckoutSubsetDiffResult } from "./subset-diff";
 import { CheckoutStatus } from "./types";
 import { parseSelectionJson } from "./types";
+
+const CHECKOUT_DIFF_STATUSES: CheckoutStatus[] = [
+  CheckoutStatus.CHECKED_IN,
+  CheckoutStatus.PENDING_ADMIN_CONFIRM,
+];
 
 export type CheckoutDiffLayerPaths = {
   added: string;
@@ -74,6 +80,39 @@ function parseDiffMeta(raw: string | null | undefined):
   return { kind: "empty" };
 }
 
+/** Parse stored checkout diff JSON (ignores pending/error meta). */
+export function parseStoredCheckoutDiffJson(
+  raw: string | null | undefined,
+): CheckoutSubsetDiffResult | null {
+  if (!raw) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+
+  if (!parsed || typeof parsed !== "object") return null;
+
+  const record = parsed as Record<string, unknown>;
+  if (record._status === "pending" || record._status === "error") return null;
+  if (typeof record.added !== "number" || typeof record.removed !== "number") return null;
+  if (!Array.isArray(record.changes)) return null;
+
+  return parsed as CheckoutSubsetDiffResult;
+}
+
+export function isCheckoutDiffApplicable(checkout: {
+  status: string;
+  checkinStoragePath: string | null;
+}): boolean {
+  return (
+    CHECKOUT_DIFF_STATUSES.includes(checkout.status as CheckoutStatus) &&
+    Boolean(checkout.checkinStoragePath)
+  );
+}
+
 export function parseCheckoutDiffFromRecord(checkout: {
   status: string;
   checkinStoragePath: string | null;
@@ -82,7 +121,7 @@ export function parseCheckoutDiffFromRecord(checkout: {
 }): ParsedCheckoutDiff {
   const objectCount = parseSelectionJson(checkout.selectionJson).objectIds.length;
 
-  if (checkout.status !== CheckoutStatus.CHECKED_IN || !checkout.checkinStoragePath) {
+  if (!isCheckoutDiffApplicable(checkout)) {
     return { status: "not_applicable" };
   }
 

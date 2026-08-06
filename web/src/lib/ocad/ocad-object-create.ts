@@ -11,6 +11,8 @@ export const OCAD_POINT_SYMBOL = 1;
 export const OCAD_LINE_SYMBOL = 2;
 export const OCAD_AREA_SYMBOL = 3;
 export const OCAD_RECTANGLE_SYMBOL = 7;
+/** Line-text symbol (type 6) — usable for line kartförslag. */
+export const OCAD_LINE_TEXT_SYMBOL = 6;
 
 export type OcadCoord = {
   x: number;

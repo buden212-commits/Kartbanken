@@ -60,11 +60,13 @@ export function serializeSuggestionSummary(
     category: string;
     title: string | null;
     comment: string;
+    reviewedAt: Date | null;
     createdAt: Date;
     updatedAt: Date;
     mapVersionId: string;
     attachmentPath: string | null;
     createdBy: { id: string; name: string | null; email: string };
+    reviewedBy: { id: string; name: string | null; email: string } | null;
     mapVersion: { versionNumber: number };
     _count: { objects: number };
   },
@@ -86,6 +88,8 @@ export function serializeSuggestionSummary(
     ),
     hasAttachment: Boolean(suggestion.attachmentPath),
     createdBy: suggestion.createdBy,
+    reviewedAt: suggestion.reviewedAt?.toISOString() ?? null,
+    reviewedBy: suggestion.reviewedBy,
     objectCount: suggestion._count.objects,
   };
 }
@@ -138,8 +142,6 @@ export function serializeSuggestionDetail(
       latestPublishedVersionNumber,
     ),
     reviewComment: suggestion.reviewComment,
-    reviewedAt: suggestion.reviewedAt?.toISOString() ?? null,
-    reviewedBy: suggestion.reviewedBy,
     checkoutId: suggestion.checkoutId,
     integratedVersionId: suggestion.integratedVersionId,
     integratedVersionNumber: suggestion.integratedVersion?.versionNumber ?? null,

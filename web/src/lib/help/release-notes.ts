@@ -7,6 +7,31 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-08-06",
+    title: "Checkout — stabilare admin-integration",
+    items: [
+      "Admin-integration validerar OCAD-filen innan ny version sparas",
+      "Tydligare felmeddelande om integration misslyckas (t.ex. vid ändrade höjdkurvor/linjer)",
+      "Diff beräknas om automatiskt om huvudversionen ändrats sedan användaren bekräftade",
+    ],
+  },
+  {
+    date: "2026-08-06",
+    title: "OCD-export av kartförslag",
+    items: [
+      "OCD-export med «Inkludera kartförslag» ger en fil med enbart förslagens markeringar — grundkartan exporteras inte",
+      "Symbolval och konvertering läser nu från originalfilen, vilket löser fel när exportversion skiljer sig från källfilen",
+      "Tydligare felmeddelande visar vilken markering och symbol som misslyckades",
+    ],
+  },
+  {
+    date: "2026-08-06",
+    title: "Kartförslag — vem satte status",
+    items: [
+      "På detaljsidan och i listan visas vem som markerade ett förslag som Pågår, Införd eller Avvisad, med datum",
+    ],
+  },
+  {
     date: "2026-08-05",
     title: "Lägg bana — förbättrad banredigering",
     items: [

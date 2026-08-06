@@ -201,6 +201,34 @@ function iterateActiveObjectEntries(
   }
 }
 
+/** Marks all active OCAD objects deleted (mutates buffer in place). */
+export function markAllActiveObjectsDeleted(
+  buffer: Buffer,
+): { buffer: Buffer; removedObjects: number } {
+  const output = Buffer.from(buffer);
+  let removedObjects = 0;
+
+  iterateActiveObjectEntries(output, (_entry, statusOffset) => {
+    output.writeUInt8(0, statusOffset);
+    removedObjects++;
+  });
+
+  return { buffer: output, removedObjects };
+}
+
+/** Updates OCAD header version fields when exporting to a different target version. */
+export function applyOcadTargetVersion(
+  buffer: Buffer,
+  sourceVersion: number,
+  targetVersion: number,
+): string | undefined {
+  if (targetVersion === sourceVersion) return undefined;
+
+  buffer.writeInt16LE(targetVersion, HEADER_VERSION_OFFSET);
+  buffer.writeInt32LE(targetVersion, HEADER_CURRENT_FILE_VERSION_OFFSET);
+  return buildVersionWarning(sourceVersion, targetVersion);
+}
+
 /** Marks OCAD objects deleted by their object index (mutates buffer in place). */
 export function markObjectsDeletedByIndices(
   buffer: Buffer,

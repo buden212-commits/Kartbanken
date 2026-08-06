@@ -8,6 +8,7 @@ import {
   SUGGESTION_CATEGORY_LABELS,
   SUGGESTION_STATUS_LABELS,
   SuggestionStatus,
+  formatSuggestionStatusAttribution,
 } from "@/lib/suggestion/types";
 import { formatDateOnly } from "@/lib/format";
 
@@ -140,7 +141,14 @@ export function SuggestionListPanel({
         <p className="mt-4 text-sm text-slate-500">Inga kartförslag i denna vy.</p>
       ) : (
         <ul className="mt-4 divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white">
-          {filtered.map((s) => (
+          {filtered.map((s) => {
+            const statusAttribution = formatSuggestionStatusAttribution(
+              s.status,
+              s.reviewedBy,
+              s.reviewedAt,
+              formatDateOnly,
+            );
+            return (
             <li
               key={s.id}
               className={`flex flex-wrap items-start justify-between gap-3 px-4 py-3 ${
@@ -185,6 +193,9 @@ export function SuggestionListPanel({
                   {SUGGESTION_STATUS_LABELS[s.status]} ·{" "}
                   {s.createdBy.name?.trim() || s.createdBy.email} · {formatDateOnly(s.createdAt)}
                 </p>
+                {statusAttribution && (
+                  <p className="mt-0.5 text-xs text-slate-500">{statusAttribution}</p>
+                )}
               </div>
               {isAdmin && (
                 <button
@@ -200,7 +211,8 @@ export function SuggestionListPanel({
                 </button>
               )}
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
 

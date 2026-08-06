@@ -89,6 +89,12 @@ export type SuggestionObjectDto = {
   sortOrder: number;
 };
 
+export type SuggestionUserRef = {
+  id: string;
+  name: string | null;
+  email: string;
+};
+
 export type SuggestionSummary = {
   id: string;
   status: SuggestionStatusValue;
@@ -102,27 +108,41 @@ export type SuggestionSummary = {
   /** True when suggestion targets an older published version than the latest */
   appliesToOlderVersion: boolean;
   hasAttachment: boolean;
-  createdBy: {
-    id: string;
-    name: string | null;
-    email: string;
-  };
+  createdBy: SuggestionUserRef;
+  reviewedAt: string | null;
+  reviewedBy: SuggestionUserRef | null;
   objectCount: number;
 };
 
 export type SuggestionDetail = SuggestionSummary & {
   reviewComment: string | null;
-  reviewedAt: string | null;
-  reviewedBy: {
-    id: string;
-    name: string | null;
-    email: string;
-  } | null;
   checkoutId: string | null;
   integratedVersionId: string | null;
   integratedVersionNumber: number | null;
   objects: SuggestionObjectDto[];
 };
+
+/** e.g. "Införd av Anna Svensson, 6 aug. 2026" — null for OPEN or missing reviewer data. */
+export function formatSuggestionStatusAttribution(
+  status: SuggestionStatusValue,
+  reviewedBy: SuggestionUserRef | null,
+  reviewedAt: string | null,
+  formatDate: (date: string) => string,
+): string | null {
+  if (status === SuggestionStatus.OPEN || !reviewedBy || !reviewedAt) return null;
+  const name = reviewedBy.name?.trim() || reviewedBy.email;
+  const date = formatDate(reviewedAt);
+  switch (status) {
+    case SuggestionStatus.IN_PROGRESS:
+      return `Pågår av ${name}, ${date}`;
+    case SuggestionStatus.IMPLEMENTED:
+      return `Införd av ${name}, ${date}`;
+    case SuggestionStatus.REJECTED:
+      return `Avvisad av ${name}, ${date}`;
+    default:
+      return null;
+  }
+}
 
 export const MAX_OPEN_SUGGESTIONS_PER_USER_PER_MAP = 10;
 

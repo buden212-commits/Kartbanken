@@ -24,12 +24,13 @@ import {
   SUGGESTION_CATEGORY_LABELS,
   SUGGESTION_STATUS_LABELS,
   SuggestionStatus,
+  formatSuggestionStatusAttribution,
   type SuggestionCategoryValue,
   type SuggestionDetail,
   type SuggestionGeometry,
   type SuggestionStatusValue,
 } from "@/lib/suggestion/types";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatDateOnly } from "@/lib/format";
 
 type DrawTool = "pin" | "rectangle" | "polygon" | "line";
 
@@ -127,6 +128,17 @@ export function SuggestionDetailClient({
   const overlayLabel = useMemo(
     () => SUGGESTION_CATEGORY_LABELS[suggestion.category],
     [suggestion.category],
+  );
+
+  const statusAttribution = useMemo(
+    () =>
+      formatSuggestionStatusAttribution(
+        suggestion.status,
+        suggestion.reviewedBy,
+        suggestion.reviewedAt,
+        formatDateOnly,
+      ),
+    [suggestion.status, suggestion.reviewedBy, suggestion.reviewedAt],
   );
 
   const resetDrawDraft = useCallback(() => {
@@ -384,6 +396,10 @@ export function SuggestionDetailClient({
           </span>
         </div>
       </div>
+
+      {statusAttribution && (
+        <p className="mt-2 text-sm text-slate-600">{statusAttribution}</p>
+      )}
 
       {editMode ? (
         <div className="card mt-6 space-y-4">

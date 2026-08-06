@@ -11,6 +11,7 @@ import {
   OCAD_POINT_OBJECT,
   OCAD_POINT_SYMBOL,
   OCAD_RECTANGLE_SYMBOL,
+  OCAD_LINE_TEXT_SYMBOL,
   type OcadCoord,
   type TObject12Template,
   writeTObject12,
@@ -56,6 +57,11 @@ export type OcdSuggestionSymbolMapping = {
   area: number;
 };
 
+export type AppendSuggestionsOptions = {
+  /** Read symbol definitions/templates from this buffer (defaults to target buffer). */
+  symbolSourceBuffer?: Buffer;
+};
+
 export type AppendSuggestionsResult = {
   buffer: Buffer;
   appended: number;
@@ -65,13 +71,28 @@ export type AppendSuggestionsResult = {
 
 const CORNER_Y_FLAG = 0x01;
 
+type OcadFileData = Awaited<ReturnType<typeof readOcad>>;
+
 function isActiveObject(obj: { objIndex?: { status: number } }): boolean {
   const status = obj.objIndex?.status;
   return status != null && status > 0 && status < 3;
 }
 
+function geometryLabel(geometry: SuggestionGeometry, index: number): string {
+  switch (geometry.type) {
+    case "Point":
+      return `Markering ${index + 1} (punkt)`;
+    case "LineString":
+      return `Markering ${index + 1} (linje)`;
+    case "Polygon":
+      return `Markering ${index + 1} (polygon)`;
+    case "Bbox":
+      return `Markering ${index + 1} (rektangel)`;
+  }
+}
+
 function templateFromObject(
-  obj: Awaited<ReturnType<typeof readOcad>>["objects"][number],
+  obj: OcadFileData["objects"][number],
   sym: number,
 ): TObject12Template {
   return {
@@ -96,10 +117,10 @@ function templateFromObject(
 }
 
 function findTemplateObject(
-  ocadFile: Awaited<ReturnType<typeof readOcad>>,
+  ocadFile: OcadFileData,
   sym: number,
   objType: number,
-): Awaited<ReturnType<typeof readOcad>>["objects"][number] | null {
+): OcadFileData["objects"][number] | null {
   const preferred = ocadFile.objects.find(
     (obj) => isActiveObject(obj) && obj.sym === sym && obj.objType === objType,
   );
@@ -110,19 +131,43 @@ function findTemplateObject(
   );
 }
 
+function inferSymbolTypeFromObjects(ocadFile: OcadFileData, sym: number): number | null {
+  const objectTypes = new Set(
+    ocadFile.objects
+      .filter((obj) => isActiveObject(obj) && obj.sym === sym)
+      .map((obj) => obj.objType),
+  );
+  if (objectTypes.has(OCAD_POINT_OBJECT)) return OCAD_POINT_SYMBOL;
+  if (objectTypes.has(OCAD_LINE_OBJECT)) return OCAD_LINE_SYMBOL;
+  if (objectTypes.has(OCAD_AREA_OBJECT)) return OCAD_AREA_SYMBOL;
+  return null;
+}
+
+function resolveSymbolType(
+  ocadFile: OcadFileData,
+  sym: number,
+): number | null {
+  const symbol = ocadFile.symbols.find((entry) => entry.symNum === sym);
+  if (symbol && Number.isFinite(symbol.type)) return symbol.type;
+  return inferSymbolTypeFromObjects(ocadFile, sym);
+}
+
 function assertSymbolType(
-  ocadFile: Awaited<ReturnType<typeof readOcad>>,
+  ocadFile: OcadFileData,
   sym: number,
   expectedTypes: number[],
   label: string,
+  geometryName: string,
 ): void {
-  const symbol = ocadFile.symbols.find((entry) => entry.symNum === sym);
-  if (!symbol) {
-    throw new Error(`Symbol ${sym} finns inte i kartfilen (${label}).`);
-  }
-  if (!expectedTypes.includes(symbol.type)) {
+  const symbolType = resolveSymbolType(ocadFile, sym);
+  if (symbolType == null) {
     throw new Error(
-      `Symbol ${sym} passar inte för ${label}. Välj en symbol av rätt typ i exportdialogen.`,
+      `${geometryName}: symbol ${sym} finns inte i kartfilen (${label}).`,
+    );
+  }
+  if (!expectedTypes.includes(symbolType)) {
+    throw new Error(
+      `${geometryName}: symbol ${sym} passar inte för ${label} (typ ${symbolType}). Välj en symbol av rätt typ i exportdialogen.`,
     );
   }
 }
@@ -146,11 +191,18 @@ function buildObjectSpec(
 function geometryToObjectSpec(
   geometry: SuggestionGeometry,
   mapping: OcdSuggestionSymbolMapping,
-  ocadFile: Awaited<ReturnType<typeof readOcad>>,
+  ocadFile: OcadFileData,
+  geometryName: string,
 ): NewObjectSpec | null {
   switch (geometry.type) {
     case "Point": {
-      assertSymbolType(ocadFile, mapping.point, [OCAD_POINT_SYMBOL], "punkt");
+      assertSymbolType(
+        ocadFile,
+        mapping.point,
+        [OCAD_POINT_SYMBOL],
+        "punkt",
+        geometryName,
+      );
       const templateObj = findTemplateObject(ocadFile, mapping.point, OCAD_POINT_OBJECT);
       const template = templateObj
         ? templateFromObject(templateObj, mapping.point)
@@ -159,13 +211,21 @@ function geometryToObjectSpec(
       return buildObjectSpec(template, [{ x, y }], OCAD_POINT_OBJECT);
     }
     case "LineString": {
-      assertSymbolType(ocadFile, mapping.line, [OCAD_LINE_SYMBOL], "linje");
+      assertSymbolType(
+        ocadFile,
+        mapping.line,
+        [OCAD_LINE_SYMBOL, OCAD_LINE_TEXT_SYMBOL],
+        "linje",
+        geometryName,
+      );
       const templateObj = findTemplateObject(ocadFile, mapping.line, OCAD_LINE_OBJECT);
       const template = templateObj
         ? templateFromObject(templateObj, mapping.line)
         : defaultTObject12Template(mapping.line);
       const coords = geometry.coordinates.map(([x, y]) => ({ x, y }));
-      if (coords.length < 2) return null;
+      if (coords.length < 2) {
+        throw new Error(`${geometryName}: linjen har för få punkter (minst 2 krävs).`);
+      }
       return buildObjectSpec(template, coords, OCAD_LINE_OBJECT);
     }
     case "Polygon": {
@@ -174,13 +234,16 @@ function geometryToObjectSpec(
         mapping.area,
         [OCAD_AREA_SYMBOL, OCAD_RECTANGLE_SYMBOL],
         "yta",
+        geometryName,
       );
       const templateObj = findTemplateObject(ocadFile, mapping.area, OCAD_AREA_OBJECT);
       const template = templateObj
         ? templateFromObject(templateObj, mapping.area)
         : defaultTObject12Template(mapping.area);
       const ring = geometry.ring;
-      if (ring.length < 3) return null;
+      if (ring.length < 3) {
+        throw new Error(`${geometryName}: polygonen har för få hörn (minst 3 krävs).`);
+      }
 
       const coords: OcadCoord[] = ring.map(([x, y], index) => ({
         x,
@@ -197,6 +260,7 @@ function geometryToObjectSpec(
         mapping.area,
         [OCAD_AREA_SYMBOL, OCAD_RECTANGLE_SYMBOL],
         "yta/rektangel",
+        geometryName,
       );
       const templateObj = findTemplateObject(ocadFile, mapping.area, OCAD_AREA_OBJECT);
       const template = templateObj
@@ -240,12 +304,21 @@ export function validateOcdSuggestionSymbolMapping(
 }
 
 export async function appendSuggestionsToOcadBuffer(
-  sourceBuffer: Buffer,
+  targetBuffer: Buffer,
   geometries: SuggestionGeometry[],
   mapping: OcdSuggestionSymbolMapping,
+  options?: AppendSuggestionsOptions,
 ): Promise<AppendSuggestionsResult> {
-  const ocadFile = await readOcad(sourceBuffer, { quietWarnings: true });
-  const version = normalizeSourceVersion(ocadFile.header.version);
+  const symbolBuffer = options?.symbolSourceBuffer ?? targetBuffer;
+  const [targetFile, symbolFile] = await Promise.all([
+    readOcad(targetBuffer, { quietWarnings: true }),
+    symbolBuffer === targetBuffer
+      ? Promise.resolve(null as OcadFileData | null)
+      : readOcad(symbolBuffer, { quietWarnings: true }),
+  ]);
+  const symbolSource = symbolFile ?? targetFile;
+
+  const version = normalizeSourceVersion(symbolSource.header.version);
   if (version !== 12 && version !== 18) {
     throw new Error(
       "Kartförslag i OCD-export stöds bara för OCAD 12 och OCAD 2018-filer.",
@@ -256,26 +329,31 @@ export async function appendSuggestionsToOcadBuffer(
   const warnings: string[] = [];
   let skipped = 0;
 
-  for (const geometry of geometries) {
+  for (const [index, geometry] of geometries.entries()) {
+    const label = geometryLabel(geometry, index);
     try {
-      const spec = geometryToObjectSpec(geometry, mapping, ocadFile);
+      const spec = geometryToObjectSpec(geometry, mapping, symbolSource, label);
       if (!spec) {
         skipped++;
-        warnings.push("En markering hoppades över (ogiltig geometri).");
+        warnings.push(`${label}: ogiltig geometri.`);
         continue;
       }
       specs.push(spec);
     } catch (err) {
       skipped++;
-      warnings.push(err instanceof Error ? err.message : "Kunde inte skapa OCAD-objekt.");
+      warnings.push(err instanceof Error ? err.message : `${label}: kunde inte skapa OCAD-objekt.`);
     }
   }
 
   if (specs.length === 0) {
-    throw new Error("Inga kartförslag kunde omvandlas till OCAD-objekt.");
+    const detail =
+      warnings.length > 0
+        ? warnings.slice(0, 5).join(" ")
+        : "Kontrollera att markeringarna har giltig geometri.";
+    throw new Error(`Inga kartförslag kunde omvandlas till OCAD-objekt. ${detail}`);
   }
 
-  const result = appendNewObjects(sourceBuffer, specs);
+  const result = appendNewObjects(targetBuffer, specs);
   return {
     buffer: result.buffer,
     appended: result.appended,

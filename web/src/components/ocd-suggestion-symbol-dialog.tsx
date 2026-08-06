@@ -10,6 +10,7 @@ import type { OcdSuggestionSymbolMapping } from "@/lib/ocad/ocad-suggestion-expo
 import {
   OCAD_AREA_SYMBOL,
   OCAD_LINE_SYMBOL,
+  OCAD_LINE_TEXT_SYMBOL,
   OCAD_POINT_SYMBOL,
   OCAD_RECTANGLE_SYMBOL,
 } from "@/lib/ocad/ocad-object-create";
@@ -94,7 +95,7 @@ export function OcdSuggestionSymbolDialog({ layers, open, onCancel, onConfirm }:
     [layers],
   );
   const lineChoices = useMemo(
-    () => symbolChoices(layers, [OCAD_LINE_SYMBOL]),
+    () => symbolChoices(layers, [OCAD_LINE_SYMBOL, OCAD_LINE_TEXT_SYMBOL]),
     [layers],
   );
   const areaChoices = useMemo(
@@ -123,8 +124,9 @@ export function OcdSuggestionSymbolDialog({ layers, open, onCancel, onConfirm }:
           Symboler för kartförslag
         </h2>
         <p className="mt-2 text-sm text-slate-600">
-          Välj vilka befintliga OCAD-symboler nya objekt ska få. Markeringarna skrivs som riktiga
-          OCAD-objekt i exportfilen (OCAD 12 / 2018).
+          Välj vilka befintliga OCAD-symboler nya objekt ska få. Exportfilen innehåller bara
+          kartförslagens markeringar — inte grundkartan. Symboltabellen från källkartan behålls
+          (OCAD 12 / 2018).
         </p>
 
         <div className="mt-4 space-y-4">

@@ -2,6 +2,14 @@ import { logAction } from "@/lib/audit";
 import { requireSession } from "@/lib/auth/api";
 import { canAdminConfirmIntegration } from "@/lib/auth/permissions";
 import { integrateCheckout } from "@/lib/checkout/integrate";
+import {
+  integrationErrorMessage,
+  logIntegrationError,
+} from "@/lib/checkout/integration-log";
+import {
+  parseCheckoutDiffFromRecord,
+  parseStoredCheckoutDiffJson,
+} from "@/lib/checkout/diff-status";
 import { getCheckoutById } from "@/lib/checkout/repository";
 import { CheckoutStatus } from "@/lib/checkout/types";
 import { notifyCheckoutIntegrated, queueNotifyAdminOfNewUpload } from "@/lib/email";
@@ -41,6 +49,44 @@ export async function POST(_request: Request, { params }: RouteParams) {
     );
   }
 
+  const diffStatus = parseCheckoutDiffFromRecord(checkout);
+  if (diffStatus.status === "pending") {
+    return NextResponse.json(
+      { error: "Diff beräknas fortfarande — försök igen om en stund" },
+      { status: 409 },
+    );
+  }
+  if (diffStatus.status === "error") {
+    return NextResponse.json(
+      { error: `Diff misslyckades: ${diffStatus.error}` },
+      { status: 409 },
+    );
+  }
+
+  const storedDiff = parseStoredCheckoutDiffJson(checkout.diffSummaryJson);
+  if (diffStatus.status === "ready") {
+    const summary = diffStatus.summary;
+    const hasChangeCounts = summary.added + summary.removed + summary.modified > 0;
+    if (hasChangeCounts && !storedDiff) {
+      console.error("[checkout-integration]", {
+        step: "confirm_admin_precheck",
+        checkoutId: checkout.id,
+        mapSlug: slug,
+        error: "Diff summary exists but changes array is missing",
+        added: summary.added,
+        removed: summary.removed,
+        modified: summary.modified,
+      });
+      return NextResponse.json(
+        {
+          error:
+            "Diff-data är ofullständig (saknar objektlista). Be användaren ladda om sidan eller beräkna om diff.",
+        },
+        { status: 409 },
+      );
+    }
+  }
+
   try {
     const result = await integrateCheckout(checkout.id, session.user.id);
 
@@ -49,6 +95,10 @@ export async function POST(_request: Request, { params }: RouteParams) {
       versionId: result.versionId,
       versionNumber: result.versionNumber,
       warnings: result.warningMessages,
+      deletedObjects: result.deletedObjects,
+      copiedObjects: result.copiedObjects,
+      skippedCopies: result.skippedCopies,
+      appendedObjects: result.appendedObjects,
     });
 
     notifyCheckoutIntegrated({
@@ -86,9 +136,16 @@ export async function POST(_request: Request, { params }: RouteParams) {
       warningMessages: result.warningMessages,
     });
   } catch (err) {
-    console.error("Checkout integration failed:", err);
+    logIntegrationError(
+      "persist",
+      { checkoutId: checkout.id, mapFileId: map.id },
+      err,
+      { mapSlug: slug, adminUserId: session.user.id },
+    );
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Integration misslyckades" },
+      {
+        error: integrationErrorMessage(err, "Integration misslyckades"),
+      },
       { status: 500 },
     );
   }

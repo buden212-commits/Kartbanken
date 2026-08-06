@@ -4,13 +4,14 @@ import {
   assertVersionViewAccess,
   getMapVersionOr404,
 } from "@/lib/maps/version-lookup";
-import { cropOcadBuffer } from "@/lib/ocad/ocad-export-server";
+import { cropOcadBuffer, markAllActiveObjectsDeleted, applyOcadTargetVersion } from "@/lib/ocad/ocad-export-server";
 import {
   appendSuggestionsToOcadBuffer,
   validateOcdSuggestionSymbolMapping,
   type OcdSuggestionSymbolMapping,
 } from "@/lib/ocad/ocad-suggestion-export";
 import {
+  normalizeSourceVersion,
   svgExportFrameToGeoBbox,
   type OcadExportVersion,
   type SvgExportFrame,
@@ -27,6 +28,7 @@ const { readOcad } = require("ocad2geojson") as {
     input: Buffer,
     options?: { quietWarnings?: boolean },
   ) => Promise<{
+    header: { version: number };
     getBounds: () => [number, number, number, number];
   }>;
 };
@@ -107,14 +109,12 @@ export async function POST(request: Request, { params }: RouteParams) {
   try {
     const sourceBuffer = await readStoredFile(version.storagePath);
     const ocadFile = await readOcad(sourceBuffer, { quietWarnings: true });
-    const bbox = svgExportFrameToGeoBbox(exportRequest.svgFrame, ocadFile.getBounds());
+    const sourceVersion = normalizeSourceVersion(ocadFile.header.version);
 
-    const result = cropOcadBuffer(sourceBuffer, {
-      bbox,
-      targetVersion: exportRequest.ocadVersion,
-    });
-
-    let outputBuffer = result.buffer;
+    let outputBuffer: Buffer;
+    let keptObjects = 0;
+    let removedObjects = 0;
+    let versionWarning: string | undefined;
     let appendedSuggestions = 0;
     const suggestionWarnings: string[] = [];
 
@@ -125,34 +125,58 @@ export async function POST(request: Request, { params }: RouteParams) {
         throw new Error("Inga öppna eller pågående kartförslag att exportera.");
       }
 
+      const cleared = markAllActiveObjectsDeleted(sourceBuffer);
+      outputBuffer = cleared.buffer;
+      removedObjects = cleared.removedObjects;
+
+      versionWarning = applyOcadTargetVersion(
+        outputBuffer,
+        sourceVersion,
+        exportRequest.ocadVersion,
+      );
+
       const appendResult = await appendSuggestionsToOcadBuffer(
         outputBuffer,
         geometries,
         exportRequest.suggestionSymbols,
+        { symbolSourceBuffer: sourceBuffer },
       );
       outputBuffer = appendResult.buffer;
       appendedSuggestions = appendResult.appended;
+      keptObjects = appendResult.appended;
       suggestionWarnings.push(...appendResult.warnings);
+    } else {
+      const bbox = svgExportFrameToGeoBbox(exportRequest.svgFrame, ocadFile.getBounds());
+      const result = cropOcadBuffer(sourceBuffer, {
+        bbox,
+        targetVersion: exportRequest.ocadVersion,
+      });
+      outputBuffer = result.buffer;
+      keptObjects = result.keptObjects;
+      removedObjects = result.removedObjects;
+      versionWarning = result.versionWarning;
     }
 
     const baseName = version.originalFilename.replace(/\.ocd$/i, "") || "karta";
-    const fileName = `${baseName}-export-v${exportRequest.ocadVersion}.ocd`;
+    const fileSuffix = exportRequest.includeSuggestions ? "forslag" : "export";
+    const fileName = `${baseName}-${fileSuffix}-v${exportRequest.ocadVersion}.ocd`;
 
     await logAction(session.user.id, "EXPORT_OCD", "MapVersion", version.id, {
       mapSlug: slug,
       versionNumber: version.versionNumber,
       ocadVersion: exportRequest.ocadVersion,
-      keptObjects: result.keptObjects,
-      removedObjects: result.removedObjects,
+      keptObjects,
+      removedObjects,
       appendedSuggestions,
+      suggestionsOnly: exportRequest.includeSuggestions,
     });
 
     const headers: Record<string, string> = {
       "Content-Type": "application/octet-stream",
       "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"`,
       "Content-Length": String(outputBuffer.byteLength),
-      "X-Ocad-Kept-Objects": String(result.keptObjects),
-      "X-Ocad-Removed-Objects": String(result.removedObjects),
+      "X-Ocad-Kept-Objects": String(keptObjects),
+      "X-Ocad-Removed-Objects": String(removedObjects),
     };
 
     if (appendedSuggestions > 0) {
@@ -165,8 +189,8 @@ export async function POST(request: Request, { params }: RouteParams) {
       );
     }
 
-    if (result.versionWarning) {
-      headers["X-Ocad-Version-Warning"] = encodeURIComponent(result.versionWarning);
+    if (versionWarning) {
+      headers["X-Ocad-Version-Warning"] = encodeURIComponent(versionWarning);
     }
 
     return new NextResponse(new Uint8Array(outputBuffer), { headers });
