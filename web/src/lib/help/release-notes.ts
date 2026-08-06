@@ -8,6 +8,13 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-06",
+    title: "OCD-export av kartförslag — buffertfix",
+    items: [
+      "Export av kartförslag till OCD misslyckades tidigare med ett internt buffertfel; det är åtgärdat",
+    ],
+  },
+  {
+    date: "2026-08-06",
     title: "Checkout — stabilare admin-integration",
     items: [
       "Admin-integration validerar OCAD-filen innan ny version sparas",

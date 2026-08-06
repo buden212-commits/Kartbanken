@@ -14,6 +14,9 @@ export const OCAD_RECTANGLE_SYMBOL = 7;
 /** Line-text symbol (type 6) — usable for line kartförslag. */
 export const OCAD_LINE_TEXT_SYMBOL = 6;
 
+/** Bytes before the Poly coordinate array in OCAD 12 / 2018 TObject (see ocad2geojson TObject12). */
+export const TOBJECT12_HEADER_SIZE = 56;
+
 export type OcadCoord = {
   x: number;
   y: number;
@@ -80,7 +83,8 @@ export function computeCoordBounds(coords: OcadCoord[]): {
 export function writeTObject12(template: TObject12Template, coords: OcadCoord[]): Buffer {
   const nItem = coords.length;
   const size =
-    54 + nItem * 8 + template.nText * (template.unicode ? 2 : 4) +
+    TOBJECT12_HEADER_SIZE + nItem * 8 +
+    template.nText * (template.unicode ? 2 : 4) +
     template.nObjectString * (template.unicode ? 2 : 4) +
     template.nDatabaseString * (template.unicode ? 2 : 4);
 
