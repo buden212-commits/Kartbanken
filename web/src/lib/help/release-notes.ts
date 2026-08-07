@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-07",
+    title: "Publicering — en version per område",
+    items: [
+      "Endast en kartversion kan vara publicerad åt gången inom samma område",
+      "När du publicerar en ny version avpubliceras den tidigare automatiskt",
+    ],
+  },
+  {
+    date: "2026-08-07",
     title: "Versionshistorik — klickbar rad",
     items: [
       "Hela raden öppnar kartan — version, datum, storlek, uppladdare, kommentar och status (desktop och mobil)",

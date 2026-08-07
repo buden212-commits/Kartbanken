@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 type Props = {
@@ -17,6 +18,7 @@ export function VersionPublishToggle({
   canManage,
   compact = false,
 }: Props) {
+  const router = useRouter();
   const [isPublished, setIsPublished] = useState(initialPublished);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +53,9 @@ export function VersionPublishToggle({
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
         throw new Error(data.error ?? "Kunde inte uppdatera");
+      }
+      if (next) {
+        router.refresh();
       }
     } catch (err) {
       setIsPublished(prev);

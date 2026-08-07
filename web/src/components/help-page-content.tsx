@@ -483,7 +483,8 @@ export async function HelpPageContent() {
           {showEditor ? (
             <HelpList
               items={[
-                "Kryssa i Publicerad i versionshistoriken för att göra versionen synlig för läsare",
+                "Endast en version kan vara publicerad åt gången per område",
+                "Kryssa i Publicerad i versionshistoriken för att göra versionen synlig för läsare — tidigare publicerad version avpubliceras då automatiskt",
                 "Avmarkera för att dölja versionen igen",
                 "Publicera först när kartan är granskad och klar att delas",
               ]}

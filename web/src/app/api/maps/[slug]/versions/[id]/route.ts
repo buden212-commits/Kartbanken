@@ -1,6 +1,7 @@
 import { logAction } from "@/lib/audit";
 import { requireAdmin, requireSession, requireUpload } from "@/lib/auth/api";
 import { deleteMapVersion } from "@/lib/maps/delete-version";
+import { setVersionPublished } from "@/lib/maps/publish-version";
 import {
   assertVersionViewAccess,
   getMapVersionOr404,
@@ -29,15 +30,11 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Ange isPublished (boolean)" }, { status: 400 });
   }
 
-  const updated = await prisma.mapVersion.update({
-    where: { id: lookup.version.id },
-    data: { isPublished: body.isPublished },
-    select: {
-      id: true,
-      versionNumber: true,
-      isPublished: true,
-    },
-  });
+  const updated = await setVersionPublished(
+    lookup.map.id,
+    lookup.version.id,
+    body.isPublished,
+  );
 
   await logAction(session.user.id, "VERSION_PUBLISH", "MapVersion", updated.id, {
     mapSlug: slug,
