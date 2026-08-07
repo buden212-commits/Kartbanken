@@ -239,6 +239,8 @@ export function SuggestionCreateClient({
   const gpsWatchIdRef = useRef<number | null>(null);
   const gpsSamplesRef = useRef<GpsTrackSample[]>([]);
   const gpsRejectedJumpsRef = useRef(0);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const [tool, setTool] = useState<DrawTool>("pin");
   const [mapMode, setMapMode] = useState<"draw" | "navigate">("draw");
@@ -647,13 +649,17 @@ export function SuggestionCreateClient({
     setError(null);
   }
 
-  function handleAttachmentChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0] ?? null;
+  function applyAttachmentFile(file: File | null) {
     setAttachmentFile(file);
-    if (attachmentPreview) {
-      URL.revokeObjectURL(attachmentPreview);
-    }
-    setAttachmentPreview(file ? URL.createObjectURL(file) : null);
+    setAttachmentPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return file ? URL.createObjectURL(file) : null;
+    });
+  }
+
+  function handleAttachmentChange(e: React.ChangeEvent<HTMLInputElement>) {
+    applyAttachmentFile(e.target.files?.[0] ?? null);
+    e.target.value = "";
   }
 
   function handleOpenSubmitDialog() {
@@ -889,16 +895,55 @@ export function SuggestionCreateClient({
                 />
               </div>
               <div>
-                <label htmlFor="attachment" className="form-label">
-                  Foto (valfritt)
-                </label>
+                <p className="form-label">Foto (valfritt)</p>
+                <div className="mt-1 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => cameraInputRef.current?.click()}
+                    className="min-h-10 rounded-lg border border-ifk-blue px-3 py-2 text-sm font-medium text-ifk-blue hover:bg-ifk-blue/5"
+                  >
+                    Ta foto
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => galleryInputRef.current?.click()}
+                    className="min-h-10 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                  >
+                    Välj bild
+                  </button>
+                  {attachmentFile && (
+                    <button
+                      type="button"
+                      onClick={() => applyAttachmentFile(null)}
+                      className="min-h-10 rounded-lg border border-slate-300 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                    >
+                      Ta bort foto
+                    </button>
+                  )}
+                </div>
                 <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleAttachmentChange}
+                  className="sr-only"
+                  aria-hidden
+                  tabIndex={-1}
+                />
+                <input
+                  ref={galleryInputRef}
                   id="attachment"
                   type="file"
-                  accept="image/jpeg,image/png,image/webp"
+                  accept="image/jpeg,image/png,image/webp,image/*"
                   onChange={handleAttachmentChange}
-                  className="form-input"
+                  className="sr-only"
+                  aria-hidden
+                  tabIndex={-1}
                 />
+                {attachmentFile && (
+                  <p className="mt-2 text-xs text-slate-500">{attachmentFile.name}</p>
+                )}
                 {attachmentPreview && (
                   <img
                     src={attachmentPreview}

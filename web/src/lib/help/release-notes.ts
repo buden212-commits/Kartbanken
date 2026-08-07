@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-07",
+    title: "Kartförslag — ta foto i inskick-dialogen",
+    items: [
+      "På mobil kan du klicka «Ta foto» i inskick-dialogen och fotografera direkt — bilden bifogas kartförslaget",
+      "«Välj bild» låter dig plocka ett befintligt foto från albumet",
+    ],
+  },
+  {
+    date: "2026-08-07",
     title: "Kartförslag — GPS-spårning",
     items: [
       "GPS-spår filtrerar bort orimliga hopp (t.ex. vid dålig mottagning) och utjämnar linjen efter rapporterad noggrannhet",

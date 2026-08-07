@@ -454,6 +454,7 @@ export async function HelpPageContent() {
               "Klicka «Lägg till ändring» när markeringen är klar — punkt och rektangel aktiveras direkt efter klick/drag",
               "Lägg till flera markeringar — varje markering numreras (1, 2, 3 …) på kartan",
               "Klicka «Skicka in kartförslag» i verktygsraden när du är klar — då fyller du i kategori och beskrivning i dialogen",
+              "I dialogen: «Ta foto» öppnar kameran på mobil (direktfoto), «Välj bild» plockar från albumet",
               "Skicka-sektionen ovanför kartan visar antal tillagda ändringar innan du skickar",
               "Öppna och pågående förslag visas på kartan — klicka markeringen eller ett förslag i listan på områdessidan (zoomar kartan till markeringen)",
               "På detaljsidan zoomas kartan automatiskt till markeringen; «Zooma till markering» finns kvar om du vill fokusera om",
