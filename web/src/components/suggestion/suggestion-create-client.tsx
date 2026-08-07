@@ -31,10 +31,10 @@ type DrawTool = "pin" | "rectangle" | "polygon" | "line";
 const NEUTRAL_BTN =
   "rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50";
 
-const MAGENTA_TOOL_ACTIVE =
-  "border-[#FD3DB5] bg-[#FD3DB5]/10 text-[#9D0066]";
-const MAGENTA_BTN =
-  "rounded-lg bg-[#FD3DB5] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#E835A5] disabled:cursor-not-allowed disabled:opacity-50";
+const TOOL_ACTIVE =
+  "border-ifk-blue bg-ifk-blue text-white hover:bg-ifk-blue";
+const TOOL_INACTIVE =
+  "border-slate-300 text-slate-700 hover:border-ifk-blue hover:text-ifk-blue";
 
 type Props = {
   mapSlug: string;
@@ -74,9 +74,9 @@ type CreateMapPanelProps = {
 
 const MAP_MODE_BTN =
   "min-h-10 flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition sm:flex-none sm:min-h-9 sm:px-4";
-const MAP_MODE_ACTIVE = "border-[#FD3DB5] bg-[#FD3DB5]/10 text-[#9D0066]";
+const MAP_MODE_ACTIVE = "border-ifk-blue bg-ifk-blue text-white";
 const MAP_MODE_INACTIVE =
-  "border-slate-300 bg-white text-slate-700 hover:bg-slate-50";
+  "border-slate-300 bg-white text-slate-700 hover:border-ifk-blue hover:text-ifk-blue";
 
 const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
   mapSlug,
@@ -195,6 +195,7 @@ export function SuggestionCreateClient({
   const [attachmentPreview, setAttachmentPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
 
   const clearFormFields = useCallback(() => {
     setCategory("FEL_I_TERRANG");
@@ -380,14 +381,23 @@ export function SuggestionCreateClient({
     setAttachmentPreview(file ? URL.createObjectURL(file) : null);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  function handleOpenSubmitDialog() {
     if (markings.length < 1) {
-      if (geometry) {
+      if (geometry || finalizableGeometry) {
         setError("Klicka «Lägg till ändring» innan du skickar, eller rensa den aktuella ritningen");
       } else {
         setError("Lägg till minst en markering på kartan");
       }
+      return;
+    }
+    setError(null);
+    setSubmitDialogOpen(true);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (markings.length < 1) {
+      setError("Lägg till minst en markering på kartan");
       return;
     }
     const submissionComment = comment.trim();
@@ -454,7 +464,7 @@ export function SuggestionCreateClient({
             type="button"
             onClick={() => handleToolChange(t)}
             className={`rounded-lg border px-3 py-1.5 text-sm ${
-              tool === t ? MAGENTA_TOOL_ACTIVE : "border-slate-300 text-slate-700 hover:bg-slate-50"
+              tool === t ? TOOL_ACTIVE : TOOL_INACTIVE
             }`}
           >
             {TOOL_LABELS[t]}
@@ -464,7 +474,7 @@ export function SuggestionCreateClient({
           type="button"
           disabled={!canAddMarking}
           onClick={handleAddMarking}
-          className={canAddMarking ? MAGENTA_BTN : NEUTRAL_BTN}
+          className={canAddMarking ? "btn-primary rounded-lg px-3 py-1.5 text-sm" : NEUTRAL_BTN}
         >
           Lägg till ändring
         </button>
@@ -475,88 +485,35 @@ export function SuggestionCreateClient({
         >
           Rensa
         </button>
+        <button
+          type="button"
+          disabled={markings.length < 1}
+          onClick={handleOpenSubmitDialog}
+          className={
+            markings.length > 0
+              ? "btn-primary rounded-lg px-3 py-1.5 text-sm"
+              : NEUTRAL_BTN
+          }
+        >
+          {markings.length > 0
+            ? `Skicka in kartförslag (${markings.length} st)`
+            : "Skicka in kartförslag"}
+        </button>
       </div>
 
-      <form onSubmit={(e) => void handleSubmit(e)} className="mt-6 space-y-6">
-        <section className="rounded-lg border border-slate-200 bg-white px-4 py-4 sm:px-6">
-          <h2 className="text-sm font-semibold text-slate-900">Beskriv ändringen</h2>
-          <p className="mt-1 text-sm text-slate-600">
-            Fyll i kategori och beskrivning — gäller hela kartförslaget oavsett antal markeringar.
-          </p>
-          <fieldset className="mt-4 space-y-4">
-            <div>
-              <label htmlFor="category" className="form-label">
-                Kategori
-              </label>
-              <select
-                id="category"
-                value={category}
-                onChange={(e) => setCategory(e.target.value as SuggestionCategoryValue)}
-                className="form-input"
-              >
-                {Object.entries(SUGGESTION_CATEGORY_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="title" className="form-label">
-                Rubrik (valfritt)
-              </label>
-              <input
-                id="title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                maxLength={120}
-                className="form-input"
-                placeholder="Kort sammanfattning"
-              />
-            </div>
-            <div>
-              <label htmlFor="comment" className="form-label">
-                Beskrivning
-              </label>
-              <textarea
-                id="comment"
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                required
-                minLength={2}
-                rows={4}
-                className="form-input"
-                placeholder="Beskriv vad som är fel, saknas eller bör förklaras (minst 2 tecken)."
-              />
-            </div>
-            <div>
-              <label htmlFor="attachment" className="form-label">
-                Foto (valfritt)
-              </label>
-              <input
-                id="attachment"
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                onChange={handleAttachmentChange}
-                className="form-input"
-              />
-              {attachmentPreview && (
-                <img
-                  src={attachmentPreview}
-                  alt="Förhandsvisning av bilaga"
-                  className="mt-2 max-h-48 rounded-lg border border-slate-200 object-contain"
-                />
-              )}
-            </div>
-          </fieldset>
-        </section>
+      {error && !submitDialogOpen && (
+        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          {error}
+        </p>
+      )}
 
+      <div className="mt-6 space-y-6">
         <section className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-4 sm:px-6">
           <h2 className="text-sm font-semibold text-slate-900">Skicka kartförslag</h2>
           <p className="mt-1 text-sm text-slate-600">
             {markings.length > 0
-              ? `Du skickar ${markings.length} ändring${markings.length === 1 ? "" : "ar"} tillsammans i ett kartförslag.`
-              : "Lägg till minst en ändring på kartan innan du skickar."}
+              ? `Du har ${markings.length} ändring${markings.length === 1 ? "" : "ar"} redo att skickas in.`
+              : "Lägg till minst en ändring på kartan innan du skickar in."}
           </p>
           {markings.length > 0 && (
             <ul className="mt-3 space-y-1 rounded-lg border border-slate-200 bg-white px-3 py-2">
@@ -579,22 +536,10 @@ export function SuggestionCreateClient({
               ))}
             </ul>
           )}
-          {error && (
-            <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-              {error}
-            </p>
-          )}
-          <div className="mt-4 flex flex-wrap gap-2">
-            <button type="submit" disabled={loading || markings.length < 1} className="btn-primary">
-              {loading
-                ? "Sparar…"
-                : markings.length > 0
-                  ? `Skicka kartförslag (${markings.length} st)`
-                  : "Skicka kartförslag"}
-            </button>
+          <div className="mt-4">
             <Link
               href={`/maps/${mapSlug}`}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              className="inline-block rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
             >
               Avbryt
             </Link>
@@ -615,7 +560,115 @@ export function SuggestionCreateClient({
           markingCount={totalMarkingCount}
           rootTransformRef={rootTransformRef}
         />
-      </form>
+      </div>
+
+      {submitDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
+          <form
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="suggestion-submit-dialog-title"
+            onSubmit={(e) => void handleSubmit(e)}
+            className="max-h-[90vh] w-full overflow-y-auto rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl"
+          >
+            <h2 id="suggestion-submit-dialog-title" className="text-lg font-semibold text-slate-900">
+              Beskriv ändringen
+            </h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Fyll i kategori och beskrivning — gäller hela kartförslaget ({markings.length}{" "}
+              {markings.length === 1 ? "markering" : "markeringar"}).
+            </p>
+            <fieldset className="mt-4 space-y-4">
+              <div>
+                <label htmlFor="category" className="form-label">
+                  Kategori
+                </label>
+                <select
+                  id="category"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value as SuggestionCategoryValue)}
+                  className="form-input"
+                >
+                  {Object.entries(SUGGESTION_CATEGORY_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="title" className="form-label">
+                  Rubrik (valfritt)
+                </label>
+                <input
+                  id="title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  maxLength={120}
+                  className="form-input"
+                  placeholder="Kort sammanfattning"
+                />
+              </div>
+              <div>
+                <label htmlFor="comment" className="form-label">
+                  Beskrivning
+                </label>
+                <textarea
+                  id="comment"
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  required
+                  minLength={2}
+                  rows={4}
+                  autoFocus
+                  className="form-input"
+                  placeholder="Beskriv vad som är fel, saknas eller bör förklaras (minst 2 tecken)."
+                />
+              </div>
+              <div>
+                <label htmlFor="attachment" className="form-label">
+                  Foto (valfritt)
+                </label>
+                <input
+                  id="attachment"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={handleAttachmentChange}
+                  className="form-input"
+                />
+                {attachmentPreview && (
+                  <img
+                    src={attachmentPreview}
+                    alt="Förhandsvisning av bilaga"
+                    className="mt-2 max-h-48 rounded-lg border border-slate-200 object-contain"
+                  />
+                )}
+              </div>
+            </fieldset>
+            {error && (
+              <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                {error}
+              </p>
+            )}
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => {
+                  setSubmitDialogOpen(false);
+                  setError(null);
+                }}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                Tillbaka
+              </button>
+              <button type="submit" disabled={loading} className="btn-primary">
+                {loading ? "Sparar…" : `Skicka kartförslag (${markings.length} st)`}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

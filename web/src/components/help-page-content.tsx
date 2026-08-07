@@ -450,7 +450,7 @@ export async function HelpPageContent() {
               "Växla «Rita» / «Navigera» ovanför kartan — i Navigera kan du dra och nypa utan att rita; i Rita zoomar två fingrar utan att skapa markering",
               "Klicka «Lägg till ändring» när markeringen är klar — punkt och rektangel aktiveras direkt efter klick/drag",
               "Lägg till flera markeringar — varje markering numreras (1, 2, 3 …) på kartan",
-              "Beskrivning och kategori fylls i i formuläret ovanför kartan och gäller hela kartförslaget",
+              "Beskrivning fylls i i dialogen när du klickar «Skicka in kartförslag» — gäller hela kartförslaget",
               "Skicka-sektionen ovanför kartan visar antal tillagda ändringar innan du skickar",
               "Öppna och pågående förslag visas på kartan — klicka markeringen eller ett förslag i listan på områdessidan (zoomar kartan till markeringen)",
               "På detaljsidan zoomas kartan automatiskt till markeringen; «Zooma till markering» finns kvar om du vill fokusera om",

@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-07",
+    title: "Kartförslag — beskrivning i dialog vid inskick",
+    items: [
+      "Beskriv ändringen döljs tills du klickar «Skicka in kartförslag» (knappen ovanför kartan) — då fyller du i uppgifterna och skickar",
+      "Ritknapparna (Punkt, Rektangel, …) har åter standardfärger; markeringar på kartan är fortfarande magenta",
+    ],
+  },
+  {
+    date: "2026-08-07",
     title: "Kartförslag — enklare skapa-flöde",
     items: [
       "Slutför-steget är borttaget — efter markering på kartan klickar du direkt «Lägg till ändring»",
