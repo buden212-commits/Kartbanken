@@ -10,7 +10,7 @@ export const releaseNotes: ReleaseNote[] = [
     date: "2026-08-07",
     title: "Kartförslag — beskrivning i dialog vid inskick",
     items: [
-      "Beskriv ändringen döljs tills du klickar «Skicka in kartförslag» (knappen ovanför kartan) — då fyller du i uppgifterna och skickar",
+      "Hela inskick-dialogen döljs tills du klickar «Skicka in kartförslag» i verktygsraden",
       "Ritknapparna (Punkt, Rektangel, …) har åter standardfärger; markeringar på kartan är fortfarande magenta",
     ],
   },

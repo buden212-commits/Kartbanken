@@ -507,45 +507,7 @@ export function SuggestionCreateClient({
         </p>
       )}
 
-      <div className="mt-6 space-y-6">
-        <section className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-4 sm:px-6">
-          <h2 className="text-sm font-semibold text-slate-900">Skicka kartförslag</h2>
-          <p className="mt-1 text-sm text-slate-600">
-            {markings.length > 0
-              ? `Du har ${markings.length} ändring${markings.length === 1 ? "" : "ar"} redo att skickas in.`
-              : "Lägg till minst en ändring på kartan innan du skickar in."}
-          </p>
-          {markings.length > 0 && (
-            <ul className="mt-3 space-y-1 rounded-lg border border-slate-200 bg-white px-3 py-2">
-              {markings.map((marking, index) => (
-                <li
-                  key={index}
-                  className="flex items-center justify-between gap-2 text-sm text-slate-600"
-                >
-                  <span>
-                    {index + 1}. {GEOMETRY_TYPE_LABELS[marking.type]}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveMarking(index)}
-                    className="text-red-600 hover:underline"
-                  >
-                    Ta bort
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="mt-4">
-            <Link
-              href={`/maps/${mapSlug}`}
-              className="inline-block rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-            >
-              Avbryt
-            </Link>
-          </div>
-        </section>
-
+      <div className="mt-6">
         <SuggestionCreateMapPanel
           mapSlug={mapSlug}
           versionId={versionId}
@@ -572,12 +534,31 @@ export function SuggestionCreateClient({
             className="max-h-[90vh] w-full overflow-y-auto rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl"
           >
             <h2 id="suggestion-submit-dialog-title" className="text-lg font-semibold text-slate-900">
-              Beskriv ändringen
+              Skicka in kartförslag
             </h2>
             <p className="mt-1 text-sm text-slate-600">
-              Fyll i kategori och beskrivning — gäller hela kartförslaget ({markings.length}{" "}
-              {markings.length === 1 ? "markering" : "markeringar"}).
+              Fyll i uppgifterna nedan och skicka in {markings.length}{" "}
+              {markings.length === 1 ? "ändring" : "ändringar"} tillsammans.
             </p>
+            <ul className="mt-3 space-y-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+              {markings.map((marking, index) => (
+                <li
+                  key={index}
+                  className="flex items-center justify-between gap-2 text-sm text-slate-600"
+                >
+                  <span>
+                    {index + 1}. {GEOMETRY_TYPE_LABELS[marking.type]}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveMarking(index)}
+                    className="text-red-600 hover:underline"
+                  >
+                    Ta bort
+                  </button>
+                </li>
+              ))}
+            </ul>
             <fieldset className="mt-4 space-y-4">
               <div>
                 <label htmlFor="category" className="form-label">
@@ -663,7 +644,7 @@ export function SuggestionCreateClient({
                 Tillbaka
               </button>
               <button type="submit" disabled={loading} className="btn-primary">
-                {loading ? "Sparar…" : `Skicka kartförslag (${markings.length} st)`}
+                {loading ? "Sparar…" : `Skicka in kartförslag (${markings.length} st)`}
               </button>
             </div>
           </form>
