@@ -569,7 +569,7 @@ export async function HelpPageContent() {
               "Knapparna + och − zoomar in respektive ut med 50 % per klick",
               "Mushjul zoomar också i 50 %-steg",
               "Skalan i verktygsraden visar nominal kartskala (t.ex. 1:15 000 vid «Hela kartan») — zoom in ger finare skala (t.ex. 1:7 500)",
-              "Max inzoom motsvarar ungefär 1:375 på en 1:15 000-karta",
+              "Max inzoom motsvarar skala 1:100 (kartfilens skala delat med zoomnivån)",
               "Hela kartan — återställer vyn så att hela kartan syns",
               "Dra i kartan för att panorera",
             ]}

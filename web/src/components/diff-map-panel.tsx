@@ -20,7 +20,7 @@ import {
 import { extractSvgInner, type OcadMapLayer } from "@/lib/ocad/svg-utils";
 import { flattenOcadLayers, initialLayerVisibility } from "@/lib/ocad/layers";
 import { MapLayerPanel } from "@/components/map-layer-panel";
-import { formatMapDisplayScale } from "@/lib/ocad/map-display-scale";
+import { formatMapDisplayScale, maxZoomForMapScale } from "@/lib/ocad/map-display-scale";
 import {
   createExportFrame,
   downloadMapOcd,
@@ -126,7 +126,6 @@ type Props = {
   } | null;
 };
 
-const MAX_ZOOM = 40;
 const MIN_ZOOM = 0.2;
 /** Zoom in/out by 50% per button click or wheel step. */
 const ZOOM_IN_FACTOR = 1.5;
@@ -168,6 +167,7 @@ function focusOnTarget(
   viewBox: string,
   containerWidth: number,
   containerHeight: number,
+  maxZoom: number,
 ): { pan: { x: number; y: number }; zoom: number } | null {
   if (containerWidth < 10 || containerHeight < 10) return null;
 
@@ -186,7 +186,7 @@ function focusOnTarget(
       const visibleW = containerWidth / renderScale;
       const visibleH = containerHeight / renderScale;
       targetZoom = Math.min(visibleW / bw, visibleH / bh) * 0.85;
-      targetZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, targetZoom));
+      targetZoom = Math.min(maxZoom, Math.max(MIN_ZOOM, targetZoom));
     }
   }
 
@@ -212,8 +212,9 @@ function zoomAtPoint(
   prevPan: { x: number; y: number },
   focalX: number,
   focalY: number,
+  maxZoom: number,
 ): { zoom: number; pan: { x: number; y: number } } {
-  const nextZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, prevZoom * factor));
+  const nextZoom = Math.min(maxZoom, Math.max(MIN_ZOOM, prevZoom * factor));
   const ratio = nextZoom / prevZoom;
   return {
     zoom: nextZoom,
@@ -260,6 +261,9 @@ export function DiffMapPanel({
   const [clickHint, setClickHint] = useState<string | null>(null);
   const [fullSvgText, setFullSvgText] = useState<string | null>(null);
   const [ocadMapScale, setOcadMapScale] = useState<number>(15000);
+  const maxZoom = useMemo(() => maxZoomForMapScale(ocadMapScale), [ocadMapScale]);
+  const maxZoomRef = useRef(maxZoom);
+  maxZoomRef.current = maxZoom;
   const [exportMode, setExportMode] = useState(false);
   const [exportSettings, setExportSettings] = useState<ExportSettings>({
     scale: 10000,
@@ -604,6 +608,10 @@ export function DiffMapPanel({
   }, [fullViewBox, loading, focusTarget, fitGeoBbox, fitWholeMap]);
 
   useEffect(() => {
+    setZoom((current) => Math.min(maxZoom, Math.max(MIN_ZOOM, current)));
+  }, [maxZoom]);
+
+  useEffect(() => {
     if (!focusTarget || !fullViewBox || loading) return;
 
     const viewport = viewportRef.current;
@@ -616,11 +624,12 @@ export function DiffMapPanel({
       fullViewBox,
       rect.width,
       rect.height,
+      maxZoom,
     );
     if (!next) return;
     setPan(next.pan);
     setZoom(next.zoom);
-  }, [focusTarget, fullViewBox, loading, rootTransform]);
+  }, [focusTarget, fullViewBox, loading, rootTransform, maxZoom]);
 
   useEffect(() => {
     if (!fitGeoBbox || !fullViewBox || loading) return;
@@ -642,6 +651,7 @@ export function DiffMapPanel({
         fullViewBox,
         rect.width,
         rect.height,
+        maxZoom,
       );
       if (!next) return false;
       setPan(next.pan);
@@ -661,7 +671,7 @@ export function DiffMapPanel({
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [fitGeoBbox, fullViewBox, loading, rootTransform]);
+  }, [fitGeoBbox, fullViewBox, loading, rootTransform, maxZoom]);
 
   const adjustZoom = useCallback((factor: number, focal?: { x: number; y: number }) => {
     const viewport = viewportRef.current;
@@ -672,7 +682,7 @@ export function DiffMapPanel({
     const focalX = focal?.x ?? rect.width / 2;
     const focalY = focal?.y ?? rect.height / 2;
     const { pan: prevPan, zoom: prevZoom } = viewStateRef.current;
-    const next = zoomAtPoint(prevZoom, factor, prevPan, focalX, focalY);
+    const next = zoomAtPoint(prevZoom, factor, prevPan, focalX, focalY, maxZoomRef.current);
     setZoom(next.zoom);
     setPan(next.pan);
   }, [markUserInteracted]);
@@ -805,6 +815,7 @@ export function DiffMapPanel({
           pinchRef.current.pan,
           focalX,
           focalY,
+          maxZoomRef.current,
         );
         markUserInteracted();
         setZoom(next.zoom);
@@ -953,7 +964,7 @@ export function DiffMapPanel({
       if (!viewport || !fullViewBox) return;
       markUserInteracted();
       const rect = viewport.getBoundingClientRect();
-      const nextZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, targetZoom));
+      const nextZoom = Math.min(maxZoomRef.current, Math.max(MIN_ZOOM, targetZoom));
       const [svgX, svgY] = geoToSvgUserPoint(mapCoord, rootTransform);
       const [screenX, screenY] = mapPointToScreen(
         svgX,
