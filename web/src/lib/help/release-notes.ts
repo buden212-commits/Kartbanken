@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-07",
+    title: "Startsidan — tips om funktioner",
+    items: [
+      "«Visste du att…» på startsidan visar ett kort tips per dag om funktioner i systemet",
+      "Tipsen är rollanpassade och länkar till relevant avsnitt i hjälpen",
+    ],
+  },
+  {
+    date: "2026-08-07",
     title: "Hjälp — process-scheman",
     items: [
       "Varje huvudavsnitt på hjälpsidan har nu flödesschema (diagram) för tillhörande process",

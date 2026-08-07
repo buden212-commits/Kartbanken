@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { auth } from "@/auth";
+import { CreateMapForm } from "@/components/create-map-form";
+import { FeatureTipCard } from "@/components/feature-tip-card";
 import { canAdmin } from "@/lib/auth/permissions";
 import { formatBytes, formatDate } from "@/lib/format";
+import { pickFeatureTip } from "@/lib/help/feature-tips";
 import { versionVisibilityFilter } from "@/lib/maps/version-query";
 import { prisma } from "@/lib/prisma";
-import { CreateMapForm } from "@/components/create-map-form";
 
 export default async function HomePage() {
   const session = await auth();
@@ -36,6 +38,12 @@ export default async function HomePage() {
     : [];
   const uploaderMap = new Map(uploaders.map((u) => [u.id, u]));
 
+  const today = new Date().toISOString().slice(0, 10);
+  const featureTip =
+    session?.user.role && !(isAdmin && maps.length === 0)
+      ? pickFeatureTip(session.user.role, `${session.user.id}:${today}`)
+      : null;
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -46,6 +54,12 @@ export default async function HomePage() {
           </h1>
         </div>
       </div>
+
+      {featureTip && (
+        <section className="mt-6">
+          <FeatureTipCard tip={featureTip} />
+        </section>
+      )}
 
       <section className="mt-8">
         {maps.length === 0 ? (
