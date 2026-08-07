@@ -446,9 +446,11 @@ export async function HelpPageContent() {
           <HelpList
             items={[
               "Öppna en publicerad version via Visa karta och klicka Föreslå ändring",
-              "Välj punkt, rektangel, polygon eller linje och markera på kartan — Slutför blir markerad när du börjat rita",
-              "Klicka Slutför för att öppna formuläret (kategori, beskrivning, foto) och lägga till ändringen",
-              "Lägg till flera markeringar genom att rita, slutföra och klicka «Lägg till ändring» — skicka alla tillsammans",
+              "Välj punkt, rektangel, polygon eller linje och markera på kartan",
+              "Växla «Rita» / «Navigera» ovanför kartan — i Navigera kan du dra och nypa utan att rita; i Rita zoomar två fingrar utan att skapa markering",
+              "Klicka «Lägg till ändring» när markeringen är klar — punkt och rektangel aktiveras direkt efter klick/drag",
+              "Lägg till flera markeringar — varje markering numreras (1, 2, 3 …) på kartan",
+              "Beskrivning och kategori fylls i i formuläret ovanför kartan och gäller hela kartförslaget",
               "Skicka-sektionen ovanför kartan visar antal tillagda ändringar innan du skickar",
               "Öppna och pågående förslag visas på kartan — klicka markeringen eller ett förslag i listan på områdessidan (zoomar kartan till markeringen)",
               "På detaljsidan zoomas kartan automatiskt till markeringen; «Zooma till markering» finns kvar om du vill fokusera om",
@@ -461,7 +463,7 @@ export async function HelpPageContent() {
               "Kartutklipp i PDF-rapporten visar minst 200×200 meter med tydligt markerade linjer och punkter",
             ]}
           />
-          <p className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-orange-900">
+          <p className="rounded-lg border border-[#FD3DB5]/30 bg-[#FD3DB5]/10 px-4 py-3 text-[#9D0066]">
             Kartförslag är <strong>förslag</strong>, inte en del av kartan. Terräng ändras fortfarande
             via checkout och OCAD-redigering.
           </p>

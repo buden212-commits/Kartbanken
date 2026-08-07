@@ -384,7 +384,7 @@ export function SuggestionDetailClient({
             <button
               type="button"
               onClick={startEdit}
-              className="rounded-lg border border-orange-300 bg-orange-50 px-3 py-1.5 text-sm font-medium text-orange-800 hover:bg-orange-100"
+              className="rounded-lg border border-[#FD3DB5]/40 bg-[#FD3DB5]/10 px-3 py-1.5 text-sm font-medium text-[#9D0066] hover:bg-[#FD3DB5]/20"
             >
               Redigera
             </button>
@@ -454,7 +454,7 @@ export function SuggestionDetailClient({
                 setRedrawMarking((v) => !v);
                 resetDrawDraft();
               }}
-              className="text-sm text-orange-700 hover:underline"
+              className="text-sm text-[#C2188F] hover:underline"
             >
               {redrawMarking ? "Avbryt omritning" : "Byt markering på kartan"}
             </button>
@@ -517,7 +517,7 @@ export function SuggestionDetailClient({
               }}
               className={`rounded-lg border px-3 py-1.5 text-sm ${
                 drawTool === t
-                  ? "border-orange-400 bg-orange-50 text-orange-900"
+                  ? "border-[#FD3DB5] bg-[#FD3DB5]/10 text-[#9D0066]"
                   : "border-slate-300 text-slate-700 hover:bg-slate-50"
               }`}
             >
@@ -531,7 +531,7 @@ export function SuggestionDetailClient({
                 drawTool === "polygon" ? polygonPoints.length < 3 : linePoints.length < 2
               }
               onClick={confirmDrawDraft}
-              className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+              className="rounded-lg bg-[#FD3DB5] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#E835A5] disabled:opacity-50"
             >
               {drawTool === "polygon" ? "Slutför polygon" : "Slutför linje"}
             </button>
@@ -553,7 +553,7 @@ export function SuggestionDetailClient({
               <button
                 type="button"
                 onClick={zoomToMarkings}
-                className="rounded-lg border border-orange-300 bg-orange-50 px-3 py-1.5 text-sm font-medium text-orange-800 hover:bg-orange-100"
+                className="rounded-lg border border-[#FD3DB5]/40 bg-[#FD3DB5]/10 px-3 py-1.5 text-sm font-medium text-[#9D0066] hover:bg-[#FD3DB5]/20"
               >
                 Zooma till markering
                 {displayGeometries.length > 1

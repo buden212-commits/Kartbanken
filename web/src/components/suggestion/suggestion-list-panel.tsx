@@ -153,7 +153,7 @@ export function SuggestionListPanel({
               key={s.id}
               className={`flex flex-wrap items-start justify-between gap-3 px-4 py-3 ${
                 onZoomToSuggestion ? "cursor-pointer hover:bg-slate-50" : ""
-              } ${highlightedSuggestionId === s.id ? "bg-orange-50/80" : ""}`}
+              } ${highlightedSuggestionId === s.id ? "bg-[#FD3DB5]/10" : ""}`}
               onClick={
                 onZoomToSuggestion
                   ? () => onZoomToSuggestion(s.id)

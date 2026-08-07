@@ -103,6 +103,8 @@ type Props = {
   /** When "draw", viewport pointer events call drawPointerHandlers instead of pan. */
   interactionMode?: "navigate" | "draw";
   drawPointerHandlers?: MapDrawPointerHandlers;
+  /** Called when a multi-touch gesture interrupts an in-progress draw (e.g. pinch-to-zoom). */
+  onDrawInterrupt?: () => void;
   /** Replaces the default map title in the toolbar row. */
   headerContent?: ReactNode;
   /** Extra row below the main toolbar (e.g. checkout draw tools). */
@@ -235,6 +237,7 @@ export function DiffMapPanel({
   suggestionOverlays,
   interactionMode = "navigate",
   drawPointerHandlers,
+  onDrawInterrupt,
   headerContent,
   secondaryHeaderContent,
   unboxed = false,
@@ -295,6 +298,8 @@ export function DiffMapPanel({
     zoom: number;
     pan: { x: number; y: number };
   } | null>(null);
+  /** Suppresses draw pointer-up after pinch/pan gestures in draw mode. */
+  const drawSuppressedRef = useRef(false);
   const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userInteractedRef = useRef(false);
   const initialFitDoneRef = useRef(false);
@@ -719,18 +724,21 @@ export function DiffMapPanel({
       const viewport = viewportRef.current;
       if (!viewport) return;
 
-      if (interactionMode === "draw" && drawPointerHandlers && svgRef.current) {
-        viewport.setPointerCapture(e.pointerId);
-        drawPointerHandlers.onPointerDown(e, svgRef.current);
-        e.preventDefault();
-        return;
-      }
-
       pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
       viewport.setPointerCapture(e.pointerId);
 
       if (pointersRef.current.size >= 2) {
         beginPinch();
+        if (interactionMode === "draw") {
+          drawSuppressedRef.current = true;
+          onDrawInterrupt?.();
+        }
+        e.preventDefault();
+        return;
+      }
+
+      if (interactionMode === "draw" && drawPointerHandlers && svgRef.current) {
+        drawPointerHandlers.onPointerDown(e, svgRef.current);
         e.preventDefault();
         return;
       }
@@ -758,17 +766,20 @@ export function DiffMapPanel({
         pointerId: e.pointerId,
       };
     },
-    [beginPinch, drawPointerHandlers, exportMode, exportFrame, interactionMode, pan.x, pan.y],
+    [
+      beginPinch,
+      drawPointerHandlers,
+      exportMode,
+      exportFrame,
+      interactionMode,
+      onDrawInterrupt,
+      pan.x,
+      pan.y,
+    ],
   );
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent) => {
-      if (interactionMode === "draw" && drawPointerHandlers && svgRef.current) {
-        drawPointerHandlers.onPointerMove(e, svgRef.current);
-        e.preventDefault();
-        return;
-      }
-
       if (!pointersRef.current.has(e.pointerId)) return;
       pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
@@ -795,6 +806,14 @@ export function DiffMapPanel({
         setZoom(next.zoom);
         setPan(next.pan);
         e.preventDefault();
+        return;
+      }
+
+      if (interactionMode === "draw" && drawPointerHandlers && svgRef.current) {
+        if (pointersRef.current.size <= 1 && !drawSuppressedRef.current) {
+          drawPointerHandlers.onPointerMove(e, svgRef.current);
+          e.preventDefault();
+        }
         return;
       }
 
@@ -860,16 +879,33 @@ export function DiffMapPanel({
 
   const handlePointerUp = useCallback(
     (e: React.PointerEvent) => {
+      const hadPointer = pointersRef.current.has(e.pointerId);
+      pointersRef.current.delete(e.pointerId);
+
+      if (viewportRef.current?.hasPointerCapture(e.pointerId)) {
+        viewportRef.current.releasePointerCapture(e.pointerId);
+      }
+
       if (interactionMode === "draw" && drawPointerHandlers && svgRef.current) {
-        if (viewportRef.current?.hasPointerCapture(e.pointerId)) {
-          viewportRef.current.releasePointerCapture(e.pointerId);
+        if (pointersRef.current.size >= 2) {
+          beginPinch();
+          e.preventDefault();
+          return;
         }
-        drawPointerHandlers.onPointerUp(e, svgRef.current);
-        e.preventDefault();
+
+        pinchRef.current = null;
+
+        if (pointersRef.current.size === 0) {
+          const suppressed = drawSuppressedRef.current;
+          drawSuppressedRef.current = false;
+          if (!suppressed) {
+            drawPointerHandlers.onPointerUp(e, svgRef.current);
+          }
+          e.preventDefault();
+        }
         return;
       }
 
-      const hadPointer = pointersRef.current.delete(e.pointerId);
       if (!hadPointer) return;
 
       if (viewportRef.current?.hasPointerCapture(e.pointerId)) {
@@ -1371,9 +1407,11 @@ export function DiffMapPanel({
 
         {!infoChange && !clickHint && !exportMode && (
           <div className="pointer-events-none absolute right-3 top-3 z-20 max-w-[calc(100%-1.5rem)] rounded-lg border border-slate-200 bg-white/90 px-2 py-1 text-xs text-slate-500 shadow-sm">
-            {clickableItems.length > 0
-              ? "Tryck på kartan för objektinfo · nyp för att zooma"
-              : "Dra för att panorera · nyp eller +/− för att zooma"}
+            {interactionMode === "draw"
+              ? "Ritläge — nyp med två fingrar för att zooma"
+              : clickableItems.length > 0
+                ? "Tryck på kartan för objektinfo · nyp för att zooma"
+                : "Dra för att panorera · nyp eller +/− för att zooma"}
           </div>
         )}
       </div>

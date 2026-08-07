@@ -13,8 +13,8 @@ import type {
   SuggestionPolygonGeometry,
 } from "./types";
 
-export const SUGGESTION_ORANGE = "#f97316";
-export const SUGGESTION_ORANGE_STROKE = "#c2410c";
+export const SUGGESTION_ORANGE = "#FD3DB5";
+export const SUGGESTION_ORANGE_STROKE = "#C2188F";
 /** Stroke/pin scale for interactive map views (detail, create, overview overlay). */
 export const LIVE_MAP_STROKE_SCALE = 2.5;
 /** Label text scale for interactive map views (relative to stroke scale). */
@@ -194,7 +194,7 @@ export function renderSuggestionObjectsSvg(
     .join("");
 }
 
-/** Orange kartförslag overlay for PDF/GeoTIFF export (same styling as live map). */
+/** Magenta kartförslag overlay for PDF/GeoTIFF export (same styling as live map). */
 export function buildSuggestionExportOverlaySvg(
   overlays: SuggestionOverlayItem[],
   rootTransform: SvgRootTransform,

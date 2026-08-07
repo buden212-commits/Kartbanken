@@ -7,6 +7,17 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-08-07",
+    title: "Kartförslag — enklare skapa-flöde",
+    items: [
+      "Slutför-steget är borttaget — efter markering på kartan klickar du direkt «Lägg till ändring»",
+      "Beskrivningsformuläret är alltid synligt och gäller hela kartförslaget",
+      "Markeringar numreras (1, 2, 3 …) på kartan i stället för texten «Förslag»",
+      "Kartförslag ritas i magenta (#FD3DB5) i skapa-vy, kartvy, detalj och export",
+      "På mobil: växla mellan Rita och Navigera ovanför kartan — nyp för att zooma utan att skapa markeringar av misstag",
+    ],
+  },
+  {
     date: "2026-08-06",
     title: "OCD-export av kartförslag — buffertfix",
     items: [
@@ -70,7 +81,7 @@ export const releaseNotes: ReleaseNote[] = [
     title: "Export — kartförslag i PDF och GeoTIFF",
     items: [
       "PDF- och GeoTIFF-export kan inkludera öppna och pågående kartförslag för versionen (kryssruta i exportmenyn)",
-      "Markeringarna ritas i samma orange stil som på kartan",
+      "Markeringarna ritas i samma magenta stil som på kartan",
     ],
   },
   {
@@ -139,7 +150,7 @@ export const releaseNotes: ReleaseNote[] = [
     title: "Kartförslag — fas 3",
     items: [
       "Rita polygon eller linje utöver punkt och rektangel när du lämnar kartförslag",
-      "Öppna och pågående förslag syns som orange markering på kartvy och områdessidan — klicka för att öppna",
+      "Öppna och pågående förslag syns som magenta markering på kartvy och områdessidan — klicka för att öppna",
       "Växla «Visa kartförslag» i kartvyn för att dölja eller visa lagret",
       "Stora foton (över ca 4,5 MB) kan laddas upp utan storleksfel",
       "Du kan redigera egna öppna förslag — text, kategori och markering på kartan",
