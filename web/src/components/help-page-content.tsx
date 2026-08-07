@@ -449,6 +449,7 @@ export async function HelpPageContent() {
               "Välj punkt, rektangel, polygon eller linje och markera på kartan",
               "«GPS-spår» finns ovanför kartan (bredvid Rita/Navigera) — spelar in en linje med telefonens GPS (kräver georefererad karta)",
               "GPS-spår filtreras (minst ca 4 m mellan punkter) och förenklas automatiskt innan linjen sparas",
+              "Orimliga GPS-hopp filtreras bort och accepterade punkter utjämnas vid sämre mottagning — antal filtrerade hopp visas efter «Sluta spåra»",
               "Växla «Rita» / «Navigera» ovanför kartan — i Navigera kan du dra och nypa utan att rita; i Rita zoomar två fingrar utan att skapa markering",
               "Klicka «Lägg till ändring» när markeringen är klar — punkt och rektangel aktiveras direkt efter klick/drag",
               "Lägg till flera markeringar — varje markering numreras (1, 2, 3 …) på kartan",

@@ -10,6 +10,7 @@ export const releaseNotes: ReleaseNote[] = [
     date: "2026-08-07",
     title: "Kartförslag — GPS-spårning",
     items: [
+      "GPS-spår filtrerar bort orimliga hopp (t.ex. vid dålig mottagning) och utjämnar linjen efter rapporterad noggrannhet",
       "«GPS-spår» ligger nu ovanför kartan (bredvid Rita/Navigera) så knappen syns även på mobil",
       "Ny knapp «GPS-spår» när du föreslår kartändring — gå längs stigen eller spåret och klicka «Sluta spåra»",
       "Spåret filtreras och förenklas automatiskt (Douglas–Peucker) så linjen blir hanterbar i OCAD",

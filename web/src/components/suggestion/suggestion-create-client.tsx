@@ -28,10 +28,12 @@ import {
   renderSuggestionGeometrySvg,
 } from "@/lib/suggestion/geometry";
 import {
+  evaluateGpsSample,
   GPS_TRACK_MAX_ACCURACY_M,
+  GPS_TRACK_MAX_JUMP_M,
+  GPS_TRACK_MAX_SPEED_MPS,
   GPS_TRACK_MIN_DISTANCE_M,
   processGpsTrack,
-  shouldAcceptGpsSample,
   type GpsTrackSample,
 } from "@/lib/suggestion/gps-track";
 import {
@@ -236,6 +238,7 @@ export function SuggestionCreateClient({
   const dragRef = useRef<{ start: [number, number]; current: [number, number] } | null>(null);
   const gpsWatchIdRef = useRef<number | null>(null);
   const gpsSamplesRef = useRef<GpsTrackSample[]>([]);
+  const gpsRejectedJumpsRef = useRef(0);
 
   const [tool, setTool] = useState<DrawTool>("pin");
   const [mapMode, setMapMode] = useState<"draw" | "navigate">("draw");
@@ -243,11 +246,13 @@ export function SuggestionCreateClient({
   const [ocadMapScale, setOcadMapScale] = useState(15000);
   const [gpsTracking, setGpsTracking] = useState(false);
   const [gpsSampleCount, setGpsSampleCount] = useState(0);
+  const [gpsRejectedJumpCount, setGpsRejectedJumpCount] = useState(0);
   const [gpsLiveAccuracyM, setGpsLiveAccuracyM] = useState<number | null>(null);
   const [gpsTrackSummary, setGpsTrackSummary] = useState<{
     averageAccuracyMeters: number;
     rawPointCount: number;
     simplifiedPointCount: number;
+    rejectedJumpCount: number;
   } | null>(null);
   const [markings, setMarkings] = useState<SuggestionGeometry[]>([]);
   const [geometry, setGeometry] = useState<SuggestionGeometry | null>(null);
@@ -303,7 +308,7 @@ export function SuggestionCreateClient({
   }, []);
 
   const appendGpsSample = useCallback(
-    (coords: GeolocationCoordinates) => {
+    (coords: GeolocationCoordinates, timestampMs: number) => {
       if (!ocadCrs || !isGeoreferencedCrs(ocadCrs)) return;
 
       const mapCoord = wgs84ToMapCoord(coords.longitude, coords.latitude, ocadCrs);
@@ -317,18 +322,29 @@ export function SuggestionCreateClient({
       setGpsLiveAccuracyM(accuracyMeters);
 
       const lastSample = gpsSamplesRef.current.at(-1) ?? null;
-      if (
-        !shouldAcceptGpsSample(mapCoord, accuracyMeters, lastSample, {
+      const evaluation = evaluateGpsSample(
+        mapCoord,
+        accuracyMeters,
+        timestampMs,
+        lastSample,
+        {
           minDistanceM: GPS_TRACK_MIN_DISTANCE_M,
           maxAccuracyM: GPS_TRACK_MAX_ACCURACY_M,
+          maxSpeedMps: GPS_TRACK_MAX_SPEED_MPS,
+          maxJumpM: GPS_TRACK_MAX_JUMP_M,
           mapScale: ocadMapScale,
-        })
-      ) {
+        },
+      );
+
+      if (!evaluation.accepted) {
+        if (evaluation.reason === "jump") {
+          gpsRejectedJumpsRef.current += 1;
+          setGpsRejectedJumpCount(gpsRejectedJumpsRef.current);
+        }
         return;
       }
 
-      const sample: GpsTrackSample = { mapCoord, accuracyMeters };
-      gpsSamplesRef.current = [...gpsSamplesRef.current, sample];
+      gpsSamplesRef.current = [...gpsSamplesRef.current, evaluation.sample];
       setGpsSampleCount(gpsSamplesRef.current.length);
       setLinePoints(gpsSamplesRef.current.map((item) => item.mapCoord));
       setGeometry(null);
@@ -350,7 +366,9 @@ export function SuggestionCreateClient({
 
     stopGpsWatch();
     gpsSamplesRef.current = [];
+    gpsRejectedJumpsRef.current = 0;
     setGpsSampleCount(0);
+    setGpsRejectedJumpCount(0);
     setGpsTracking(true);
     setGpsTrackSummary(null);
     setGpsLiveAccuracyM(null);
@@ -362,7 +380,7 @@ export function SuggestionCreateClient({
     setError(null);
 
     gpsWatchIdRef.current = navigator.geolocation.watchPosition(
-      (pos) => appendGpsSample(pos.coords),
+      (pos) => appendGpsSample(pos.coords, pos.timestamp),
       (err) => {
         stopGpsWatch();
         setGpsTracking(false);
@@ -391,7 +409,10 @@ export function SuggestionCreateClient({
     setGpsLiveAccuracyM(null);
 
     const samples = gpsSamplesRef.current;
-    const result = processGpsTrack(samples, { mapScale: ocadMapScale });
+    const result = processGpsTrack(samples, {
+      mapScale: ocadMapScale,
+      rejectedJumpCount: gpsRejectedJumpsRef.current,
+    });
     if (!result) {
       gpsSamplesRef.current = [];
       setGpsSampleCount(0);
@@ -410,6 +431,7 @@ export function SuggestionCreateClient({
       averageAccuracyMeters: result.averageAccuracyMeters,
       rawPointCount: result.rawPointCount,
       simplifiedPointCount: result.simplifiedPointCount,
+      rejectedJumpCount: result.rejectedJumpCount,
     });
     setError(null);
   }, [ocadMapScale, stopGpsWatch]);
@@ -419,7 +441,9 @@ export function SuggestionCreateClient({
     setGpsTracking(false);
     setGpsLiveAccuracyM(null);
     gpsSamplesRef.current = [];
+    gpsRejectedJumpsRef.current = 0;
     setGpsSampleCount(0);
+    setGpsRejectedJumpCount(0);
     setLinePoints([]);
   }, [stopGpsWatch]);
 
@@ -540,13 +564,21 @@ export function SuggestionCreateClient({
         gpsLiveAccuracyM != null
           ? `Senaste noggrannhet ±${Math.round(gpsLiveAccuracyM)} m`
           : "Väntar på GPS-fix…";
-      return `Spårar GPS — ${gpsSampleCount} punkt${gpsSampleCount === 1 ? "" : "er"}. ${accuracyText}.`;
+      const jumpText =
+        gpsRejectedJumpCount > 0
+          ? ` ${gpsRejectedJumpCount} GPS-hopp filtrerades bort.`
+          : "";
+      return `Spårar GPS — ${gpsSampleCount} punkt${gpsSampleCount === 1 ? "" : "er"}. ${accuracyText}.${jumpText}`;
     }
     if (gpsTrackSummary) {
-      return `Spår avslutat. Medelnoggrannhet ±${Math.round(gpsTrackSummary.averageAccuracyMeters)} m. ${gpsTrackSummary.rawPointCount} GPS-punkter förenklades till ${gpsTrackSummary.simplifiedPointCount} brytpunkter. Klicka «Lägg till ändring» om linjen ser bra ut.`;
+      const jumpText =
+        gpsTrackSummary.rejectedJumpCount > 0
+          ? ` ${gpsTrackSummary.rejectedJumpCount} GPS-hopp filtrerades bort under spårningen.`
+          : "";
+      return `Spår avslutat. Medelnoggrannhet ±${Math.round(gpsTrackSummary.averageAccuracyMeters)} m. ${gpsTrackSummary.rawPointCount} GPS-punkter förenklades till ${gpsTrackSummary.simplifiedPointCount} brytpunkter.${jumpText} Klicka «Lägg till ändring» om linjen ser bra ut.`;
     }
     return null;
-  }, [gpsTracking, gpsSampleCount, gpsLiveAccuracyM, gpsTrackSummary]);
+  }, [gpsTracking, gpsSampleCount, gpsLiveAccuracyM, gpsRejectedJumpCount, gpsTrackSummary]);
 
   const canUseGpsTracking = isGeoreferencedCrs(ocadCrs);
 

@@ -3,10 +3,15 @@ import { mapUnitsToMeters, metersToMapUnits } from "@/lib/ocad/crs";
 export const GPS_TRACK_MIN_DISTANCE_M = 4;
 export const GPS_TRACK_MAX_ACCURACY_M = 30;
 export const GPS_TRACK_SIMPLIFY_TOLERANCE_M = 3;
+/** Max plausible speed on foot (m/s) — ~22 km/h. Filters GPS jumps. */
+export const GPS_TRACK_MAX_SPEED_MPS = 6;
+/** Absolute max single-step jump (m) when accuracy is poor. */
+export const GPS_TRACK_MAX_JUMP_M = 25;
 
 export type GpsTrackSample = {
   mapCoord: [number, number];
   accuracyMeters: number;
+  timestampMs: number;
 };
 
 export type GpsTrackProcessResult = {
@@ -15,13 +20,27 @@ export type GpsTrackProcessResult = {
   filteredPointCount: number;
   simplifiedPointCount: number;
   averageAccuracyMeters: number;
+  rejectedJumpCount: number;
 };
 
 export type GpsTrackProcessOptions = {
   minDistanceM?: number;
   simplifyToleranceM?: number;
   mapScale: number;
+  rejectedJumpCount?: number;
 };
+
+export type GpsTrackFilterOptions = {
+  minDistanceM: number;
+  maxAccuracyM: number;
+  maxSpeedMps: number;
+  maxJumpM: number;
+  mapScale: number;
+};
+
+export type GpsSampleEvaluation =
+  | { accepted: true; sample: GpsTrackSample }
+  | { accepted: false; reason: "accuracy" | "min_distance" | "jump" };
 
 export function mapCoordDistanceMeters(
   a: [number, number],
@@ -33,20 +52,90 @@ export function mapCoordDistanceMeters(
   return mapUnitsToMeters(Math.hypot(dx, dy), mapScale);
 }
 
-export function shouldAcceptGpsSample(
-  mapCoord: [number, number],
+/** Blend weight: lower when accuracy is worse → smoother track in poor reception. */
+export function gpsSmoothingAlpha(accuracyMeters: number): number {
+  const clamped = Math.max(5, Math.min(accuracyMeters, GPS_TRACK_MAX_ACCURACY_M));
+  return 0.6 - ((clamped - 5) / (GPS_TRACK_MAX_ACCURACY_M - 5)) * 0.4;
+}
+
+export function smoothGpsMapCoord(
+  previous: [number, number],
+  raw: [number, number],
   accuracyMeters: number,
-  lastSample: GpsTrackSample | null,
-  options: { minDistanceM: number; maxAccuracyM: number; mapScale: number },
+): [number, number] {
+  const alpha = gpsSmoothingAlpha(accuracyMeters);
+  return [
+    previous[0] + alpha * (raw[0] - previous[0]),
+    previous[1] + alpha * (raw[1] - previous[1]),
+  ];
+}
+
+export function isImplausibleGpsJump(
+  distanceM: number,
+  elapsedSec: number,
+  accuracyMeters: number,
+  options: Pick<GpsTrackFilterOptions, "maxSpeedMps" | "maxJumpM">,
 ): boolean {
-  if (!Number.isFinite(accuracyMeters) || accuracyMeters > options.maxAccuracyM) {
+  if (!(distanceM > 0)) return false;
+
+  const dt = Math.max(elapsedSec, 0.5);
+  const speedMps = distanceM / dt;
+  if (speedMps > options.maxSpeedMps) return true;
+
+  if (distanceM <= options.maxJumpM) return false;
+
+  // Large jump: reject unless accuracy is good and speed still plausible
+  if (accuracyMeters <= 12 && speedMps <= options.maxSpeedMps * 0.85) {
     return false;
   }
-  if (!lastSample) return true;
-  return (
-    mapCoordDistanceMeters(lastSample.mapCoord, mapCoord, options.mapScale) >=
-    options.minDistanceM
+
+  return true;
+}
+
+export function evaluateGpsSample(
+  rawMapCoord: [number, number],
+  accuracyMeters: number,
+  timestampMs: number,
+  lastSample: GpsTrackSample | null,
+  options: GpsTrackFilterOptions,
+): GpsSampleEvaluation {
+  if (!Number.isFinite(accuracyMeters) || accuracyMeters > options.maxAccuracyM) {
+    return { accepted: false, reason: "accuracy" };
+  }
+
+  if (!lastSample) {
+    return {
+      accepted: true,
+      sample: { mapCoord: rawMapCoord, accuracyMeters, timestampMs },
+    };
+  }
+
+  const distanceM = mapCoordDistanceMeters(
+    lastSample.mapCoord,
+    rawMapCoord,
+    options.mapScale,
   );
+
+  const elapsedSec = (timestampMs - lastSample.timestampMs) / 1000;
+  if (
+    isImplausibleGpsJump(distanceM, elapsedSec, accuracyMeters, {
+      maxSpeedMps: options.maxSpeedMps,
+      maxJumpM: options.maxJumpM,
+    })
+  ) {
+    return { accepted: false, reason: "jump" };
+  }
+
+  if (distanceM < options.minDistanceM) {
+    return { accepted: false, reason: "min_distance" };
+  }
+
+  const mapCoord = smoothGpsMapCoord(lastSample.mapCoord, rawMapCoord, accuracyMeters);
+
+  return {
+    accepted: true,
+    sample: { mapCoord, accuracyMeters, timestampMs },
+  };
 }
 
 function perpendicularDistanceMapUnits(
@@ -126,5 +215,6 @@ export function processGpsTrack(
     filteredPointCount: filtered.length,
     simplifiedPointCount: simplified.length,
     averageAccuracyMeters: accuracySum / samples.length,
+    rejectedJumpCount: options.rejectedJumpCount ?? 0,
   };
 }
