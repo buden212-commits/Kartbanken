@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-07",
+    title: "Kartvy — skala i stället för zoom i procent",
+    items: [
+      "Zoomindikatorn i kartvyn visar nominal skala (t.ex. 1:15 000) i stället för procent",
+      "«Hela kartan» motsvarar kartfilens skala; zoom in ger t.ex. 1:7 500",
+    ],
+  },
+  {
+    date: "2026-08-07",
     title: "Kartförslag — ta foto i inskick-dialogen",
     items: [
       "På mobil kan du klicka «Ta foto» i inskick-dialogen och fotografera direkt — bilden bifogas kartförslaget",

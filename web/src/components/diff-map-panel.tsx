@@ -20,6 +20,7 @@ import {
 import { extractSvgInner, type OcadMapLayer } from "@/lib/ocad/svg-utils";
 import { flattenOcadLayers, initialLayerVisibility } from "@/lib/ocad/layers";
 import { MapLayerPanel } from "@/components/map-layer-panel";
+import { formatMapDisplayScale } from "@/lib/ocad/map-display-scale";
 import {
   createExportFrame,
   downloadMapOcd,
@@ -1123,8 +1124,11 @@ export function DiffMapPanel({
           >
             −
           </button>
-          <span className="min-w-[3.5rem] text-center text-xs tabular-nums text-slate-500">
-            {Math.round(zoom * 100)}%
+          <span
+            className="min-w-[4.5rem] text-center text-xs tabular-nums text-slate-500"
+            title="Nominal kartskala vid aktuell zoom"
+          >
+            {formatMapDisplayScale(ocadMapScale, zoom)}
           </span>
           <button
             type="button"
