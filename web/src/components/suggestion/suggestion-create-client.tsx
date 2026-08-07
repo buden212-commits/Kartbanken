@@ -2,8 +2,17 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { memo, useCallback, useMemo, useRef, useState, type MutableRefObject } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject,
+} from "react";
 import { DiffMapPanel, type MapDrawPointerHandlers } from "@/components/diff-map-panel";
+import { isGeoreferencedCrs, wgs84ToMapCoord, type OcadCrsInfo } from "@/lib/ocad/crs";
 import { screenToSvgPoint } from "@/lib/ocad/map-hit-test";
 import {
   IDENTITY_SVG_TRANSFORM,
@@ -18,6 +27,13 @@ import {
   normalizeSuggestionBbox,
   renderSuggestionGeometrySvg,
 } from "@/lib/suggestion/geometry";
+import {
+  GPS_TRACK_MAX_ACCURACY_M,
+  GPS_TRACK_MIN_DISTANCE_M,
+  processGpsTrack,
+  shouldAcceptGpsSample,
+  type GpsTrackSample,
+} from "@/lib/suggestion/gps-track";
 import {
   MAX_SUGGESTION_GEOMETRIES,
   SUGGESTION_CATEGORY_LABELS,
@@ -70,6 +86,9 @@ type CreateMapPanelProps = {
   drawHint: string;
   markingCount: number;
   rootTransformRef: MutableRefObject<SvgRootTransform>;
+  onOcadCrsReady: (crs: OcadCrsInfo | null) => void;
+  onOcadMapScale: (scale: number) => void;
+  gpsTrackingStatus: string | null;
 };
 
 const MAP_MODE_BTN =
@@ -91,6 +110,9 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
   drawHint,
   markingCount,
   rootTransformRef,
+  onOcadCrsReady,
+  onOcadMapScale,
+  gpsTrackingStatus,
 }: CreateMapPanelProps) {
   const renderSvgOverlay = useCallback(
     (rootTransform: SvgRootTransform) => {
@@ -131,8 +153,15 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
       drawPointerHandlers={mapMode === "draw" ? drawPointerHandlers : undefined}
       onDrawInterrupt={onDrawInterrupt}
       renderSvgOverlay={renderSvgOverlay}
+      onOcadCrsReady={onOcadCrsReady}
+      onOcadMapScale={onOcadMapScale}
       secondaryHeaderContent={
         <div className="space-y-2 border-b border-slate-200 bg-slate-50 px-3 py-2 sm:px-4">
+          {gpsTrackingStatus && (
+            <p className="rounded-lg border border-ifk-blue/30 bg-ifk-blue/5 px-3 py-2 text-xs text-ifk-blue">
+              {gpsTrackingStatus}
+            </p>
+          )}
           <div
             className="flex gap-2"
             role="group"
@@ -180,9 +209,21 @@ export function SuggestionCreateClient({
   const router = useRouter();
   const rootTransformRef = useRef<SvgRootTransform>(IDENTITY_SVG_TRANSFORM);
   const dragRef = useRef<{ start: [number, number]; current: [number, number] } | null>(null);
+  const gpsWatchIdRef = useRef<number | null>(null);
+  const gpsSamplesRef = useRef<GpsTrackSample[]>([]);
 
   const [tool, setTool] = useState<DrawTool>("pin");
   const [mapMode, setMapMode] = useState<"draw" | "navigate">("draw");
+  const [ocadCrs, setOcadCrs] = useState<OcadCrsInfo | null>(null);
+  const [ocadMapScale, setOcadMapScale] = useState(15000);
+  const [gpsTracking, setGpsTracking] = useState(false);
+  const [gpsSampleCount, setGpsSampleCount] = useState(0);
+  const [gpsLiveAccuracyM, setGpsLiveAccuracyM] = useState<number | null>(null);
+  const [gpsTrackSummary, setGpsTrackSummary] = useState<{
+    averageAccuracyMeters: number;
+    rawPointCount: number;
+    simplifiedPointCount: number;
+  } | null>(null);
   const [markings, setMarkings] = useState<SuggestionGeometry[]>([]);
   const [geometry, setGeometry] = useState<SuggestionGeometry | null>(null);
   const [draftBbox, setDraftBbox] = useState<SuggestionGeometry | null>(null);
@@ -215,12 +256,155 @@ export function SuggestionCreateClient({
     dragRef.current = null;
   }, []);
 
+  const stopGpsWatch = useCallback(() => {
+    if (gpsWatchIdRef.current != null && typeof navigator !== "undefined") {
+      navigator.geolocation.clearWatch(gpsWatchIdRef.current);
+      gpsWatchIdRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      stopGpsWatch();
+    };
+  }, [stopGpsWatch]);
+
+  const handleOcadCrsReady = useCallback((crs: OcadCrsInfo | null) => {
+    setOcadCrs(crs);
+  }, []);
+
+  const handleOcadMapScale = useCallback((scale: number) => {
+    setOcadMapScale(scale);
+  }, []);
+
+  const appendGpsSample = useCallback(
+    (coords: GeolocationCoordinates) => {
+      if (!ocadCrs || !isGeoreferencedCrs(ocadCrs)) return;
+
+      const mapCoord = wgs84ToMapCoord(coords.longitude, coords.latitude, ocadCrs);
+      if (!mapCoord) return;
+
+      const accuracyMeters =
+        typeof coords.accuracy === "number" && Number.isFinite(coords.accuracy)
+          ? coords.accuracy
+          : GPS_TRACK_MAX_ACCURACY_M;
+
+      setGpsLiveAccuracyM(accuracyMeters);
+
+      const lastSample = gpsSamplesRef.current.at(-1) ?? null;
+      if (
+        !shouldAcceptGpsSample(mapCoord, accuracyMeters, lastSample, {
+          minDistanceM: GPS_TRACK_MIN_DISTANCE_M,
+          maxAccuracyM: GPS_TRACK_MAX_ACCURACY_M,
+          mapScale: ocadMapScale,
+        })
+      ) {
+        return;
+      }
+
+      const sample: GpsTrackSample = { mapCoord, accuracyMeters };
+      gpsSamplesRef.current = [...gpsSamplesRef.current, sample];
+      setGpsSampleCount(gpsSamplesRef.current.length);
+      setLinePoints(gpsSamplesRef.current.map((item) => item.mapCoord));
+      setGeometry(null);
+      setGpsTrackSummary(null);
+      setError(null);
+    },
+    [ocadCrs, ocadMapScale],
+  );
+
+  const startGpsTracking = useCallback(() => {
+    if (!isGeoreferencedCrs(ocadCrs)) {
+      setError("Kartan saknar georeferering — GPS-spårning fungerar inte.");
+      return;
+    }
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setError("Enheten stödjer inte GPS.");
+      return;
+    }
+
+    stopGpsWatch();
+    gpsSamplesRef.current = [];
+    setGpsSampleCount(0);
+    setGpsTracking(true);
+    setGpsTrackSummary(null);
+    setGpsLiveAccuracyM(null);
+    setTool("line");
+    setMapMode("navigate");
+    setGeometry(null);
+    resetDraft();
+    setLinePoints([]);
+    setError(null);
+
+    gpsWatchIdRef.current = navigator.geolocation.watchPosition(
+      (pos) => appendGpsSample(pos.coords),
+      (err) => {
+        stopGpsWatch();
+        setGpsTracking(false);
+        setGpsLiveAccuracyM(null);
+        if (err.code === err.PERMISSION_DENIED) {
+          setError("Platsåtkomst nekades. Tillåt plats i webbläsaren.");
+        } else if (err.code === err.POSITION_UNAVAILABLE) {
+          setError("Kunde inte hämta GPS-position.");
+        } else if (err.code === err.TIMEOUT) {
+          setError("GPS tog för lång tid. Försök igen.");
+        } else {
+          setError("GPS-fel under spårning.");
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 5000,
+        timeout: 20000,
+      },
+    );
+  }, [appendGpsSample, ocadCrs, resetDraft, stopGpsWatch]);
+
+  const stopGpsTracking = useCallback(() => {
+    stopGpsWatch();
+    setGpsTracking(false);
+    setGpsLiveAccuracyM(null);
+
+    const samples = gpsSamplesRef.current;
+    const result = processGpsTrack(samples, { mapScale: ocadMapScale });
+    if (!result) {
+      gpsSamplesRef.current = [];
+      setGpsSampleCount(0);
+      setLinePoints([]);
+      setError(
+        samples.length === 0
+          ? "Inga GPS-punkter sparades — kontrollera mottagning och att du rör dig minst några meter."
+          : "Spåret har för få punkter — gå längre eller försök igen med bättre GPS-mottagning.",
+      );
+      return;
+    }
+
+    setLinePoints(result.coordinates);
+    setGeometry({ type: "LineString", coordinates: result.coordinates });
+    setGpsTrackSummary({
+      averageAccuracyMeters: result.averageAccuracyMeters,
+      rawPointCount: result.rawPointCount,
+      simplifiedPointCount: result.simplifiedPointCount,
+    });
+    setError(null);
+  }, [ocadMapScale, stopGpsWatch]);
+
+  const cancelGpsTracking = useCallback(() => {
+    stopGpsWatch();
+    setGpsTracking(false);
+    setGpsLiveAccuracyM(null);
+    gpsSamplesRef.current = [];
+    setGpsSampleCount(0);
+    setLinePoints([]);
+  }, [stopGpsWatch]);
+
   const handleDrawInterrupt = useCallback(() => {
     resetDraft();
   }, [resetDraft]);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent, svg: SVGSVGElement) => {
+      if (gpsTracking) return;
       const pt = screenToSvgPoint(svg, e.clientX, e.clientY);
       if (!pt) return;
       const geo = svgUserToGeoPoint(pt, rootTransformRef.current);
@@ -260,7 +444,7 @@ export function SuggestionCreateClient({
         setError(null);
       }
     },
-    [tool],
+    [tool, gpsTracking],
   );
 
   const handlePointerMove = useCallback(
@@ -312,17 +496,34 @@ export function SuggestionCreateClient({
     [handlePointerDown, handlePointerMove, handlePointerUp],
   );
 
-  const drawHint = useMemo(
-    () =>
-      tool === "pin"
-        ? "Ritläge — klicka på kartan för att placera en punkt, klicka sedan Lägg till ändring."
-        : tool === "rectangle"
-          ? "Ritläge — dra en rektangel på kartan och klicka sedan Lägg till ändring."
-          : tool === "polygon"
-            ? "Ritläge — klicka hörn (minst 3), klicka sedan Lägg till ändring."
-            : "Ritläge — klicka punkter längs linjen (minst 2), klicka sedan Lägg till ändring.",
-    [tool],
-  );
+  const drawHint = useMemo(() => {
+    if (gpsTracking) {
+      return `GPS-spårning — gå längs spåret du vill markera. Minst ${GPS_TRACK_MIN_DISTANCE_M} m mellan punkter. Klicka «Sluta spåra» när du är klar.`;
+    }
+    return tool === "pin"
+      ? "Ritläge — klicka på kartan för att placera en punkt, klicka sedan Lägg till ändring."
+      : tool === "rectangle"
+        ? "Ritläge — dra en rektangel på kartan och klicka sedan Lägg till ändring."
+        : tool === "polygon"
+          ? "Ritläge — klicka hörn (minst 3), klicka sedan Lägg till ändring."
+          : "Ritläge — klicka punkter längs linjen (minst 2), klicka sedan Lägg till ändring.";
+  }, [tool, gpsTracking]);
+
+  const gpsTrackingStatus = useMemo(() => {
+    if (gpsTracking) {
+      const accuracyText =
+        gpsLiveAccuracyM != null
+          ? `Senaste noggrannhet ±${Math.round(gpsLiveAccuracyM)} m`
+          : "Väntar på GPS-fix…";
+      return `Spårar GPS — ${gpsSampleCount} punkt${gpsSampleCount === 1 ? "" : "er"}. ${accuracyText}.`;
+    }
+    if (gpsTrackSummary) {
+      return `Spår avslutat. Medelnoggrannhet ±${Math.round(gpsTrackSummary.averageAccuracyMeters)} m. ${gpsTrackSummary.rawPointCount} GPS-punkter förenklades till ${gpsTrackSummary.simplifiedPointCount} brytpunkter. Klicka «Lägg till ändring» om linjen ser bra ut.`;
+    }
+    return null;
+  }, [gpsTracking, gpsSampleCount, gpsLiveAccuracyM, gpsTrackSummary]);
+
+  const canUseGpsTracking = isGeoreferencedCrs(ocadCrs);
 
   const finalizableGeometry = useMemo((): SuggestionGeometry | null => {
     if (geometry) return geometry;
@@ -341,9 +542,13 @@ export function SuggestionCreateClient({
   const totalMarkingCount = markings.length + (finalizableGeometry ? 1 : 0);
 
   function handleToolChange(next: DrawTool) {
+    if (gpsTracking) {
+      cancelGpsTracking();
+    }
     setTool(next);
     setGeometry(null);
     resetDraft();
+    setGpsTrackSummary(null);
     setError(null);
   }
 
@@ -357,6 +562,7 @@ export function SuggestionCreateClient({
     setMarkings((prev) => [...prev, toAdd]);
     setGeometry(null);
     resetDraft();
+    setGpsTrackSummary(null);
     setError(null);
   }
 
@@ -365,8 +571,12 @@ export function SuggestionCreateClient({
   }
 
   function handleClearAll() {
+    if (gpsTracking) {
+      cancelGpsTracking();
+    }
     setMarkings([]);
     setGeometry(null);
+    setGpsTrackSummary(null);
     clearFormFields();
     resetDraft();
     setError(null);
@@ -462,14 +672,34 @@ export function SuggestionCreateClient({
           <button
             key={t}
             type="button"
+            disabled={gpsTracking}
             onClick={() => handleToolChange(t)}
             className={`rounded-lg border px-3 py-1.5 text-sm ${
-              tool === t ? TOOL_ACTIVE : TOOL_INACTIVE
-            }`}
+              tool === t && !gpsTracking ? TOOL_ACTIVE : TOOL_INACTIVE
+            } disabled:cursor-not-allowed disabled:opacity-50`}
           >
             {TOOL_LABELS[t]}
           </button>
         ))}
+        <button
+          type="button"
+          disabled={!canUseGpsTracking && !gpsTracking}
+          title={
+            canUseGpsTracking
+              ? undefined
+              : "GPS-spårning kräver georefererad karta"
+          }
+          onClick={() => (gpsTracking ? stopGpsTracking() : startGpsTracking())}
+          className={`rounded-lg border px-3 py-1.5 text-sm ${
+            gpsTracking
+              ? "border-amber-600 bg-amber-600 text-white hover:bg-amber-700"
+              : canUseGpsTracking
+                ? "border-ifk-blue text-ifk-blue hover:bg-ifk-blue/5"
+                : TOOL_INACTIVE
+          } disabled:cursor-not-allowed disabled:opacity-50`}
+        >
+          {gpsTracking ? "Sluta spåra" : "GPS-spår"}
+        </button>
         <button
           type="button"
           disabled={!canAddMarking}
@@ -521,6 +751,9 @@ export function SuggestionCreateClient({
           drawHint={drawHint}
           markingCount={totalMarkingCount}
           rootTransformRef={rootTransformRef}
+          onOcadCrsReady={handleOcadCrsReady}
+          onOcadMapScale={handleOcadMapScale}
+          gpsTrackingStatus={gpsTrackingStatus}
         />
       </div>
 

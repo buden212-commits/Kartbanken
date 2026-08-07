@@ -114,6 +114,8 @@ type Props = {
   showLayerPanel?: boolean;
   /** Called when OCAD map scale is read from preview metadata. */
   onOcadMapScale?: (scale: number) => void;
+  /** Called when georeferenced CRS is loaded from preview (or cleared on reload). */
+  onOcadCrsReady?: (crs: OcadCrsInfo | null) => void;
   /**
    * Fit the viewport to a geo bbox (no highlight). Bump requestId to re-apply.
    */
@@ -243,6 +245,7 @@ export function DiffMapPanel({
   unboxed = false,
   showLayerPanel = true,
   onOcadMapScale,
+  onOcadCrsReady,
   fitGeoBbox = null,
 }: Props) {
   const [svgInner, setSvgInner] = useState<string | null>(null);
@@ -1070,6 +1073,10 @@ export function DiffMapPanel({
       }
     };
   }, []);
+
+  useEffect(() => {
+    onOcadCrsReady?.(ocadCrs);
+  }, [ocadCrs, onOcadCrsReady]);
 
   const gpsMarker = useMemo(() => {
     if (!gpsFix || !fullViewBox || !viewportRef.current) return null;
