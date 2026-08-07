@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-07",
+    title: "Hjälp — process-scheman",
+    items: [
+      "Varje huvudavsnitt på hjälpsidan har nu flödesschema (diagram) för tillhörande process",
+      "Täcker inloggning, områden, versioner, publicering, checkout, banor, kartförslag, jämförelse, verifiering, kartvy och administration",
+    ],
+  },
+  {
+    date: "2026-08-07",
     title: "Publicering — en version per område",
     items: [
       "Endast en kartversion kan vara publicerad åt gången inom samma område",

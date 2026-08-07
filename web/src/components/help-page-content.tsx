@@ -1,8 +1,30 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { auth } from "@/auth";
+import { HelpProcessDiagram } from "@/components/help-process-diagram";
 import { HelpReleaseNotes } from "@/components/help-release-notes";
 import { canAdmin, canUpload, roleLabel } from "@/lib/auth/permissions";
+import {
+  accountRegistration,
+  adminSystemFlow,
+  adminUserFlow,
+  areaManagement,
+  checkoutFlow,
+  checkoutSteps,
+  compareFlow,
+  courseFlow,
+  loginFlow,
+  mapViewExport,
+  notificationFlow,
+  overviewSystem,
+  passwordReset,
+  publishFlow,
+  roleHierarchy,
+  suggestionFlow,
+  suggestionSubmit,
+  verifyFlow,
+  versionUpload,
+} from "@/lib/help/process-diagrams";
 
 const sections = [
   { id: "oversikt", label: "Översikt" },
@@ -103,6 +125,11 @@ export async function HelpPageContent() {
             <li>Rita start, kontroller och mål med IOF-symboler 701–709.</li>
             <li>Spara banan och exportera som PDF vid behov.</li>
           </ol>
+          <HelpProcessDiagram
+            title="Översikt — huvudflöden i systemet"
+            chart={overviewSystem}
+            caption="Versionshantering är kärnflödet; checkout, banor, kartförslag och verifiering sker parallellt."
+          />
         </HelpSection>
 
         <HelpSection id="kom-igang" title="Kom igång">
@@ -113,6 +140,7 @@ export async function HelpPageContent() {
             Ditt konto får statusen <em>Väntar på godkännande</em> tills en administratör godkänt
             det. Administratören får ett e-postmeddelande om SMTP är konfigurerat.
           </p>
+          <HelpProcessDiagram title="Flöde — skapa konto" chart={accountRegistration} />
 
           <h3 className="font-medium text-slate-900">Logga in</h3>
           <p>
@@ -122,6 +150,7 @@ export async function HelpPageContent() {
             e-postmeddelande med vilken behörighet du fått och länk till inloggning (kräver
             konfigurerad SMTP).
           </p>
+          <HelpProcessDiagram title="Flöde — logga in" chart={loginFlow} />
 
           <h3 className="font-medium text-slate-900">Glömt lösenord</h3>
           <p>
@@ -130,6 +159,7 @@ export async function HelpPageContent() {
             Logga in med det tillfälliga lösenordet — du omdirigeras då till att välja ett nytt
             eget lösenord innan du kan använda systemet.
           </p>
+          <HelpProcessDiagram title="Flöde — glömt lösenord" chart={passwordReset} />
 
           <h3 className="font-medium text-slate-900">Min profil</h3>
           <p>
@@ -197,6 +227,11 @@ export async function HelpPageContent() {
               med rollen <strong>{roleLabel(role)}</strong>.
             </p>
           )}
+          <HelpProcessDiagram
+            title="Behörighetsnivåer"
+            chart={roleHierarchy}
+            caption="Varje högre roll inkluderar allt som lägre roller kan göra."
+          />
         </HelpSection>
 
         <HelpSection id="omraden" title="Områden">
@@ -218,6 +253,11 @@ export async function HelpPageContent() {
               </p>
             </div>
           )}
+          <HelpProcessDiagram
+            title="Flöde — områden"
+            chart={areaManagement}
+            caption="Alla godkända användare bläddrar och öppnar områden; skapa, byta namn och radera kräver administratör."
+          />
         </HelpSection>
 
         <HelpSection id="versioner" title="Versionshantering">
@@ -265,6 +305,9 @@ export async function HelpPageContent() {
             senaste versionen kan vara ihopfälld som standard beroende på vy — expandera för att se
             alla versioner.
           </p>
+          {showEditor && (
+            <HelpProcessDiagram title="Flöde — ladda upp ny version" chart={versionUpload} />
+          )}
         </HelpSection>
 
         <HelpSection id="checkout" title="Checka ut och in">
@@ -340,6 +383,14 @@ export async function HelpPageContent() {
             Om en checkout är aktiv längre än sju dagar (standard, konfigurerbart av administratör)
             får checkout-ägaren ett påminnelsemail att checka in eller avbryta arbetet.
           </p>
+          <HelpProcessDiagram
+            title="Status — checkout"
+            chart={checkoutFlow}
+            caption="ACTIVE → incheckad → väntar på admin → integrerad (ny version). Admin kan avbryta från ACTIVE."
+          />
+          {showEditor && (
+            <HelpProcessDiagram title="Steg för steg — checka ut och in" chart={checkoutSteps} />
+          )}
         </HelpSection>
 
         <HelpSection id="bana" title="Lägg bana">
@@ -436,6 +487,7 @@ export async function HelpPageContent() {
               Publika banor kan du öppna och kopiera som underlag för egna banor.
             </p>
           )}
+          <HelpProcessDiagram title="Flöde — lägg bana" chart={courseFlow} />
         </HelpSection>
 
         <HelpSection id="kartforslag" title="Kartförslag">
@@ -472,6 +524,8 @@ export async function HelpPageContent() {
             Kartförslag är <strong>förslag</strong>, inte en del av kartan. Terräng ändras fortfarande
             via checkout och OCAD-redigering.
           </p>
+          <HelpProcessDiagram title="Status — kartförslag" chart={suggestionFlow} />
+          <HelpProcessDiagram title="Steg för steg — skicka in kartförslag" chart={suggestionSubmit} />
         </HelpSection>
 
         <HelpSection id="publicering" title="Publicering">
@@ -494,6 +548,9 @@ export async function HelpPageContent() {
               Om du inte ser den senaste versionen kan det bero på att den ännu inte publicerats.
               Kontakta en redaktör i klubben.
             </p>
+          )}
+          {showEditor && (
+            <HelpProcessDiagram title="Flöde — publicera version" chart={publishFlow} />
           )}
         </HelpSection>
 
@@ -539,6 +596,7 @@ export async function HelpPageContent() {
             Stora kartfiler kan ta upp till en minut att parsa och jämföra. Sidan uppdateras
             automatiskt när beräkningen är klar.
           </p>
+          <HelpProcessDiagram title="Flöde — jämföra versioner" chart={compareFlow} />
         </HelpSection>
 
         <HelpSection id="verifiera" title="Verifiera">
@@ -555,6 +613,7 @@ export async function HelpPageContent() {
               "Export till PDF/OCD finns inte i Verifiera",
             ]}
           />
+          <HelpProcessDiagram title="Flöde — verifiera" chart={verifyFlow} />
         </HelpSection>
 
         <HelpSection id="kartvy" title="Visa karta och export">
@@ -624,6 +683,7 @@ export async function HelpPageContent() {
               "Dra exportramen på kartan till önskat utsnitt innan du exporterar",
             ]}
           />
+          <HelpProcessDiagram title="Flöde — visa karta och export" chart={mapViewExport} />
         </HelpSection>
 
         {showAdmin && (
@@ -714,6 +774,13 @@ export async function HelpPageContent() {
               Endast administratörer kan skapa nya områden på startsidan. Redigera namn och radera
               område via ikonerna bredvid titeln på områdessidan.
             </p>
+            <HelpProcessDiagram title="Flöde — användarhantering" chart={adminUserFlow} />
+            <HelpProcessDiagram title="Översikt — admin-flikar" chart={adminSystemFlow} />
+            <HelpProcessDiagram
+              title="Flöde — e-postnotiser"
+              chart={notificationFlow}
+              caption="Gäller när SMTP är konfigurerat och mottagaren har notiser aktiverade (utom obligatoriska admin-meddelanden)."
+            />
           </HelpSection>
         )}
 
