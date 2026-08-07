@@ -247,7 +247,7 @@ export async function HelpPageContent() {
           <h3 className="font-medium text-slate-900">Åtgärder per version</h3>
           <p>
             I versionshistoriken finns ikonknappar med tooltips för ladda ner, jämföra, publicera
-            och radera. Klicka på datumet för att öppna kartan.
+            och radera. Klicka på versionscellen (version och datum) för att öppna kartan.
           </p>
           <HelpList
             items={[
