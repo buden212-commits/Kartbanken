@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-07",
+    title: "Versionshistorik — klickbar versionscell",
+    items: [
+      "Hela versionscellen (versionsnummer och datum) öppnar kartan — samma i mobilvy",
+      "Åtgärdsknapparna fungerar som tidigare",
+    ],
+  },
+  {
+    date: "2026-08-07",
     title: "Versionshistorik — tydligare kolumnrubriker",
     items: [
       "Mer utrymme mellan kolumnerna Version och Datum i tabellen",

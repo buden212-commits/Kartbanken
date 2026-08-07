@@ -37,30 +37,39 @@ function parseLabel(version: VersionHistoryItem): string {
   return "Väntar";
 }
 
-function VersionDateLink({
+const versionMapLinkClass =
+  "block rounded-md py-1 pr-2 transition hover:bg-ifk-blue/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ifk-blue";
+
+function VersionMapLink({
   version,
   mapSlug,
+  className = "",
 }: {
   version: VersionHistoryItem;
   mapSlug: string;
+  className?: string;
 }) {
   const date = formatDateOnly(version.uploadedAt);
   const timeTitle = formatTimeOnly(version.uploadedAt);
+
   if (version.canView) {
     return (
       <Link
         href={`/maps/${mapSlug}/versions/${version.id}`}
-        className="link-primary"
+        className={`${versionMapLinkClass} ${className}`.trim()}
         title={`Öppna karta · ${timeTitle}`}
       >
-        {date}
+        <span className="font-mono text-sm font-medium text-slate-800">v{version.versionNumber}</span>
+        <span className="mt-0.5 block text-sm text-ifk-blue">{date}</span>
       </Link>
     );
   }
+
   return (
-    <span title={timeTitle} className="text-slate-600">
-      {date}
-    </span>
+    <div className={className} title={timeTitle}>
+      <span className="font-mono text-sm font-medium text-slate-800">v{version.versionNumber}</span>
+      <span className="mt-0.5 block text-sm text-slate-600">{date}</span>
+    </div>
   );
 }
 
@@ -81,10 +90,8 @@ function VersionCard({
   return (
     <li className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-mono text-sm font-medium text-slate-800">
-            v{version.versionNumber}
-          </p>
+        <div className="min-w-0 flex-1">
+          <VersionMapLink version={version} mapSlug={mapSlug} className="-ml-1 pl-1" />
         </div>
         <p className="shrink-0 text-xs text-slate-500">{parseLabel(version)}</p>
       </div>
@@ -99,12 +106,6 @@ function VersionCard({
       </div>
 
       <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-slate-600">
-        <div>
-          <dt className="text-slate-400">Datum</dt>
-          <dd className="mt-0.5">
-            <VersionDateLink version={version} mapSlug={mapSlug} />
-          </dd>
-        </div>
         <div>
           <dt className="text-slate-400">Storlek</dt>
           <dd className="mt-0.5">{formatBytes(version.fileSizeBytes)}</dd>
@@ -146,9 +147,8 @@ function VersionRow({
 }) {
   return (
     <tr className="border-b border-slate-100 last:border-0">
-      <td className="py-2.5 pl-3 pr-5 font-mono text-slate-700">v{version.versionNumber}</td>
-      <td className="whitespace-nowrap py-2.5 pl-1 pr-2">
-        <VersionDateLink version={version} mapSlug={mapSlug} />
+      <td className="px-2 py-2 pl-3 align-top">
+        <VersionMapLink version={version} mapSlug={mapSlug} />
       </td>
       <td className="whitespace-nowrap px-2 py-2.5 text-slate-600">
         {formatBytes(version.fileSizeBytes)}
@@ -239,8 +239,7 @@ export function VersionHistoryList({
       <div className="mt-4 hidden rounded-xl border border-slate-200 bg-white shadow-sm md:block">
         <table className="w-full table-fixed text-sm">
           <colgroup>
-            <col className="w-[5.5rem]" />
-            <col className="w-[12%]" />
+            <col className="w-[9.5rem]" />
             <col className="w-[8%]" />
             <col className="w-[12%]" />
             <col />
@@ -250,8 +249,7 @@ export function VersionHistoryList({
           </colgroup>
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-500">
-              <th className="px-2 pb-3 pl-3 pr-5 pt-4 font-medium">Version</th>
-              <th className="px-2 pb-3 pl-1 pt-4 font-medium">Datum</th>
+              <th className="px-2 pb-3 pl-3 pt-4 font-medium">Version</th>
               <th className="px-2 pb-3 pt-4 font-medium">Storlek</th>
               <th className="px-2 pb-3 pt-4 font-medium">Uppladdare</th>
               <th className="px-2 pb-3 pt-4 font-medium">Kommentar</th>
@@ -281,7 +279,7 @@ export function VersionHistoryList({
               ))}
             {olderCount > 0 && (
               <tr>
-                <td colSpan={8} className="border-t border-slate-100 px-2 py-3">
+                <td colSpan={7} className="border-t border-slate-100 px-2 py-3">
                   <button
                     type="button"
                     className="w-full rounded-lg border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-100"
