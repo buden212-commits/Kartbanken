@@ -8,6 +8,13 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-07",
+    title: "Versionshistorik — tydligare kolumnrubriker",
+    items: [
+      "Mer utrymme mellan kolumnerna Version och Datum i tabellen",
+    ],
+  },
+  {
+    date: "2026-08-07",
     title: "Kartvy — kraftigare inzoom",
     items: [
       "Max inzoom i kartvyn motsvarar nu skala 1:100 (tidigare ungefär 1:375 på typisk orienteringskarta)",

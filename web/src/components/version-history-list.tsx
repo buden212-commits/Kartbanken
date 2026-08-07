@@ -146,8 +146,8 @@ function VersionRow({
 }) {
   return (
     <tr className="border-b border-slate-100 last:border-0">
-      <td className="px-2 py-2.5 font-mono text-slate-700">v{version.versionNumber}</td>
-      <td className="whitespace-nowrap px-2 py-2.5">
+      <td className="py-2.5 pl-3 pr-5 font-mono text-slate-700">v{version.versionNumber}</td>
+      <td className="whitespace-nowrap py-2.5 pl-1 pr-2">
         <VersionDateLink version={version} mapSlug={mapSlug} />
       </td>
       <td className="whitespace-nowrap px-2 py-2.5 text-slate-600">
@@ -239,8 +239,8 @@ export function VersionHistoryList({
       <div className="mt-4 hidden rounded-xl border border-slate-200 bg-white shadow-sm md:block">
         <table className="w-full table-fixed text-sm">
           <colgroup>
-            <col className="w-12" />
-            <col className="w-[11%]" />
+            <col className="w-[5.5rem]" />
+            <col className="w-[12%]" />
             <col className="w-[8%]" />
             <col className="w-[12%]" />
             <col />
@@ -250,8 +250,8 @@ export function VersionHistoryList({
           </colgroup>
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-500">
-              <th className="px-2 pb-3 pt-4 font-medium">Version</th>
-              <th className="px-2 pb-3 pt-4 font-medium">Datum</th>
+              <th className="px-2 pb-3 pl-3 pr-5 pt-4 font-medium">Version</th>
+              <th className="px-2 pb-3 pl-1 pt-4 font-medium">Datum</th>
               <th className="px-2 pb-3 pt-4 font-medium">Storlek</th>
               <th className="px-2 pb-3 pt-4 font-medium">Uppladdare</th>
               <th className="px-2 pb-3 pt-4 font-medium">Kommentar</th>
