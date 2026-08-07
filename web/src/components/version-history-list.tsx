@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { formatBytes, formatDateOnly, formatTimeOnly } from "@/lib/format";
 import { VersionHistoryActions } from "@/components/version-history-actions";
 import { VersionPublishToggle } from "@/components/version-publish-toggle";
@@ -28,6 +28,10 @@ type Props = {
   canDelete?: boolean;
 };
 
+function versionMapHref(mapSlug: string, versionId: string): string {
+  return `/maps/${mapSlug}/versions/${versionId}`;
+}
+
 function parseLabel(version: VersionHistoryItem): string {
   if (version.parseStatus === "OK") {
     return `${version.objectCount?.toLocaleString("sv-SE") ?? "?"} objekt`;
@@ -37,38 +41,28 @@ function parseLabel(version: VersionHistoryItem): string {
   return "Väntar";
 }
 
-const versionMapLinkClass =
-  "block rounded-md py-1 pr-2 transition hover:bg-ifk-blue/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ifk-blue";
+function stopRowNavigation(event: MouseEvent | KeyboardEvent) {
+  event.stopPropagation();
+}
 
-function VersionMapLink({
+function VersionSummary({
   version,
-  mapSlug,
   className = "",
 }: {
   version: VersionHistoryItem;
-  mapSlug: string;
   className?: string;
 }) {
   const date = formatDateOnly(version.uploadedAt);
   const timeTitle = formatTimeOnly(version.uploadedAt);
 
-  if (version.canView) {
-    return (
-      <Link
-        href={`/maps/${mapSlug}/versions/${version.id}`}
-        className={`${versionMapLinkClass} ${className}`.trim()}
-        title={`Öppna karta · ${timeTitle}`}
-      >
-        <span className="font-mono text-sm font-medium text-slate-800">v{version.versionNumber}</span>
-        <span className="mt-0.5 block text-sm text-ifk-blue">{date}</span>
-      </Link>
-    );
-  }
-
   return (
     <div className={className} title={timeTitle}>
       <span className="font-mono text-sm font-medium text-slate-800">v{version.versionNumber}</span>
-      <span className="mt-0.5 block text-sm text-slate-600">{date}</span>
+      <span
+        className={`mt-0.5 block text-sm ${version.canView ? "text-ifk-blue" : "text-slate-600"}`}
+      >
+        {date}
+      </span>
     </div>
   );
 }
@@ -87,16 +81,63 @@ function VersionCard({
   canManagePublication: boolean;
   canDelete: boolean;
 }) {
+  const router = useRouter();
+  const mapHref = versionMapHref(mapSlug, version.id);
+  const timeTitle = formatTimeOnly(version.uploadedAt);
+
+  const openMap = useCallback(() => {
+    if (version.canView) router.push(mapHref);
+  }, [mapHref, router, version.canView]);
+
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (!version.canView) return;
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        router.push(mapHref);
+      }
+    },
+    [mapHref, router, version.canView],
+  );
+
   return (
     <li className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <VersionMapLink version={version} mapSlug={mapSlug} className="-ml-1 pl-1" />
+      <div
+        role={version.canView ? "link" : undefined}
+        tabIndex={version.canView ? 0 : undefined}
+        onClick={openMap}
+        onKeyDown={handleKeyDown}
+        title={version.canView ? `Öppna karta · ${timeTitle}` : timeTitle}
+        className={
+          version.canView
+            ? "cursor-pointer rounded-lg outline-none transition hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-ifk-blue/30 -mx-1 px-1 py-1"
+            : undefined
+        }
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <VersionSummary version={version} />
+          </div>
+          <p className="shrink-0 text-xs text-slate-500">{parseLabel(version)}</p>
         </div>
-        <p className="shrink-0 text-xs text-slate-500">{parseLabel(version)}</p>
+
+        <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-slate-600">
+          <div>
+            <dt className="text-slate-400">Storlek</dt>
+            <dd className="mt-0.5">{formatBytes(version.fileSizeBytes)}</dd>
+          </div>
+          <div>
+            <dt className="text-slate-400">Uppladdare</dt>
+            <dd className="mt-0.5 truncate">{version.uploaderLabel}</dd>
+          </div>
+          <div className="col-span-2">
+            <dt className="text-slate-400">Kommentar</dt>
+            <dd className="mt-0.5 whitespace-pre-wrap break-words">{version.comment ?? "—"}</dd>
+          </div>
+        </dl>
       </div>
 
-      <div className="mt-3">
+      <div className="mt-3" onClick={stopRowNavigation} onKeyDown={stopRowNavigation}>
         <VersionPublishToggle
           mapSlug={mapSlug}
           versionId={version.id}
@@ -105,22 +146,7 @@ function VersionCard({
         />
       </div>
 
-      <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-slate-600">
-        <div>
-          <dt className="text-slate-400">Storlek</dt>
-          <dd className="mt-0.5">{formatBytes(version.fileSizeBytes)}</dd>
-        </div>
-        <div>
-          <dt className="text-slate-400">Uppladdare</dt>
-          <dd className="mt-0.5 truncate">{version.uploaderLabel}</dd>
-        </div>
-        <div className="col-span-2">
-          <dt className="text-slate-400">Kommentar</dt>
-          <dd className="mt-0.5 whitespace-pre-wrap break-words">{version.comment ?? "—"}</dd>
-        </div>
-      </dl>
-
-      <div className="mt-4">
+      <div className="mt-4" onClick={stopRowNavigation} onKeyDown={stopRowNavigation}>
         <VersionHistoryActions
           mapSlug={mapSlug}
           versionId={version.id}
@@ -145,10 +171,37 @@ function VersionRow({
   canManagePublication: boolean;
   canDelete: boolean;
 }) {
+  const router = useRouter();
+  const mapHref = versionMapHref(mapSlug, version.id);
+  const timeTitle = formatTimeOnly(version.uploadedAt);
+
+  const openMap = useCallback(() => {
+    if (version.canView) router.push(mapHref);
+  }, [mapHref, router, version.canView]);
+
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLTableRowElement>) => {
+      if (!version.canView) return;
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        router.push(mapHref);
+      }
+    },
+    [mapHref, router, version.canView],
+  );
+
   return (
-    <tr className="border-b border-slate-100 last:border-0">
+    <tr
+      className={`border-b border-slate-100 last:border-0 ${
+        version.canView ? "cursor-pointer hover:bg-slate-50/80" : ""
+      }`}
+      onClick={openMap}
+      onKeyDown={handleKeyDown}
+      tabIndex={version.canView ? 0 : undefined}
+      title={version.canView ? `Öppna karta · ${timeTitle}` : undefined}
+    >
       <td className="px-2 py-2 pl-3 align-top">
-        <VersionMapLink version={version} mapSlug={mapSlug} />
+        <VersionSummary version={version} className="py-1 pr-2" />
       </td>
       <td className="whitespace-nowrap px-2 py-2.5 text-slate-600">
         {formatBytes(version.fileSizeBytes)}
@@ -164,7 +217,7 @@ function VersionRow({
       <td className="whitespace-nowrap px-2 py-2.5 text-xs text-slate-500">
         {parseLabel(version)}
       </td>
-      <td className="px-2 py-2.5">
+      <td className="px-2 py-2.5" onClick={stopRowNavigation} onKeyDown={stopRowNavigation}>
         <VersionPublishToggle
           mapSlug={mapSlug}
           versionId={version.id}
@@ -173,7 +226,7 @@ function VersionRow({
           compact
         />
       </td>
-      <td className="px-2 py-2.5">
+      <td className="px-2 py-2.5" onClick={stopRowNavigation} onKeyDown={stopRowNavigation}>
         <VersionHistoryActions
           mapSlug={mapSlug}
           versionId={version.id}
