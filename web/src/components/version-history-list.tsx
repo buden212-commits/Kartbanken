@@ -37,6 +37,33 @@ function parseLabel(version: VersionHistoryItem): string {
   return "Väntar";
 }
 
+function VersionDateLink({
+  version,
+  mapSlug,
+}: {
+  version: VersionHistoryItem;
+  mapSlug: string;
+}) {
+  const date = formatDateOnly(version.uploadedAt);
+  const timeTitle = formatTimeOnly(version.uploadedAt);
+  if (version.canView) {
+    return (
+      <Link
+        href={`/maps/${mapSlug}/versions/${version.id}`}
+        className="link-primary"
+        title={`Öppna karta · ${timeTitle}`}
+      >
+        {date}
+      </Link>
+    );
+  }
+  return (
+    <span title={timeTitle} className="text-slate-600">
+      {date}
+    </span>
+  );
+}
+
 const toggleBtn =
   "mt-3 w-full rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-100";
 
@@ -58,18 +85,6 @@ function VersionCard({
           <p className="font-mono text-sm font-medium text-slate-800">
             v{version.versionNumber}
           </p>
-          <p className="mt-1 truncate text-sm" title={version.originalFilename}>
-            {version.canView ? (
-              <Link
-                href={`/maps/${mapSlug}/versions/${version.id}`}
-                className="link-primary"
-              >
-                {version.originalFilename}
-              </Link>
-            ) : (
-              <span className="text-slate-700">{version.originalFilename}</span>
-            )}
-          </p>
         </div>
         <p className="shrink-0 text-xs text-slate-500">{parseLabel(version)}</p>
       </div>
@@ -86,8 +101,8 @@ function VersionCard({
       <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-slate-600">
         <div>
           <dt className="text-slate-400">Datum</dt>
-          <dd className="mt-0.5" title={formatTimeOnly(version.uploadedAt)}>
-            {formatDateOnly(version.uploadedAt)}
+          <dd className="mt-0.5">
+            <VersionDateLink version={version} mapSlug={mapSlug} />
           </dd>
         </div>
         <div>
@@ -132,20 +147,8 @@ function VersionRow({
   return (
     <tr className="border-b border-slate-100 last:border-0">
       <td className="px-2 py-2.5 font-mono text-slate-700">v{version.versionNumber}</td>
-      <td className="px-2 py-2.5" title={version.originalFilename}>
-        {version.canView ? (
-          <Link
-            href={`/maps/${mapSlug}/versions/${version.id}`}
-            className="link-primary block truncate"
-          >
-            {version.originalFilename}
-          </Link>
-        ) : (
-          <span className="block truncate text-slate-700">{version.originalFilename}</span>
-        )}
-      </td>
-      <td className="whitespace-nowrap px-2 py-2.5 text-slate-600" title={formatTimeOnly(version.uploadedAt)}>
-        {formatDateOnly(version.uploadedAt)}
+      <td className="whitespace-nowrap px-2 py-2.5">
+        <VersionDateLink version={version} mapSlug={mapSlug} />
       </td>
       <td className="whitespace-nowrap px-2 py-2.5 text-slate-600">
         {formatBytes(version.fileSizeBytes)}
@@ -237,7 +240,6 @@ export function VersionHistoryList({
         <table className="w-full table-fixed text-sm">
           <colgroup>
             <col className="w-12" />
-            <col className="w-[14%]" />
             <col className="w-[11%]" />
             <col className="w-[8%]" />
             <col className="w-[12%]" />
@@ -249,7 +251,6 @@ export function VersionHistoryList({
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-500">
               <th className="px-2 pb-3 pt-4 font-medium">Version</th>
-              <th className="px-2 pb-3 pt-4 font-medium">Filnamn</th>
               <th className="px-2 pb-3 pt-4 font-medium">Datum</th>
               <th className="px-2 pb-3 pt-4 font-medium">Storlek</th>
               <th className="px-2 pb-3 pt-4 font-medium">Uppladdare</th>
@@ -280,7 +281,7 @@ export function VersionHistoryList({
               ))}
             {olderCount > 0 && (
               <tr>
-                <td colSpan={9} className="border-t border-slate-100 px-2 py-3">
+                <td colSpan={8} className="border-t border-slate-100 px-2 py-3">
                   <button
                     type="button"
                     className="w-full rounded-lg border border-slate-300 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-100"

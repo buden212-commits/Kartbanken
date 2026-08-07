@@ -247,20 +247,21 @@ export async function HelpPageContent() {
           <h3 className="font-medium text-slate-900">Åtgärder per version</h3>
           <p>
             I versionshistoriken finns ikonknappar med tooltips för ladda ner, jämföra, publicera
-            och radera. Klicka på filnamnet för att öppna kartan.
+            och radera. Klicka på datumet för att öppna kartan.
           </p>
           <HelpList
             items={[
               "Ladda ner — hämta originalfilen (.ocd)",
               "Jämför — diff mot föregående version",
-              "Visa karta — klicka på filnamnet eller öppna via ikonmenyn",
+              "Visa karta — klicka på datumet eller öppna via ikonmenyn",
               "Öppna i nytt fönster — helskärmsvy utan sidhuvud",
               "Publicera — kryssa i Publicerad (redaktör/admin)",
             ]}
           />
           <h3 className="font-medium text-slate-900">Versionshistorik</h3>
           <p>
-            Tabellen visar datum (klockslag i tooltip), filnamn, kommentar och åtgärder. Endast den
+            Tabellen visar datum (klickbart för att öppna kartan; klockslag i tooltip), kommentar
+            och åtgärder. Endast den
             senaste versionen kan vara ihopfälld som standard beroende på vy — expandera för att se
             alla versioner.
           </p>

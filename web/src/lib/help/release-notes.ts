@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-07",
+    title: "Versionshistorik — datum öppnar kartan",
+    items: [
+      "Filnamn visas inte längre i versionshistoriken",
+      "Klicka på datumet för att öppna kartversionen (klockslag i tooltip)",
+    ],
+  },
+  {
+    date: "2026-08-07",
     title: "Kartvy — skala i stället för zoom i procent",
     items: [
       "Zoomindikatorn i kartvyn visar nominal skala (t.ex. 1:15 000) i stället för procent",
