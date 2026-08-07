@@ -89,6 +89,9 @@ type CreateMapPanelProps = {
   onOcadCrsReady: (crs: OcadCrsInfo | null) => void;
   onOcadMapScale: (scale: number) => void;
   gpsTrackingStatus: string | null;
+  gpsTracking: boolean;
+  canUseGpsTracking: boolean;
+  onGpsTrackingToggle: () => void;
 };
 
 const MAP_MODE_BTN =
@@ -96,6 +99,8 @@ const MAP_MODE_BTN =
 const MAP_MODE_ACTIVE = "border-ifk-blue bg-ifk-blue text-white";
 const MAP_MODE_INACTIVE =
   "border-slate-300 bg-white text-slate-700 hover:border-ifk-blue hover:text-ifk-blue";
+const GPS_TRACK_BTN =
+  "min-h-10 w-full rounded-lg border px-3 py-2 text-sm font-medium transition sm:min-h-9 sm:w-auto sm:px-4";
 
 const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
   mapSlug,
@@ -113,6 +118,9 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
   onOcadCrsReady,
   onOcadMapScale,
   gpsTrackingStatus,
+  gpsTracking,
+  canUseGpsTracking,
+  onGpsTrackingToggle,
 }: CreateMapPanelProps) {
   const renderSvgOverlay = useCallback(
     (rootTransform: SvgRootTransform) => {
@@ -162,6 +170,23 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
               {gpsTrackingStatus}
             </p>
           )}
+          <button
+            type="button"
+            disabled={!canUseGpsTracking && !gpsTracking}
+            title={
+              canUseGpsTracking ? undefined : "GPS-spårning kräver georefererad karta"
+            }
+            onClick={onGpsTrackingToggle}
+            className={`${GPS_TRACK_BTN} ${
+              gpsTracking
+                ? "border-amber-600 bg-amber-600 text-white hover:bg-amber-700"
+                : canUseGpsTracking
+                  ? "border-ifk-blue bg-white text-ifk-blue hover:bg-ifk-blue/5"
+                  : "cursor-not-allowed border-slate-300 bg-slate-100 text-slate-400"
+            } disabled:cursor-not-allowed disabled:opacity-50`}
+          >
+            {gpsTracking ? "Sluta spåra" : "GPS-spår"}
+          </button>
           <div
             className="flex gap-2"
             role="group"
@@ -525,6 +550,14 @@ export function SuggestionCreateClient({
 
   const canUseGpsTracking = isGeoreferencedCrs(ocadCrs);
 
+  const handleGpsTrackingToggle = useCallback(() => {
+    if (gpsTracking) {
+      stopGpsTracking();
+    } else {
+      startGpsTracking();
+    }
+  }, [gpsTracking, startGpsTracking, stopGpsTracking]);
+
   const finalizableGeometry = useMemo((): SuggestionGeometry | null => {
     if (geometry) return geometry;
     if (tool === "polygon" && polygonPoints.length >= 3) {
@@ -683,25 +716,6 @@ export function SuggestionCreateClient({
         ))}
         <button
           type="button"
-          disabled={!canUseGpsTracking && !gpsTracking}
-          title={
-            canUseGpsTracking
-              ? undefined
-              : "GPS-spårning kräver georefererad karta"
-          }
-          onClick={() => (gpsTracking ? stopGpsTracking() : startGpsTracking())}
-          className={`rounded-lg border px-3 py-1.5 text-sm ${
-            gpsTracking
-              ? "border-amber-600 bg-amber-600 text-white hover:bg-amber-700"
-              : canUseGpsTracking
-                ? "border-ifk-blue text-ifk-blue hover:bg-ifk-blue/5"
-                : TOOL_INACTIVE
-          } disabled:cursor-not-allowed disabled:opacity-50`}
-        >
-          {gpsTracking ? "Sluta spåra" : "GPS-spår"}
-        </button>
-        <button
-          type="button"
           disabled={!canAddMarking}
           onClick={handleAddMarking}
           className={canAddMarking ? "btn-primary rounded-lg px-3 py-1.5 text-sm" : NEUTRAL_BTN}
@@ -754,6 +768,9 @@ export function SuggestionCreateClient({
           onOcadCrsReady={handleOcadCrsReady}
           onOcadMapScale={handleOcadMapScale}
           gpsTrackingStatus={gpsTrackingStatus}
+          gpsTracking={gpsTracking}
+          canUseGpsTracking={canUseGpsTracking}
+          onGpsTrackingToggle={handleGpsTrackingToggle}
         />
       </div>
 

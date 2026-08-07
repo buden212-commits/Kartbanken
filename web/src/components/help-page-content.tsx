@@ -447,7 +447,7 @@ export async function HelpPageContent() {
             items={[
               "Öppna en publicerad version via Visa karta och klicka Föreslå ändring",
               "Välj punkt, rektangel, polygon eller linje och markera på kartan",
-              "«GPS-spår» spelar in en linje med telefonens GPS (kräver georefererad karta) — klicka «Sluta spåra» när du gått klart; medelnoggrannhet och antal brytpunkter visas då",
+              "«GPS-spår» finns ovanför kartan (bredvid Rita/Navigera) — spelar in en linje med telefonens GPS (kräver georefererad karta)",
               "GPS-spår filtreras (minst ca 4 m mellan punkter) och förenklas automatiskt innan linjen sparas",
               "Växla «Rita» / «Navigera» ovanför kartan — i Navigera kan du dra och nypa utan att rita; i Rita zoomar två fingrar utan att skapa markering",
               "Klicka «Lägg till ändring» när markeringen är klar — punkt och rektangel aktiveras direkt efter klick/drag",
