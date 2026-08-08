@@ -166,7 +166,7 @@ export function MapExportControls({
               }
               className="rounded border-slate-300"
             />
-            Inkludera kartförslag
+            Exportera endast kartförslag
             {suggestionOverlayCount != null && suggestionOverlayCount > 0 && (
               <span className="text-xs text-slate-400">({suggestionOverlayCount})</span>
             )}
@@ -197,13 +197,14 @@ export function MapExportControls({
         Dra ramen på kartan till önskat utsnitt innan du exporterar.
         {settings.outputFormat === "ocd" &&
           (settings.includeSuggestions
-            ? " OCD-exporten sparar objekt inom ramen. Med «Inkludera kartförslag» läggs markeringar till som OCAD-objekt — du väljer symbol/lager i dialogen (OCAD 12/2018)."
+            ? " OCD-exporten sparar enbart kartförslagens markeringar som OCAD-objekt inom ramen — du väljer symbol/lager i dialogen (OCAD 12/2018). Grundkartan ingår inte."
             : " OCD-exporten sparar objekt inom ramen och behåller symboler och inställningar från originalfilen.")}
         {settings.outputFormat === "geotiff" &&
           " GeoTIFF sparas med kartans projicerade koordinatsystem (EPSG) för det valda utsnittet."}
         {showSuggestionOption &&
           settings.includeSuggestions &&
-          " Öppna och pågående kartförslag för versionen ritas ovanpå kartan i exporten."}
+          (settings.outputFormat === "pdf" || settings.outputFormat === "geotiff") &&
+          " Öppna och pågående kartförslag ritas ovanpå kartan i exporten."}
       </p>
 
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}

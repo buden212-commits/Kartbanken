@@ -680,7 +680,7 @@ export async function HelpPageContent() {
               "Välj pappersformat: A4 eller A3",
               "Välj orientering: stående eller liggande",
               "Välj utdataformat: PDF, OCAD (.ocd) eller GeoTIFF (.tif)",
-              "PDF, GeoTIFF och OCD kan inkludera öppna och pågående kartförslag (kryssruta «Inkludera kartförslag»)",
+              "Kryssruta «Exportera endast kartförslag»: PDF och GeoTIFF ritar förslagen ovanpå kartan; OCD exporterar enbart markeringarna (inte grundkartan)",
               "GeoTIFF sparas med kartans projicerade koordinatsystem (EPSG) — kräver georefererad karta",
               "OCD med kartförslag: välj symbol för punkt, linje och yta i dialogen — exportfilen innehåller bara förslagens objekt med kartans befintliga symboler (OCAD 12/2018), inte grundkartan",
               "Dra exportramen på kartan till önskat utsnitt innan du exporterar",

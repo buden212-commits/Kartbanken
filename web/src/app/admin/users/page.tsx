@@ -1,7 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { AdminNav } from "@/components/admin-nav";
-import { AdminUserEditForm } from "@/components/admin-user-edit-form";
+import { AdminUserEditForm, AdminUserEditTableRow } from "@/components/admin-user-edit-form";
 import { AdminUserNotificationToggle } from "@/components/admin-user-notification-toggle";
 import { HelpLinkIcon, HelpSectionHeading } from "@/components/help-link-icon";
 import { logAction } from "@/lib/audit";
@@ -463,22 +463,21 @@ export default async function AdminUsersPage() {
               </thead>
               <tbody>
                 {pendingUsers.map((user) => (
-                  <tr key={user.id} className="border-b border-slate-100 last:border-0 align-top">
+                  <AdminUserEditTableRow
+                    key={user.id}
+                    colSpan={5}
+                    user={user}
+                    currentUserId={session.user.id}
+                    updateUser={updateUser}
+                    actionsCell={<PendingActions user={user} />}
+                  >
                     <td className="px-4 py-2 pr-4">{user.name ?? "—"}</td>
                     <td className="py-2 pr-4">{user.email}</td>
                     <td className="py-2 pr-4 text-slate-500">
                       {user.createdAt.toLocaleDateString("sv-SE")}
                     </td>
                     <td className="py-2 pr-4 text-slate-500">{formatLastLogin(user.lastLoginAt)}</td>
-                    <td className="px-4 py-2">
-                      <PendingActions user={user} />
-                      <AdminUserEditForm
-                        user={user}
-                        currentUserId={session.user.id}
-                        updateUser={updateUser}
-                      />
-                    </td>
-                  </tr>
+                  </AdminUserEditTableRow>
                 ))}
               </tbody>
             </table>
@@ -599,7 +598,13 @@ export default async function AdminUsersPage() {
             </thead>
             <tbody>
               {otherUsers.map((user) => (
-                <tr key={user.id} className="border-b border-slate-100 last:border-0 align-top">
+                <AdminUserEditTableRow
+                  key={user.id}
+                  colSpan={7}
+                  user={user}
+                  currentUserId={session.user.id}
+                  updateUser={updateUser}
+                >
                   <td className="px-4 py-3 pr-4">{user.name ?? "—"}</td>
                   <td className="py-3 pr-4">{user.email}</td>
                   <td className="py-3 pr-4">
@@ -624,14 +629,7 @@ export default async function AdminUsersPage() {
                       <span className="text-xs text-slate-400">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-3">
-                    <AdminUserEditForm
-                      user={user}
-                      currentUserId={session.user.id}
-                      updateUser={updateUser}
-                    />
-                  </td>
-                </tr>
+                </AdminUserEditTableRow>
               ))}
             </tbody>
           </table>

@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-08",
+    title: "Admin och export",
+    items: [
+      "Redigeringsformuläret för användare öppnas nu över hela tabellbredden i stället för i den smala åtgärdskolumnen",
+      "Kryssrutan i exportpanelen heter nu «Exportera endast kartförslag» (tidigare «Inkludera kartförslag»)",
+    ],
+  },
+  {
+    date: "2026-08-08",
     title: "GPS-spår — zoom och prestanda",
     items: [
       "Under GPS-spårning zoomas kartan automatiskt till skala 1:100 och följer din position var 10:e sekund",
@@ -150,7 +158,7 @@ export const releaseNotes: ReleaseNote[] = [
     date: "2026-08-06",
     title: "OCD-export av kartförslag",
     items: [
-      "OCD-export med «Inkludera kartförslag» ger en fil med enbart förslagens markeringar — grundkartan exporteras inte",
+      "OCD-export med «Exportera endast kartförslag» ger en fil med enbart förslagens markeringar — grundkartan exporteras inte",
       "Symbolval och konvertering läser nu från originalfilen, vilket löser fel när exportversion skiljer sig från källfilen",
       "Tydligare felmeddelande visar vilken markering och symbol som misslyckades",
     ],
