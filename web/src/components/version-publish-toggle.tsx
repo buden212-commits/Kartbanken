@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { HelpLinkIcon } from "@/components/help-link-icon";
 
 type Props = {
   mapSlug: string;
@@ -68,25 +67,20 @@ export function VersionPublishToggle({
 
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-2">
-        <label
-          title={isPublished ? "Publicerad" : "Ej publicerad"}
-          className="inline-flex cursor-pointer items-center gap-2 text-xs text-slate-700"
-        >
-          <input
-            type="checkbox"
-            checked={isPublished}
-            disabled={saving}
-            onChange={(e) => void handleToggle(e.target.checked)}
-            onClick={(e) => e.stopPropagation()}
-            className="h-4 w-4 rounded border-slate-300 text-ifk-blue focus:ring-ifk-blue/20"
-          />
-          {!compact && <span>{isPublished ? "Publicerad" : "Ej publicerad"}</span>}
-        </label>
-        <span onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-          <HelpLinkIcon section="publicering" />
-        </span>
-      </div>
+      <label
+        title={isPublished ? "Publicerad" : "Ej publicerad"}
+        className="inline-flex cursor-pointer items-center gap-2 text-xs text-slate-700"
+      >
+        <input
+          type="checkbox"
+          checked={isPublished}
+          disabled={saving}
+          onChange={(e) => void handleToggle(e.target.checked)}
+          onClick={(e) => e.stopPropagation()}
+          className="h-4 w-4 rounded border-slate-300 text-ifk-blue focus:ring-ifk-blue/20"
+        />
+        {!compact && <span>{isPublished ? "Publicerad" : "Ej publicerad"}</span>}
+      </label>
       {error && <span className="text-xs text-red-600">{error}</span>}
     </div>
   );

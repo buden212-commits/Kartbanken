@@ -55,7 +55,8 @@ export function MapExportControls({
 
   return (
     <div className="border-b border-slate-200 bg-ifk-blue-muted px-4 py-3">
-      <div className="mb-2 flex justify-end">
+      <div className="mb-3 flex min-w-0 items-center gap-2">
+        <p className="text-sm font-medium text-slate-900">Exportera utsnitt</p>
         <HelpLinkIcon section="kartvy" />
       </div>
       <div className="flex flex-wrap items-end gap-4">

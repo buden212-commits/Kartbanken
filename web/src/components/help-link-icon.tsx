@@ -49,11 +49,11 @@ export function HelpSectionHeading({
   id,
 }: HeadingProps) {
   return (
-    <div className="flex items-start justify-between gap-3">
+    <div className="flex min-w-0 items-center gap-2">
       <Tag id={id} className={className}>
         {children}
       </Tag>
-      <HelpLinkIcon section={section} className="mt-0.5 shrink-0" />
+      <HelpLinkIcon section={section} />
     </div>
   );
 }

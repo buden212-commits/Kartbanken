@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-08",
+    title: "Hjälpikoner — rubrikrad",
+    items: [
+      "Hjälpikonen (?) sitter i rubrikraden bredvid titeln — t.ex. versionshistorik, hjälpsidan och export",
+      "Inte längre vid varje publiceringskryss eller längst ut till höger ovanför formulär",
+    ],
+  },
+  {
+    date: "2026-08-08",
     title: "Hjälplänkar i formulär och dialoger",
     items: [
       "«?»-ikon uppe till höger i formulär och dialoger länkar till relevant avsnitt i hjälpen",

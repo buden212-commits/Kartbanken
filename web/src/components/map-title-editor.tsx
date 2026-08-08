@@ -100,6 +100,7 @@ export function MapTitleEditor({
     return (
       <div className="flex flex-wrap items-center gap-1.5">
         <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">{title}</h1>
+        <HelpLinkIcon section="omraden" />
         <button
           type="button"
           aria-label="Redigera namn"
@@ -120,12 +121,9 @@ export function MapTitleEditor({
 
   return (
     <form onSubmit={(e) => void handleSave(e)} className="max-w-xl">
-      <div className="flex items-center justify-between gap-2">
-        <label htmlFor="map-title" className="form-label">
-          Område
-        </label>
-        <HelpLinkIcon section="omraden" />
-      </div>
+      <label htmlFor="map-title" className="form-label">
+        Område
+      </label>
       <input
         id="map-title"
         type="text"

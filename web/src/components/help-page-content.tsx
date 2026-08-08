@@ -168,7 +168,7 @@ export async function HelpPageContent() {
           </p>
           <HelpList
             items={[
-              "«?» — i formulär och dialoger: länk till relevant hjälpavsnitt om funktionen",
+              "«?» — i rubrikraden bredvid avsnittets titel: länk till relevant hjälpavsnitt",
               "Behörighet — visar din roll (läsare, redaktör eller administratör) och vad den innebär",
               "Notiser — kryssa i e-postnotiser vid nya versioner, checkout och incheckning; valfritt bifoga .ocd",
               "Lösenord — byt lösenord med nuvarande lösenord som bekräftelse",

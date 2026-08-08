@@ -109,7 +109,7 @@ export function CoursePdfPanel({
 
   return (
     <div className="border-t border-slate-200 bg-white px-3 py-3">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex min-w-0 items-center gap-2">
         <h3 className="text-sm font-medium text-slate-900">PDF-export</h3>
         <HelpLinkIcon section="bana" />
       </div>
