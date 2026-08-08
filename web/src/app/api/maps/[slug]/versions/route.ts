@@ -3,8 +3,10 @@ import { requireUpload } from "@/lib/auth/api";
 import { queueNotifyAdminOfNewUpload } from "@/lib/email";
 import { runAfterResponse } from "@/lib/background";
 import { sha256 } from "@/lib/hash";
+import { assertMapAllowsUpload, checkVersionUploadGuards } from "@/lib/maps/upload-guards";
 import { processVersionAfterUpload } from "@/lib/ocad/process-version";
 import { prisma } from "@/lib/prisma";
+import type { Role as RoleType } from "@/lib/roles";
 import {
   buildMapVersionPath,
   deleteFile,
@@ -64,13 +66,48 @@ export async function POST(request: Request, { params }: RouteParams) {
   }
 
   const comment = formData.get("comment")?.toString().trim() || null;
+  const forceDespiteCheckouts = formData.get("forceDespiteCheckouts") === "true";
+  const forceDuplicate = formData.get("forceDuplicate") === "true";
   const buffer = Buffer.from(await file.arrayBuffer());
   const contentHash = sha256(buffer);
+
+  const mapRecord = await prisma.mapFile.findUnique({
+    where: { id: map.id },
+    select: { id: true, archivedAt: true },
+  });
+  if (!mapRecord) {
+    return NextResponse.json({ error: "Kartfil hittades inte" }, { status: 404 });
+  }
+
+  const archiveGuard = await assertMapAllowsUpload(
+    mapRecord.id,
+    mapRecord.archivedAt,
+    session.user.role as RoleType,
+  );
+  if (!archiveGuard.ok) {
+    return NextResponse.json({ error: archiveGuard.error, code: archiveGuard.code }, { status: 403 });
+  }
 
   const latest = await prisma.mapVersion.findFirst({
     where: { mapFileId: map.id },
     orderBy: { versionNumber: "desc" },
   });
+
+  const uploadGuard = await checkVersionUploadGuards(map.id, contentHash, latest, {
+    role: session.user.role as RoleType,
+    forceDespiteCheckouts,
+    forceDuplicate,
+  });
+  if (!uploadGuard.ok) {
+    return NextResponse.json(
+      {
+        error: uploadGuard.error,
+        code: uploadGuard.code,
+        activeCheckoutCount: uploadGuard.activeCheckoutCount,
+      },
+      { status: 409 },
+    );
+  }
 
   const versionNumber = (latest?.versionNumber ?? 0) + 1;
   const storagePath = buildMapVersionPath(map.id, versionNumber);

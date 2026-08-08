@@ -2,6 +2,7 @@ import { logAction } from "@/lib/audit";
 import { requireAdmin, requireSession, requireUpload } from "@/lib/auth/api";
 import { deleteMapVersion } from "@/lib/maps/delete-version";
 import { setVersionPublished } from "@/lib/maps/publish-version";
+import { setVersionRecommended } from "@/lib/maps/recommended-version";
 import {
   assertVersionViewAccess,
   getMapVersionOr404,
@@ -19,30 +20,49 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   const lookup = await getMapVersionOr404(slug, id);
   if (lookup instanceof NextResponse) return lookup;
 
-  let body: { isPublished?: boolean };
+  let body: { isPublished?: boolean; isRecommended?: boolean };
   try {
-    body = (await request.json()) as { isPublished?: boolean };
+    body = (await request.json()) as { isPublished?: boolean; isRecommended?: boolean };
   } catch {
     return NextResponse.json({ error: "Ogiltig JSON" }, { status: 400 });
   }
 
-  if (typeof body.isPublished !== "boolean") {
-    return NextResponse.json({ error: "Ange isPublished (boolean)" }, { status: 400 });
+  if (typeof body.isPublished === "boolean") {
+    const result = await setVersionPublished(
+      lookup.map.id,
+      lookup.version.id,
+      body.isPublished,
+    );
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
+    }
+
+    await logAction(session.user.id, "VERSION_PUBLISH", "MapVersion", result.version.id, {
+      mapSlug: slug,
+      versionNumber: result.version.versionNumber,
+      isPublished: result.version.isPublished,
+    });
+
+    return NextResponse.json(result.version);
   }
 
-  const updated = await setVersionPublished(
-    lookup.map.id,
-    lookup.version.id,
-    body.isPublished,
-  );
+  if (typeof body.isRecommended === "boolean") {
+    const updated = await setVersionRecommended(
+      lookup.map.id,
+      lookup.version.id,
+      body.isRecommended,
+    );
 
-  await logAction(session.user.id, "VERSION_PUBLISH", "MapVersion", updated.id, {
-    mapSlug: slug,
-    versionNumber: updated.versionNumber,
-    isPublished: updated.isPublished,
-  });
+    await logAction(session.user.id, "VERSION_RECOMMENDED", "MapVersion", updated.id, {
+      mapSlug: slug,
+      versionNumber: updated.versionNumber,
+      isRecommended: updated.isRecommended,
+    });
 
-  return NextResponse.json(updated);
+    return NextResponse.json(updated);
+  }
+
+  return NextResponse.json({ error: "Ange isPublished eller isRecommended" }, { status: 400 });
 }
 
 export async function GET(_request: Request, { params }: RouteParams) {

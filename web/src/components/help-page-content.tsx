@@ -329,7 +329,7 @@ export async function HelpPageContent() {
                   "Välj verktyg: rektangel eller polygon",
                   "Rita området på kartan och bekräfta urvalet",
                   "Klicka Checka ut område — du kommer till checkout-detaljsidan",
-                  "Ladda ner utcheckning .ocd och redigera i OCAD",
+                  "Ladda ner utcheckning .ocd och redigera i OCAD — filen genereras av systemet; öppna och spara i OCAD innan du redigerar",
                   "Överlappande checkouts blockeras — vänta tills ett område frigörs",
                 ]}
               />
@@ -340,7 +340,8 @@ export async function HelpPageContent() {
                   "Ladda upp den redigerade .ocd-filen via Checka in på checkout-sidan",
                   "Granska utcheckningsdiff mot aktuell version (tillagda, borttagna, ändrade)",
                   "Bekräfta integration — checkout går till admin-bekräftelse",
-                  "Administratör bekräftar och integrerar — en ny kartversion skapas",
+                  "Administratör bekräftar och integrerar — en ny opublicerad kartversion skapas (publicera i versionshistoriken)",
+                  "Efter integration: jämför, granska och publicera så att läsare ser ändringarna",
                   "Vid incheckning skickas e-post med .ocd-bilaga till admin och prenumeranter med «Bifoga .ocd»",
                 ]}
               />
@@ -366,7 +367,8 @@ export async function HelpPageContent() {
                 items={[
                   "Avbryt checkout (tvinga avbryt) med valfri anledning om arbetet behöver stoppas",
                   "Bekräfta och integrera efter att användaren bekräftat diff",
-                  "Vid full uppladdning av hel karta varnas du om aktiva checkouts finns",
+                  "Bekräfta granskning (kryssruta) innan integration genomförs",
+                  "Vid full uppladdning av hel karta blockeras uppladdning vid aktiva checkouts — admin kan bekräfta undantag",
                 ]}
               />
             </>
@@ -374,16 +376,16 @@ export async function HelpPageContent() {
 
           {showEditor && (
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
-              Ladda inte upp en hel karta (.ocd) medan aktiva checkouts pågår om du inte vet vad
-              du gör — det kan störa parallellt arbete. Systemet varnar dig innan uppladdningen
-              genomförs.
+              Ladda inte upp en hel karta (.ocd) medan aktiva checkouts pågår — systemet blockerar
+              det för redaktörer. Administratörer kan ladda upp efter explicit bekräftelse.
             </p>
           )}
 
           <h3 className="font-medium text-slate-900">Påminnelser</h3>
           <p>
             Om en checkout är aktiv längre än sju dagar (standard, konfigurerbart av administratör)
-            får checkout-ägaren ett påminnelsemail att checka in eller avbryta arbetet.
+            får checkout-ägaren ett påminnelsemail. Admin får påminnelse om checkouts som väntar
+            på integration.
           </p>
           <HelpProcessDiagram
             title="Status — checkout"
@@ -542,6 +544,8 @@ export async function HelpPageContent() {
               items={[
                 "Endast en version kan vara publicerad åt gången per område",
                 "Kryssa i Publicerad i versionshistoriken för att göra versionen synlig för läsare — tidigare publicerad version avpubliceras då automatiskt",
+                "Versioner med parsningsfel kan inte publiceras",
+                "Markera Rek. för intern rekommenderad version (valfritt komplement till publicering)",
                 "Avmarkera för att dölja versionen igen",
                 "Publicera först när kartan är granskad och klar att delas",
               ]}
@@ -694,9 +698,16 @@ export async function HelpPageContent() {
             <p>
               Administratörer hanterar systemet via flikarna{" "}
               <Link href="/admin/users" className="link-primary">Användare</Link>,{" "}
+              <Link href="/admin/checkouts" className="link-primary">Checkouts</Link>,{" "}
               <Link href="/admin/lagring" className="link-primary">Lagring</Link>,{" "}
               <Link href="/admin/loggning" className="link-primary">Loggning</Link> och{" "}
               <Link href="/admin/settings" className="link-primary">Inställningar</Link>.
+            </p>
+
+            <h3 className="font-medium text-slate-900">Checkouts</h3>
+            <p>
+              På <Link href="/admin/checkouts" className="link-primary">/admin/checkouts</Link>{" "}
+              ser du checkouts som väntar på admin-integration efter att redaktören bekräftat diff.
             </p>
 
             <h3 className="font-medium text-slate-900">Användarhantering</h3>
@@ -774,8 +785,8 @@ export async function HelpPageContent() {
 
             <h3 className="font-medium text-slate-900">Skapa och hantera områden</h3>
             <p>
-              Endast administratörer kan skapa nya områden på startsidan. Redigera namn och radera
-              område via ikonerna bredvid titeln på områdessidan.
+              Endast administratörer kan skapa nya områden på startsidan. Redigera namn, arkivera
+              (döljer från startsidan) eller radera område via ikonerna bredvid titeln på områdessidan.
             </p>
             <HelpProcessDiagram title="Flöde — användarhantering" chart={adminUserFlow} />
             <HelpProcessDiagram title="Översikt — admin-flikar" chart={adminSystemFlow} />

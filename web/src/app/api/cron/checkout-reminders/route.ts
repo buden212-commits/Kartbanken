@@ -3,7 +3,8 @@ import {
   findCheckoutsNeedingReminder,
   markReminderSent,
 } from "@/lib/checkout/repository";
-import { notifyCheckoutReminder } from "@/lib/email";
+import { CheckoutStatus } from "@/lib/checkout/types";
+import { notifyCheckoutReminder, notifyCheckoutUserConfirmed } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -39,12 +40,20 @@ export async function GET(request: Request) {
     });
     if (!map) continue;
 
-    notifyCheckoutReminder({
-      checkoutId: checkout.id,
-      map: { title: map.title, slug: map.slug },
-      owner: { name: checkout.user.name, email: checkout.user.email },
-      days,
-    });
+    if (checkout.status === CheckoutStatus.PENDING_ADMIN_CONFIRM) {
+      notifyCheckoutUserConfirmed({
+        checkoutId: checkout.id,
+        map: { title: map.title, slug: map.slug },
+        owner: { name: checkout.user.name, email: checkout.user.email },
+      });
+    } else {
+      notifyCheckoutReminder({
+        checkoutId: checkout.id,
+        map: { title: map.title, slug: map.slug },
+        owner: { name: checkout.user.name, email: checkout.user.email },
+        days,
+      });
+    }
 
     await markReminderSent(checkout.id);
     await logAction(null, "CHECKOUT_REMINDER_SENT", "MapCheckout", checkout.id, {

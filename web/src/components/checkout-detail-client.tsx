@@ -4,7 +4,7 @@
 
 import { useRouter } from "next/navigation";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import {
 
@@ -117,6 +117,8 @@ type Props = {
   isAdmin: boolean;
 
   isOwner: boolean;
+
+  subsetNotice?: ReactNode;
 
 };
 
@@ -234,11 +236,15 @@ export function CheckoutDetailClient({
 
   isOwner,
 
+  subsetNotice,
+
 }: Props) {
 
   const router = useRouter();
 
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+
+  const [integrationReviewed, setIntegrationReviewed] = useState(false);
 
   const loading = pendingAction !== null;
 
@@ -818,6 +824,10 @@ export function CheckoutDetailClient({
 
         </div>
 
+
+
+        {subsetNotice}
+
       </div>
 
 
@@ -1128,11 +1138,23 @@ export function CheckoutDetailClient({
 
           )}
 
+          <label className="mt-4 flex cursor-pointer items-start gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={integrationReviewed}
+              onChange={(e) => setIntegrationReviewed(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-ifk-blue focus:ring-ifk-blue/20"
+            />
+            <span>
+              Jag har granskat diff och eventuella varningar och vill integrera ändringarna.
+            </span>
+          </label>
+
           <button
 
             type="button"
 
-            disabled={loading}
+            disabled={loading || !integrationReviewed}
 
             onClick={handleAdminIntegrate}
 

@@ -7,14 +7,20 @@ type Props = {
   mapSlug: string;
   versionId: string;
   initialPublished: boolean;
+  parseStatus: string;
   canManage: boolean;
   compact?: boolean;
 };
+
+function canPublish(parseStatus: string): boolean {
+  return parseStatus === "OK";
+}
 
 export function VersionPublishToggle({
   mapSlug,
   versionId,
   initialPublished,
+  parseStatus,
   canManage,
   compact = false,
 }: Props) {
@@ -22,6 +28,7 @@ export function VersionPublishToggle({
   const [isPublished, setIsPublished] = useState(initialPublished);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const publishAllowed = canPublish(parseStatus);
 
   if (!canManage) {
     return (
@@ -39,6 +46,15 @@ export function VersionPublishToggle({
   }
 
   async function handleToggle(next: boolean) {
+    if (next && !publishAllowed) {
+      setError(
+        parseStatus === "ERROR"
+          ? "Parsningsfel — versionen kan inte publiceras."
+          : "Versionen parsas fortfarande.",
+      );
+      return;
+    }
+
     setSaving(true);
     setError(null);
     const prev = isPublished;
@@ -68,16 +84,26 @@ export function VersionPublishToggle({
   return (
     <div className="flex flex-col gap-1">
       <label
-        title={isPublished ? "Publicerad" : "Ej publicerad"}
-        className="inline-flex cursor-pointer items-center gap-2 text-xs text-slate-700"
+        title={
+          !publishAllowed && !isPublished
+            ? parseStatus === "ERROR"
+              ? "Parsningsfel"
+              : "Parsning pågår"
+            : isPublished
+              ? "Publicerad"
+              : "Ej publicerad"
+        }
+        className={`inline-flex items-center gap-2 text-xs text-slate-700 ${
+          !publishAllowed && !isPublished ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+        }`}
       >
         <input
           type="checkbox"
           checked={isPublished}
-          disabled={saving}
+          disabled={saving || (!publishAllowed && !isPublished)}
           onChange={(e) => void handleToggle(e.target.checked)}
           onClick={(e) => e.stopPropagation()}
-          className="h-4 w-4 rounded border-slate-300 text-ifk-blue focus:ring-ifk-blue/20"
+          className="h-4 w-4 rounded border-slate-300 text-ifk-blue focus:ring-ifk-blue/20 disabled:opacity-50"
         />
         {!compact && <span>{isPublished ? "Publicerad" : "Ej publicerad"}</span>}
       </label>

@@ -5,6 +5,7 @@ import { useCallback, useState, type KeyboardEvent, type MouseEvent } from "reac
 import { formatBytes, formatDateOnly, formatTimeOnly } from "@/lib/format";
 import { VersionHistoryActions } from "@/components/version-history-actions";
 import { VersionPublishToggle } from "@/components/version-publish-toggle";
+import { VersionRecommendedToggle } from "@/components/version-recommended-toggle";
 import { HelpLinkIcon } from "@/components/help-link-icon";
 
 export type VersionHistoryItem = {
@@ -17,6 +18,7 @@ export type VersionHistoryItem = {
   parseStatus: string;
   objectCount: number | null;
   isPublished: boolean;
+  isRecommended: boolean;
   uploaderLabel: string;
   previousVersionId?: string;
   canView: boolean;
@@ -191,11 +193,18 @@ function VersionCard({
         </dl>
       </div>
 
-      <div className="mt-3" onClick={stopRowNavigation} onKeyDown={stopRowNavigation}>
+      <div className="mt-3 space-y-2" onClick={stopRowNavigation} onKeyDown={stopRowNavigation}>
         <VersionPublishToggle
           mapSlug={mapSlug}
           versionId={version.id}
           initialPublished={version.isPublished}
+          parseStatus={version.parseStatus}
+          canManage={canManagePublication}
+        />
+        <VersionRecommendedToggle
+          mapSlug={mapSlug}
+          versionId={version.id}
+          initialRecommended={version.isRecommended}
           canManage={canManagePublication}
         />
       </div>
@@ -272,13 +281,22 @@ function VersionRow({
         {parseLabel(version)}
       </td>
       <td className="px-2 py-2.5" onClick={stopRowNavigation} onKeyDown={stopRowNavigation}>
-        <VersionPublishToggle
-          mapSlug={mapSlug}
-          versionId={version.id}
-          initialPublished={version.isPublished}
-          canManage={canManagePublication}
-          compact
-        />
+        <div className="flex flex-col gap-1">
+          <VersionPublishToggle
+            mapSlug={mapSlug}
+            versionId={version.id}
+            initialPublished={version.isPublished}
+            parseStatus={version.parseStatus}
+            canManage={canManagePublication}
+            compact
+          />
+          <VersionRecommendedToggle
+            mapSlug={mapSlug}
+            versionId={version.id}
+            initialRecommended={version.isRecommended}
+            canManage={canManagePublication}
+          />
+        </div>
       </td>
       <td className="px-2 py-2.5" onClick={stopRowNavigation} onKeyDown={stopRowNavigation}>
         <VersionHistoryActions

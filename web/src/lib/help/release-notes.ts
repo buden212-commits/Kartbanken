@@ -8,6 +8,26 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-08",
+    title: "Versionsflöde — tydligare väg från lagring till redigering",
+    items: [
+      "Banner på områdessidan när opublicerade versioner väntar granskning och publicering",
+      "Efter checkout-integration: tydliga knappar för jämförelse, visa version och publicera",
+      "Checkout-sidan visar basversion, head och publicerad version; varning om head ändrats",
+      "Full uppladdning blockeras vid aktiva checkouts (admin kan bekräfta undantag)",
+      "Dublett-uppladdning (identiskt innehåll) kräver bekräftelse",
+      "Utcheckningsfil: informationsruta om att filen genereras av systemet",
+      "Admin måste bekräfta granskning innan integration",
+      "Checkout-historik på områdessidan; admin-flik «Checkouts» för väntande integrationer",
+      "Markera rekommenderad version i versionshistoriken",
+      "Publicering blockeras vid parsningsfel",
+      "Jämförelsevy: exportera PDF-rapport",
+      "Kartförslag: länk till checkout för redaktörer",
+      "Administratörer kan arkivera områden (döljs från startsidan)",
+      "Påminnelser skickas även när checkout väntar på admin-integration",
+    ],
+  },
+  {
+    date: "2026-08-08",
     title: "Admin och export",
     items: [
       "Redigeringsformuläret för användare öppnas nu över hela tabellbredden i stället för i den smala åtgärdskolumnen",

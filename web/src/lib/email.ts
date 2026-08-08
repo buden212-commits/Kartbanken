@@ -900,27 +900,35 @@ async function notifyCheckoutUserConfirmedAsync(ctx: CheckoutMailContext): Promi
 }
 
 export function notifyCheckoutIntegrated(
-  ctx: CheckoutMailContext & { versionNumber: number },
+  ctx: CheckoutMailContext & { versionNumber: number; versionId?: string },
 ): void {
   scheduleEmail(() => notifyCheckoutIntegratedAsync(ctx), "checkout integrated");
 }
 
 async function notifyCheckoutIntegratedAsync(
-  ctx: CheckoutMailContext & { versionNumber: number },
+  ctx: CheckoutMailContext & { versionNumber: number; versionId?: string },
 ): Promise<void> {
   if (!(await isEmailConfigured())) return;
 
   const mapUrl = `${getAppBaseUrl()}/maps/${ctx.map.slug}`;
+  const versionUrl = ctx.versionId ? `${mapUrl}/versions/${ctx.versionId}` : mapUrl;
   const subject = `Checkout integrerad — ${ctx.map.title}`;
   const text = [
     `Checkout på ${ctx.map.title} har integrerats som version ${ctx.versionNumber}.`,
     "",
+    "Versionen är opublicerad — publicera den i versionshistoriken innan läsare ser ändringarna.",
+    "",
     `Visa karta: ${mapUrl}`,
-  ].join("\n");
+    ctx.versionId ? `Visa version: ${versionUrl}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   const bodyHtml = `
     <p style="margin:0 0 16px;">Checkout på <strong>${escapeHtml(ctx.map.title)}</strong> har integrerats som <strong>v${ctx.versionNumber}</strong>.</p>
-    <p style="margin:0;"><a href="${escapeHtml(mapUrl)}" style="display:inline-block;padding:10px 18px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:500;">Visa karta</a></p>
+    <p style="margin:0 0 16px;"><strong>Versionen är opublicerad</strong> — granska diff och publicera i versionshistoriken innan läsare ser ändringarna.</p>
+    <p style="margin:0 0 12px;"><a href="${escapeHtml(versionUrl)}" style="display:inline-block;padding:10px 18px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:500;">Visa version</a></p>
+    <p style="margin:0;"><a href="${escapeHtml(mapUrl)}" style="color:#2563eb;">Gå till områdessidan</a></p>
   `.trim();
 
   const html = buildHtmlEmail({ title: subject, bodyHtml });

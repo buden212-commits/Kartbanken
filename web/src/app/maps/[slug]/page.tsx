@@ -3,7 +3,9 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { canAdmin, canCheckout, canCreateCourse, canCreateMapSuggestion, canReviewMapSuggestion, canUpload } from "@/lib/auth/permissions";
 import { MapTitleEditor } from "@/components/map-title-editor";
-import { findActiveCheckoutsForMap, getHeadVersionId, serializeCheckoutResponse } from "@/lib/checkout/repository";
+import { findActiveCheckoutsForMap, findCheckoutHistoryForMap, getHeadVersionId, serializeCheckoutResponse } from "@/lib/checkout/repository";
+import { getMapVersionContext } from "@/lib/maps/version-context";
+import { isMapArchived } from "@/lib/maps/archive-map";
 import { listCoursesForMap, serializeCourseSummary } from "@/lib/course/repository";
 import { versionVisibilityFilter } from "@/lib/maps/version-query";
 import { canViewVersion } from "@/lib/auth/version-access";
@@ -18,6 +20,9 @@ import { SuggestionAreaSection } from "@/components/suggestion/suggestion-map-ov
 import { CourseListPanel } from "@/components/course/course-list-panel";
 import { listSuggestionsForMap, serializeSuggestionSummary, getLatestPublishedVersionNumber } from "@/lib/suggestion/repository";
 import { Role } from "@/lib/roles";
+import { UnpublishedVersionBanner } from "@/components/unpublished-version-banner";
+import { CheckoutHistoryPanel } from "@/components/checkout-history-panel";
+import { MapArchiveButton } from "@/components/map-archive-button";
 
 type PageProps = { params: Promise<{ slug: string }> };
 
@@ -32,7 +37,12 @@ export default async function MapDetailPage({ params }: PageProps) {
 
   const map = await prisma.mapFile.findUnique({
     where: { slug },
-    include: {
+    select: {
+      id: true,
+      slug: true,
+      title: true,
+      description: true,
+      archivedAt: true,
       versions: {
         where: versionVisibilityFilter(role),
         orderBy: { versionNumber: "desc" },
@@ -41,6 +51,10 @@ export default async function MapDetailPage({ params }: PageProps) {
   });
 
   if (!map) notFound();
+
+  const mapArchived = isMapArchived(map.archivedAt);
+  const versionContext = await getMapVersionContext(map.id);
+  const checkoutHistory = await findCheckoutHistoryForMap(map.id);
 
   const activeCheckouts = await findActiveCheckoutsForMap(map.id);
   const headVersionId = await getHeadVersionId(map.id);
@@ -85,6 +99,7 @@ export default async function MapDetailPage({ params }: PageProps) {
       parseStatus: version.parseStatus,
       objectCount: version.objectCount,
       isPublished: version.isPublished,
+      isRecommended: version.isRecommended,
       uploaderLabel: uploader?.name ?? uploader?.email ?? "—",
       previousVersionId: map.versions[index + 1]?.id,
       canView: role ? canViewVersion(role, version.isPublished) : false,
@@ -115,17 +130,38 @@ export default async function MapDetailPage({ params }: PageProps) {
             showDelete={isAdmin}
           />
           {map.description && <p className="mt-2 text-slate-600">{map.description}</p>}
+          {mapArchived && (
+            <p className="mt-2 rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm text-slate-700">
+              Detta område är arkiverat. Endast administratörer kan återställa eller radera det.
+            </p>
+          )}
         </div>
-        {canCreateCheckout && (
-          <CheckoutAreaCta
-            mapSlug={map.slug}
-            canCheckout={canCreateCheckout}
-            headVersionId={headVersionId}
-          />
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {isAdmin && (
+            <MapArchiveButton mapSlug={map.slug} initialArchived={mapArchived} />
+          )}
+          {canCreateCheckout && !mapArchived && (
+            <CheckoutAreaCta
+              mapSlug={map.slug}
+              canCheckout={canCreateCheckout}
+              headVersionId={headVersionId}
+            />
+          )}
+        </div>
       </div>
 
-      {canUploadVersion && (
+      {canManagePublication && versionContext.head && (
+        <UnpublishedVersionBanner
+          mapSlug={map.slug}
+          headVersionNumber={versionContext.head.versionNumber}
+          headIsPublished={versionContext.head.isPublished}
+          publishedVersionNumber={versionContext.published?.versionNumber ?? null}
+          unpublishedCount={versionContext.unpublishedHeadCount}
+          canManage={canManagePublication}
+        />
+      )}
+
+      {canUploadVersion && !mapArchived && (
         <section className="card mt-8">
           <HelpSectionHeading section="versioner">Ladda upp ny version</HelpSectionHeading>
           <p className="mt-1 text-sm text-slate-600">
@@ -136,6 +172,8 @@ export default async function MapDetailPage({ params }: PageProps) {
           <div className="mt-4">
             <UploadVersionForm
               mapSlug={map.slug}
+              isAdmin={isAdmin}
+              mapArchived={mapArchived}
               activeCheckouts={checkoutListItems.map((checkout) => ({
                 id: checkout.id,
                 userLabel: checkout.user.name ?? checkout.user.email,
@@ -147,7 +185,7 @@ export default async function MapDetailPage({ params }: PageProps) {
         </section>
       )}
 
-      <section className="mt-10">
+      <section className="mt-10" id="versionshistorik">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-medium text-slate-900">
             Versionshistorik ({map.versions.length})
@@ -203,14 +241,27 @@ export default async function MapDetailPage({ params }: PageProps) {
       )}
 
       {session?.user?.id && (
-        <CheckoutListPanel
-          mapSlug={map.slug}
-          checkouts={checkoutListItems}
-          sessionUserId={session.user.id}
-          isAdmin={role === Role.ADMIN}
-          canCheckout={canCreateCheckout}
-          headVersionId={headVersionId}
-        />
+        <>
+          <CheckoutListPanel
+            mapSlug={map.slug}
+            checkouts={checkoutListItems}
+            sessionUserId={session.user.id}
+            isAdmin={isAdmin}
+            canCheckout={canCreateCheckout && !mapArchived}
+            headVersionId={headVersionId}
+          />
+          <CheckoutHistoryPanel
+            mapSlug={map.slug}
+            items={checkoutHistory.map((row) => ({
+              id: row.id,
+              status: row.status,
+              createdAt: row.createdAt.toISOString(),
+              integratedAt: row.integratedAt?.toISOString() ?? null,
+              integratedVersionId: row.integratedVersionId,
+              user: row.user,
+            }))}
+          />
+        </>
       )}
 
       {session?.user?.id && role && canCreateCourse(role) && (

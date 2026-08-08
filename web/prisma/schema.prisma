@@ -73,6 +73,7 @@ model MapFile {
   slug        String        @unique
   title       String
   description String?
+  archivedAt  DateTime?
   createdAt   DateTime      @default(now())
   createdById String?
   versions    MapVersion[]

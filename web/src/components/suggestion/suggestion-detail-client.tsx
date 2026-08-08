@@ -603,6 +603,12 @@ export function SuggestionDetailClient({
       {canReviewNow && !editMode && (
         <div className="card mt-6 space-y-4">
           <HelpSectionHeading section="kartforslag">Granska förslag</HelpSectionHeading>
+          <p className="text-sm text-slate-600">
+            <Link href={`/maps/${mapSlug}/checkout`} className="link-primary">
+              Checka ut område
+            </Link>
+            {" "}för att redigera kartfilen i OCAD utifrån detta förslag.
+          </p>
           <div>
             <label htmlFor="reviewComment" className="form-label">
               Kommentar till skaparen (krävs vid avvisning)

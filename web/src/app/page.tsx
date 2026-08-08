@@ -15,8 +15,14 @@ export default async function HomePage() {
   const visibilityFilter = versionVisibilityFilter(session?.user.role);
 
   const maps = await prisma.mapFile.findMany({
+    where: isAdmin ? undefined : { archivedAt: null },
     orderBy: { title: "asc" },
-    include: {
+    select: {
+      id: true,
+      slug: true,
+      title: true,
+      description: true,
+      archivedAt: true,
       versions: {
         where: visibilityFilter,
         orderBy: { versionNumber: "desc" },
@@ -92,6 +98,11 @@ export default async function HomePage() {
                     >
                       {map.title}
                     </Link>
+                    {map.archivedAt && isAdmin && (
+                      <span className="ml-2 rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-600">
+                        Arkiverad
+                      </span>
+                    )}
                     {map.description && (
                       <p className="mt-1 text-sm text-slate-500">{map.description}</p>
                     )}
@@ -150,6 +161,11 @@ export default async function HomePage() {
                           <Link href={`/maps/${map.slug}`} className="link-primary">
                             {map.title}
                           </Link>
+                          {map.archivedAt && isAdmin && (
+                            <span className="ml-2 rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-600">
+                              Arkiverad
+                            </span>
+                          )}
                           {map.description && (
                             <p className="mt-0.5 text-xs text-slate-500">{map.description}</p>
                           )}

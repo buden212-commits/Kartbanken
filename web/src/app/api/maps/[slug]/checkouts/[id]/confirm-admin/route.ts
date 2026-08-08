@@ -106,6 +106,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
       map: { title: map.title, slug: map.slug },
       owner: { name: checkout.user.name, email: checkout.user.email },
       versionNumber: result.versionNumber,
+      versionId: result.versionId,
     });
 
     const integratedVersion = await prisma.mapVersion.findUnique({
