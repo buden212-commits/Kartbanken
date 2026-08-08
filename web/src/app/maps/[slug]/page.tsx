@@ -9,7 +9,7 @@ import { versionVisibilityFilter } from "@/lib/maps/version-query";
 import { canViewVersion } from "@/lib/auth/version-access";
 import { prisma } from "@/lib/prisma";
 import { UploadVersionForm } from "@/components/upload-version-form";
-import { HelpLinkIcon, HelpSectionHeading } from "@/components/help-link-icon";
+import { HelpSectionHeading } from "@/components/help-link-icon";
 import { VersionHistoryList } from "@/components/version-history-list";
 import { CheckoutAreaCta } from "@/components/checkout-area-cta";
 import { CheckoutListPanel } from "@/components/checkout-list-panel";
@@ -149,15 +149,9 @@ export default async function MapDetailPage({ params }: PageProps) {
 
       <section className="mt-10">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <h2 className="text-lg font-medium text-slate-900">
-              Versionshistorik ({map.versions.length})
-            </h2>
-            <HelpLinkIcon section="versioner" />
-            {canManagePublication && (
-              <HelpLinkIcon section="publicering" label="Hjälp om publicering" />
-            )}
-          </div>
+          <h2 className="text-lg font-medium text-slate-900">
+            Versionshistorik ({map.versions.length})
+          </h2>
           {latestComparePair && (
             <Link
               href={`/maps/${map.slug}/compare?v1=${latestComparePair[0].id}&v2=${latestComparePair[1].id}`}

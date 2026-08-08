@@ -8,10 +8,18 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-08",
-    title: "Hjälpikoner — rubrikrad",
+    title: "GPS-spår — zoom och prestanda",
     items: [
-      "Hjälpikonen (?) sitter i rubrikraden bredvid titeln — t.ex. versionshistorik, hjälpsidan och export",
-      "Inte längre vid varje publiceringskryss eller längst ut till höger ovanför formulär",
+      "Under GPS-spårning zoomas kartan automatiskt till skala 1:100 och följer din position var 10:e sekund",
+      "Knappar och verktyg svarar snabbare under spårning — kartan uppdateras inte längre vid varje GPS-punkt",
+    ],
+  },
+  {
+    date: "2026-08-08",
+    title: "Hjälpikoner — tabellrubriker",
+    items: [
+      "Hjälpikonen (?) i versionshistoriken sitter i kolumnrubrikraden — vid Version och Pub.",
+      "Kolumnbredderna är justerade så tabellen fungerar på både desktop och mobil",
     ],
   },
   {

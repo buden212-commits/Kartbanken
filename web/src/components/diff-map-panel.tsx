@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import type { OcadObjectChange } from "@/lib/ocad/diff-types";
 import type { ChangeType } from "@/lib/ocad/diff-types";
 import { formatChangeCentroid } from "@/lib/ocad/change-utils";
@@ -124,6 +124,15 @@ type Props = {
     bbox: Bbox;
     requestId: number;
   } | null;
+  /**
+   * Kartförslag GPS-spår: håll skala 1:100 och centrera på senaste position var 10:e sekund.
+   */
+  gpsTrackFollow?: {
+    active: boolean;
+    mapCoordRef: MutableRefObject<[number, number] | null>;
+    /** Ökas när spårning startar eller första GPS-fix kommer. */
+    recenterToken: number;
+  } | null;
 };
 
 const MIN_ZOOM = 0.2;
@@ -137,6 +146,8 @@ const POINT_HIGHLIGHT_RADIUS_M = 5; // 10 m diameter in map units (meters)
 const DRAG_THRESHOLD_PX = 5;
 /** Fixed screen size for GPS reticle (overlay is outside zoom transform). */
 const GPS_CROSSHAIR_SIZE_PX = 28;
+/** Re-center interval while recording a kartförslag GPS track. */
+const GPS_TRACK_FOLLOW_INTERVAL_MS = 10_000;
 
 type HighlightShape =
   | { kind: "circle"; cx: number; cy: number; r: number }
@@ -249,6 +260,7 @@ export function DiffMapPanel({
   onOcadMapScale,
   onOcadCrsReady,
   fitGeoBbox = null,
+  gpsTrackFollow = null,
 }: Props) {
   const [svgInner, setSvgInner] = useState<string | null>(null);
   const [svgFill, setSvgFill] = useState("transparent");
@@ -261,6 +273,8 @@ export function DiffMapPanel({
   const [clickHint, setClickHint] = useState<string | null>(null);
   const [fullSvgText, setFullSvgText] = useState<string | null>(null);
   const [ocadMapScale, setOcadMapScale] = useState<number>(15000);
+  const ocadMapScaleRef = useRef(ocadMapScale);
+  ocadMapScaleRef.current = ocadMapScale;
   const maxZoom = useMemo(() => maxZoomForMapScale(ocadMapScale), [ocadMapScale]);
   const maxZoomRef = useRef(maxZoom);
   maxZoomRef.current = maxZoom;
@@ -959,10 +973,12 @@ export function DiffMapPanel({
   const canUseGps = isGeoreferencedCrs(ocadCrs);
 
   const panToMapCoord = useCallback(
-    (mapCoord: [number, number], targetZoom = 8) => {
+    (mapCoord: [number, number], targetZoom = 8, options?: { markInteraction?: boolean }) => {
       const viewport = viewportRef.current;
       if (!viewport || !fullViewBox) return;
-      markUserInteracted();
+      if (options?.markInteraction !== false) {
+        markUserInteracted();
+      }
       const rect = viewport.getBoundingClientRect();
       const nextZoom = Math.min(maxZoomRef.current, Math.max(MIN_ZOOM, targetZoom));
       const [svgX, svgY] = geoToSvgUserPoint(mapCoord, rootTransform);
@@ -981,6 +997,33 @@ export function DiffMapPanel({
     },
     [fullViewBox, markUserInteracted, rootTransform],
   );
+
+  const panToMapCoordAtDisplayScale = useCallback(
+    (mapCoord: [number, number]) => {
+      const zoom100 = maxZoomForMapScale(ocadMapScaleRef.current);
+      panToMapCoord(mapCoord, zoom100, { markInteraction: false });
+    },
+    [panToMapCoord],
+  );
+
+  useEffect(() => {
+    if (!gpsTrackFollow?.active || !fullViewBox) return;
+
+    const follow = () => {
+      const coord = gpsTrackFollow.mapCoordRef.current;
+      if (coord) panToMapCoordAtDisplayScale(coord);
+    };
+
+    follow();
+    const id = window.setInterval(follow, GPS_TRACK_FOLLOW_INTERVAL_MS);
+    return () => window.clearInterval(id);
+  }, [
+    fullViewBox,
+    gpsTrackFollow?.active,
+    gpsTrackFollow?.mapCoordRef,
+    gpsTrackFollow?.recenterToken,
+    panToMapCoordAtDisplayScale,
+  ]);
 
   const applyGpsPosition = useCallback(
     (coords: GeolocationCoordinates, autoCenter: boolean) => {

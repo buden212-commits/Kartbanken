@@ -86,6 +86,7 @@ type CreateMapPanelProps = {
   markings: SuggestionGeometry[];
   currentGeometry: SuggestionGeometry | null;
   draftGeometry: SuggestionGeometry | null;
+  gpsLiveGeometry: SuggestionGeometry | null;
   drawHint: string;
   markingCount: number;
   rootTransformRef: MutableRefObject<SvgRootTransform>;
@@ -95,6 +96,11 @@ type CreateMapPanelProps = {
   gpsTracking: boolean;
   canUseGpsTracking: boolean;
   onGpsTrackingToggle: () => void;
+  gpsTrackFollow: {
+    active: boolean;
+    mapCoordRef: MutableRefObject<[number, number] | null>;
+    recenterToken: number;
+  };
 };
 
 const MAP_MODE_BTN =
@@ -115,6 +121,7 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
   markings,
   currentGeometry,
   draftGeometry,
+  gpsLiveGeometry,
   drawHint,
   markingCount,
   rootTransformRef,
@@ -124,6 +131,7 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
   gpsTracking,
   canUseGpsTracking,
   onGpsTrackingToggle,
+  gpsTrackFollow,
 }: CreateMapPanelProps) {
   const renderSvgOverlay = useCallback(
     (rootTransform: SvgRootTransform) => {
@@ -138,7 +146,7 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
         );
       }
       const nextLabel = String(markings.length + 1);
-      const overlay = draftGeometry ?? currentGeometry;
+      const overlay = draftGeometry ?? currentGeometry ?? gpsLiveGeometry;
       if (overlay) {
         parts.push(
           renderSuggestionGeometrySvg(overlay, rootTransform, {
@@ -151,7 +159,7 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
       if (parts.length === 0) return null;
       return <g dangerouslySetInnerHTML={{ __html: parts.join("") }} />;
     },
-    [markings, currentGeometry, draftGeometry, rootTransformRef],
+    [markings, currentGeometry, draftGeometry, gpsLiveGeometry, rootTransformRef],
   );
 
   return (
@@ -166,6 +174,7 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
       renderSvgOverlay={renderSvgOverlay}
       onOcadCrsReady={onOcadCrsReady}
       onOcadMapScale={onOcadMapScale}
+      gpsTrackFollow={gpsTrackFollow}
       secondaryHeaderContent={
         <div className="space-y-2 border-b border-slate-200 bg-slate-50 px-3 py-2 sm:px-4">
           {gpsTrackingStatus && (
@@ -228,6 +237,9 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
   );
 });
 
+const GPS_UI_UPDATE_MS = 1000;
+const GPS_LINE_RENDER_MS = 2000;
+
 export function SuggestionCreateClient({
   mapSlug,
   mapTitle,
@@ -240,6 +252,10 @@ export function SuggestionCreateClient({
   const gpsWatchIdRef = useRef<number | null>(null);
   const gpsSamplesRef = useRef<GpsTrackSample[]>([]);
   const gpsRejectedJumpsRef = useRef(0);
+  const gpsLatestMapCoordRef = useRef<[number, number] | null>(null);
+  const gpsLastAccuracyRef = useRef<number | null>(null);
+  const gpsUiUpdateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const gpsLineRenderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
@@ -248,6 +264,8 @@ export function SuggestionCreateClient({
   const [ocadCrs, setOcadCrs] = useState<OcadCrsInfo | null>(null);
   const [ocadMapScale, setOcadMapScale] = useState(15000);
   const [gpsTracking, setGpsTracking] = useState(false);
+  const [gpsTrackingRecenterToken, setGpsTrackingRecenterToken] = useState(0);
+  const [gpsLineRenderTick, setGpsLineRenderTick] = useState(0);
   const [gpsSampleCount, setGpsSampleCount] = useState(0);
   const [gpsRejectedJumpCount, setGpsRejectedJumpCount] = useState(0);
   const [gpsLiveAccuracyM, setGpsLiveAccuracyM] = useState<number | null>(null);
@@ -294,6 +312,40 @@ export function SuggestionCreateClient({
       navigator.geolocation.clearWatch(gpsWatchIdRef.current);
       gpsWatchIdRef.current = null;
     }
+    if (gpsUiUpdateTimerRef.current != null) {
+      clearTimeout(gpsUiUpdateTimerRef.current);
+      gpsUiUpdateTimerRef.current = null;
+    }
+    if (gpsLineRenderTimerRef.current != null) {
+      clearTimeout(gpsLineRenderTimerRef.current);
+      gpsLineRenderTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleGpsUiUpdate = useCallback(() => {
+    if (gpsUiUpdateTimerRef.current != null) return;
+    gpsUiUpdateTimerRef.current = setTimeout(() => {
+      gpsUiUpdateTimerRef.current = null;
+      setGpsSampleCount(gpsSamplesRef.current.length);
+      setGpsLiveAccuracyM(gpsLastAccuracyRef.current);
+      setGpsRejectedJumpCount(gpsRejectedJumpsRef.current);
+    }, GPS_UI_UPDATE_MS);
+  }, []);
+
+  const scheduleGpsLineRender = useCallback((immediate = false) => {
+    if (immediate) {
+      if (gpsLineRenderTimerRef.current != null) {
+        clearTimeout(gpsLineRenderTimerRef.current);
+        gpsLineRenderTimerRef.current = null;
+      }
+      setGpsLineRenderTick((tick) => tick + 1);
+      return;
+    }
+    if (gpsLineRenderTimerRef.current != null) return;
+    gpsLineRenderTimerRef.current = setTimeout(() => {
+      gpsLineRenderTimerRef.current = null;
+      setGpsLineRenderTick((tick) => tick + 1);
+    }, GPS_LINE_RENDER_MS);
   }, []);
 
   useEffect(() => {
@@ -322,7 +374,7 @@ export function SuggestionCreateClient({
           ? coords.accuracy
           : GPS_TRACK_MAX_ACCURACY_M;
 
-      setGpsLiveAccuracyM(accuracyMeters);
+      gpsLastAccuracyRef.current = accuracyMeters;
 
       const lastSample = gpsSamplesRef.current.at(-1) ?? null;
       const evaluation = evaluateGpsSample(
@@ -342,19 +394,27 @@ export function SuggestionCreateClient({
       if (!evaluation.accepted) {
         if (evaluation.reason === "jump") {
           gpsRejectedJumpsRef.current += 1;
-          setGpsRejectedJumpCount(gpsRejectedJumpsRef.current);
+          scheduleGpsUiUpdate();
         }
         return;
       }
 
       gpsSamplesRef.current = [...gpsSamplesRef.current, evaluation.sample];
-      setGpsSampleCount(gpsSamplesRef.current.length);
-      setLinePoints(gpsSamplesRef.current.map((item) => item.mapCoord));
+      gpsLatestMapCoordRef.current = evaluation.sample.mapCoord;
+      const isFirstSample = gpsSamplesRef.current.length === 1;
+      if (isFirstSample) {
+        setGpsTrackingRecenterToken((token) => token + 1);
+        scheduleGpsUiUpdate();
+        scheduleGpsLineRender(true);
+      } else {
+        scheduleGpsUiUpdate();
+        scheduleGpsLineRender();
+      }
       setGeometry(null);
       setGpsTrackSummary(null);
       setError(null);
     },
-    [ocadCrs, ocadMapScale],
+    [ocadCrs, ocadMapScale, scheduleGpsLineRender, scheduleGpsUiUpdate],
   );
 
   const startGpsTracking = useCallback(() => {
@@ -370,9 +430,13 @@ export function SuggestionCreateClient({
     stopGpsWatch();
     gpsSamplesRef.current = [];
     gpsRejectedJumpsRef.current = 0;
+    gpsLatestMapCoordRef.current = null;
+    gpsLastAccuracyRef.current = null;
     setGpsSampleCount(0);
     setGpsRejectedJumpCount(0);
     setGpsTracking(true);
+    setGpsTrackingRecenterToken((token) => token + 1);
+    setGpsLineRenderTick(0);
     setGpsTrackSummary(null);
     setGpsLiveAccuracyM(null);
     setTool("line");
@@ -409,7 +473,8 @@ export function SuggestionCreateClient({
   const stopGpsTracking = useCallback(() => {
     stopGpsWatch();
     setGpsTracking(false);
-    setGpsLiveAccuracyM(null);
+    setGpsLiveAccuracyM(gpsLastAccuracyRef.current);
+    gpsLatestMapCoordRef.current = null;
 
     const samples = gpsSamplesRef.current;
     const result = processGpsTrack(samples, {
@@ -445,9 +510,12 @@ export function SuggestionCreateClient({
     setGpsLiveAccuracyM(null);
     gpsSamplesRef.current = [];
     gpsRejectedJumpsRef.current = 0;
+    gpsLatestMapCoordRef.current = null;
+    gpsLastAccuracyRef.current = null;
     setGpsSampleCount(0);
     setGpsRejectedJumpCount(0);
     setLinePoints([]);
+    setGpsLineRenderTick(0);
   }, [stopGpsWatch]);
 
   const handleDrawInterrupt = useCallback(() => {
@@ -535,9 +603,19 @@ export function SuggestionCreateClient({
   const draftGeometry = useMemo((): SuggestionGeometry | null => {
     if (draftBbox) return draftBbox;
     if (polygonPoints.length >= 2) return { type: "Polygon", ring: polygonPoints };
-    if (linePoints.length >= 1) return { type: "LineString", coordinates: linePoints };
+    if (!gpsTracking && linePoints.length >= 1) {
+      return { type: "LineString", coordinates: linePoints };
+    }
     return null;
-  }, [draftBbox, linePoints, polygonPoints]);
+  }, [draftBbox, gpsTracking, linePoints, polygonPoints]);
+
+  const gpsLiveGeometry = useMemo((): SuggestionGeometry | null => {
+    if (!gpsTracking) return null;
+    void gpsLineRenderTick;
+    const coordinates = gpsSamplesRef.current.map((item) => item.mapCoord);
+    if (coordinates.length < 1) return null;
+    return { type: "LineString", coordinates };
+  }, [gpsTracking, gpsLineRenderTick]);
 
   const drawPointerHandlers = useMemo<MapDrawPointerHandlers>(
     () => ({
@@ -582,6 +660,15 @@ export function SuggestionCreateClient({
     }
     return null;
   }, [gpsTracking, gpsSampleCount, gpsLiveAccuracyM, gpsRejectedJumpCount, gpsTrackSummary]);
+
+  const gpsTrackFollow = useMemo(
+    () => ({
+      active: gpsTracking,
+      mapCoordRef: gpsLatestMapCoordRef,
+      recenterToken: gpsTrackingRecenterToken,
+    }),
+    [gpsTracking, gpsTrackingRecenterToken],
+  );
 
   const canUseGpsTracking = isGeoreferencedCrs(ocadCrs);
 
@@ -804,6 +891,7 @@ export function SuggestionCreateClient({
           markings={markings}
           currentGeometry={geometry}
           draftGeometry={draftGeometry}
+          gpsLiveGeometry={gpsLiveGeometry}
           drawHint={drawHint}
           markingCount={totalMarkingCount}
           rootTransformRef={rootTransformRef}
@@ -813,6 +901,7 @@ export function SuggestionCreateClient({
           gpsTracking={gpsTracking}
           canUseGpsTracking={canUseGpsTracking}
           onGpsTrackingToggle={handleGpsTrackingToggle}
+          gpsTrackFollow={gpsTrackFollow}
         />
       </div>
 

@@ -168,7 +168,7 @@ export async function HelpPageContent() {
           </p>
           <HelpList
             items={[
-              "«?» — i rubrikraden bredvid avsnittets titel: länk till relevant hjälpavsnitt",
+              "«?» — i rubrikraden bredvid avsnittets titel, eller i tabellens kolumnrubriker (t.ex. versionshistorik)",
               "Behörighet — visar din roll (läsare, redaktör eller administratör) och vad den innebär",
               "Notiser — kryssa i e-postnotiser vid nya versioner, checkout och incheckning; valfritt bifoga .ocd",
               "Lösenord — byt lösenord med nuvarande lösenord som bekräftelse",
@@ -503,6 +503,7 @@ export async function HelpPageContent() {
               "Öppna en publicerad version via Visa karta och klicka Föreslå ändring",
               "Välj punkt, rektangel, polygon eller linje och markera på kartan",
               "«GPS-spår» finns ovanför kartan (bredvid Rita/Navigera) — spelar in en linje med telefonens GPS (kräver georefererad karta)",
+              "Under spårning zoomas kartan till skala 1:100 och följer din position var 10:e sekund",
               "GPS-spår filtreras (minst ca 4 m mellan punkter) och förenklas automatiskt innan linjen sparas",
               "Orimliga GPS-hopp filtreras bort och accepterade punkter utjämnas vid sämre mottagning — antal filtrerade hopp visas efter «Sluta spåra»",
               "Växla «Rita» / «Navigera» ovanför kartan — i Navigera kan du dra och nypa utan att rita; i Rita zoomar två fingrar utan att skapa markering",

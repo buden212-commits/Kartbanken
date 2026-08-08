@@ -5,6 +5,7 @@ import { useCallback, useState, type KeyboardEvent, type MouseEvent } from "reac
 import { formatBytes, formatDateOnly, formatTimeOnly } from "@/lib/format";
 import { VersionHistoryActions } from "@/components/version-history-actions";
 import { VersionPublishToggle } from "@/components/version-publish-toggle";
+import { HelpLinkIcon } from "@/components/help-link-icon";
 
 export type VersionHistoryItem = {
   id: string;
@@ -69,6 +70,59 @@ function VersionSummary({
 
 const toggleBtn =
   "mt-3 w-full rounded-lg border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-100";
+
+const versionHistoryColgroup = (
+  <colgroup>
+    <col className="w-[10.5rem]" />
+    <col className="w-[8%]" />
+    <col className="w-[12%]" />
+    <col />
+    <col className="w-[9%]" />
+    <col className="w-14" />
+    <col className="w-[8rem]" />
+  </colgroup>
+);
+
+function VersionHistoryTableHead({
+  canManagePublication,
+  compact = false,
+}: {
+  canManagePublication: boolean;
+  compact?: boolean;
+}) {
+  const cellClass = compact
+    ? "px-2 py-2.5 font-medium"
+    : "px-2 pb-3 pt-4 font-medium";
+  const firstCellClass = compact
+    ? "px-2 py-2.5 pl-3 font-medium"
+    : "px-2 pb-3 pl-3 pt-4 font-medium";
+
+  return (
+    <thead>
+      <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-500">
+        <th className={firstCellClass}>
+          <div className="flex items-center gap-1">
+            <span>Version</span>
+            <HelpLinkIcon section="versioner" compact />
+          </div>
+        </th>
+        <th className={cellClass}>Storlek</th>
+        <th className={cellClass}>Uppladdare</th>
+        <th className={cellClass}>Kommentar</th>
+        <th className={cellClass}>Status</th>
+        <th className={cellClass}>
+          <div className="flex items-center gap-0.5">
+            <span title="Publicerad">Pub.</span>
+            {canManagePublication && (
+              <HelpLinkIcon section="publicering" compact label="Hjälp om publicering" />
+            )}
+          </div>
+        </th>
+        <th className={cellClass}>Åtgärder</th>
+      </tr>
+    </thead>
+  );
+}
 
 function VersionCard({
   version,
@@ -256,7 +310,13 @@ export function VersionHistoryList({
 
   return (
     <>
-      <ul className="mt-4 space-y-3 md:hidden">
+      <div className="mt-4 overflow-x-auto md:hidden">
+        <table className="w-full min-w-[36rem] table-fixed rounded-xl border border-slate-200 bg-white text-xs shadow-sm">
+          {versionHistoryColgroup}
+          <VersionHistoryTableHead canManagePublication={canManagePublication} compact />
+        </table>
+      </div>
+      <ul className="mt-3 space-y-3 md:hidden">
         <VersionCard
           version={latestVersion}
           mapSlug={mapSlug}
@@ -291,28 +351,8 @@ export function VersionHistoryList({
 
       <div className="mt-4 hidden rounded-xl border border-slate-200 bg-white shadow-sm md:block">
         <table className="w-full table-fixed text-sm">
-          <colgroup>
-            <col className="w-[9.5rem]" />
-            <col className="w-[8%]" />
-            <col className="w-[12%]" />
-            <col />
-            <col className="w-[9%]" />
-            <col className="w-10" />
-            <col className="w-[8rem]" />
-          </colgroup>
-          <thead>
-            <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-500">
-              <th className="px-2 pb-3 pl-3 pt-4 font-medium">Version</th>
-              <th className="px-2 pb-3 pt-4 font-medium">Storlek</th>
-              <th className="px-2 pb-3 pt-4 font-medium">Uppladdare</th>
-              <th className="px-2 pb-3 pt-4 font-medium">Kommentar</th>
-              <th className="px-2 pb-3 pt-4 font-medium">Status</th>
-              <th className="px-2 pb-3 pt-4 font-medium" title="Publicerad">
-                Pub.
-              </th>
-              <th className="px-2 pb-3 pt-4 font-medium">Åtgärder</th>
-            </tr>
-          </thead>
+          {versionHistoryColgroup}
+          <VersionHistoryTableHead canManagePublication={canManagePublication} />
           <tbody>
             <VersionRow
               version={latestVersion}
