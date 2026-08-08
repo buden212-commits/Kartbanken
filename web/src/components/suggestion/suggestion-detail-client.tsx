@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DiffMapPanel, type MapDrawPointerHandlers } from "@/components/diff-map-panel";
+import { HelpSectionHeading } from "@/components/help-link-icon";
 import { screenToSvgPoint } from "@/lib/ocad/map-hit-test";
 import {
   IDENTITY_SVG_TRANSFORM,
@@ -403,7 +404,7 @@ export function SuggestionDetailClient({
 
       {editMode ? (
         <div className="card mt-6 space-y-4">
-          <h2 className="text-lg font-medium text-slate-900">Redigera kartförslag</h2>
+          <HelpSectionHeading section="kartforslag">Redigera kartförslag</HelpSectionHeading>
           <div>
             <label htmlFor="editCategory" className="form-label">
               Kategori
@@ -601,7 +602,7 @@ export function SuggestionDetailClient({
 
       {canReviewNow && !editMode && (
         <div className="card mt-6 space-y-4">
-          <h2 className="text-lg font-medium text-slate-900">Granska förslag</h2>
+          <HelpSectionHeading section="kartforslag">Granska förslag</HelpSectionHeading>
           <div>
             <label htmlFor="reviewComment" className="form-label">
               Kommentar till skaparen (krävs vid avvisning)

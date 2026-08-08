@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Role } from "@/lib/roles";
 import { canSubscribeToNotifications } from "@/lib/settings/notification-recipients";
+import { HelpLinkIcon } from "@/components/help-link-icon";
 
 export type EditableUser = {
   id: string;
@@ -66,6 +67,9 @@ export function AdminUserEditForm({ user, currentUserId, updateUser }: Props) {
       onSubmit={handleSubmit}
       className="mt-2 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-left"
     >
+      <div className="flex justify-end">
+        <HelpLinkIcon section="admin" />
+      </div>
       <input type="hidden" name="userId" value={user.id} />
       <div className="grid gap-3 sm:grid-cols-2">
         <div>

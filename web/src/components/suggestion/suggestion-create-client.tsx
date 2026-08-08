@@ -12,6 +12,7 @@ import {
   type MutableRefObject,
 } from "react";
 import { DiffMapPanel, type MapDrawPointerHandlers } from "@/components/diff-map-panel";
+import { HelpLinkIcon, HelpSectionHeading } from "@/components/help-link-icon";
 import { isGeoreferencedCrs, wgs84ToMapCoord, type OcadCrsInfo } from "@/lib/ocad/crs";
 import { screenToSvgPoint } from "@/lib/ocad/map-hit-test";
 import {
@@ -730,12 +731,15 @@ export function SuggestionCreateClient({
         ← Tillbaka till kartvy
       </Link>
 
-      <div className="mt-4">
-        <h1 className="text-2xl font-semibold text-slate-900">Föreslå kartändring</h1>
-        <p className="mt-2 text-sm text-slate-600">
-          {mapTitle} · v{versionNumber}. Markera plats eller område på kartan, skriv vad som bör
-          ändras och spara. Förslaget påverkar inte kartfilen — en redaktör granskar det separat.
-        </p>
+      <div className="mt-4 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">Föreslå kartändring</h1>
+          <p className="mt-2 text-sm text-slate-600">
+            {mapTitle} · v{versionNumber}. Markera plats eller område på kartan, skriv vad som bör
+            ändras och spara. Förslaget påverkar inte kartfilen — en redaktör granskar det separat.
+          </p>
+        </div>
+        <HelpLinkIcon section="kartforslag" className="mt-1 shrink-0" />
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
@@ -821,9 +825,9 @@ export function SuggestionCreateClient({
             onSubmit={(e) => void handleSubmit(e)}
             className="max-h-[90vh] w-full overflow-y-auto rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl"
           >
-            <h2 id="suggestion-submit-dialog-title" className="text-lg font-semibold text-slate-900">
+            <HelpSectionHeading section="kartforslag" id="suggestion-submit-dialog-title">
               Skicka in kartförslag
-            </h2>
+            </HelpSectionHeading>
             <p className="mt-1 text-sm text-slate-600">
               Fyll i uppgifterna nedan och skicka in {markings.length}{" "}
               {markings.length === 1 ? "ändring" : "ändringar"} tillsammans.

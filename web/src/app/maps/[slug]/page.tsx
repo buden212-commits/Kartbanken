@@ -9,6 +9,7 @@ import { versionVisibilityFilter } from "@/lib/maps/version-query";
 import { canViewVersion } from "@/lib/auth/version-access";
 import { prisma } from "@/lib/prisma";
 import { UploadVersionForm } from "@/components/upload-version-form";
+import { HelpSectionHeading } from "@/components/help-link-icon";
 import { VersionHistoryList } from "@/components/version-history-list";
 import { CheckoutAreaCta } from "@/components/checkout-area-cta";
 import { CheckoutListPanel } from "@/components/checkout-list-panel";
@@ -126,7 +127,7 @@ export default async function MapDetailPage({ params }: PageProps) {
 
       {canUploadVersion && (
         <section className="card mt-8">
-          <h2 className="text-lg font-medium text-slate-900">Ladda upp ny version</h2>
+          <HelpSectionHeading section="versioner">Ladda upp ny version</HelpSectionHeading>
           <p className="mt-1 text-sm text-slate-600">
             Uppladdning skapar en ny version — tidigare versioner behålls. Efter uppladdning
             jämförs automatiskt med föregående version. Nya versioner är opublicerade tills du

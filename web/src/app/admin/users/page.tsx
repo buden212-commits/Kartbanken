@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { AdminNav } from "@/components/admin-nav";
 import { AdminUserEditForm } from "@/components/admin-user-edit-form";
 import { AdminUserNotificationToggle } from "@/components/admin-user-notification-toggle";
+import { HelpLinkIcon, HelpSectionHeading } from "@/components/help-link-icon";
 import { logAction } from "@/lib/audit";
 import { hashPassword } from "@/lib/auth/password";
 import { canAdmin, roleLabel } from "@/lib/auth/permissions";
@@ -400,22 +401,27 @@ export default async function AdminUsersPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
       <p className="page-eyebrow">Administration</p>
-      <h1 className="mt-2 text-2xl font-semibold text-slate-900">
-        Användarhantering
-        <PendingBadge count={pendingUsers.length} />
-      </h1>
-      <p className="mt-2 text-sm text-slate-600">
-        Godkänn registrerade konton, skapa konton manuellt eller redigera befintliga användare.
-        Notisprenumeration för uppladdade kartfiler hanteras per användare. Lösenord visas aldrig.
-      </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="mt-2 text-2xl font-semibold text-slate-900">
+            Användarhantering
+            <PendingBadge count={pendingUsers.length} />
+          </h1>
+          <p className="mt-2 text-sm text-slate-600">
+            Godkänn registrerade konton, skapa konton manuellt eller redigera befintliga användare.
+            Notisprenumeration för uppladdade kartfiler hanteras per användare. Lösenord visas aldrig.
+          </p>
+        </div>
+        <HelpLinkIcon section="admin" className="mt-3 shrink-0" />
+      </div>
 
       <AdminNav active="users" />
 
       {pendingUsers.length > 0 && (
         <section className="card mt-8 border-amber-200 bg-amber-50/50">
-          <h2 className="text-lg font-medium text-slate-900">
+          <HelpSectionHeading section="admin">
             Väntar på godkännande ({pendingUsers.length})
-          </h2>
+          </HelpSectionHeading>
           <p className="mt-1 text-sm text-slate-600">
             Välj roll och godkänn, eller avvisa/radera kontot.
           </p>
@@ -481,7 +487,7 @@ export default async function AdminUsersPage() {
       )}
 
       <section className="card mt-8">
-        <h2 className="text-lg font-medium text-slate-900">Skapa nytt konto</h2>
+        <HelpSectionHeading section="admin">Skapa nytt konto</HelpSectionHeading>
         <p className="mt-1 text-sm text-slate-600">
           Skapa ett konto direkt med tilldelad roll (godkänns automatiskt).
         </p>

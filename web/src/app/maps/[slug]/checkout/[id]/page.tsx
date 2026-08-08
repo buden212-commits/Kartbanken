@@ -7,6 +7,7 @@ import {
 } from "@/lib/auth/permissions";
 import { getCheckoutById, serializeCheckoutResponse } from "@/lib/checkout/repository";
 import { CheckoutDetailClient } from "@/components/checkout-detail-client";
+import { HelpLinkIcon } from "@/components/help-link-icon";
 import { prisma } from "@/lib/prisma";
 import { Role } from "@/lib/roles";
 
@@ -36,7 +37,10 @@ export default async function CheckoutDetailPage({ params }: PageProps) {
       <Link href={`/maps/${slug}`} className="link-muted text-sm">
         ← {map.title}
       </Link>
-      <h1 className="mt-4 text-2xl font-semibold text-slate-900 sm:text-3xl">Checkout</h1>
+      <div className="mt-4 flex items-start justify-between gap-3">
+        <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">Checkout</h1>
+        <HelpLinkIcon section="checkout" className="mt-1 shrink-0" />
+      </div>
       <p className="mt-2 text-sm text-slate-600">
         {checkout.user.name ?? checkout.user.email} · {map.title}
       </p>

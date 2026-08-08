@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangePasswordForm } from "@/components/change-password-form";
+import { HelpLinkIcon } from "@/components/help-link-icon";
 import { UserNotificationPreferences } from "@/components/user-notification-preferences";
 import { roleDescription, roleLabel } from "@/lib/auth/permissions";
 import { canSubscribeToNotifications } from "@/lib/settings/notification-recipients";
@@ -39,14 +40,17 @@ export function UserProfileDialog({
             <p className="mt-1 text-sm text-slate-600">{displayName}</p>
             {name?.trim() && <p className="text-sm text-slate-500">{email}</p>}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md px-2 py-1 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-700"
-            aria-label="Stäng"
-          >
-            ✕
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            <HelpLinkIcon section="kom-igang" />
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md px-2 py-1 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+              aria-label="Stäng"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         <section className="mt-6 border-t border-slate-200 pt-5">

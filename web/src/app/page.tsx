@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { auth } from "@/auth";
 import { CreateMapForm } from "@/components/create-map-form";
+import { HelpSectionHeading } from "@/components/help-link-icon";
 import { FeatureTipCard } from "@/components/feature-tip-card";
 import { canAdmin } from "@/lib/auth/permissions";
 import { formatBytes, formatDate } from "@/lib/format";
@@ -177,7 +178,7 @@ export default async function HomePage() {
 
       {isAdmin && (
         <section className="card mt-10">
-          <h2 className="text-lg font-medium text-slate-900">Skapa nytt kartområde</h2>
+          <HelpSectionHeading section="omraden">Skapa nytt kartområde</HelpSectionHeading>
           <p className="mt-1 text-sm text-slate-600">
             Endast administratörer kan skapa nya områden.
           </p>

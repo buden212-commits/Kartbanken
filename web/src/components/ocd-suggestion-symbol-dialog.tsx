@@ -14,6 +14,7 @@ import {
   OCAD_POINT_SYMBOL,
   OCAD_RECTANGLE_SYMBOL,
 } from "@/lib/ocad/ocad-object-create";
+import { HelpSectionHeading } from "@/components/help-link-icon";
 
 type Props = {
   layers: OcadMapLayer[];
@@ -120,9 +121,9 @@ export function OcdSuggestionSymbolDialog({ layers, open, onCancel, onConfirm }:
         aria-labelledby="ocd-suggestion-symbol-title"
         className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-white p-5 shadow-xl"
       >
-        <h2 id="ocd-suggestion-symbol-title" className="text-lg font-semibold text-slate-900">
+        <HelpSectionHeading section="kartvy" id="ocd-suggestion-symbol-title">
           Symboler för kartförslag
-        </h2>
+        </HelpSectionHeading>
         <p className="mt-2 text-sm text-slate-600">
           Välj vilka befintliga OCAD-symboler nya objekt ska få. Exportfilen innehåller bara
           kartförslagens markeringar — inte grundkartan. Symboltabellen från källkartan behålls

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { FORGOT_PASSWORD_SUCCESS_MESSAGE } from "@/lib/auth/password-policy";
+import { HelpLinkIcon } from "@/components/help-link-icon";
 
 type Props = {
   onBack: () => void;
@@ -40,10 +41,13 @@ export function ForgotPasswordForm({ onBack }: Props) {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-slate-600">
-        Ange din e-postadress. Om den finns registrerad skickas ett tillfälligt lösenord som
-        gäller i en timme.
-      </p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm text-slate-600">
+          Ange din e-postadress. Om den finns registrerad skickas ett tillfälligt lösenord som
+          gäller i en timme.
+        </p>
+        <HelpLinkIcon section="kom-igang" className="shrink-0" />
+      </div>
       <form onSubmit={(event) => void handleSubmit(event)} className="space-y-4">
         <div>
           <label htmlFor="reset-email" className="form-label">

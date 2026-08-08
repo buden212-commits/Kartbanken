@@ -32,6 +32,7 @@ import {
 } from "@/lib/checkout/integration-warnings";
 
 import { IntegrationWarningsPanel } from "@/components/integration-warnings-panel";
+import { HelpSectionHeading } from "@/components/help-link-icon";
 
 
 
@@ -825,7 +826,7 @@ export function CheckoutDetailClient({
 
         <section className="card">
 
-          <h2 className="text-lg font-medium text-slate-900">Checka in redigerad utcheckning</h2>
+          <HelpSectionHeading section="checkout">Checka in redigerad utcheckning</HelpSectionHeading>
 
           <form onSubmit={handleCheckin} className="mt-4 space-y-3">
 
@@ -959,8 +960,10 @@ export function CheckoutDetailClient({
 
         <section className="card">
 
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-medium text-slate-900">Utcheckningsdiff mot aktuell version</h2>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <HelpSectionHeading section="checkout">Utcheckningsdiff mot aktuell version</HelpSectionHeading>
+            </div>
             <button
               type="button"
               disabled={retryingDiff}
@@ -1043,7 +1046,7 @@ export function CheckoutDetailClient({
 
         <section className="card">
 
-          <h2 className="text-lg font-medium text-slate-900">Bekräfta integration</h2>
+          <HelpSectionHeading section="checkout">Bekräfta integration</HelpSectionHeading>
 
           <p className="mt-2 text-sm text-slate-600">
 
@@ -1105,7 +1108,7 @@ export function CheckoutDetailClient({
 
         <section className="card border-ifk-blue/20">
 
-          <h2 className="text-lg font-medium text-slate-900">Admin: bekräfta och integrera</h2>
+          <HelpSectionHeading section="checkout">Admin: bekräfta och integrera</HelpSectionHeading>
 
           <p className="mt-2 text-sm text-slate-600">
 

@@ -7,6 +7,14 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-08-08",
+    title: "Hjälplänkar i formulär och dialoger",
+    items: [
+      "«?»-ikon uppe till höger i formulär och dialoger länkar till relevant avsnitt i hjälpen",
+      "Gäller t.ex. uppladdning, checkout, kartförslag, banor, export, verifiera och admin",
+    ],
+  },
+  {
     date: "2026-08-07",
     title: "Startsidan — tips om funktioner",
     items: [

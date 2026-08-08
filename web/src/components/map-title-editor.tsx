@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { MapDeleteButton } from "@/components/map-delete-button";
+import { HelpLinkIcon } from "@/components/help-link-icon";
 
 type Props = {
   mapSlug: string;
@@ -119,9 +120,12 @@ export function MapTitleEditor({
 
   return (
     <form onSubmit={(e) => void handleSave(e)} className="max-w-xl">
-      <label htmlFor="map-title" className="form-label">
-        Område
-      </label>
+      <div className="flex items-center justify-between gap-2">
+        <label htmlFor="map-title" className="form-label">
+          Område
+        </label>
+        <HelpLinkIcon section="omraden" />
+      </div>
       <input
         id="map-title"
         type="text"
