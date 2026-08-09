@@ -1,0 +1,25 @@
+---
+description: Uppdatera hjälp och release notes vid commit av app-ändringar
+alwaysApply: true
+---
+
+# Uppdatera hjälp vid commit
+
+När du committar ändringar i webbappen (`web/src/` eller `web/prisma/migrations/`) ska hjälpen **alltid** uppdateras i samma commit.
+
+## Obligatoriska filer
+
+1. **`web/src/lib/help/release-notes.ts`** — lägg till eller uppdatera posten längst upp med datum, titel och punktlista över användarvändiga ändringar.
+2. **`web/src/components/help-page-content.tsx`** — uppdatera relevanta avsnitt (Kom igång, Admin, FAQ m.m.) om beteendet eller gränssnittet ändrats.
+
+## Innan commit
+
+- Kontrollera att minst en hjälpfil ingår i commiten.
+- Repot har pre-commit-hook som blockerar commit utan hjälpuppdatering (`npm run hooks:install` aktiverar den).
+- Vid ren dokumentations-/konfigurationscommit utan app-kod behövs ingen hjälpuppdatering.
+
+## Release notes
+
+- Nyast först, ISO-datum `YYYY-MM-DD`.
+- Skriv för slutanvändare, inte tekniska implementationer.
+- Gruppera relaterade ändringar under en titel per deploy/commit när det är rimligt.

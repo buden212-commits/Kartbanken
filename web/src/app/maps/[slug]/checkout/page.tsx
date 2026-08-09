@@ -5,6 +5,7 @@ import { canCheckout } from "@/lib/auth/permissions";
 import { findActiveCheckoutsForMap, getHeadVersionId } from "@/lib/checkout/repository";
 import { serializeCheckoutResponse } from "@/lib/checkout/repository";
 import { CheckoutPageClient } from "@/components/checkout-page-client";
+import { HelpLinkIcon } from "@/components/help-link-icon";
 import { prisma } from "@/lib/prisma";
 
 type PageProps = { params: Promise<{ slug: string }> };
@@ -31,7 +32,10 @@ export default async function CheckoutCreatePage({ params }: PageProps) {
       <Link href={`/maps/${slug}`} className="link-muted text-sm">
         ← {map.title}
       </Link>
-      <h1 className="mt-4 text-2xl font-semibold text-slate-900 sm:text-3xl">Checka ut område</h1>
+      <div className="mt-4 flex items-start justify-between gap-3">
+        <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">Checka ut område</h1>
+        <HelpLinkIcon section="checkout" className="mt-1 shrink-0" />
+      </div>
       <p className="mt-2 text-sm text-slate-600">
         Rita ett område på kartan. Befintliga checkouts visas som färgade ytor.
       </p>

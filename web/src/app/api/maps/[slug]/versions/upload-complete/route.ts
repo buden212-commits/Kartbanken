@@ -1,10 +1,12 @@
 import { logAction } from "@/lib/audit";
 import { requireUpload } from "@/lib/auth/api";
-import { notifyAdminOfNewUpload } from "@/lib/email";
+import { queueNotifyAdminOfNewUpload } from "@/lib/email";
 import { runAfterResponse } from "@/lib/background";
 import { sha256 } from "@/lib/hash";
+import { assertMapAllowsUpload, checkVersionUploadGuards } from "@/lib/maps/upload-guards";
 import { processVersionAfterUpload } from "@/lib/ocad/process-version";
 import { prisma } from "@/lib/prisma";
+import type { Role as RoleType } from "@/lib/roles";
 import {
   deleteFile,
   fileExists,
@@ -35,7 +37,10 @@ export async function POST(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Ange versionId" }, { status: 400 });
   }
 
-  const map = await prisma.mapFile.findUnique({ where: { slug } });
+  const map = await prisma.mapFile.findUnique({
+    where: { slug },
+    select: { id: true, title: true, slug: true, archivedAt: true },
+  });
   if (!map) {
     return NextResponse.json({ error: "Kartfil hittades inte" }, { status: 404 });
   }
@@ -59,6 +64,20 @@ export async function POST(request: Request, { params }: RouteParams) {
       data: { storagePath: blobUrl },
     });
     storageRef = blobUrl;
+  }
+
+  const forceDespiteCheckouts = body.forceDespiteCheckouts === true;
+  const forceDuplicate = body.forceDuplicate === true;
+
+  const archiveGuard = await assertMapAllowsUpload(
+    map.id,
+    map.archivedAt,
+    session.user.role as RoleType,
+  );
+  if (!archiveGuard.ok) {
+    await deleteFile(storageRef);
+    await prisma.mapVersion.delete({ where: { id: versionId } });
+    return NextResponse.json({ error: archiveGuard.error, code: archiveGuard.code }, { status: 403 });
   }
 
   const exists = await fileExists(storageRef);
@@ -99,6 +118,24 @@ export async function POST(request: Request, { params }: RouteParams) {
     orderBy: { versionNumber: "desc" },
   });
 
+  const uploadGuard = await checkVersionUploadGuards(map.id, contentHash, latest, {
+    role: session.user.role as RoleType,
+    forceDespiteCheckouts,
+    forceDuplicate,
+  });
+  if (!uploadGuard.ok) {
+    await deleteFile(storageRef);
+    await prisma.mapVersion.delete({ where: { id: versionId } });
+    return NextResponse.json(
+      {
+        error: uploadGuard.error,
+        code: uploadGuard.code,
+        activeCheckoutCount: uploadGuard.activeCheckoutCount,
+      },
+      { status: 409 },
+    );
+  }
+
   await prisma.mapVersion.update({
     where: { id: versionId },
     data: { contentHash },
@@ -114,7 +151,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     processVersionAfterUpload(map.id, version.id, latest?.id ?? null),
   );
 
-  void notifyAdminOfNewUpload({
+  queueNotifyAdminOfNewUpload({
     uploader: { name: session.user.name, email: session.user.email },
     map: { title: map.title, slug: map.slug },
     version: {
@@ -124,8 +161,6 @@ export async function POST(request: Request, { params }: RouteParams) {
       comment: version.comment,
       storagePath: storageRef,
     },
-  }).catch((err) => {
-    console.error("[email] Failed to send upload notification:", err);
   });
 
   return NextResponse.json(

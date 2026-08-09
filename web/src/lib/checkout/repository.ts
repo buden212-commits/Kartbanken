@@ -161,12 +161,49 @@ export async function confirmCheckoutByUser(checkoutId: string) {
   });
 }
 
+export async function findCheckoutHistoryForMap(mapFileId: string, limit = 20) {
+  return prisma.mapCheckout.findMany({
+    where: {
+      mapFileId,
+      status: { in: [CheckoutStatus.INTEGRATED, CheckoutStatus.CANCELLED] },
+    },
+    select: checkoutWithUserSelect,
+    orderBy: { updatedAt: "desc" },
+    take: limit,
+  });
+}
+
+export async function findPendingAdminCheckouts() {
+  return prisma.mapCheckout.findMany({
+    where: { status: CheckoutStatus.PENDING_ADMIN_CONFIRM },
+    select: {
+      id: true,
+      mapFileId: true,
+      status: true,
+      userConfirmedAt: true,
+      createdAt: true,
+      user: { select: { id: true, name: true, email: true } },
+      mapFile: { select: { slug: true, title: true } },
+    },
+    orderBy: { userConfirmedAt: "asc" },
+  });
+}
+
 export async function findCheckoutsNeedingReminder(olderThan: Date) {
   return prisma.mapCheckout.findMany({
     where: {
-      status: CheckoutStatus.ACTIVE,
-      createdAt: { lt: olderThan },
-      reminderSentAt: null,
+      OR: [
+        {
+          status: CheckoutStatus.ACTIVE,
+          createdAt: { lt: olderThan },
+          reminderSentAt: null,
+        },
+        {
+          status: CheckoutStatus.PENDING_ADMIN_CONFIRM,
+          userConfirmedAt: { lt: olderThan },
+          reminderSentAt: null,
+        },
+      ],
     },
     select: checkoutWithUserSelect,
   });
@@ -189,7 +226,6 @@ export type CancelCheckoutInput = {
 const CANCELLABLE_STATUSES: CheckoutStatus[] = [
   CheckoutStatus.ACTIVE,
   CheckoutStatus.CHECKED_IN,
-  CheckoutStatus.PENDING_USER_CONFIRM,
   CheckoutStatus.PENDING_ADMIN_CONFIRM,
 ];
 

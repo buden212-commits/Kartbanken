@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { auth } from "@/auth";
+import { CreateMapForm } from "@/components/create-map-form";
+import { HelpSectionHeading } from "@/components/help-link-icon";
+import { FeatureTipCard } from "@/components/feature-tip-card";
 import { canAdmin } from "@/lib/auth/permissions";
 import { formatBytes, formatDate } from "@/lib/format";
+import { pickFeatureTip } from "@/lib/help/feature-tips";
 import { versionVisibilityFilter } from "@/lib/maps/version-query";
 import { prisma } from "@/lib/prisma";
-import { CreateMapForm } from "@/components/create-map-form";
 
 export default async function HomePage() {
   const session = await auth();
@@ -12,8 +15,14 @@ export default async function HomePage() {
   const visibilityFilter = versionVisibilityFilter(session?.user.role);
 
   const maps = await prisma.mapFile.findMany({
+    where: isAdmin ? undefined : { archivedAt: null },
     orderBy: { title: "asc" },
-    include: {
+    select: {
+      id: true,
+      slug: true,
+      title: true,
+      description: true,
+      archivedAt: true,
       versions: {
         where: visibilityFilter,
         orderBy: { versionNumber: "desc" },
@@ -36,6 +45,12 @@ export default async function HomePage() {
     : [];
   const uploaderMap = new Map(uploaders.map((u) => [u.id, u]));
 
+  const today = new Date().toISOString().slice(0, 10);
+  const featureTip =
+    session?.user.role && !(isAdmin && maps.length === 0)
+      ? pickFeatureTip(session.user.role, `${session.user.id}:${today}`)
+      : null;
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -46,6 +61,12 @@ export default async function HomePage() {
           </h1>
         </div>
       </div>
+
+      {featureTip && (
+        <section className="mt-6">
+          <FeatureTipCard tip={featureTip} />
+        </section>
+      )}
 
       <section className="mt-8">
         {maps.length === 0 ? (
@@ -77,6 +98,11 @@ export default async function HomePage() {
                     >
                       {map.title}
                     </Link>
+                    {map.archivedAt && isAdmin && (
+                      <span className="ml-2 rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-600">
+                        Arkiverad
+                      </span>
+                    )}
                     {map.description && (
                       <p className="mt-1 text-sm text-slate-500">{map.description}</p>
                     )}
@@ -135,6 +161,11 @@ export default async function HomePage() {
                           <Link href={`/maps/${map.slug}`} className="link-primary">
                             {map.title}
                           </Link>
+                          {map.archivedAt && isAdmin && (
+                            <span className="ml-2 rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-600">
+                              Arkiverad
+                            </span>
+                          )}
                           {map.description && (
                             <p className="mt-0.5 text-xs text-slate-500">{map.description}</p>
                           )}
@@ -163,7 +194,7 @@ export default async function HomePage() {
 
       {isAdmin && (
         <section className="card mt-10">
-          <h2 className="text-lg font-medium text-slate-900">Skapa nytt kartområde</h2>
+          <HelpSectionHeading section="omraden">Skapa nytt kartområde</HelpSectionHeading>
           <p className="mt-1 text-sm text-slate-600">
             Endast administratörer kan skapa nya områden.
           </p>

@@ -1,11 +1,13 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { AdminNav } from "@/components/admin-nav";
-import { AdminUserEditForm } from "@/components/admin-user-edit-form";
+import { AdminUserEditForm, AdminUserEditTableRow } from "@/components/admin-user-edit-form";
 import { AdminUserNotificationToggle } from "@/components/admin-user-notification-toggle";
+import { HelpLinkIcon, HelpSectionHeading } from "@/components/help-link-icon";
 import { logAction } from "@/lib/audit";
 import { hashPassword } from "@/lib/auth/password";
 import { canAdmin, roleLabel } from "@/lib/auth/permissions";
+import { queueNotifyUserApproved } from "@/lib/email";
 import { formatDate } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import { Role, type Role as RoleType } from "@/lib/roles";
@@ -118,7 +120,7 @@ async function approveUser(formData: FormData) {
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, role: true },
+    select: { id: true, role: true, email: true, name: true },
   });
   if (!user || user.role !== Role.PENDING) return;
 
@@ -130,6 +132,8 @@ async function approveUser(formData: FormData) {
       approvedById: session.user.id,
     },
   });
+
+  queueNotifyUserApproved({ email: user.email, name: user.name, role });
 
   await logAction(session.user.id, "ROLE_CHANGE", "User", userId, {
     from: Role.PENDING,
@@ -307,6 +311,13 @@ async function updateUser(formData: FormData): Promise<{ ok: true } | { ok: fals
     data,
   });
 
+  if (
+    becomingApproved &&
+    (user.role === Role.PENDING || user.role === Role.REJECTED)
+  ) {
+    queueNotifyUserApproved({ email, name, role: nextRole });
+  }
+
   await logAction(session.user.id, "USER_UPDATED", "User", userId, {
     previous: {
       name: user.name,
@@ -390,14 +401,89 @@ export default async function AdminUsersPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
       <p className="page-eyebrow">Administration</p>
-      <h1 className="mt-2 text-2xl font-semibold text-slate-900">
-        Användarhantering
-        <PendingBadge count={pendingUsers.length} />
-      </h1>
-      <p className="mt-2 text-sm text-slate-600">
-        Godkänn registrerade konton, skapa konton manuellt eller redigera befintliga användare.
-        Notisprenumeration för uppladdade kartfiler hanteras per användare. Lösenord visas aldrig.
-      </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="mt-2 text-2xl font-semibold text-slate-900">
+            Användarhantering
+            <PendingBadge count={pendingUsers.length} />
+          </h1>
+          <p className="mt-2 text-sm text-slate-600">
+            Godkänn registrerade konton, skapa konton manuellt eller redigera befintliga användare.
+            Notisprenumeration för uppladdade kartfiler hanteras per användare. Lösenord visas aldrig.
+          </p>
+        </div>
+        <HelpLinkIcon section="admin" className="mt-3 shrink-0" />
+      </div>
+
+      <AdminNav active="users" />
+
+      {pendingUsers.length > 0 && (
+        <section className="card mt-8 border-amber-200 bg-amber-50/50">
+          <HelpSectionHeading section="admin">
+            Väntar på godkännande ({pendingUsers.length})
+          </HelpSectionHeading>
+          <p className="mt-1 text-sm text-slate-600">
+            Välj roll och godkänn, eller avvisa/radera kontot.
+          </p>
+
+          <ul className="mt-4 space-y-3 md:hidden">
+            {pendingUsers.map((user) => (
+              <li
+                key={user.id}
+                className="rounded-xl border border-amber-200 bg-white p-4 shadow-sm"
+              >
+                <p className="font-medium text-slate-900">{user.name ?? "—"}</p>
+                <p className="mt-1 break-all text-sm text-slate-600">{user.email}</p>
+                <p className="mt-2 text-xs text-slate-500">
+                  Registrerad {user.createdAt.toLocaleDateString("sv-SE")} · Senaste inloggning{" "}
+                  {formatLastLogin(user.lastLoginAt)}
+                </p>
+                <div className="mt-3 space-y-2">
+                  <PendingActions user={user} />
+                  <AdminUserEditForm
+                    user={user}
+                    currentUserId={session.user.id}
+                    updateUser={updateUser}
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          <div className="mt-4 hidden overflow-x-auto rounded-xl border border-amber-200 bg-white shadow-sm md:block">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-500">
+                  <th className="px-4 pb-2 pt-3 pr-4 font-medium">Namn</th>
+                  <th className="pb-2 pt-3 pr-4 font-medium">E-post</th>
+                  <th className="pb-2 pt-3 pr-4 font-medium">Registrerad</th>
+                  <th className="pb-2 pt-3 pr-4 font-medium">Senaste inloggning</th>
+                  <th className="px-4 pb-2 pt-3 font-medium">Åtgärder</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingUsers.map((user) => (
+                  <AdminUserEditTableRow
+                    key={user.id}
+                    colSpan={5}
+                    user={user}
+                    currentUserId={session.user.id}
+                    updateUser={updateUser}
+                    actionsCell={<PendingActions user={user} />}
+                  >
+                    <td className="px-4 py-2 pr-4">{user.name ?? "—"}</td>
+                    <td className="py-2 pr-4">{user.email}</td>
+                    <td className="py-2 pr-4 text-slate-500">
+                      {user.createdAt.toLocaleDateString("sv-SE")}
+                    </td>
+                    <td className="py-2 pr-4 text-slate-500">{formatLastLogin(user.lastLoginAt)}</td>
+                  </AdminUserEditTableRow>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       <AdminNav active="users" />
 
@@ -471,7 +557,7 @@ export default async function AdminUsersPage() {
       )}
 
       <section className="card mt-8">
-        <h2 className="text-lg font-medium text-slate-900">Skapa nytt konto</h2>
+        <HelpSectionHeading section="admin">Skapa nytt konto</HelpSectionHeading>
         <p className="mt-1 text-sm text-slate-600">
           Skapa ett konto direkt med tilldelad roll (godkänns automatiskt).
         </p>
@@ -583,7 +669,13 @@ export default async function AdminUsersPage() {
             </thead>
             <tbody>
               {otherUsers.map((user) => (
-                <tr key={user.id} className="border-b border-slate-100 last:border-0 align-top">
+                <AdminUserEditTableRow
+                  key={user.id}
+                  colSpan={7}
+                  user={user}
+                  currentUserId={session.user.id}
+                  updateUser={updateUser}
+                >
                   <td className="px-4 py-3 pr-4">{user.name ?? "—"}</td>
                   <td className="py-3 pr-4">{user.email}</td>
                   <td className="py-3 pr-4">
@@ -608,14 +700,7 @@ export default async function AdminUsersPage() {
                       <span className="text-xs text-slate-400">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-3">
-                    <AdminUserEditForm
-                      user={user}
-                      currentUserId={session.user.id}
-                      updateUser={updateUser}
-                    />
-                  </td>
-                </tr>
+                </AdminUserEditTableRow>
               ))}
             </tbody>
           </table>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { DiffMapPanel, type MapDrawPointerHandlers } from "@/components/diff-map-panel";
 import { CourseControlList } from "@/components/course/course-control-list";
 import { CoursePdfPanel } from "@/components/course/course-pdf-panel";
@@ -13,10 +13,12 @@ import {
   TOOL_LABELS,
 } from "@/components/course/course-symbol-panel";
 import { CourseTextModal } from "@/components/course/course-text-modal";
+import { HelpLinkIcon } from "@/components/help-link-icon";
 import type { CourseSummary, EditorObject, EditorTool } from "@/lib/course/types";
 import { CourseObjectType } from "@/lib/course/types";
 import {
   defaultControlNumberForControl,
+  ensureControlNumbers,
   findControlNumberObject,
   getControlsSorted,
   isControlNumberObject,
@@ -29,6 +31,7 @@ import {
   courseObjectsBbox,
   formatCourseLengthKm,
   hitTestTopObject,
+  hitTestTopObjectForDelete,
   objectCentroid,
   renderCourseOverlaySvg,
   renumberSortOrder,
@@ -50,6 +53,42 @@ type Props = {
 
 function newClientId(): string {
   return `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function CourseNameInput({
+  value,
+  disabled,
+  onLiveChange,
+  onDirty,
+}: {
+  value: string;
+  disabled: boolean;
+  onLiveChange: (name: string) => void;
+  onDirty: () => void;
+}) {
+  const [local, setLocal] = useState(value);
+
+  useEffect(() => {
+    setLocal(value);
+  }, [value]);
+
+  function handleChange(e: ChangeEvent<HTMLInputElement>) {
+    const next = e.target.value;
+    setLocal(next);
+    onLiveChange(next);
+    onDirty();
+  }
+
+  return (
+    <input
+      type="text"
+      value={local}
+      onChange={handleChange}
+      disabled={disabled}
+      className="rounded border border-slate-300 px-2 py-1 text-sm"
+      placeholder="Bannamn"
+    />
+  );
 }
 
 function detailToEditorObjects(
@@ -80,6 +119,7 @@ export function CourseEditorClient({
   const router = useRouter();
   const [courseId, setCourseId] = useState<string | null>(initialCourseId ?? null);
   const [courseName, setCourseName] = useState("Ny bana");
+  const courseNameRef = useRef("Ny bana");
   const [isPublic, setIsPublic] = useState(false);
   const [objects, setObjects] = useState<EditorObject[]>([]);
   const [courses, setCourses] = useState<CourseSummary[]>([]);
@@ -151,6 +191,7 @@ export function CourseEditorClient({
       const loadedObjects = migrateLegacyControlNumbers(detailToEditorObjects(data.objects));
       setCourseId(data.id);
       setCourseName(data.name);
+      courseNameRef.current = data.name;
       setIsPublic(data.isPublic);
       setObjects(loadedObjects);
       setDirty(false);
@@ -225,7 +266,7 @@ export function CourseEditorClient({
           next = next.filter((o) => o.clientId !== linked.clientId);
         }
       }
-      return resyncControlNumberIndices(renumberSortOrder(next));
+      return ensureControlNumbers(renumberSortOrder(next));
     });
     setSelectedId(null);
     setDirty(true);
@@ -271,7 +312,7 @@ export function CourseEditorClient({
       if (tool === "delete") {
         const vb = parseViewBoxString(viewBoxRef.current);
         const tol = computeHitTolerance(vb?.width ?? 1000, vb?.height ?? 1000);
-        const hit = hitTestTopObject(geo, objects, tol);
+        const hit = hitTestTopObjectForDelete(geo, objects, tol);
         if (hit && window.confirm("Radera detta objekt?")) {
           removeObject(hit.clientId);
         }
@@ -490,7 +531,7 @@ export function CourseEditorClient({
         const createRes = await fetch(`/api/maps/${mapSlug}/courses`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: courseName.trim() || "Ny bana", isPublic }),
+          body: JSON.stringify({ name: courseNameRef.current.trim() || "Ny bana", isPublic }),
         });
         if (!createRes.ok) {
           const data = await createRes.json().catch(() => ({}));
@@ -503,7 +544,7 @@ export function CourseEditorClient({
         const patchRes = await fetch(`/api/maps/${mapSlug}/courses/${id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: courseName.trim(), isPublic }),
+          body: JSON.stringify({ name: courseNameRef.current.trim(), isPublic }),
         });
         if (!patchRes.ok) {
           const data = await patchRes.json().catch(() => ({}));
@@ -548,6 +589,7 @@ export function CourseEditorClient({
     if (dirty && !window.confirm("Osparade ändringar går förlorade. Fortsätta?")) return;
     setCourseId(null);
     setCourseName("Ny bana");
+    courseNameRef.current = "Ny bana";
     setIsPublic(false);
     setObjects([]);
     setDirty(false);
@@ -568,10 +610,21 @@ export function CourseEditorClient({
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error ?? "Radering misslyckades");
       }
-      router.push(`/maps/${mapSlug}`);
+      setCourseId(null);
+      setCourseName("Ny bana");
+      courseNameRef.current = "Ny bana";
+      setIsPublic(false);
+      setObjects([]);
+      setDirty(false);
+      setSelectedId(null);
+      setLineDraft([]);
+      setPolygonDraft([]);
+      setSuccess("Banan raderades");
+      await loadCourses();
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Radering misslyckades");
+    } finally {
       setDeleting(false);
     }
   }
@@ -662,6 +715,7 @@ export function CourseEditorClient({
   const toolbar = (
     <div className="flex flex-wrap items-center gap-2">
       <span className="text-sm font-medium text-slate-800">Lägg bana</span>
+      <HelpLinkIcon section="bana" />
       <span className="text-xs text-slate-500">· Aktuell version v{headVersionNumber}</span>
       <span className="text-xs font-medium text-slate-700">Banlängd: {courseLengthLabel}</span>
       {(["draw", "move", "delete"] as EditorTool[]).map((t) => (
@@ -702,16 +756,13 @@ export function CourseEditorClient({
 
   const saveBar = (
     <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2">
-      <input
-        type="text"
+      <CourseNameInput
         value={courseName}
-        onChange={(e) => {
-          setCourseName(e.target.value);
-          setDirty(true);
-        }}
         disabled={!canEdit}
-        className="rounded border border-slate-300 px-2 py-1 text-sm"
-        placeholder="Bannamn"
+        onLiveChange={(name) => {
+          courseNameRef.current = name;
+        }}
+        onDirty={() => setDirty(true)}
       />
       <label className="flex items-center gap-1 text-xs text-slate-600">
         <input
@@ -841,7 +892,6 @@ export function CourseEditorClient({
         <CourseSymbolPanel
           selectedNr={selectedSymbol}
           onSelect={setSelectedSymbol}
-          activeGeometry={activeGeometry}
         />
       </div>
 

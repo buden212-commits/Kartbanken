@@ -22,6 +22,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const user = await prisma.user.findUnique({ where: { email } });
         if (!user?.passwordHash) return null;
 
+        if (user.mustChangePassword && user.passwordExpiresAt && new Date() > user.passwordExpiresAt) {
+          return null;
+        }
+
         const valid = await verifyPassword(password, user.passwordHash);
         if (!valid) return null;
 
@@ -44,6 +48,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           email: user.email,
           name: user.name,
           role: user.role as RoleType,
+          mustChangePassword: user.mustChangePassword,
         };
       },
     }),
@@ -52,17 +57,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn: "/login",
   },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id;
+        token.name = user.name;
+        token.email = user.email;
         token.role = (user as { role?: RoleType }).role ?? Role.PENDING;
+        token.mustChangePassword = (user as { mustChangePassword?: boolean }).mustChangePassword ?? false;
+      }
+      if (trigger === "update" && session?.user && "mustChangePassword" in session.user) {
+        token.mustChangePassword = session.user.mustChangePassword === true;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
+        session.user.name = token.name ?? null;
+        if (token.email) {
+          session.user.email = token.email;
+        }
         session.user.role = (token.role as RoleType) ?? Role.PENDING;
+        session.user.mustChangePassword = token.mustChangePassword === true;
       }
       return session;
     },

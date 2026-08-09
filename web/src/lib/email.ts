@@ -10,7 +10,11 @@ import {
   resolveSmtpConfig,
   type SmtpConfig,
 } from "@/lib/settings/app-settings";
+import { runAfterResponse } from "@/lib/background";
+import { logEmailSent, type EmailSentAuditMetadata } from "@/lib/audit";
+import { roleDescription, roleLabel } from "@/lib/auth/permissions";
 import { readStoredFile } from "@/lib/storage";
+import { Role, type Role as RoleType } from "@/lib/roles";
 
 const APP_NAME = "IFK Mora Kartor";
 
@@ -79,6 +83,24 @@ export async function isEmailConfigured(): Promise<boolean> {
 
 export async function getAdminNotificationEmail(): Promise<string | null> {
   return resolveAdminNotificationEmail();
+}
+
+export function formatSmtpErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (/application-specific password required|InvalidSecondFactor|534-5\.7\.9/i.test(message)) {
+    return [
+      "Gmail kräver ett app-lösenord — vanligt kontolösenord fungerar inte.",
+      "Skapa ett under Google-konto → Säkerhet → Verifiering i två steg → App-lösenord.",
+      "Klistra in app-lösenordet (16 tecken) i fältet App-lösenord och spara.",
+    ].join(" ");
+  }
+
+  if (/535|authentication failed|invalid credentials|username and password not accepted/i.test(message)) {
+    return "SMTP-inloggning misslyckades. Kontrollera Gmail-adress och app-lösenord.";
+  }
+
+  return message;
 }
 
 function formatFromAddress(smtpUser: string): string {
@@ -182,20 +204,46 @@ async function sendMailToNotificationRecipients(
   await Promise.all(recipients.map((to) => sendMail({ ...options, to })));
 }
 
-export async function sendTestEmail(to: string): Promise<void> {
+const TEST_ATTACHMENT_FILENAME = "test-bifogning.ocd";
+
+function buildTestAttachment(): MailAttachment {
+  return {
+    filename: TEST_ATTACHMENT_FILENAME,
+    content: Buffer.from(
+      "IFK Mora Kartor — testbilaga. Detta är inte en riktig OCAD-fil, utan verifierar att bifogningar fungerar.\n",
+      "utf-8",
+    ),
+    contentType: "application/octet-stream",
+  };
+}
+
+export async function sendTestEmail(
+  to: string,
+  options?: { withAttachment?: boolean; triggeredByUserId?: string | null },
+): Promise<void> {
   const baseUrl = getAppBaseUrl();
-  const subject = `Testmail — ${APP_NAME}`;
-  const text = [
+  const withAttachment = options?.withAttachment === true;
+  const subject = withAttachment
+    ? `Testmail med bifogad fil — ${APP_NAME}`
+    : `Testmail — ${APP_NAME}`;
+  const textLines = [
     `Detta är ett testmail från ${APP_NAME}.`,
     "",
-    "Om du läser detta fungerar SMTP-inställningarna.",
+    withAttachment
+      ? "En testfil (.ocd) är bifogad för att verifiera att bilagor fungerar."
+      : "Om du läser detta fungerar SMTP-inställningarna.",
     "",
     `Webbplats: ${baseUrl}`,
-  ].join("\n");
+  ];
+  const text = textLines.join("\n");
 
   const bodyHtml = `
     <p style="margin:0 0 16px;">Detta är ett testmail från ${escapeHtml(APP_NAME)}.</p>
-    <p style="margin:0 0 16px;">Om du läser detta fungerar SMTP-inställningarna.</p>
+    <p style="margin:0 0 16px;">${
+      withAttachment
+        ? "En testfil (.ocd) är bifogad för att verifiera att bilagor fungerar."
+        : "Om du läser detta fungerar SMTP-inställningarna."
+    }</p>
     <p style="margin:0;">
       <a href="${escapeHtml(baseUrl)}" style="color:#2563eb;text-decoration:none;">${escapeHtml(baseUrl.replace(/^https?:\/\//, ""))}</a>
     </p>
@@ -206,7 +254,248 @@ export async function sendTestEmail(to: string): Promise<void> {
     bodyHtml,
   });
 
-  await sendMail({ to, subject, text, html });
+  await sendMail({
+    to,
+    subject,
+    text,
+    html,
+    attachments: withAttachment ? [buildTestAttachment()] : undefined,
+  });
+
+  if (withAttachment) {
+    await recordEmailAudit(
+      {
+        kind: "test",
+        subject,
+        withAttachment: true,
+        attachmentFilename: TEST_ATTACHMENT_FILENAME,
+        recipientsWithAttachment: [to],
+        recipientsWithoutAttachment: [],
+      },
+      { userId: options?.triggeredByUserId ?? null },
+    );
+  }
+}
+
+export async function sendTemporaryPasswordEmail(options: {
+  to: string;
+  name: string | null | undefined;
+  temporaryPassword: string;
+  expiresAt: Date;
+}): Promise<void> {
+  const loginUrl = `${getAppBaseUrl()}/login`;
+  const expiresText = options.expiresAt.toLocaleString("sv-SE", {
+    timeZone: "Europe/Stockholm",
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+  const greeting = options.name?.trim() ? `Hej ${options.name.trim()}!` : "Hej!";
+  const subject = `Tillfälligt lösenord — ${APP_NAME}`;
+
+  const text = [
+    greeting,
+    "",
+    "Du har begärt återställning av lösenord.",
+    "",
+    `Tillfälligt lösenord: ${options.temporaryPassword}`,
+    `Giltigt till: ${expiresText}`,
+    "",
+    "Logga in och byt till ett eget lösenord innan tiden går ut.",
+    "",
+    `Logga in: ${loginUrl}`,
+  ].join("\n");
+
+  const bodyHtml = `
+    <p style="margin:0 0 16px;">${escapeHtml(greeting)}</p>
+    <p style="margin:0 0 16px;">Du har begärt återställning av lösenord. Använd lösenordet nedan för att logga in.</p>
+    <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 20px;width:100%;font-size:15px;">
+      <tr>
+        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;width:140px;">Tillfälligt lösenord</td>
+        <td style="padding:4px 0;color:#0f172a;font-family:monospace;font-size:16px;">${escapeHtml(options.temporaryPassword)}</td>
+      </tr>
+      <tr>
+        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;">Giltigt till</td>
+        <td style="padding:4px 0;color:#0f172a;">${escapeHtml(expiresText)}</td>
+      </tr>
+    </table>
+    <p style="margin:0 0 16px;">Du måste byta till ett eget lösenord direkt efter inloggning.</p>
+    <p style="margin:0;">
+      <a href="${escapeHtml(loginUrl)}" style="display:inline-block;padding:10px 18px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:500;">Logga in</a>
+    </p>
+  `.trim();
+
+  const html = buildHtmlEmail({ title: subject, bodyHtml });
+
+  await sendMail({ to: options.to, subject, text, html });
+}
+
+export async function notifyUserApproved(user: {
+  email: string;
+  name: string | null | undefined;
+  role: string;
+}): Promise<void> {
+  if (!(await isEmailConfigured())) {
+    console.warn("[email] SMTP not configured — skipping account approved notification");
+    return;
+  }
+
+  const role = user.role as RoleType;
+  if (role !== Role.READER && role !== Role.EDITOR && role !== Role.ADMIN) {
+    return;
+  }
+
+  const loginUrl = `${getAppBaseUrl()}/login`;
+  const greeting = user.name?.trim() ? `Hej ${user.name.trim()}!` : "Hej!";
+  const permissionLabel = roleLabel(role);
+  const permissionText = roleDescription(role);
+  const subject = `Ditt konto är godkänt — ${APP_NAME}`;
+
+  const text = [
+    greeting,
+    "",
+    `Ditt konto på ${APP_NAME} har godkänts och du kan nu logga in.`,
+    "",
+    `Behörighet: ${permissionLabel}`,
+    permissionText,
+    "",
+    `Logga in: ${loginUrl}`,
+  ].join("\n");
+
+  const bodyHtml = `
+    <p style="margin:0 0 16px;">${escapeHtml(greeting)}</p>
+    <p style="margin:0 0 16px;">Ditt konto har godkänts och du kan nu logga in i ${escapeHtml(APP_NAME)}.</p>
+    <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 20px;width:100%;font-size:15px;">
+      <tr>
+        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;width:100px;">Behörighet</td>
+        <td style="padding:4px 0;color:#0f172a;font-weight:600;">${escapeHtml(permissionLabel)}</td>
+      </tr>
+      <tr>
+        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;">Du kan</td>
+        <td style="padding:4px 0;color:#0f172a;">${escapeHtml(permissionText)}</td>
+      </tr>
+    </table>
+    <p style="margin:0;">
+      <a href="${escapeHtml(loginUrl)}" style="display:inline-block;padding:10px 18px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:500;">Logga in</a>
+    </p>
+  `.trim();
+
+  const html = buildHtmlEmail({ title: subject, bodyHtml });
+
+  await sendMail({ to: user.email, subject, text, html });
+}
+
+export async function notifyNewMapSuggestion(input: {
+  mapTitle: string;
+  mapSlug: string;
+  suggestionId: string;
+  versionNumber: number;
+  categoryLabel: string;
+  comment: string;
+  authorName: string | null;
+  authorEmail: string;
+}): Promise<void> {
+  if (!(await isEmailConfigured())) {
+    console.warn("[email] SMTP not configured — skipping map suggestion notification");
+    return;
+  }
+
+  const url = `${getAppBaseUrl()}/maps/${input.mapSlug}/suggestions/${input.suggestionId}`;
+  const author = input.authorName?.trim() || input.authorEmail;
+  const subject = `Nytt kartförslag — ${input.mapTitle}`;
+  const text = [
+    `${author} har lämnat ett kartförslag på ${input.mapTitle} (v${input.versionNumber}).`,
+    "",
+    `Kategori: ${input.categoryLabel}`,
+    input.comment,
+    "",
+    `Visa förslag: ${url}`,
+  ].join("\n");
+
+  const bodyHtml = `
+    <p style="margin:0 0 16px;">${escapeHtml(author)} har lämnat ett kartförslag på <strong>${escapeHtml(input.mapTitle)}</strong> (v${input.versionNumber}).</p>
+    <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 20px;width:100%;font-size:15px;">
+      <tr>
+        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;width:90px;">Kategori</td>
+        <td style="padding:4px 0;color:#0f172a;">${escapeHtml(input.categoryLabel)}</td>
+      </tr>
+      <tr>
+        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;">Kommentar</td>
+        <td style="padding:4px 0;color:#0f172a;">${escapeHtml(input.comment)}</td>
+      </tr>
+    </table>
+    <p style="margin:0;">
+      <a href="${escapeHtml(url)}" style="display:inline-block;padding:10px 18px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:500;">Visa kartförslag</a>
+    </p>
+  `.trim();
+
+  const html = buildHtmlEmail({ title: subject, bodyHtml });
+  await sendMailToNotificationRecipients({ subject, text, html });
+}
+
+export async function notifyMapSuggestionReviewed(input: {
+  mapTitle: string;
+  mapSlug: string;
+  suggestionId: string;
+  versionNumber: number;
+  categoryLabel: string;
+  comment: string;
+  statusLabel: string;
+  reviewComment: string | null;
+  creatorEmail: string;
+  creatorName: string | null;
+  receiveNotifications: boolean;
+}): Promise<void> {
+  if (!(await isEmailConfigured())) {
+    console.warn("[email] SMTP not configured — skipping map suggestion review notification");
+    return;
+  }
+
+  if (!input.receiveNotifications) {
+    return;
+  }
+
+  const url = `${getAppBaseUrl()}/maps/${input.mapSlug}/suggestions/${input.suggestionId}`;
+  const subject = `Kartförslag granskat — ${input.mapTitle}`;
+  const textLines = [
+    `Ditt kartförslag på ${input.mapTitle} (v${input.versionNumber}) har granskats.`,
+    "",
+    `Status: ${input.statusLabel}`,
+    `Kategori: ${input.categoryLabel}`,
+    input.comment,
+  ];
+  if (input.reviewComment) {
+    textLines.push("", `Kommentar från redaktör: ${input.reviewComment}`);
+  }
+  textLines.push("", `Visa förslag: ${url}`);
+  const text = textLines.join("\n");
+
+  const reviewRow = input.reviewComment
+    ? `<tr>
+        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;">Kommentar</td>
+        <td style="padding:4px 0;color:#0f172a;">${escapeHtml(input.reviewComment)}</td>
+      </tr>`
+    : "";
+
+  const bodyHtml = `
+    <p style="margin:0 0 16px;">Ditt kartförslag på <strong>${escapeHtml(input.mapTitle)}</strong> (v${input.versionNumber}) har granskats.</p>
+    <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 20px;width:100%;font-size:15px;">
+      <tr>
+        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;width:90px;">Status</td>
+        <td style="padding:4px 0;color:#0f172a;font-weight:600;">${escapeHtml(input.statusLabel)}</td>
+      </tr>
+      <tr>
+        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;">Kategori</td>
+        <td style="padding:4px 0;color:#0f172a;">${escapeHtml(input.categoryLabel)}</td>
+      </tr>
+      ${reviewRow}
+    </table>
+    <p style="margin:0;">
+      <a href="${escapeHtml(url)}" style="display:inline-block;padding:10px 18px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:500;">Visa kartförslag</a>
+    </p>
+  `.trim();
+
+  const html = buildHtmlEmail({ title: subject, bodyHtml });
+  await sendMail({ to: input.creatorEmail, subject, text, html });
 }
 
 export async function notifyAdminOfNewRegistration(user: {
@@ -260,6 +549,31 @@ function ocdAttachmentFilename(originalFilename: string, fallbackBase: string): 
     : `${fallbackBase}.ocd`;
 }
 
+async function recordEmailAudit(
+  metadata: EmailSentAuditMetadata,
+  options?: {
+    userId?: string | null;
+    targetType?: string;
+    targetId?: string;
+  },
+): Promise<void> {
+  try {
+    await logEmailSent(metadata, options);
+  } catch (err) {
+    console.error("[email] Failed to write email audit log:", err);
+  }
+}
+
+type EmailAuditContext = {
+  kind: EmailSentAuditMetadata["kind"];
+  mapSlug?: string;
+  mapTitle?: string;
+  versionNumber?: number;
+  targetType?: string;
+  targetId?: string;
+  userId?: string | null;
+};
+
 async function sendMailsWithOptionalOcdAttachment(options: {
   recipients: string[];
   subject: string;
@@ -267,10 +581,12 @@ async function sendMailsWithOptionalOcdAttachment(options: {
   bodyHtml: string;
   storagePath?: string;
   attachmentFilename?: string;
+  audit?: EmailAuditContext;
 }): Promise<void> {
   const ocdRecipients = await resolveOcdAttachmentRecipients();
 
   let mapAttachment: MailAttachment | null = null;
+  let attachmentError: string | undefined;
   if (ocdRecipients.size > 0 && options.storagePath && options.attachmentFilename) {
     try {
       const fileBuffer = await readStoredFile(options.storagePath);
@@ -280,13 +596,19 @@ async function sendMailsWithOptionalOcdAttachment(options: {
         contentType: "application/octet-stream",
       };
     } catch (err) {
+      attachmentError = err instanceof Error ? err.message : "Kunde inte läsa kartfil";
       console.error("[email] Could not read map file for email attachment:", err);
     }
   }
 
+  const recipientsWithAttachment: string[] = [];
+  const recipientsWithoutAttachment: string[] = [];
+
   await Promise.all(
     options.recipients.map(async (to) => {
       const includeAttachment = mapAttachment !== null && ocdRecipients.has(to.toLowerCase());
+      if (includeAttachment) recipientsWithAttachment.push(to);
+      else recipientsWithoutAttachment.push(to);
 
       const recipientText = includeAttachment
         ? `${options.text}\n\nKartfilen (.ocd) är bifogad till detta meddelande.`
@@ -305,6 +627,28 @@ async function sendMailsWithOptionalOcdAttachment(options: {
       });
     }),
   );
+
+  if (options.audit) {
+    await recordEmailAudit(
+      {
+        kind: options.audit.kind,
+        subject: options.subject,
+        withAttachment: recipientsWithAttachment.length > 0,
+        attachmentFilename: mapAttachment?.filename ?? options.attachmentFilename,
+        attachmentError,
+        recipientsWithAttachment,
+        recipientsWithoutAttachment,
+        mapSlug: options.audit.mapSlug,
+        mapTitle: options.audit.mapTitle,
+        versionNumber: options.audit.versionNumber,
+      },
+      {
+        userId: options.audit.userId ?? null,
+        targetType: options.audit.targetType,
+        targetId: options.audit.targetId,
+      },
+    );
+  }
 }
 
 export async function notifyAdminOfNewUpload(upload: {
@@ -388,6 +732,14 @@ export async function notifyAdminOfNewUpload(upload: {
       upload.version.originalFilename,
       `${upload.map.title.replace(/\s+/g, "-")}-v${upload.version.versionNumber}`,
     ),
+    audit: {
+      kind: "new_upload",
+      mapSlug: upload.map.slug,
+      mapTitle: upload.map.title,
+      versionNumber: upload.version.versionNumber,
+      targetType: "MapVersion",
+      targetId: upload.version.id,
+    },
   });
 }
 
@@ -419,14 +771,42 @@ async function resolveCheckoutRecipients(ownerEmail: string): Promise<string[]> 
   return [...recipients];
 }
 
-function fireAndForget(promise: Promise<void>, label: string): void {
-  void promise.catch((err) => {
-    console.error(`[email] Failed to send ${label}:`, err);
+function scheduleEmail(task: () => Promise<void>, label: string): void {
+  runAfterResponse(async () => {
+    try {
+      await task();
+    } catch (err) {
+      console.error(`[email] Failed to send ${label}:`, err);
+    }
   });
 }
 
+export function queueNotifyAdminOfNewUpload(
+  upload: Parameters<typeof notifyAdminOfNewUpload>[0],
+): void {
+  scheduleEmail(() => notifyAdminOfNewUpload(upload), "new upload");
+}
+
+export function queueNotifyUserApproved(
+  user: Parameters<typeof notifyUserApproved>[0],
+): void {
+  scheduleEmail(() => notifyUserApproved(user), "account approved");
+}
+
+export function queueNotifyNewMapSuggestion(
+  input: Parameters<typeof notifyNewMapSuggestion>[0],
+): void {
+  scheduleEmail(() => notifyNewMapSuggestion(input), "map suggestion");
+}
+
+export function queueNotifyMapSuggestionReviewed(
+  input: Parameters<typeof notifyMapSuggestionReviewed>[0],
+): void {
+  scheduleEmail(() => notifyMapSuggestionReviewed(input), "map suggestion reviewed");
+}
+
 export function notifyCheckoutCreated(ctx: CheckoutMailContext): void {
-  fireAndForget(notifyCheckoutCreatedAsync(ctx), "checkout created");
+  scheduleEmail(() => notifyCheckoutCreatedAsync(ctx), "checkout created");
 }
 
 async function notifyCheckoutCreatedAsync(ctx: CheckoutMailContext): Promise<void> {
@@ -451,7 +831,7 @@ async function notifyCheckoutCreatedAsync(ctx: CheckoutMailContext): Promise<voi
 }
 
 export function notifyCheckinSubmitted(ctx: CheckoutMailContext): void {
-  fireAndForget(notifyCheckinSubmittedAsync(ctx), "checkin submitted");
+  scheduleEmail(() => notifyCheckinSubmittedAsync(ctx), "checkin submitted");
 }
 
 async function notifyCheckinSubmittedAsync(ctx: CheckoutMailContext): Promise<void> {
@@ -483,11 +863,18 @@ async function notifyCheckinSubmittedAsync(ctx: CheckoutMailContext): Promise<vo
           `${ctx.map.title.replace(/\s+/g, "-")}-checkin`,
         )
       : undefined,
+    audit: {
+      kind: "checkin",
+      mapSlug: ctx.map.slug,
+      mapTitle: ctx.map.title,
+      targetType: "MapCheckout",
+      targetId: ctx.checkoutId,
+    },
   });
 }
 
 export function notifyCheckoutUserConfirmed(ctx: CheckoutMailContext): void {
-  fireAndForget(notifyCheckoutUserConfirmedAsync(ctx), "checkout user confirmed");
+  scheduleEmail(() => notifyCheckoutUserConfirmedAsync(ctx), "checkout user confirmed");
 }
 
 async function notifyCheckoutUserConfirmedAsync(ctx: CheckoutMailContext): Promise<void> {
@@ -513,27 +900,35 @@ async function notifyCheckoutUserConfirmedAsync(ctx: CheckoutMailContext): Promi
 }
 
 export function notifyCheckoutIntegrated(
-  ctx: CheckoutMailContext & { versionNumber: number },
+  ctx: CheckoutMailContext & { versionNumber: number; versionId?: string },
 ): void {
-  fireAndForget(notifyCheckoutIntegratedAsync(ctx), "checkout integrated");
+  scheduleEmail(() => notifyCheckoutIntegratedAsync(ctx), "checkout integrated");
 }
 
 async function notifyCheckoutIntegratedAsync(
-  ctx: CheckoutMailContext & { versionNumber: number },
+  ctx: CheckoutMailContext & { versionNumber: number; versionId?: string },
 ): Promise<void> {
   if (!(await isEmailConfigured())) return;
 
   const mapUrl = `${getAppBaseUrl()}/maps/${ctx.map.slug}`;
+  const versionUrl = ctx.versionId ? `${mapUrl}/versions/${ctx.versionId}` : mapUrl;
   const subject = `Checkout integrerad — ${ctx.map.title}`;
   const text = [
     `Checkout på ${ctx.map.title} har integrerats som version ${ctx.versionNumber}.`,
     "",
+    "Versionen är opublicerad — publicera den i versionshistoriken innan läsare ser ändringarna.",
+    "",
     `Visa karta: ${mapUrl}`,
-  ].join("\n");
+    ctx.versionId ? `Visa version: ${versionUrl}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   const bodyHtml = `
     <p style="margin:0 0 16px;">Checkout på <strong>${escapeHtml(ctx.map.title)}</strong> har integrerats som <strong>v${ctx.versionNumber}</strong>.</p>
-    <p style="margin:0;"><a href="${escapeHtml(mapUrl)}" style="display:inline-block;padding:10px 18px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:500;">Visa karta</a></p>
+    <p style="margin:0 0 16px;"><strong>Versionen är opublicerad</strong> — granska diff och publicera i versionshistoriken innan läsare ser ändringarna.</p>
+    <p style="margin:0 0 12px;"><a href="${escapeHtml(versionUrl)}" style="display:inline-block;padding:10px 18px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:500;">Visa version</a></p>
+    <p style="margin:0;"><a href="${escapeHtml(mapUrl)}" style="color:#2563eb;">Gå till områdessidan</a></p>
   `.trim();
 
   const html = buildHtmlEmail({ title: subject, bodyHtml });
@@ -544,7 +939,7 @@ async function notifyCheckoutIntegratedAsync(
 export function notifyCheckoutCancelled(
   ctx: CheckoutMailContext & { reason?: string | null },
 ): void {
-  fireAndForget(notifyCheckoutCancelledAsync(ctx), "checkout cancelled");
+  scheduleEmail(() => notifyCheckoutCancelledAsync(ctx), "checkout cancelled");
 }
 
 async function notifyCheckoutCancelledAsync(
@@ -577,7 +972,7 @@ async function notifyCheckoutCancelledAsync(
 }
 
 export function notifyCheckoutReminder(ctx: CheckoutMailContext & { days: number }): void {
-  fireAndForget(notifyCheckoutReminderAsync(ctx), "checkout reminder");
+  scheduleEmail(() => notifyCheckoutReminderAsync(ctx), "checkout reminder");
 }
 
 async function notifyCheckoutReminderAsync(

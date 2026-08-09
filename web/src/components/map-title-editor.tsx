@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { MapDeleteButton } from "@/components/map-delete-button";
+import { HelpLinkIcon } from "@/components/help-link-icon";
 
 type Props = {
   mapSlug: string;
@@ -99,6 +100,7 @@ export function MapTitleEditor({
     return (
       <div className="flex flex-wrap items-center gap-1.5">
         <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">{title}</h1>
+        <HelpLinkIcon section="omraden" />
         <button
           type="button"
           aria-label="Redigera namn"

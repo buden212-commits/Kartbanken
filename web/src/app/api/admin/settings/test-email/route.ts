@@ -1,12 +1,13 @@
 import { requireAdmin } from "@/lib/auth/api";
 import {
+  formatSmtpErrorMessage,
   getAdminNotificationEmail,
   isEmailConfigured,
   sendTestEmail,
 } from "@/lib/email";
 import { NextResponse } from "next/server";
 
-export async function POST() {
+export async function POST(request: Request) {
   const session = await requireAdmin();
   if (session instanceof NextResponse) {
     return session;
@@ -27,14 +28,22 @@ export async function POST() {
     );
   }
 
+  let withAttachment = false;
   try {
-    await sendTestEmail(to);
+    const body = (await request.json()) as { withAttachment?: boolean };
+    withAttachment = body.withAttachment === true;
+  } catch {
+    // Tom body = vanligt testmail utan bifogning
+  }
+
+  try {
+    await sendTestEmail(to, { withAttachment, triggeredByUserId: session.user.id });
     return NextResponse.json({
-      message: `Testmail skickades till ${to}.`,
+      message: withAttachment
+        ? `Testmail med bifogad fil skickades till ${to}.`
+        : `Testmail skickades till ${to}.`,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Kunde inte skicka testmail";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: formatSmtpErrorMessage(error) }, { status: 500 });
   }
 }

@@ -53,10 +53,14 @@ export async function POST(request: Request, { params }: RouteParams) {
   const { slug } = await params;
   const map = await prisma.mapFile.findUnique({
     where: { slug },
-    select: { id: true, title: true, slug: true },
+    select: { id: true, title: true, slug: true, archivedAt: true },
   });
   if (!map) {
     return NextResponse.json({ error: "Kartfil hittades inte" }, { status: 404 });
+  }
+
+  if (map.archivedAt) {
+    return NextResponse.json({ error: "Arkiverat område kan inte checkas ut" }, { status: 403 });
   }
 
   let body: unknown;

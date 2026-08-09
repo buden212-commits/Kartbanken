@@ -21,6 +21,8 @@ model User {
   lastLoginAt        DateTime?
   receiveNotifications Boolean       @default(false)
   receiveOcdAttachment Boolean       @default(false)
+  mustChangePassword   Boolean       @default(false)
+  passwordExpiresAt    DateTime?
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
   accounts           Account[]
@@ -28,6 +30,11 @@ model User {
   checkouts          MapCheckout[] @relation("CheckoutUser")
   cancelledCheckouts MapCheckout[] @relation("CheckoutCancelledBy")
   courses            Course[]
+  suggestionsCreated MapSuggestion[] @relation("SuggestionAuthor")
+  suggestionsReviewed MapSuggestion[] @relation("SuggestionReviewer")
+  feedbackCreated    FeedbackItem[]  @relation("FeedbackAuthor")
+  feedbackReviewed   FeedbackItem[]  @relation("FeedbackReviewer")
+  feedbackVotes      FeedbackVote[]
 }
 
 model Account {
@@ -69,11 +76,13 @@ model MapFile {
   slug        String        @unique
   title       String
   description String?
+  archivedAt  DateTime?
   createdAt   DateTime      @default(now())
   createdById String?
   versions    MapVersion[]
   checkouts   MapCheckout[]
   courses     Course[]
+  suggestions MapSuggestion[]
 }
 
 model MapVersion {
@@ -96,6 +105,8 @@ model MapVersion {
   mapFile               MapFile       @relation(fields: [mapFileId], references: [id], onDelete: Cascade)
   checkoutsAsBase       MapCheckout[] @relation("CheckoutBaseVersion")
   checkoutsAsIntegrated MapCheckout[] @relation("CheckoutIntegratedVersion")
+  suggestions           MapSuggestion[]
+  suggestionsIntegrated MapSuggestion[] @relation("SuggestionIntegratedVersion")
 
   @@unique([mapFileId, versionNumber])
 }
@@ -128,6 +139,7 @@ model MapCheckout {
   user              User        @relation("CheckoutUser", fields: [userId], references: [id])
   integratedVersion MapVersion? @relation("CheckoutIntegratedVersion", fields: [integratedVersionId], references: [id])
   cancelledBy       User?       @relation("CheckoutCancelledBy", fields: [cancelledById], references: [id])
+  suggestions       MapSuggestion[]
 
   @@index([mapFileId, status])
 }
@@ -195,4 +207,84 @@ model CourseObject {
   course       Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
 
   @@index([courseId, sortOrder])
+}
+
+model MapSuggestion {
+  id                  String   @id @default(cuid())
+  mapFileId           String
+  mapVersionId        String
+  createdById         String
+  status              String   @default("OPEN")
+  category            String
+  title               String?
+  comment             String
+  reviewComment       String?
+  reviewedById        String?
+  reviewedAt          DateTime?
+  checkoutId          String?
+  integratedVersionId String?
+  attachmentPath      String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  mapFile           MapFile     @relation(fields: [mapFileId], references: [id], onDelete: Cascade)
+  mapVersion        MapVersion  @relation(fields: [mapVersionId], references: [id], onDelete: Cascade)
+  createdBy         User        @relation("SuggestionAuthor", fields: [createdById], references: [id])
+  reviewedBy        User?       @relation("SuggestionReviewer", fields: [reviewedById], references: [id])
+  checkout          MapCheckout? @relation(fields: [checkoutId], references: [id], onDelete: SetNull)
+  integratedVersion MapVersion? @relation("SuggestionIntegratedVersion", fields: [integratedVersionId], references: [id], onDelete: SetNull)
+  objects           MapSuggestionObject[]
+
+  @@index([mapFileId, status])
+  @@index([mapVersionId])
+  @@index([createdById])
+}
+
+model MapSuggestionObject {
+  id           String   @id @default(cuid())
+  suggestionId String
+  objectType   String
+  geometryJson String
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  suggestion MapSuggestion @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+
+  @@index([suggestionId, sortOrder])
+}
+
+model FeedbackItem {
+  id                String   @id @default(cuid())
+  type              String
+  title             String
+  description       String
+  stepsToReproduce  String?
+  status            String   @default("OPEN")
+  adminComment      String?
+  createdById       String
+  reviewedById      String?
+  reviewedAt        DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  createdBy  User           @relation("FeedbackAuthor", fields: [createdById], references: [id])
+  reviewedBy User?          @relation("FeedbackReviewer", fields: [reviewedById], references: [id])
+  votes      FeedbackVote[]
+
+  @@index([type, status])
+  @@index([createdById])
+  @@index([createdAt])
+}
+
+model FeedbackVote {
+  id             String   @id @default(cuid())
+  feedbackItemId String
+  userId         String
+  createdAt      DateTime @default(now())
+
+  feedbackItem FeedbackItem @relation(fields: [feedbackItemId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([feedbackItemId, userId])
+  @@index([feedbackItemId])
 }

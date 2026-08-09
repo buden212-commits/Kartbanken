@@ -6,14 +6,23 @@ const BLOB_UPLOAD_ROUTE = "/api/blob/upload";
 
 const BODY_LIMIT_BYTES = 4_500_000;
 
+export type UploadMapVersionOptions = {
+  forceDespiteCheckouts?: boolean;
+  forceDuplicate?: boolean;
+};
+
 /** Direkt FormData-uppladdning (lokal lagring / små filer). */
 export async function uploadViaFormData(
   url: string,
-  fields: Record<string, string | File>,
+  fields: Record<string, string | File | boolean>,
 ): Promise<Response> {
   const formData = new FormData();
   for (const [key, value] of Object.entries(fields)) {
-    formData.set(key, value);
+    if (typeof value === "boolean") {
+      formData.set(key, value ? "true" : "false");
+    } else {
+      formData.set(key, value);
+    }
   }
   return fetch(url, { method: "POST", body: formData });
 }
@@ -22,8 +31,11 @@ async function uploadMapVersionViaBlobClient(
   mapSlug: string,
   file: File,
   comment?: string,
+  options: UploadMapVersionOptions = {},
 ): Promise<Response> {
   const extra: Record<string, string> = comment ? { comment } : {};
+  if (options.forceDespiteCheckouts) extra.forceDespiteCheckouts = "true";
+  if (options.forceDuplicate) extra.forceDuplicate = "true";
 
   const initRes = await fetch(`/api/maps/${mapSlug}/versions/upload-init`, {
     method: "POST",
@@ -56,7 +68,12 @@ async function uploadMapVersionViaBlobClient(
   return fetch(`/api/maps/${mapSlug}/versions/upload-complete`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ versionId: init.versionId, blobUrl: blob.url }),
+    body: JSON.stringify({
+      versionId: init.versionId,
+      blobUrl: blob.url,
+      forceDespiteCheckouts: options.forceDespiteCheckouts ?? false,
+      forceDuplicate: options.forceDuplicate ?? false,
+    }),
   });
 }
 
@@ -64,11 +81,14 @@ export async function uploadMapVersion(
   mapSlug: string,
   file: File,
   comment?: string,
+  options: UploadMapVersionOptions = {},
 ): Promise<Response> {
-  const extra: Record<string, string> = comment ? { comment } : {};
+  const extra: Record<string, string | File | boolean> = comment ? { comment } : {};
+  if (options.forceDespiteCheckouts) extra.forceDespiteCheckouts = true;
+  if (options.forceDuplicate) extra.forceDuplicate = true;
 
   if (file.size > BODY_LIMIT_BYTES) {
-    return uploadMapVersionViaBlobClient(mapSlug, file, comment);
+    return uploadMapVersionViaBlobClient(mapSlug, file, comment, options);
   }
 
   const res = await uploadViaFormData(`/api/maps/${mapSlug}/versions`, { file, ...extra });
@@ -77,7 +97,7 @@ export async function uploadMapVersion(
       clientUploadRequired?: boolean;
     };
     if (data.clientUploadRequired) {
-      return uploadMapVersionViaBlobClient(mapSlug, file, comment);
+      return uploadMapVersionViaBlobClient(mapSlug, file, comment, options);
     }
   }
 
@@ -211,6 +231,68 @@ export async function uploadCheckoutCheckin(
 
   if (res.status === 413) {
     return uploadCheckoutCheckinViaBlob(mapSlug, checkoutId, file, comment);
+  }
+
+  return res;
+}
+
+async function uploadSuggestionAttachmentViaBlob(
+  mapSlug: string,
+  file: File,
+): Promise<Response> {
+  const initRes = await fetch(
+    `/api/maps/${mapSlug}/suggestions/attachment/upload-init`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        filename: file.name,
+        size: file.size,
+      }),
+    },
+  );
+
+  if (initRes.status === 400) {
+    return uploadViaFormData(`/api/maps/${mapSlug}/suggestions/attachment`, { file });
+  }
+
+  if (!initRes.ok) return initRes;
+
+  const init = (await initRes.json()) as { storagePath: string };
+
+  const blob = await upload(init.storagePath, file, {
+    access: "private",
+    handleUploadUrl: BLOB_UPLOAD_ROUTE,
+    clientPayload: JSON.stringify({
+      kind: "suggestionAttachment",
+      slug: mapSlug,
+    }),
+  });
+
+  return fetch(`/api/maps/${mapSlug}/suggestions/attachment/upload-complete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ blobUrl: blob.url }),
+  });
+}
+
+export async function uploadSuggestionAttachment(
+  mapSlug: string,
+  file: File,
+): Promise<Response> {
+  if (file.size > BODY_LIMIT_BYTES) {
+    return uploadSuggestionAttachmentViaBlob(mapSlug, file);
+  }
+
+  const res = await uploadViaFormData(`/api/maps/${mapSlug}/suggestions/attachment`, { file });
+
+  if (res.status === 413) {
+    const data = (await res.clone().json().catch(() => ({}))) as {
+      clientUploadRequired?: boolean;
+    };
+    if (data.clientUploadRequired) {
+      return uploadSuggestionAttachmentViaBlob(mapSlug, file);
+    }
   }
 
   return res;

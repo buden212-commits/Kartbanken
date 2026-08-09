@@ -1,11 +1,24 @@
 import Image from "next/image";
 import Link from "next/link";
 import { auth, signOut } from "@/auth";
-import { roleLabel } from "@/lib/auth/permissions";
+import { AppHeaderUserMenu } from "@/components/app-header-user-menu";
 import { canAdmin } from "@/lib/auth/permissions";
+import { prisma } from "@/lib/prisma";
+import type { Role } from "@/lib/roles";
 
 export async function AppHeader() {
   const session = await auth();
+  const profile = session?.user?.id
+    ? await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: {
+          name: true,
+          email: true,
+          receiveNotifications: true,
+          receiveOcdAttachment: true,
+        },
+      })
+    : null;
 
   return (
     <header className="border-b border-ifk-blue bg-ifk-blue text-white shadow-sm">
@@ -43,12 +56,13 @@ export async function AppHeader() {
               <Link href="/hjalp" className="text-white/80 transition hover:text-white">
                 Hjälp
               </Link>
-              <span
-                className="hidden cursor-default text-white/50 lg:inline"
-                title={roleLabel(session.user.role)}
-              >
-                {session.user.name?.trim() || session.user.email}
-              </span>
+              <AppHeaderUserMenu
+                name={profile?.name ?? session.user.name}
+                email={profile?.email ?? session.user.email ?? ""}
+                role={session.user.role as Role}
+                receiveNotifications={profile?.receiveNotifications ?? false}
+                receiveOcdAttachment={profile?.receiveOcdAttachment ?? false}
+              />
               <form
                 action={async () => {
                   "use server";

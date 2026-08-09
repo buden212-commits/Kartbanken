@@ -15,6 +15,18 @@ npm run dev
 
 Öppna [http://localhost:3000/login](http://localhost:3000/login).
 
+## Hjälp och commit
+
+Hjälpsidan (`/hjalp`) och release notes (`web/src/lib/help/release-notes.ts`) ska uppdateras i samma commit som app-ändringar.
+
+Aktivera pre-commit-kontroll (en gång per klonat repo):
+
+```bash
+npm run hooks:install
+```
+
+Vid commit utan hjälpuppdatering blockeras commiten. Hoppa över vid behov: `SKIP_HELP_CHECK=1 git commit` eller `git commit --no-verify`.
+
 ## Inloggning (e-post + lösenord)
 
 Google-inloggning är pausad. Admin skapar konton manuellt under `/admin/users`.

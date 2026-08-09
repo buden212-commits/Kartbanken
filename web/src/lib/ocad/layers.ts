@@ -7,6 +7,8 @@ export type OcadMapLayer = {
   objectCount: number;
   kind: "group" | "symbol";
   symbolNum?: number;
+  /** OCAD symbol type: 1 point, 2 line, 3 area, 7 rectangle */
+  symbolType?: number;
   drawOrder?: number;
   minObjectIndex?: number;
   children?: OcadMapLayer[];
@@ -15,8 +17,14 @@ export type OcadMapLayer = {
 type SymTreeEntry = {
   _first?: string;
   g?: string | number;
+  /** OCAD 9: first node in subgroup — not visibility */
   f?: string | number;
+  /** OCAD 9: last node in subgroup — not locked */
   l?: string | number;
+  /** OCAD 9/12: visible (1 = visible, 0 = hidden) */
+  v?: string | number;
+  /** OCAD 9/12: tree node expanded */
+  e?: string | number;
   i?: string | number;
 };
 
@@ -29,6 +37,7 @@ type OcadSymbol = {
   number?: string;
   description?: string;
   group?: number;
+  type?: number;
   colors?: number[];
   symbolTreeGroup?: number[];
   isHidden: () => boolean;
@@ -131,12 +140,19 @@ function symbolLabel(symbol: OcadSymbol): string {
   return desc ? `${number} ${desc}` : number;
 }
 
-function symtreeVisible(entry: SymTreeEntry): boolean {
-  return entry.f === "1" || entry.f === 1;
+function symtreeFlagOn(value: string | number | undefined): boolean {
+  return value === "1" || value === 1;
 }
 
-function symtreeLocked(entry: SymTreeEntry): boolean {
-  return entry.l === "1" || entry.l === 1;
+function symtreeVisible(entry: SymTreeEntry): boolean {
+  // OCAD stores visibility in `v`. Some files (OCAD 9 symtree layout) omit it;
+  // `f`/`l` are tree-structure markers, not visibility/lock flags.
+  if (entry.v === undefined) return true;
+  return symtreeFlagOn(entry.v);
+}
+
+function symtreeLocked(_entry: SymTreeEntry): boolean {
+  return false;
 }
 
 function buildSymbolSubLayers(
@@ -168,6 +184,7 @@ function buildSymbolSubLayers(
       id: `g${groupId}-s${symNum}`,
       groupId,
       symbolNum: symNum,
+      symbolType: sym.type,
       kind: "symbol",
       name: symbolLabel(sym),
       visible: groupVisible && !sym.isHidden(),
@@ -316,7 +333,7 @@ export function collectSymbolLayersForRender(layers: OcadMapLayer[]): OcadMapLay
     .sort(compareSymbolLayers);
 }
 
-export const OCAD_LAYERS_FORMAT_VERSION = 5;
+export const OCAD_LAYERS_FORMAT_VERSION = 6;
 
 export function layersMetadataForSvg(layers: OcadMapLayer[]): OcadMapLayer[] {
   return layers.map((layer) => ({
@@ -328,6 +345,7 @@ export function layersMetadataForSvg(layers: OcadMapLayer[]): OcadMapLayer[] {
     objectCount: layer.objectCount,
     kind: layer.kind,
     symbolNum: layer.symbolNum,
+    symbolType: layer.symbolType,
     children: layer.children?.map((child) => ({
       id: child.id,
       groupId: child.groupId,
@@ -337,6 +355,7 @@ export function layersMetadataForSvg(layers: OcadMapLayer[]): OcadMapLayer[] {
       objectCount: child.objectCount,
       kind: child.kind,
       symbolNum: child.symbolNum,
+      symbolType: child.symbolType,
       drawOrder: child.drawOrder,
     })),
   }));

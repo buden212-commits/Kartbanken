@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import type { OcadObjectChange } from "@/lib/ocad/diff-types";
 import type { ChangeType } from "@/lib/ocad/diff-types";
 import { formatChangeCentroid } from "@/lib/ocad/change-utils";
@@ -20,10 +20,12 @@ import {
 import { extractSvgInner, type OcadMapLayer } from "@/lib/ocad/svg-utils";
 import { flattenOcadLayers, initialLayerVisibility } from "@/lib/ocad/layers";
 import { MapLayerPanel } from "@/components/map-layer-panel";
+import { formatMapDisplayScale, maxZoomForMapScale } from "@/lib/ocad/map-display-scale";
 import {
   createExportFrame,
   downloadMapOcd,
   downloadMapPdf,
+  downloadMapGeoTiff,
   exportFrameBbox,
   pointInExportFrame,
   type ExportFrame,
@@ -32,6 +34,17 @@ import {
 import { defaultOcadExportVersion } from "@/lib/ocad/ocad-export-shared";
 import { clearPreviewCache, fetchPreviewText } from "@/lib/ocad/preview-fetch";
 import { MapExportControls } from "@/components/map-export-controls";
+import { OcdSuggestionSymbolDialog } from "@/components/ocd-suggestion-symbol-dialog";
+import type { OcdSuggestionSymbolMapping } from "@/lib/ocad/ocad-suggestion-export";
+import { buildSuggestionExportOverlaySvg } from "@/lib/suggestion/geometry";
+import type { SuggestionOverlayItem } from "@/lib/suggestion/types";
+
+type GpsFix = {
+  mapCoord: [number, number];
+  accuracyMeters: number;
+  latitude: number;
+  longitude: number;
+};
 
 type GpsFix = {
   mapCoord: [number, number];
@@ -93,9 +106,13 @@ type Props = {
   onObjectClick?: (changeIndex: number) => void;
   /** Extra SVG overlay content rendered above map layers (e.g. checkout areas). */
   renderSvgOverlay?: (rootTransform: SvgRootTransform) => ReactNode;
+  /** Open/in-progress kartförslag for raster export (PDF/GeoTIFF). Fetched on export if omitted. */
+  suggestionOverlays?: SuggestionOverlayItem[];
   /** When "draw", viewport pointer events call drawPointerHandlers instead of pan. */
   interactionMode?: "navigate" | "draw";
   drawPointerHandlers?: MapDrawPointerHandlers;
+  /** Called when a multi-touch gesture interrupts an in-progress draw (e.g. pinch-to-zoom). */
+  onDrawInterrupt?: () => void;
   /** Replaces the default map title in the toolbar row. */
   headerContent?: ReactNode;
   /** Extra row below the main toolbar (e.g. checkout draw tools). */
@@ -105,6 +122,8 @@ type Props = {
   showLayerPanel?: boolean;
   /** Called when OCAD map scale is read from preview metadata. */
   onOcadMapScale?: (scale: number) => void;
+  /** Called when georeferenced CRS is loaded from preview (or cleared on reload). */
+  onOcadCrsReady?: (crs: OcadCrsInfo | null) => void;
   /**
    * Fit the viewport to a geo bbox (no highlight). Bump requestId to re-apply.
    */
@@ -112,9 +131,17 @@ type Props = {
     bbox: Bbox;
     requestId: number;
   } | null;
+  /**
+   * Kartförslag GPS-spår: håll skala 1:100 och centrera på senaste position var 10:e sekund.
+   */
+  gpsTrackFollow?: {
+    active: boolean;
+    mapCoordRef: MutableRefObject<[number, number] | null>;
+    /** Ökas när spårning startar eller första GPS-fix kommer. */
+    recenterToken: number;
+  } | null;
 };
 
-const MAX_ZOOM = 30;
 const MIN_ZOOM = 0.2;
 /** Zoom in/out by 50% per button click or wheel step. */
 const ZOOM_IN_FACTOR = 1.5;
@@ -126,6 +153,8 @@ const POINT_HIGHLIGHT_RADIUS_M = 5; // 10 m diameter in map units (meters)
 const DRAG_THRESHOLD_PX = 5;
 /** Fixed screen size for GPS reticle (overlay is outside zoom transform). */
 const GPS_CROSSHAIR_SIZE_PX = 28;
+/** Re-center interval while recording a kartförslag GPS track. */
+const GPS_TRACK_FOLLOW_INTERVAL_MS = 10_000;
 
 type HighlightShape =
   | { kind: "circle"; cx: number; cy: number; r: number }
@@ -156,6 +185,7 @@ function focusOnTarget(
   viewBox: string,
   containerWidth: number,
   containerHeight: number,
+  maxZoom: number,
 ): { pan: { x: number; y: number }; zoom: number } | null {
   if (containerWidth < 10 || containerHeight < 10) return null;
 
@@ -174,7 +204,7 @@ function focusOnTarget(
       const visibleW = containerWidth / renderScale;
       const visibleH = containerHeight / renderScale;
       targetZoom = Math.min(visibleW / bw, visibleH / bh) * 0.85;
-      targetZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, targetZoom));
+      targetZoom = Math.min(maxZoom, Math.max(MIN_ZOOM, targetZoom));
     }
   }
 
@@ -200,8 +230,9 @@ function zoomAtPoint(
   prevPan: { x: number; y: number },
   focalX: number,
   focalY: number,
+  maxZoom: number,
 ): { zoom: number; pan: { x: number; y: number } } {
-  const nextZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, prevZoom * factor));
+  const nextZoom = Math.min(maxZoom, Math.max(MIN_ZOOM, prevZoom * factor));
   const ratio = nextZoom / prevZoom;
   return {
     zoom: nextZoom,
@@ -225,14 +256,18 @@ export function DiffMapPanel({
   onClearFocus,
   onObjectClick,
   renderSvgOverlay,
+  suggestionOverlays,
   interactionMode = "navigate",
   drawPointerHandlers,
+  onDrawInterrupt,
   headerContent,
   secondaryHeaderContent,
   unboxed = false,
   showLayerPanel = true,
   onOcadMapScale,
+  onOcadCrsReady,
   fitGeoBbox = null,
+  gpsTrackFollow = null,
 }: Props) {
   const [svgInner, setSvgInner] = useState<string | null>(null);
   const [svgFill, setSvgFill] = useState("transparent");
@@ -245,6 +280,11 @@ export function DiffMapPanel({
   const [clickHint, setClickHint] = useState<string | null>(null);
   const [fullSvgText, setFullSvgText] = useState<string | null>(null);
   const [ocadMapScale, setOcadMapScale] = useState<number>(15000);
+  const ocadMapScaleRef = useRef(ocadMapScale);
+  ocadMapScaleRef.current = ocadMapScale;
+  const maxZoom = useMemo(() => maxZoomForMapScale(ocadMapScale), [ocadMapScale]);
+  const maxZoomRef = useRef(maxZoom);
+  maxZoomRef.current = maxZoom;
   const [exportMode, setExportMode] = useState(false);
   const [exportSettings, setExportSettings] = useState<ExportSettings>({
     scale: 10000,
@@ -252,10 +292,12 @@ export function DiffMapPanel({
     orientation: "portrait",
     outputFormat: "pdf",
     ocadVersion: 12,
+    includeSuggestions: true,
   });
   const [exportFrame, setExportFrame] = useState<ExportFrame | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [ocdSymbolDialogOpen, setOcdSymbolDialogOpen] = useState(false);
   const [ocadCrs, setOcadCrs] = useState<OcadCrsInfo | null>(null);
   const [gpsEnabled, setGpsEnabled] = useState(false);
   const [gpsFix, setGpsFix] = useState<GpsFix | null>(null);
@@ -285,6 +327,8 @@ export function DiffMapPanel({
     zoom: number;
     pan: { x: number; y: number };
   } | null>(null);
+  /** Suppresses draw pointer-up after pinch/pan gestures in draw mode. */
+  const drawSuppressedRef = useRef(false);
   const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userInteractedRef = useRef(false);
   const initialFitDoneRef = useRef(false);
@@ -454,44 +498,115 @@ export function DiffMapPanel({
     });
   }, [exportSettings, exportMode, ocadMapScale]);
 
+  const performExport = useCallback(
+    async (ocdSuggestionSymbols?: OcdSuggestionSymbolMapping) => {
+      if (!exportFrame) return;
+      setExporting(true);
+      setExportError(null);
+      setOcdSymbolDialogOpen(false);
+      try {
+        const safeTitle = title.replace(/[^\w\s-åäöÅÄÖ]/g, "").trim() || "karta";
+
+        const rasterExport =
+          exportSettings.outputFormat === "geotiff" || exportSettings.outputFormat === "pdf";
+        let suggestionOverlaySvg: string | undefined;
+        if (rasterExport && exportSettings.includeSuggestions) {
+          let overlays: SuggestionOverlayItem[];
+          if (suggestionOverlays !== undefined) {
+            overlays = suggestionOverlays;
+          } else {
+            overlays = [];
+            try {
+              const res = await fetch(
+                `/api/maps/${mapSlug}/suggestions?overlay=1&mapVersionId=${encodeURIComponent(versionId)}`,
+              );
+              if (res.ok) {
+                const data = (await res.json()) as { overlays?: SuggestionOverlayItem[] };
+                overlays = data.overlays ?? [];
+              }
+            } catch {
+              overlays = [];
+            }
+          }
+          if (overlays.length > 0) {
+            suggestionOverlaySvg = buildSuggestionExportOverlaySvg(overlays, rootTransform);
+          }
+        }
+
+        if (exportSettings.outputFormat === "ocd") {
+          const { versionWarning, suggestionWarnings } = await downloadMapOcd(
+            mapSlug,
+            versionId,
+            exportFrame,
+            exportSettings.ocadVersion,
+            `${safeTitle}-${exportSettings.scale}`,
+            exportSettings.includeSuggestions
+              ? { includeSuggestions: true, suggestionSymbols: ocdSuggestionSymbols }
+              : undefined,
+          );
+          if (versionWarning) {
+            window.alert(versionWarning);
+          }
+          if (suggestionWarnings) {
+            window.alert(suggestionWarnings);
+          }
+        } else if (exportSettings.outputFormat === "geotiff") {
+          if (!fullSvgText) return;
+          if (!isGeoreferencedCrs(ocadCrs)) {
+            throw new Error(
+              "Kartan saknar georeferering — GeoTIFF-export kräver EPSG-koordinater i filen.",
+            );
+          }
+          await downloadMapGeoTiff(
+            mapSlug,
+            versionId,
+            fullSvgText,
+            exportFrame,
+            `${safeTitle}-${exportSettings.scale}`,
+            { suggestionOverlaySvg },
+          );
+        } else {
+          if (!fullSvgText) return;
+          await downloadMapPdf(fullSvgText, exportFrame, `${safeTitle}-${exportSettings.scale}`, {
+            suggestionOverlaySvg,
+          });
+        }
+
+        cancelExportMode();
+      } catch (err) {
+        setExportError(err instanceof Error ? err.message : "Export misslyckades");
+      } finally {
+        setExporting(false);
+      }
+    },
+    [
+      fullSvgText,
+      exportFrame,
+      title,
+      exportSettings,
+      mapSlug,
+      versionId,
+      cancelExportMode,
+      ocadCrs,
+      suggestionOverlays,
+      rootTransform,
+    ],
+  );
+
   const handleExport = useCallback(async () => {
     if (!exportFrame) return;
-    setExporting(true);
-    setExportError(null);
-    try {
-      const safeTitle = title.replace(/[^\w\s-åäöÅÄÖ]/g, "").trim() || "karta";
 
-      if (exportSettings.outputFormat === "ocd") {
-        const { versionWarning } = await downloadMapOcd(
-          mapSlug,
-          versionId,
-          exportFrame,
-          exportSettings.ocadVersion,
-          `${safeTitle}-${exportSettings.scale}`,
-        );
-        if (versionWarning) {
-          window.alert(versionWarning);
-        }
-      } else {
-        if (!fullSvgText) return;
-        await downloadMapPdf(fullSvgText, exportFrame, `${safeTitle}-${exportSettings.scale}`);
-      }
-
-      cancelExportMode();
-    } catch (err) {
-      setExportError(err instanceof Error ? err.message : "Export misslyckades");
-    } finally {
-      setExporting(false);
+    if (exportSettings.outputFormat === "ocd" && exportSettings.includeSuggestions) {
+      setOcdSymbolDialogOpen(true);
+      return;
     }
-  }, [
-    fullSvgText,
-    exportFrame,
-    title,
-    exportSettings,
-    mapSlug,
-    versionId,
-    cancelExportMode,
-  ]);
+  }, [fullViewBox, loading, focusTarget, fitGeoBbox, fitWholeMap]);
+
+  useEffect(() => {
+    if (!focusTarget || !fullViewBox || loading) return;
+
+    await performExport();
+  }, [exportFrame, exportSettings.outputFormat, exportSettings.includeSuggestions, performExport]);
 
   const viewStateRef = useRef({ pan: { x: 0, y: 0 }, zoom: FIT_WHOLE_ZOOM });
   viewStateRef.current = { pan, zoom };
@@ -518,6 +633,10 @@ export function DiffMapPanel({
   }, [fullViewBox, loading, focusTarget, fitGeoBbox, fitWholeMap]);
 
   useEffect(() => {
+    setZoom((current) => Math.min(maxZoom, Math.max(MIN_ZOOM, current)));
+  }, [maxZoom]);
+
+  useEffect(() => {
     if (!focusTarget || !fullViewBox || loading) return;
 
     const viewport = viewportRef.current;
@@ -530,11 +649,54 @@ export function DiffMapPanel({
       fullViewBox,
       rect.width,
       rect.height,
+      maxZoom,
     );
     if (!next) return;
     setPan(next.pan);
     setZoom(next.zoom);
-  }, [focusTarget, fullViewBox, loading, rootTransform]);
+  }, [focusTarget, fullViewBox, loading, rootTransform, maxZoom]);
+
+  useEffect(() => {
+    if (!fitGeoBbox || !fullViewBox || loading) return;
+
+    const apply = () => {
+      const viewport = viewportRef.current;
+      if (!viewport) return false;
+      const rect = viewport.getBoundingClientRect();
+      if (rect.width < 10 || rect.height < 10) return false;
+
+      const [minX, minY, maxX, maxY] = fitGeoBbox.bbox;
+      const next = focusOnTarget(
+        {
+          bbox: fitGeoBbox.bbox,
+          centroid: [(minX + maxX) / 2, (minY + maxY) / 2],
+          objectType: "area",
+        },
+        rootTransform,
+        fullViewBox,
+        rect.width,
+        rect.height,
+        maxZoom,
+      );
+      if (!next) return false;
+      setPan(next.pan);
+      setZoom(next.zoom);
+      return true;
+    };
+
+    if (apply()) return;
+
+    // Viewport may not have layout yet (fullscreen flex) — retry next frames.
+    let tries = 0;
+    let raf = 0;
+    const tick = () => {
+      tries += 1;
+      if (apply() || tries >= 20) return;
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [fitGeoBbox, fullViewBox, loading, rootTransform, maxZoom]);
 
   useEffect(() => {
     if (!fitGeoBbox || !fullViewBox || loading) return;
@@ -586,7 +748,7 @@ export function DiffMapPanel({
     const focalX = focal?.x ?? rect.width / 2;
     const focalY = focal?.y ?? rect.height / 2;
     const { pan: prevPan, zoom: prevZoom } = viewStateRef.current;
-    const next = zoomAtPoint(prevZoom, factor, prevPan, focalX, focalY);
+    const next = zoomAtPoint(prevZoom, factor, prevPan, focalX, focalY, maxZoomRef.current);
     setZoom(next.zoom);
     setPan(next.pan);
   }, [markUserInteracted]);
@@ -642,18 +804,21 @@ export function DiffMapPanel({
       const viewport = viewportRef.current;
       if (!viewport) return;
 
-      if (interactionMode === "draw" && drawPointerHandlers && svgRef.current) {
-        viewport.setPointerCapture(e.pointerId);
-        drawPointerHandlers.onPointerDown(e, svgRef.current);
-        e.preventDefault();
-        return;
-      }
-
       pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
       viewport.setPointerCapture(e.pointerId);
 
       if (pointersRef.current.size >= 2) {
         beginPinch();
+        if (interactionMode === "draw") {
+          drawSuppressedRef.current = true;
+          onDrawInterrupt?.();
+        }
+        e.preventDefault();
+        return;
+      }
+
+      if (interactionMode === "draw" && drawPointerHandlers && svgRef.current) {
+        drawPointerHandlers.onPointerDown(e, svgRef.current);
         e.preventDefault();
         return;
       }
@@ -681,17 +846,20 @@ export function DiffMapPanel({
         pointerId: e.pointerId,
       };
     },
-    [beginPinch, drawPointerHandlers, exportMode, exportFrame, interactionMode, pan.x, pan.y],
+    [
+      beginPinch,
+      drawPointerHandlers,
+      exportMode,
+      exportFrame,
+      interactionMode,
+      onDrawInterrupt,
+      pan.x,
+      pan.y,
+    ],
   );
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent) => {
-      if (interactionMode === "draw" && drawPointerHandlers && svgRef.current) {
-        drawPointerHandlers.onPointerMove(e, svgRef.current);
-        e.preventDefault();
-        return;
-      }
-
       if (!pointersRef.current.has(e.pointerId)) return;
       pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
@@ -713,11 +881,20 @@ export function DiffMapPanel({
           pinchRef.current.pan,
           focalX,
           focalY,
+          maxZoomRef.current,
         );
         markUserInteracted();
         setZoom(next.zoom);
         setPan(next.pan);
         e.preventDefault();
+        return;
+      }
+
+      if (interactionMode === "draw" && drawPointerHandlers && svgRef.current) {
+        if (pointersRef.current.size <= 1 && !drawSuppressedRef.current) {
+          drawPointerHandlers.onPointerMove(e, svgRef.current);
+          e.preventDefault();
+        }
         return;
       }
 
@@ -783,16 +960,33 @@ export function DiffMapPanel({
 
   const handlePointerUp = useCallback(
     (e: React.PointerEvent) => {
+      const hadPointer = pointersRef.current.has(e.pointerId);
+      pointersRef.current.delete(e.pointerId);
+
+      if (viewportRef.current?.hasPointerCapture(e.pointerId)) {
+        viewportRef.current.releasePointerCapture(e.pointerId);
+      }
+
       if (interactionMode === "draw" && drawPointerHandlers && svgRef.current) {
-        if (viewportRef.current?.hasPointerCapture(e.pointerId)) {
-          viewportRef.current.releasePointerCapture(e.pointerId);
+        if (pointersRef.current.size >= 2) {
+          beginPinch();
+          e.preventDefault();
+          return;
         }
-        drawPointerHandlers.onPointerUp(e, svgRef.current);
-        e.preventDefault();
+
+        pinchRef.current = null;
+
+        if (pointersRef.current.size === 0) {
+          const suppressed = drawSuppressedRef.current;
+          drawSuppressedRef.current = false;
+          if (!suppressed) {
+            drawPointerHandlers.onPointerUp(e, svgRef.current);
+          }
+          e.preventDefault();
+        }
         return;
       }
 
-      const hadPointer = pointersRef.current.delete(e.pointerId);
       if (!hadPointer) return;
 
       if (viewportRef.current?.hasPointerCapture(e.pointerId)) {
@@ -831,12 +1025,14 @@ export function DiffMapPanel({
   const canUseGps = isGeoreferencedCrs(ocadCrs);
 
   const panToMapCoord = useCallback(
-    (mapCoord: [number, number], targetZoom = 8) => {
+    (mapCoord: [number, number], targetZoom = 8, options?: { markInteraction?: boolean }) => {
       const viewport = viewportRef.current;
       if (!viewport || !fullViewBox) return;
-      markUserInteracted();
+      if (options?.markInteraction !== false) {
+        markUserInteracted();
+      }
       const rect = viewport.getBoundingClientRect();
-      const nextZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, targetZoom));
+      const nextZoom = Math.min(maxZoomRef.current, Math.max(MIN_ZOOM, targetZoom));
       const [svgX, svgY] = geoToSvgUserPoint(mapCoord, rootTransform);
       const [screenX, screenY] = mapPointToScreen(
         svgX,
@@ -853,6 +1049,33 @@ export function DiffMapPanel({
     },
     [fullViewBox, markUserInteracted, rootTransform],
   );
+
+  const panToMapCoordAtDisplayScale = useCallback(
+    (mapCoord: [number, number]) => {
+      const zoom100 = maxZoomForMapScale(ocadMapScaleRef.current);
+      panToMapCoord(mapCoord, zoom100, { markInteraction: false });
+    },
+    [panToMapCoord],
+  );
+
+  useEffect(() => {
+    if (!gpsTrackFollow?.active || !fullViewBox) return;
+
+    const follow = () => {
+      const coord = gpsTrackFollow.mapCoordRef.current;
+      if (coord) panToMapCoordAtDisplayScale(coord);
+    };
+
+    follow();
+    const id = window.setInterval(follow, GPS_TRACK_FOLLOW_INTERVAL_MS);
+    return () => window.clearInterval(id);
+  }, [
+    fullViewBox,
+    gpsTrackFollow?.active,
+    gpsTrackFollow?.mapCoordRef,
+    gpsTrackFollow?.recenterToken,
+    panToMapCoordAtDisplayScale,
+  ]);
 
   const applyGpsPosition = useCallback(
     (coords: GeolocationCoordinates, autoCenter: boolean) => {
@@ -958,6 +1181,10 @@ export function DiffMapPanel({
     };
   }, []);
 
+  useEffect(() => {
+    onOcadCrsReady?.(ocadCrs);
+  }, [ocadCrs, onOcadCrsReady]);
+
   const gpsMarker = useMemo(() => {
     if (!gpsFix || !fullViewBox || !viewportRef.current) return null;
     const viewport = viewportRef.current;
@@ -1003,8 +1230,11 @@ export function DiffMapPanel({
           >
             −
           </button>
-          <span className="min-w-[3.5rem] text-center text-xs tabular-nums text-slate-500">
-            {Math.round(zoom * 100)}%
+          <span
+            className="min-w-[4.5rem] text-center text-xs tabular-nums text-slate-500"
+            title="Nominal kartskala vid aktuell zoom"
+          >
+            {formatMapDisplayScale(ocadMapScale, zoom)}
           </span>
           <button
             type="button"
@@ -1076,8 +1306,18 @@ export function DiffMapPanel({
           onCancel={cancelExportMode}
           exporting={exporting}
           error={exportError}
+          suggestionOverlayCount={suggestionOverlays?.length}
         />
       )}
+
+      <OcdSuggestionSymbolDialog
+        layers={mapLayers}
+        open={ocdSymbolDialogOpen}
+        onCancel={() => setOcdSymbolDialogOpen(false)}
+        onConfirm={(mapping) => {
+          void performExport(mapping);
+        }}
+      />
 
       <div
         ref={viewportRef}
@@ -1284,9 +1524,11 @@ export function DiffMapPanel({
 
         {!infoChange && !clickHint && !exportMode && (
           <div className="pointer-events-none absolute right-3 top-3 z-20 max-w-[calc(100%-1.5rem)] rounded-lg border border-slate-200 bg-white/90 px-2 py-1 text-xs text-slate-500 shadow-sm">
-            {clickableItems.length > 0
-              ? "Tryck på kartan för objektinfo · nyp för att zooma"
-              : "Dra för att panorera · nyp eller +/− för att zooma"}
+            {interactionMode === "draw"
+              ? "Ritläge — nyp med två fingrar för att zooma"
+              : clickableItems.length > 0
+                ? "Tryck på kartan för objektinfo · nyp för att zooma"
+                : "Dra för att panorera · nyp eller +/− för att zooma"}
           </div>
         )}
       </div>

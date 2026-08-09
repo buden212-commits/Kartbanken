@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { assertVersionViewAccess, getMapVersionOr404 } from "@/lib/maps/version-lookup";
 import { VersionMapClient } from "@/components/version-map-client";
+import { canCreateMapSuggestion } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
 
 export const maxDuration = 300;
@@ -36,6 +37,8 @@ export default async function VersionMapPage({ params }: PageProps) {
   });
   if (!version) notFound();
 
+  const canSuggest = canCreateMapSuggestion(session.user.role);
+
   return (
     <VersionMapClient
       mapSlug={slug}
@@ -44,6 +47,8 @@ export default async function VersionMapPage({ params }: PageProps) {
       versionNumber={version.versionNumber}
       fileName={version.originalFilename}
       objectCount={version.objectCount}
+      isPublished={version.isPublished}
+      canSuggest={canSuggest}
     />
   );
 }

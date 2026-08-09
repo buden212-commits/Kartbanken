@@ -4,7 +4,7 @@
 
 import { useRouter } from "next/navigation";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import {
 
@@ -32,6 +32,7 @@ import {
 } from "@/lib/checkout/integration-warnings";
 
 import { IntegrationWarningsPanel } from "@/components/integration-warnings-panel";
+import { HelpSectionHeading } from "@/components/help-link-icon";
 
 
 
@@ -116,6 +117,8 @@ type Props = {
   isAdmin: boolean;
 
   isOwner: boolean;
+
+  subsetNotice?: ReactNode;
 
 };
 
@@ -233,11 +236,15 @@ export function CheckoutDetailClient({
 
   isOwner,
 
+  subsetNotice,
+
 }: Props) {
 
   const router = useRouter();
 
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+
+  const [integrationReviewed, setIntegrationReviewed] = useState(false);
 
   const loading = pendingAction !== null;
 
@@ -817,6 +824,10 @@ export function CheckoutDetailClient({
 
         </div>
 
+
+
+        {subsetNotice}
+
       </div>
 
 
@@ -825,7 +836,7 @@ export function CheckoutDetailClient({
 
         <section className="card">
 
-          <h2 className="text-lg font-medium text-slate-900">Checka in redigerad utcheckning</h2>
+          <HelpSectionHeading section="checkout">Checka in redigerad utcheckning</HelpSectionHeading>
 
           <form onSubmit={handleCheckin} className="mt-4 space-y-3">
 
@@ -959,8 +970,10 @@ export function CheckoutDetailClient({
 
         <section className="card">
 
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-medium text-slate-900">Utcheckningsdiff mot aktuell version</h2>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <HelpSectionHeading section="checkout">Utcheckningsdiff mot aktuell version</HelpSectionHeading>
+            </div>
             <button
               type="button"
               disabled={retryingDiff}
@@ -1043,7 +1056,7 @@ export function CheckoutDetailClient({
 
         <section className="card">
 
-          <h2 className="text-lg font-medium text-slate-900">Bekräfta integration</h2>
+          <HelpSectionHeading section="checkout">Bekräfta integration</HelpSectionHeading>
 
           <p className="mt-2 text-sm text-slate-600">
 
@@ -1105,7 +1118,7 @@ export function CheckoutDetailClient({
 
         <section className="card border-ifk-blue/20">
 
-          <h2 className="text-lg font-medium text-slate-900">Admin: bekräfta och integrera</h2>
+          <HelpSectionHeading section="checkout">Admin: bekräfta och integrera</HelpSectionHeading>
 
           <p className="mt-2 text-sm text-slate-600">
 
@@ -1125,11 +1138,23 @@ export function CheckoutDetailClient({
 
           )}
 
+          <label className="mt-4 flex cursor-pointer items-start gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={integrationReviewed}
+              onChange={(e) => setIntegrationReviewed(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300 text-ifk-blue focus:ring-ifk-blue/20"
+            />
+            <span>
+              Jag har granskat diff och eventuella varningar och vill integrera ändringarna.
+            </span>
+          </label>
+
           <button
 
             type="button"
 
-            disabled={loading}
+            disabled={loading || !integrationReviewed}
 
             onClick={handleAdminIntegrate}
 

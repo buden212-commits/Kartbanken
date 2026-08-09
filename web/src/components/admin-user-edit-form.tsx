@@ -1,9 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import { Role } from "@/lib/roles";
 import { canSubscribeToNotifications } from "@/lib/settings/notification-recipients";
+import { HelpLinkIcon } from "@/components/help-link-icon";
 
 export type EditableUser = {
   id: string;
@@ -16,15 +17,22 @@ export type EditableUser = {
 
 type UpdateResult = { ok: true } | { ok: false; error: string };
 
-type Props = {
+type PanelProps = {
   user: EditableUser;
   currentUserId: string;
   updateUser: (formData: FormData) => Promise<UpdateResult>;
+  onClose: () => void;
+  className?: string;
 };
 
-export function AdminUserEditForm({ user, currentUserId, updateUser }: Props) {
+function AdminUserEditFormPanel({
+  user,
+  currentUserId,
+  updateUser,
+  onClose,
+  className = "",
+}: PanelProps) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const isSelf = user.id === currentUserId;
@@ -41,33 +49,22 @@ export function AdminUserEditForm({ user, currentUserId, updateUser }: Props) {
         setError(result.error);
         return;
       }
-      setOpen(false);
+      onClose();
       router.refresh();
     });
-  }
-
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => {
-          setError(null);
-          setOpen(true);
-        }}
-        className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
-      >
-        Redigera
-      </button>
-    );
   }
 
   return (
     <form
       onSubmit={handleSubmit}
-      className="mt-2 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-left"
+      className={`space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-left ${className}`.trim()}
     >
+      <div className="flex min-w-0 items-center gap-2">
+        <h3 className="text-sm font-medium text-slate-900">Redigera användare</h3>
+        <HelpLinkIcon section="admin" />
+      </div>
       <input type="hidden" name="userId" value={user.id} />
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <label className="form-label" htmlFor={`edit-name-${user.id}`}>
             Namn
@@ -139,7 +136,7 @@ export function AdminUserEditForm({ user, currentUserId, updateUser }: Props) {
           </p>
         </div>
         {canSubscribe && (
-          <div className="sm:col-span-2 space-y-2">
+          <div className="sm:col-span-2 lg:col-span-4 space-y-2">
             <label className="inline-flex cursor-pointer items-start gap-2 text-sm text-slate-700">
               <input
                 type="checkbox"
@@ -188,7 +185,7 @@ export function AdminUserEditForm({ user, currentUserId, updateUser }: Props) {
           type="button"
           disabled={pending}
           onClick={() => {
-            setOpen(false);
+            onClose();
             setError(null);
           }}
           className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
@@ -197,5 +194,89 @@ export function AdminUserEditForm({ user, currentUserId, updateUser }: Props) {
         </button>
       </div>
     </form>
+  );
+}
+
+type Props = {
+  user: EditableUser;
+  currentUserId: string;
+  updateUser: (formData: FormData) => Promise<UpdateResult>;
+};
+
+export function AdminUserEditForm({ user, currentUserId, updateUser }: Props) {
+  const [open, setOpen] = useState(false);
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+      >
+        Redigera
+      </button>
+    );
+  }
+
+  return (
+    <AdminUserEditFormPanel
+      user={user}
+      currentUserId={currentUserId}
+      updateUser={updateUser}
+      onClose={() => setOpen(false)}
+      className="mt-2 w-full"
+    />
+  );
+}
+
+type TableRowProps = Props & {
+  colSpan: number;
+  children: ReactNode;
+  actionsCell?: ReactNode;
+};
+
+export function AdminUserEditTableRow({
+  user,
+  currentUserId,
+  updateUser,
+  colSpan,
+  children,
+  actionsCell,
+}: TableRowProps) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <tr className="border-b border-slate-100 last:border-0 align-top">
+        {children}
+        <td className="px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {actionsCell}
+            {!open && (
+              <button
+                type="button"
+                onClick={() => setOpen(true)}
+                className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+              >
+                Redigera
+              </button>
+            )}
+          </div>
+        </td>
+      </tr>
+      {open && (
+        <tr className="border-b border-slate-100 bg-white last:border-0">
+          <td colSpan={colSpan} className="px-4 py-3">
+            <AdminUserEditFormPanel
+              user={user}
+              currentUserId={currentUserId}
+              updateUser={updateUser}
+              onClose={() => setOpen(false)}
+              className="w-full"
+            />
+          </td>
+        </tr>
+      )}
+    </>
   );
 }

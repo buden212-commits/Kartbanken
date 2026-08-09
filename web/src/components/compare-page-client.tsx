@@ -102,6 +102,14 @@ export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
 
       {data?.status === "ok" && (
         <div className="mt-10">
+          <div className="mb-4 flex flex-wrap gap-2">
+            <a
+              href={`/api/maps/${mapSlug}/compare/export-pdf?v1=${v1}&v2=${v2}`}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Exportera PDF-rapport
+            </a>
+          </div>
           <DiffViewClient
             diff={data.summary}
             changes={data.changes}

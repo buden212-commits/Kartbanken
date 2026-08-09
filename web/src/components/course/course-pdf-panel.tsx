@@ -8,6 +8,7 @@ import {
   type PdfPaperFormat,
 } from "@/lib/course/pdf-scale";
 import { downloadMapPdf } from "@/lib/ocad/map-export";
+import { HelpLinkIcon } from "@/components/help-link-icon";
 import { useEffect, useMemo, useState } from "react";
 
 type Props = {
@@ -108,7 +109,10 @@ export function CoursePdfPanel({
 
   return (
     <div className="border-t border-slate-200 bg-white px-3 py-3">
-      <h3 className="text-sm font-medium text-slate-900">PDF-export</h3>
+      <div className="flex min-w-0 items-center gap-2">
+        <h3 className="text-sm font-medium text-slate-900">PDF-export</h3>
+        <HelpLinkIcon section="bana" />
+      </div>
       <div className="mt-2 flex flex-wrap gap-2">
         <select
           value={exportCourseId}

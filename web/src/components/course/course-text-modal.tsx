@@ -1,5 +1,7 @@
 "use client";
 
+import { HelpSectionHeading } from "@/components/help-link-icon";
+
 type Props = {
   open: boolean;
   initialText?: string;
@@ -28,7 +30,9 @@ export function CourseTextModal({
           if (text) onConfirm(text);
         }}
       >
-        <h3 className="text-lg font-medium text-slate-900">{title}</h3>
+        <HelpSectionHeading section="bana" as="h3" className="text-lg font-medium text-slate-900">
+          {title}
+        </HelpSectionHeading>
         <input
           name="text"
           type="text"

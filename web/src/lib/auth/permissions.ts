@@ -46,6 +46,14 @@ export function canCreateCourse(role: RoleType): boolean {
   return canDownload(role);
 }
 
+export function canCreateMapSuggestion(role: RoleType): boolean {
+  return canDownload(role);
+}
+
+export function canReviewMapSuggestion(role: RoleType): boolean {
+  return canUpload(role);
+}
+
 export function canEditCourse(
   role: RoleType,
   courseOwnerId: string,
@@ -91,5 +99,18 @@ export function roleLabel(role: RoleType): string {
       return "Avvisad";
     default:
       return role;
+  }
+}
+
+export function roleDescription(role: RoleType): string {
+  switch (role) {
+    case Role.ADMIN:
+      return "Allt redaktör kan, plus skapa områden, redigera områdesnamn, radera områden, godkänna konton, avbryta checkouts, integrera incheckningar och hantera systeminställningar.";
+    case Role.EDITOR:
+      return "Allt läsare kan, plus ladda upp versioner, publicera/avpublicera, se opublicerade versioner och checka ut/in områden för OCAD-redigering.";
+    case Role.READER:
+      return "Ladda ner, visa och jämföra publicerade versioner. Skapa och redigera egna banor (privata som standard).";
+    default:
+      return "";
   }
 }

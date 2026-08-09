@@ -159,6 +159,19 @@ export function hitTestTopObject<T extends CourseObjectDto | EditorObject>(
   return sorted.find((o) => hitTestObject(geoPoint, o, tolerance));
 }
 
+/** Hit test for delete — skips auto-placed control numbers (704) so controls are reachable. */
+export function hitTestTopObjectForDelete<T extends CourseObjectDto | EditorObject>(
+  geoPoint: [number, number],
+  objects: T[],
+  tolerance: number,
+): T | undefined {
+  const sorted = objects
+    .slice()
+    .sort((a, b) => b.sortOrder - a.sortOrder)
+    .filter((o) => !isControlNumberObject(o as EditorObject));
+  return sorted.find((o) => hitTestObject(geoPoint, o, tolerance));
+}
+
 /** Sum leg distances start → controls → finish in sortOrder (701/703/706). */
 export function computeCourseLengthMeters(
   objects: Array<CourseObjectDto | EditorObject>,

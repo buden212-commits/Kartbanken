@@ -21,7 +21,6 @@ export type CheckoutSelectionType =
 export const LOCKING_CHECKOUT_STATUSES: CheckoutStatus[] = [
   CheckoutStatus.ACTIVE,
   CheckoutStatus.CHECKED_IN,
-  CheckoutStatus.PENDING_USER_CONFIRM,
   CheckoutStatus.PENDING_ADMIN_CONFIRM,
 ];
 
