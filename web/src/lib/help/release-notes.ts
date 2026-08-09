@@ -7,6 +7,21 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-08-09",
+    title: "Versionshistorik — tooltips i åtgärdskolumnen",
+    items: [
+      "Ikonerna under Åtgärder visar nu rätt tooltip (ladda ner, jämför, öppna i nytt fönster, radera) i stället för «Öppna karta»",
+    ],
+  },
+  {
+    date: "2026-08-09",
+    title: "Opublicerade versioner — tydligare banner",
+    items: [
+      "Bannern listar nu vilka versionsnummer (t.ex. v4, v5) som väntar granskning",
+      "Knappar för att jämföra senaste versionen och publicera den direkt från bannern",
+    ],
+  },
+  {
     date: "2026-08-08",
     title: "Versionsflöde — tydligare väg från lagring till redigering",
     items: [

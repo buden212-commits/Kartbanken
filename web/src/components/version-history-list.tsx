@@ -56,10 +56,9 @@ function VersionSummary({
   className?: string;
 }) {
   const date = formatDateOnly(version.uploadedAt);
-  const timeTitle = formatTimeOnly(version.uploadedAt);
 
   return (
-    <div className={className} title={timeTitle}>
+    <div className={className}>
       <span className="font-mono text-sm font-medium text-slate-800">v{version.versionNumber}</span>
       <span
         className={`mt-0.5 block text-sm ${version.canView ? "text-ifk-blue" : "text-slate-600"}`}
@@ -261,26 +260,44 @@ function VersionRow({
       onClick={openMap}
       onKeyDown={handleKeyDown}
       tabIndex={version.canView ? 0 : undefined}
-      title={version.canView ? `Öppna karta · ${timeTitle}` : undefined}
     >
-      <td className="px-2 py-2 pl-3 align-top">
+      <td
+        className="px-2 py-2 pl-3 align-top"
+        title={version.canView ? `Öppna karta · ${timeTitle}` : timeTitle}
+      >
         <VersionSummary version={version} className="py-1 pr-2" />
       </td>
-      <td className="whitespace-nowrap px-2 py-2.5 text-slate-600">
+      <td
+        className="whitespace-nowrap px-2 py-2.5 text-slate-600"
+        title={version.canView ? `Öppna karta · ${timeTitle}` : undefined}
+      >
         {formatBytes(version.fileSizeBytes)}
       </td>
-      <td className="px-2 py-2.5" title={version.uploaderLabel}>
+      <td
+        className="px-2 py-2.5"
+        title={version.uploaderLabel}
+      >
         <span className="block truncate text-slate-600">{version.uploaderLabel}</span>
       </td>
-      <td className="px-2 py-2.5" title={version.comment ?? undefined}>
+      <td
+        className="px-2 py-2.5"
+        title={version.comment ?? undefined}
+      >
         <span className="line-clamp-2 break-words text-slate-600">
           {version.comment ?? "—"}
         </span>
       </td>
-      <td className="whitespace-nowrap px-2 py-2.5 text-xs text-slate-500">
+      <td
+        className="whitespace-nowrap px-2 py-2.5 text-xs text-slate-500"
+        title={version.canView ? `Öppna karta · ${timeTitle}` : undefined}
+      >
         {parseLabel(version)}
       </td>
-      <td className="px-2 py-2.5" onClick={stopRowNavigation} onKeyDown={stopRowNavigation}>
+      <td
+        className="px-2 py-2.5"
+        onClick={stopRowNavigation}
+        onKeyDown={stopRowNavigation}
+      >
         <div className="flex flex-col gap-1">
           <VersionPublishToggle
             mapSlug={mapSlug}
@@ -298,7 +315,11 @@ function VersionRow({
           />
         </div>
       </td>
-      <td className="px-2 py-2.5" onClick={stopRowNavigation} onKeyDown={stopRowNavigation}>
+      <td
+        className="px-2 py-2.5"
+        onClick={stopRowNavigation}
+        onKeyDown={stopRowNavigation}
+      >
         <VersionHistoryActions
           mapSlug={mapSlug}
           versionId={version.id}

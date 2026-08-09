@@ -150,13 +150,20 @@ export default async function MapDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      {canManagePublication && versionContext.head && (
+      {canManagePublication && (
         <UnpublishedVersionBanner
           mapSlug={map.slug}
-          headVersionNumber={versionContext.head.versionNumber}
-          headIsPublished={versionContext.head.isPublished}
           publishedVersionNumber={versionContext.published?.versionNumber ?? null}
-          unpublishedCount={versionContext.unpublishedHeadCount}
+          publishedVersionId={versionContext.published?.id ?? null}
+          unpublishedVersions={map.versions
+            .filter((v) => !v.isPublished)
+            .map((v) => ({
+              id: v.id,
+              versionNumber: v.versionNumber,
+              parseStatus: v.parseStatus,
+              previousVersionId: map.versions.find((p) => p.versionNumber === v.versionNumber - 1)
+                ?.id,
+            }))}
           canManage={canManagePublication}
         />
       )}

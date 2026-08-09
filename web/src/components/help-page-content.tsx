@@ -543,6 +543,7 @@ export async function HelpPageContent() {
             <HelpList
               items={[
                 "Endast en version kan vara publicerad åt gången per område",
+                "Gul banner på områdessidan listar opublicerade versionsnummer (t.ex. v4, v5) med knappar för jämförelse och publicering",
                 "Kryssa i Publicerad i versionshistoriken för att göra versionen synlig för läsare — tidigare publicerad version avpubliceras då automatiskt",
                 "Versioner med parsningsfel kan inte publiceras",
                 "Markera Rek. för intern rekommenderad version (valfritt komplement till publicering)",
