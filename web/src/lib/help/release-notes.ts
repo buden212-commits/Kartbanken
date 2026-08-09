@@ -8,6 +8,13 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-09",
+    title: "Kartförslag — äldre versioner i listan",
+    items: [
+      "Kartförslag på kartan och i listan inkluderar nu förslag från äldre versioner (t.ex. v5) även när en nyare version (v7) är publicerad — samma som i statusbannern",
+    ],
+  },
+  {
+    date: "2026-08-09",
     title: "Kartförslag — alla aktiva versioner på kartan",
     items: [
       "Kartförslag på kartan och i listan visar alla öppna och pågående förslag oavsett version — kartan visar fortfarande senaste publicerade version som underlag",

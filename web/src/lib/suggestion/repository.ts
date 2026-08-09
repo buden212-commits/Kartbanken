@@ -165,7 +165,6 @@ export async function listPendingSuggestionsForMap(mapFileId: string) {
   return prisma.mapSuggestion.findMany({
     where: {
       mapFileId,
-      mapVersion: { isPublished: true },
       status: { in: [SuggestionStatus.OPEN, SuggestionStatus.IN_PROGRESS] },
     },
     select: suggestionWithUserSelect,
@@ -206,13 +205,12 @@ export async function listSuggestionOverlaysForVersion(
   );
 }
 
-/** Öppna och pågående kartförslag på alla publicerade versioner (för områdessidan). */
+/** Öppna och pågående kartförslag på alla versioner (för områdessidan). */
 export async function listPendingSuggestionOverlaysForMap(mapFileId: string) {
   const rows = await prisma.mapSuggestion.findMany({
     where: {
       mapFileId,
       status: { in: [SuggestionStatus.OPEN, SuggestionStatus.IN_PROGRESS] },
-      mapVersion: { isPublished: true },
     },
     select: {
       id: true,
