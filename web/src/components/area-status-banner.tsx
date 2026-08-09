@@ -1,5 +1,12 @@
 import Link from "next/link";
 
+export type SuggestionVersionBreakdown = {
+  versionId: string;
+  versionNumber: number;
+  open: number;
+  inProgress: number;
+};
+
 type Props = {
   mapSlug: string;
   /** Senaste (head) version — null om inga versioner. */
@@ -8,14 +15,13 @@ type Props = {
   headIsPublished: boolean;
   publishedVersionNumber: number | null;
   publishedVersionId: string | null;
-  openSuggestionCount: number;
-  inProgressSuggestionCount: number;
+  suggestionBreakdown: SuggestionVersionBreakdown[];
   activeCheckoutCount: number;
   /** Visa opublicerad head-version (redaktörer). */
   showVersionStatus: boolean;
 };
 
-function formatSuggestionLine(open: number, inProgress: number): string {
+function formatSuggestionCounts(open: number, inProgress: number): string {
   const parts: string[] = [];
   if (open > 0) {
     parts.push(`${open} öppna`);
@@ -23,7 +29,7 @@ function formatSuggestionLine(open: number, inProgress: number): string {
   if (inProgress > 0) {
     parts.push(`${inProgress} pågår`);
   }
-  return `${parts.join(", ")} kartförslag`;
+  return parts.join(", ");
 }
 
 export function AreaStatusBanner({
@@ -33,11 +39,15 @@ export function AreaStatusBanner({
   headIsPublished,
   publishedVersionNumber,
   publishedVersionId,
-  openSuggestionCount,
-  inProgressSuggestionCount,
+  suggestionBreakdown,
   activeCheckoutCount,
   showVersionStatus,
 }: Props) {
+  const openSuggestionCount = suggestionBreakdown.reduce((sum, row) => sum + row.open, 0);
+  const inProgressSuggestionCount = suggestionBreakdown.reduce(
+    (sum, row) => sum + row.inProgress,
+    0,
+  );
   const pendingSuggestions = openSuggestionCount + inProgressSuggestionCount;
   const unpublishedHead =
     showVersionStatus && headVersionNumber != null && !headIsPublished;
@@ -65,8 +75,27 @@ export function AreaStatusBanner({
         {pendingSuggestions > 0 && (
           <li>
             <Link href={`/maps/${mapSlug}#kartforslag`} className="text-ifk-blue hover:underline">
-              {formatSuggestionLine(openSuggestionCount, inProgressSuggestionCount)}
+              {formatSuggestionCounts(openSuggestionCount, inProgressSuggestionCount)} kartförslag
             </Link>
+            {suggestionBreakdown.length > 0 && (
+              <ul className="mt-1 space-y-0.5 pl-4 text-xs text-amber-900/85">
+                {suggestionBreakdown.map((row) => {
+                  const appliesToOlder =
+                    publishedVersionNumber != null &&
+                    row.versionNumber < publishedVersionNumber;
+                  return (
+                    <li key={row.versionId}>
+                      <strong>v{row.versionNumber}</strong>
+                      {appliesToOlder && (
+                        <span className="text-violet-800"> · gäller äldre version</span>
+                      )}
+                      {": "}
+                      {formatSuggestionCounts(row.open, row.inProgress)}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </li>
         )}
 

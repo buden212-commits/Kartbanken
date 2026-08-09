@@ -542,7 +542,7 @@ export async function HelpPageContent() {
             <HelpList
               items={[
                 "Endast en version kan vara publicerad åt gången per område",
-                "Gul statusbanner på områdessidan när kartförslag väntar, senaste version inte är publicerad eller det finns utcheckade områden",
+                "Gul statusbanner på områdessidan när kartförslag väntar, senaste version inte är publicerad eller det finns utcheckade områden — med uppdelning per versionsnummer för kartförslag",
                 "Under Kartförslag anges vilken version som är publicerad för läsare",
                 "Kryssa i Publicerad i versionshistoriken för att göra versionen synlig för läsare — tidigare publicerad version avpubliceras då automatiskt",
                 "Versioner med parsningsfel kan inte publiceras",

@@ -8,6 +8,13 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-09",
+    title: "Statusbanner — kartförslag per version",
+    items: [
+      "Gul banner visar nu hur många öppna och pågående kartförslag som finns på varje version (t.ex. v13: 3 öppna · v11: 1 öppen, gäller äldre version)",
+    ],
+  },
+  {
+    date: "2026-08-09",
     title: "Jämför valfria versioner",
     items: [
       "Ovanför versionshistoriken kan du välja två valfria versioner (A och B) och jämföra dem — samma diff-vy som tidigare",

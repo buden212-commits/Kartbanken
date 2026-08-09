@@ -18,7 +18,7 @@ import { CheckoutListPanel } from "@/components/checkout-list-panel";
 import { CheckoutOverviewMap } from "@/components/checkout-overview-map";
 import { SuggestionAreaSection } from "@/components/suggestion/suggestion-map-overlay";
 import { CourseListPanel } from "@/components/course/course-list-panel";
-import { listSuggestionsForMap, serializeSuggestionSummary, getLatestPublishedVersionNumber, countPendingSuggestionsForMap } from "@/lib/suggestion/repository";
+import { listSuggestionsForMap, serializeSuggestionSummary, getLatestPublishedVersionNumber, listPendingSuggestionsByVersion } from "@/lib/suggestion/repository";
 import { Role } from "@/lib/roles";
 import { CheckoutHistoryPanel } from "@/components/checkout-history-panel";
 import { MapArchiveButton } from "@/components/map-archive-button";
@@ -59,8 +59,8 @@ export default async function MapDetailPage({ params }: PageProps) {
   const headVersionId = await getHeadVersionId(map.id);
   const checkoutListItems = activeCheckouts.map(serializeCheckoutResponse);
 
-  const pendingSuggestionCounts =
-    session?.user?.id ? await countPendingSuggestionsForMap(map.id) : { open: 0, inProgress: 0 };
+  const pendingSuggestionBreakdown =
+    session?.user?.id ? await listPendingSuggestionsByVersion(map.id) : [];
 
   const courseList =
     session?.user?.id && role && canCreateCourse(role)
@@ -156,8 +156,7 @@ export default async function MapDetailPage({ params }: PageProps) {
           headIsPublished={headVersion?.isPublished ?? false}
           publishedVersionNumber={latestPublishedVersion?.versionNumber ?? null}
           publishedVersionId={latestPublishedVersion?.id ?? null}
-          openSuggestionCount={pendingSuggestionCounts.open}
-          inProgressSuggestionCount={pendingSuggestionCounts.inProgress}
+          suggestionBreakdown={pendingSuggestionBreakdown}
           activeCheckoutCount={activeCheckouts.length}
           showVersionStatus={canManagePublication}
         />

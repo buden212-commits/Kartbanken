@@ -204,26 +204,61 @@ export async function countOpenSuggestionsForUser(mapFileId: string, userId: str
   });
 }
 
-export async function countPendingSuggestionsForMap(mapFileId: string): Promise<{
-  open: number;
-  inProgress: number;
-}> {
-  const rows = await prisma.mapSuggestion.groupBy({
-    by: ["status"],
+export async function listPendingSuggestionsByVersion(mapFileId: string): Promise<
+  {
+    versionId: string;
+    versionNumber: number;
+    open: number;
+    inProgress: number;
+  }[]
+> {
+  const rows = await prisma.mapSuggestion.findMany({
     where: {
       mapFileId,
       status: { in: [SuggestionStatus.OPEN, SuggestionStatus.IN_PROGRESS] },
     },
-    _count: { _all: true },
+    select: {
+      status: true,
+      mapVersion: { select: { id: true, versionNumber: true } },
+    },
   });
 
-  let open = 0;
-  let inProgress = 0;
+  const byVersion = new Map<
+    string,
+    { versionId: string; versionNumber: number; open: number; inProgress: number }
+  >();
+
   for (const row of rows) {
-    if (row.status === SuggestionStatus.OPEN) open = row._count._all;
-    if (row.status === SuggestionStatus.IN_PROGRESS) inProgress = row._count._all;
+    let entry = byVersion.get(row.mapVersion.id);
+    if (!entry) {
+      entry = {
+        versionId: row.mapVersion.id,
+        versionNumber: row.mapVersion.versionNumber,
+        open: 0,
+        inProgress: 0,
+      };
+      byVersion.set(row.mapVersion.id, entry);
+    }
+    if (row.status === SuggestionStatus.OPEN) entry.open += 1;
+    if (row.status === SuggestionStatus.IN_PROGRESS) entry.inProgress += 1;
   }
-  return { open, inProgress };
+
+  return [...byVersion.values()].sort((a, b) => b.versionNumber - a.versionNumber);
+}
+
+/** @deprecated Använd listPendingSuggestionsByVersion */
+export async function countPendingSuggestionsForMap(mapFileId: string): Promise<{
+  open: number;
+  inProgress: number;
+}> {
+  const rows = await listPendingSuggestionsByVersion(mapFileId);
+  return rows.reduce(
+    (acc, row) => ({
+      open: acc.open + row.open,
+      inProgress: acc.inProgress + row.inProgress,
+    }),
+    { open: 0, inProgress: 0 },
+  );
 }
 
 export async function getSuggestionById(suggestionId: string) {
