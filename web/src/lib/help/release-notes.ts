@@ -8,6 +8,22 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-09",
+    title: "Jämför valfria versioner",
+    items: [
+      "Ovanför versionshistoriken kan du välja två valfria versioner (A och B) och jämföra dem — samma diff-vy som tidigare",
+      "Systemet sorterar automatiskt så äldre version blir utgångspunkt och nyare blir mål",
+    ],
+  },
+  {
+    date: "2026-08-09",
+    title: "Områdessidan — gul statusbanner",
+    items: [
+      "Gul banner högst upp när något kräver uppmärksamhet: kartförslag som väntar, opublicerad senaste version (redaktörer) eller utcheckade områden",
+      "Bannern döljs när senaste versionen är publicerad och inga öppna eller pågående kartförslag finns (saknas utcheckningar)",
+    ],
+  },
+  {
+    date: "2026-08-09",
     title: "Kartexport — exportknapp fungerar igen",
     items: [
       "Export från kartvyn (PDF, GeoTIFF, OCD) fungerar igen efter merge-fix",

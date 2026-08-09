@@ -204,6 +204,28 @@ export async function countOpenSuggestionsForUser(mapFileId: string, userId: str
   });
 }
 
+export async function countPendingSuggestionsForMap(mapFileId: string): Promise<{
+  open: number;
+  inProgress: number;
+}> {
+  const rows = await prisma.mapSuggestion.groupBy({
+    by: ["status"],
+    where: {
+      mapFileId,
+      status: { in: [SuggestionStatus.OPEN, SuggestionStatus.IN_PROGRESS] },
+    },
+    _count: { _all: true },
+  });
+
+  let open = 0;
+  let inProgress = 0;
+  for (const row of rows) {
+    if (row.status === SuggestionStatus.OPEN) open = row._count._all;
+    if (row.status === SuggestionStatus.IN_PROGRESS) inProgress = row._count._all;
+  }
+  return { open, inProgress };
+}
+
 export async function getSuggestionById(suggestionId: string) {
   return prisma.mapSuggestion.findUnique({
     where: { id: suggestionId },

@@ -95,7 +95,7 @@ flowchart TD
   subgraph entry ["Vägar in"]
     E1[Efter uppladdning]
     E2[Jämför-knapp i historiken]
-    E3[Jämför senaste två]
+    E3[Välj två versioner]
   end
   E1 --> S
   E2 --> S

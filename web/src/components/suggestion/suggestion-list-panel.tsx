@@ -99,7 +99,7 @@ export function SuggestionListPanel({
   }
 
   return (
-    <section className="mt-10">
+    <section className="mt-10" id="kartforslag">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-medium text-slate-900">
           Kartförslag ({openCount} öppna

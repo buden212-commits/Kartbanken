@@ -542,6 +542,7 @@ export async function HelpPageContent() {
             <HelpList
               items={[
                 "Endast en version kan vara publicerad åt gången per område",
+                "Gul statusbanner på områdessidan när kartförslag väntar, senaste version inte är publicerad eller det finns utcheckade områden",
                 "Under Kartförslag anges vilken version som är publicerad för läsare",
                 "Kryssa i Publicerad i versionshistoriken för att göra versionen synlig för läsare — tidigare publicerad version avpubliceras då automatiskt",
                 "Versioner med parsningsfel kan inte publiceras",
@@ -564,9 +565,9 @@ export async function HelpPageContent() {
         <HelpSection id="jamfor" title="Jämföra versioner">
           <p>
             Jämförelsen visar skillnader mellan två versioner: tillagda, borttagna och ändrade
-            kartobjekt. Du når jämförelsen via knappen <strong>Jämför</strong> i
-            versionshistoriken, via <strong>Jämför senaste två versioner</strong>, eller automatiskt
-            efter uppladdning.
+            kartobjekt. Du når jämförelsen via <strong>Jämför versioner</strong> ovanför
+            versionshistoriken (välj två valfria versioner), via knappen <strong>Jämför</strong> i
+            tabellen, eller automatiskt efter uppladdning.
           </p>
 
           <h3 className="font-medium text-slate-900">Färgkoder</h3>
