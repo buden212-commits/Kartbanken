@@ -71,7 +71,7 @@ function filterChangesToScope(
     }
 
     warnings.push(
-      `Ändring på objekt ${id} (${change.symbolName}) ligger utanför ursprungligt checkout-urval.`,
+      `Ändring på objekt ${id} (${change.symbolName}) ligger utanför ursprungligt utcheckningsurval.`,
     );
   }
 
@@ -124,11 +124,11 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
   });
 
   if (!checkout) {
-    throw new Error("Checkout hittades inte");
+    throw new Error("Utcheckning hittades inte");
   }
 
   if (!checkout.checkinStoragePath) {
-    throw new Error("Checkout saknar incheckad fil");
+    throw new Error("Utcheckningen saknar incheckad fil");
   }
 
   const headVersion = checkout.mapFile.versions[0];

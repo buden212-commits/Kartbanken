@@ -22,7 +22,7 @@ export function CheckoutAreaCta({
   if (!canCheckout) {
     if (showReaderHint) {
       return (
-        <p className="text-sm text-slate-500">Checkout kräver redaktörsbehörighet</p>
+        <p className="text-sm text-slate-500">Utcheckning kräver redaktörsbehörighet</p>
       );
     }
     return null;

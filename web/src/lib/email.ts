@@ -813,16 +813,16 @@ async function notifyCheckoutCreatedAsync(ctx: CheckoutMailContext): Promise<voi
   if (!(await isEmailConfigured())) return;
 
   const url = checkoutDetailUrl(ctx.map.slug, ctx.checkoutId);
-  const subject = `Ny checkout — ${ctx.map.title}`;
+  const subject = `Ny utcheckning — ${ctx.map.title}`;
   const text = [
     `${ownerLabel(ctx.owner)} har checkat ut ett område på ${ctx.map.title}.`,
     "",
-    `Visa checkout: ${url}`,
+    `Visa utcheckning: ${url}`,
   ].join("\n");
 
   const bodyHtml = `
     <p style="margin:0 0 16px;"><strong>${escapeHtml(ownerLabel(ctx.owner))}</strong> har checkat ut ett område på <strong>${escapeHtml(ctx.map.title)}</strong>.</p>
-    <p style="margin:0;"><a href="${escapeHtml(url)}" style="display:inline-block;padding:10px 18px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:500;">Visa checkout</a></p>
+    <p style="margin:0;"><a href="${escapeHtml(url)}" style="display:inline-block;padding:10px 18px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:500;">Visa utcheckning</a></p>
   `.trim();
 
   const html = buildHtmlEmail({ title: subject, bodyHtml });
@@ -838,7 +838,7 @@ async function notifyCheckinSubmittedAsync(ctx: CheckoutMailContext): Promise<vo
   if (!(await isEmailConfigured())) return;
 
   const url = checkoutDetailUrl(ctx.map.slug, ctx.checkoutId);
-  const subject = `Checkin inskickad — ${ctx.map.title}`;
+  const subject = `Incheckning inskickad — ${ctx.map.title}`;
   const text = [
     `${ownerLabel(ctx.owner)} har checkat in ett redigerat område på ${ctx.map.title}.`,
     "",
@@ -881,9 +881,9 @@ async function notifyCheckoutUserConfirmedAsync(ctx: CheckoutMailContext): Promi
   if (!(await isEmailConfigured())) return;
 
   const url = checkoutDetailUrl(ctx.map.slug, ctx.checkoutId);
-  const subject = `Checkout bekräftad av användare — ${ctx.map.title}`;
+  const subject = `Utcheckning bekräftad av användare — ${ctx.map.title}`;
   const text = [
-    `${ownerLabel(ctx.owner)} har bekräftat integration av checkout på ${ctx.map.title}.`,
+    `${ownerLabel(ctx.owner)} har bekräftat integration av utcheckning på ${ctx.map.title}.`,
     "Admin-bekräftelse krävs innan ändringar slås ihop.",
     "",
     `Granska: ${url}`,
@@ -892,7 +892,7 @@ async function notifyCheckoutUserConfirmedAsync(ctx: CheckoutMailContext): Promi
   const bodyHtml = `
     <p style="margin:0 0 16px;"><strong>${escapeHtml(ownerLabel(ctx.owner))}</strong> har bekräftat integration.</p>
     <p style="margin:0 0 16px;">Admin-bekräftelse krävs innan ändringar slås ihop med aktuella versionen.</p>
-    <p style="margin:0;"><a href="${escapeHtml(url)}" style="display:inline-block;padding:10px 18px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:500;">Granska checkout</a></p>
+    <p style="margin:0;"><a href="${escapeHtml(url)}" style="display:inline-block;padding:10px 18px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:500;">Granska utcheckning</a></p>
   `.trim();
 
   const html = buildHtmlEmail({ title: subject, bodyHtml });
@@ -912,9 +912,9 @@ async function notifyCheckoutIntegratedAsync(
 
   const mapUrl = `${getAppBaseUrl()}/maps/${ctx.map.slug}`;
   const versionUrl = ctx.versionId ? `${mapUrl}/versions/${ctx.versionId}` : mapUrl;
-  const subject = `Checkout integrerad — ${ctx.map.title}`;
+  const subject = `Utcheckning integrerad — ${ctx.map.title}`;
   const text = [
-    `Checkout på ${ctx.map.title} har integrerats som version ${ctx.versionNumber}.`,
+    `Utcheckning på ${ctx.map.title} har integrerats som version ${ctx.versionNumber}.`,
     "",
     "Versionen är opublicerad — publicera den i versionshistoriken innan läsare ser ändringarna.",
     "",
@@ -925,7 +925,7 @@ async function notifyCheckoutIntegratedAsync(
     .join("\n");
 
   const bodyHtml = `
-    <p style="margin:0 0 16px;">Checkout på <strong>${escapeHtml(ctx.map.title)}</strong> har integrerats som <strong>v${ctx.versionNumber}</strong>.</p>
+    <p style="margin:0 0 16px;">Utcheckning på <strong>${escapeHtml(ctx.map.title)}</strong> har integrerats som <strong>v${ctx.versionNumber}</strong>.</p>
     <p style="margin:0 0 16px;"><strong>Versionen är opublicerad</strong> — granska diff och publicera i versionshistoriken innan läsare ser ändringarna.</p>
     <p style="margin:0 0 12px;"><a href="${escapeHtml(versionUrl)}" style="display:inline-block;padding:10px 18px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:500;">Visa version</a></p>
     <p style="margin:0;"><a href="${escapeHtml(mapUrl)}" style="color:#2563eb;">Gå till områdessidan</a></p>
@@ -948,10 +948,10 @@ async function notifyCheckoutCancelledAsync(
   if (!(await isEmailConfigured())) return;
 
   const url = checkoutDetailUrl(ctx.map.slug, ctx.checkoutId);
-  const subject = `Checkout avbruten — ${ctx.map.title}`;
+  const subject = `Utcheckning avbruten — ${ctx.map.title}`;
   const reasonLine = ctx.reason ? `\nAnledning: ${ctx.reason}` : "";
   const text = [
-    `Checkout på ${ctx.map.title} har avbrutits av administratör.${reasonLine}`,
+    `Utcheckning på ${ctx.map.title} har avbrutits av administratör.${reasonLine}`,
     "",
     `Detaljer: ${url}`,
   ].join("\n");
@@ -961,9 +961,9 @@ async function notifyCheckoutCancelledAsync(
     : "";
 
   const bodyHtml = `
-    <p style="margin:0 0 16px;">Checkout på <strong>${escapeHtml(ctx.map.title)}</strong> har avbrutits av administratör.</p>
+    <p style="margin:0 0 16px;">Utcheckning på <strong>${escapeHtml(ctx.map.title)}</strong> har avbrutits av administratör.</p>
     ${reasonHtml}
-    <p style="margin:0;"><a href="${escapeHtml(url)}" style="color:#2563eb;text-decoration:none;">Visa checkout</a></p>
+    <p style="margin:0;"><a href="${escapeHtml(url)}" style="color:#2563eb;text-decoration:none;">Visa utcheckning</a></p>
   `.trim();
 
   const html = buildHtmlEmail({ title: subject, bodyHtml });
@@ -981,16 +981,16 @@ async function notifyCheckoutReminderAsync(
   if (!(await isEmailConfigured())) return;
 
   const url = checkoutDetailUrl(ctx.map.slug, ctx.checkoutId);
-  const subject = `Påminnelse: aktiv checkout — ${ctx.map.title}`;
+  const subject = `Påminnelse: aktiv utcheckning — ${ctx.map.title}`;
   const text = [
-    `Du har en aktiv checkout på ${ctx.map.title} som är äldre än ${ctx.days} dagar.`,
+    `Du har en aktiv utcheckning på ${ctx.map.title} som är äldre än ${ctx.days} dagar.`,
     "",
     `Checka in eller avbryt: ${url}`,
   ].join("\n");
 
   const bodyHtml = `
-    <p style="margin:0 0 16px;">Du har en aktiv checkout på <strong>${escapeHtml(ctx.map.title)}</strong> som är äldre än ${ctx.days} dagar.</p>
-    <p style="margin:0;"><a href="${escapeHtml(url)}" style="display:inline-block;padding:10px 18px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:500;">Öppna checkout</a></p>
+    <p style="margin:0 0 16px;">Du har en aktiv utcheckning på <strong>${escapeHtml(ctx.map.title)}</strong> som är äldre än ${ctx.days} dagar.</p>
+    <p style="margin:0;"><a href="${escapeHtml(url)}" style="display:inline-block;padding:10px 18px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:500;">Öppna utcheckning</a></p>
   `.trim();
 
   const html = buildHtmlEmail({ title: subject, bodyHtml });

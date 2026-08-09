@@ -72,7 +72,7 @@ export function CheckoutPageClient({
       if (data.conflicts?.[0]?.message) {
         setError(data.conflicts[0].message);
       } else {
-        setError(data.error ?? "Checkout misslyckades");
+        setError(data.error ?? "Utcheckning misslyckades");
       }
       return;
     }
@@ -97,7 +97,7 @@ export function CheckoutPageClient({
 
       {existingCheckouts.length > 0 && (
         <section className="mt-8">
-          <h2 className="text-lg font-medium text-slate-900">Befintliga checkouts</h2>
+          <h2 className="text-lg font-medium text-slate-900">Befintliga utcheckningar</h2>
           <ul className="mt-3 space-y-2">
             {existingCheckouts.map((checkout) => (
               <li
@@ -119,7 +119,7 @@ export function CheckoutPageClient({
       )}
 
       <p className="mt-6 text-sm text-slate-500">
-        Checkout baseras på senaste version av {mapTitle}. Utcheckning .ocd genereras automatiskt.
+        Utcheckning baseras på senaste version av {mapTitle}. Utcheckning .ocd genereras automatiskt.
       </p>
     </div>
   );

@@ -137,7 +137,7 @@ export function AreaStatusBanner({
 
         {activeCheckoutCount > 0 && (
           <li>
-            <Link href={`/maps/${mapSlug}#checkouts`} className="text-ifk-blue hover:underline">
+            <Link href={`/maps/${mapSlug}#utcheckningar`} className="text-ifk-blue hover:underline">
               {activeCheckoutCount === 1
                 ? "1 utcheckat område"
                 : `${activeCheckoutCount} utcheckade områden`}

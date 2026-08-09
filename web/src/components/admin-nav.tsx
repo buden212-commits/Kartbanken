@@ -6,7 +6,7 @@ type AdminNavProps = {
 
 const links = [
   { href: "/admin/users", key: "users" as const, label: "Användare" },
-  { href: "/admin/checkouts", key: "checkouts" as const, label: "Checkouts" },
+  { href: "/admin/checkouts", key: "checkouts" as const, label: "Utcheckningar" },
   { href: "/admin/feedback", key: "feedback" as const, label: "Feedback" },
   { href: "/admin/lagring", key: "lagring" as const, label: "Lagring" },
   { href: "/admin/loggning", key: "loggning" as const, label: "Loggning" },

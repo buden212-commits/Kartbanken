@@ -235,7 +235,7 @@ export default async function MapDetailPage({ params }: PageProps) {
 
       {headVersionId && activeCheckouts.length > 0 && (
         <section className="mt-10">
-          <h2 className="text-lg font-medium text-slate-900">Checkout-områden på kartan</h2>
+          <h2 className="text-lg font-medium text-slate-900">Utcheckningsområden på kartan</h2>
           <p className="mt-1 text-sm text-slate-600">
             Färgade ytor visar vem som checkat ut vad (read-only).
           </p>

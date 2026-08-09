@@ -25,7 +25,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
 
   const checkout = await getCheckoutById(map.id, id);
   if (!checkout) {
-    return NextResponse.json({ error: "Checkout hittades inte" }, { status: 404 });
+    return NextResponse.json({ error: "Utcheckning hittades inte" }, { status: 404 });
   }
 
   if (
@@ -36,7 +36,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
 
   if (checkout.status !== CheckoutStatus.CHECKED_IN) {
     return NextResponse.json(
-      { error: "Checkout väntar inte på användarbekräftelse" },
+      { error: "Utcheckningen väntar inte på användarbekräftelse" },
       { status: 400 },
     );
   }
@@ -55,7 +55,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
     );
   }
   if (diffStatus.status !== "ready") {
-    return NextResponse.json({ error: "Diff saknas för checkout" }, { status: 409 });
+    return NextResponse.json({ error: "Diff saknas för utcheckning" }, { status: 409 });
   }
 
   const updated = await confirmCheckoutByUser(checkout.id);

@@ -65,7 +65,7 @@ flowchart TD
 
 export const versionUpload = `
 flowchart TD
-  O[Öppna område] --> W{Aktiva checkouts?}
+  O[Öppna område] --> W{Aktiva utcheckningar?}
   W -->|Ja| V[Varning visas]
   V --> U
   W -->|Nej| U[Välj .ocd-fil och kommentar]
@@ -222,7 +222,7 @@ flowchart TD
 export const roleHierarchy = `
 flowchart BT
   R[Läsare — publicerade versioner, banor, kartförslag]
-  E[Redaktör — + uppladdning, publicering, checkout]
+  E[Redaktör — + uppladdning, publicering, utcheckning]
   A[Administratör — + områden, användare, integration]
   R --> E
   E --> A

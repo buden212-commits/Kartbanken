@@ -41,16 +41,16 @@ export async function POST(request: Request, { params }: RouteParams) {
 
   const checkout = await getCheckoutById(map.id, id);
   if (!checkout) {
-    return NextResponse.json({ error: "Checkout hittades inte" }, { status: 404 });
+    return NextResponse.json({ error: "Utcheckning hittades inte" }, { status: 404 });
   }
 
   if (checkout.userId !== session.user.id && session.user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Du kan endast checka in egna checkouts" }, { status: 403 });
+    return NextResponse.json({ error: "Du kan endast checka in egna utcheckningar" }, { status: 403 });
   }
 
   if (checkout.status !== CheckoutStatus.ACTIVE && checkout.status !== CheckoutStatus.CHECKED_IN) {
     return NextResponse.json(
-      { error: "Checkout accepterar inte checkin i nuvarande status" },
+      { error: "Utcheckningen accepterar inte incheckning i nuvarande status" },
       { status: 400 },
     );
   }

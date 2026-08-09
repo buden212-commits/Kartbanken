@@ -634,7 +634,7 @@ export function CheckoutMapPanel({
 
         {disabled
 
-          ? "Färgade ytor visar befintliga checkout-områden."
+          ? "Färgade ytor visar befintliga utcheckningsområden."
 
           : tool === "rectangle"
 
@@ -694,7 +694,7 @@ export function CheckoutMapPanel({
 
             >
 
-              {createLoading ? "Skapar checkout…" : "Checka ut område"}
+              {createLoading ? "Skapar utcheckning…" : "Checka ut område"}
 
             </button>
 

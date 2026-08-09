@@ -22,7 +22,7 @@ async function loadAuthorizedCheckout(slug: string, id: string, session: AuthSes
 
   const checkout = await getCheckoutById(map.id, id);
   if (!checkout) {
-    return { error: NextResponse.json({ error: "Checkout hittades inte" }, { status: 404 }) };
+    return { error: NextResponse.json({ error: "Utcheckning hittades inte" }, { status: 404 }) };
   }
 
   const canView =
@@ -104,7 +104,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
 
   if (checkout.status !== CheckoutStatus.CHECKED_IN || !checkout.checkinStoragePath) {
     return NextResponse.json(
-      { error: "Diff kan endast beräknas efter checkin" },
+      { error: "Diff kan endast beräknas efter incheckning" },
       { status: 400 },
     );
   }

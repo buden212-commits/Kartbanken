@@ -99,7 +99,7 @@ export function UploadVersionForm({
 
     if (activeCheckouts.length > 0 && !isAdmin) {
       setError(
-        `Det finns ${activeCheckouts.length} aktiv(a) checkout(s). Vänta tills de är integrerade eller avbrutna.`,
+        `Det finns ${activeCheckouts.length === 1 ? "1 aktiv utcheckning" : `${activeCheckouts.length} aktiva utcheckningar`}. Vänta tills de är integrerade eller avbrutna.`,
       );
       return;
     }
@@ -174,10 +174,10 @@ export function UploadVersionForm({
 
       {pendingUpload?.kind === "checkout" && activeCheckouts.length > 0 && (
         <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4">
-          <HelpSectionHeading section="checkout">Aktiva checkouts</HelpSectionHeading>
+          <HelpSectionHeading section="checkout">Aktiva utcheckningar</HelpSectionHeading>
           <p className="mt-2 text-sm text-amber-900">
-            Det finns {activeCheckouts.length} aktiv(a) checkout(s). Full uppladdning kan ogiltigförglora
-            pågående arbete och ändra head-versionen.
+            Det finns {activeCheckouts.length === 1 ? "1 aktiv utcheckning" : `${activeCheckouts.length} aktiva utcheckningar`}. Full uppladdning kan ogiltigförglora
+            pågående arbete och ändra senaste versionen.
           </p>
           <ul className="mt-2 list-inside list-disc text-sm text-amber-900">
             {activeCheckouts.map((checkout) => (

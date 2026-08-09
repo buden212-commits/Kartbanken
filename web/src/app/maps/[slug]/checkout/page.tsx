@@ -37,7 +37,7 @@ export default async function CheckoutCreatePage({ params }: PageProps) {
         <HelpLinkIcon section="checkout" className="mt-1 shrink-0" />
       </div>
       <p className="mt-2 text-sm text-slate-600">
-        Rita ett område på kartan. Befintliga checkouts visas som färgade ytor.
+        Rita ett område på kartan. Befintliga utcheckningar visas som färgade ytor.
       </p>
 
       <div className="mt-6">

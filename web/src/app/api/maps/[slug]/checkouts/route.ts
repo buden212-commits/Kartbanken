@@ -27,7 +27,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
   if (session instanceof NextResponse) return session;
 
   if (!canViewCheckouts(session.user.role)) {
-    return NextResponse.json({ error: "Ingen behörighet att visa checkouts" }, { status: 403 });
+    return NextResponse.json({ error: "Ingen behörighet att visa utcheckningar" }, { status: 403 });
   }
 
   const { slug } = await params;
@@ -101,7 +101,7 @@ export async function POST(request: Request, { params }: RouteParams) {
   if (conflicts.length > 0) {
     return NextResponse.json(
       {
-        error: "Området överlappar en befintlig checkout",
+        error: "Området överlappar en befintlig utcheckning",
         conflicts,
       },
       { status: 409 },
