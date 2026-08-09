@@ -161,6 +161,17 @@ export async function listSuggestionsForMap(mapFileId: string, status?: string) 
   });
 }
 
+export async function listPendingSuggestionsForMap(mapFileId: string) {
+  return prisma.mapSuggestion.findMany({
+    where: {
+      mapFileId,
+      status: { in: [SuggestionStatus.OPEN, SuggestionStatus.IN_PROGRESS] },
+    },
+    select: suggestionWithUserSelect,
+    orderBy: [{ createdAt: "desc" }],
+  });
+}
+
 export async function listSuggestionOverlaysForVersion(
   mapFileId: string,
   mapVersionId: string,
@@ -194,6 +205,35 @@ export async function listSuggestionOverlaysForVersion(
   );
 }
 
+/** Öppna och pågående kartförslag på alla versioner (för områdessidan). */
+export async function listPendingSuggestionOverlaysForMap(mapFileId: string) {
+  const rows = await prisma.mapSuggestion.findMany({
+    where: {
+      mapFileId,
+      status: { in: [SuggestionStatus.OPEN, SuggestionStatus.IN_PROGRESS] },
+    },
+    select: {
+      id: true,
+      status: true,
+      category: true,
+      objects: {
+        orderBy: { sortOrder: "asc" },
+        select: { geometryJson: true },
+      },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return rows.flatMap((row) =>
+    row.objects.map((obj) => ({
+      id: row.id,
+      status: row.status as SuggestionSummary["status"],
+      category: row.category as SuggestionSummary["category"],
+      geometry: parseGeometryJson(obj.geometryJson),
+    })),
+  );
+}
+
 export async function countOpenSuggestionsForUser(mapFileId: string, userId: string) {
   return prisma.mapSuggestion.count({
     where: {
@@ -202,6 +242,63 @@ export async function countOpenSuggestionsForUser(mapFileId: string, userId: str
       status: SuggestionStatus.OPEN,
     },
   });
+}
+
+export async function listPendingSuggestionsByVersion(mapFileId: string): Promise<
+  {
+    versionId: string;
+    versionNumber: number;
+    open: number;
+    inProgress: number;
+  }[]
+> {
+  const rows = await prisma.mapSuggestion.findMany({
+    where: {
+      mapFileId,
+      status: { in: [SuggestionStatus.OPEN, SuggestionStatus.IN_PROGRESS] },
+    },
+    select: {
+      status: true,
+      mapVersion: { select: { id: true, versionNumber: true } },
+    },
+  });
+
+  const byVersion = new Map<
+    string,
+    { versionId: string; versionNumber: number; open: number; inProgress: number }
+  >();
+
+  for (const row of rows) {
+    let entry = byVersion.get(row.mapVersion.id);
+    if (!entry) {
+      entry = {
+        versionId: row.mapVersion.id,
+        versionNumber: row.mapVersion.versionNumber,
+        open: 0,
+        inProgress: 0,
+      };
+      byVersion.set(row.mapVersion.id, entry);
+    }
+    if (row.status === SuggestionStatus.OPEN) entry.open += 1;
+    if (row.status === SuggestionStatus.IN_PROGRESS) entry.inProgress += 1;
+  }
+
+  return [...byVersion.values()].sort((a, b) => b.versionNumber - a.versionNumber);
+}
+
+/** @deprecated Använd listPendingSuggestionsByVersion */
+export async function countPendingSuggestionsForMap(mapFileId: string): Promise<{
+  open: number;
+  inProgress: number;
+}> {
+  const rows = await listPendingSuggestionsByVersion(mapFileId);
+  return rows.reduce(
+    (acc, row) => ({
+      open: acc.open + row.open,
+      inProgress: acc.inProgress + row.inProgress,
+    }),
+    { open: 0, inProgress: 0 },
+  );
 }
 
 export async function getSuggestionById(suggestionId: string) {

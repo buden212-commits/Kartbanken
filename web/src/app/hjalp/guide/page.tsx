@@ -23,7 +23,7 @@ export default async function HelpGuidePage() {
             <HelpLinkIcon section="oversikt" />
           </div>
           <p className="mt-3 max-w-2xl text-slate-600">
-            Fullständig guide till områden, versionshantering, checkout, jämförelse och export.
+            Fullständig guide till områden, versionshantering, utcheckning, jämförelse och export.
           </p>
         </div>
         <HelpExportPdfButton userLabel={userLabel} />

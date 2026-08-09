@@ -122,7 +122,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
           select: { id: true },
         });
         if (!checkout) {
-          return NextResponse.json({ error: "Checkout hittades inte" }, { status: 400 });
+          return NextResponse.json({ error: "Utcheckning hittades inte" }, { status: 400 });
         }
       }
     }

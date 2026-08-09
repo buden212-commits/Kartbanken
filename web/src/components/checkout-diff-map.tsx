@@ -68,7 +68,7 @@ const MAP_TABS: { id: MapTab; label: string; description: string; legendClass: s
   {
     id: "added",
     label: "Nya objekt",
-    description: "Tillagda objekt i checkin",
+    description: "Tillagda objekt i incheckningen",
     legendClass: "text-emerald-600",
   },
   {
@@ -197,7 +197,7 @@ export function CheckoutDiffMap({
 
       {!layerPaths && hasChanges && (
         <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          Diff-lager saknas för denna checkout. Klicka &quot;Försök beräkna diff igen&quot; ovan
+          Diff-lager saknas för denna utcheckning. Klicka &quot;Försök beräkna diff igen&quot; ovan
           för att generera kartlager.
         </p>
       )}
@@ -318,7 +318,7 @@ export function CheckoutDiffMap({
             exportEnabled={false}
           />
           <p className="mt-3 rounded-lg border border-ifk-blue/20 bg-ifk-blue-pale px-3 py-2 text-sm text-ifk-blue">
-            Inga skillnader i checkout-urvalet — kartan visar aktuell version.
+            Inga skillnader i utcheckningsurvalet — kartan visar aktuell version.
           </p>
         </div>
       )}

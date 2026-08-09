@@ -531,7 +531,7 @@ export function CheckoutDetailClient({
 
       const data = await res.json().catch(() => ({}));
 
-      setError(data.error ?? "Checkin misslyckades");
+      setError(data.error ?? "Incheckning misslyckades");
 
       return;
 
@@ -816,7 +816,7 @@ export function CheckoutDetailClient({
 
             >
 
-              Avbryt checkout
+              Avbryt utcheckning
 
             </button>
 
@@ -912,7 +912,7 @@ export function CheckoutDetailClient({
 
               <p className="mt-2 text-sm text-amber-800">
 
-                Checkin mottagen. Jämför {objectCount} objekt i urvalet mot aktuell version.
+                Incheckning mottagen. Jämför {objectCount} objekt i urvalet mot aktuell version.
 
               </p>
 
@@ -988,7 +988,7 @@ export function CheckoutDetailClient({
 
             <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
 
-              Aktuell version har ändrats sedan checkout skapades. Granska diff noggrant innan integration.
+              Aktuell version har ändrats sedan utcheckningen skapades. Granska diff noggrant innan integration.
 
             </p>
 

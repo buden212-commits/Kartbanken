@@ -112,7 +112,7 @@ export async function HelpPageContent() {
             <li>Granska diff mot föregående version.</li>
             <li>Publicera versionen när den ska vara tillgänglig för läsare.</li>
           </ol>
-          <p className="mt-4">Parallell redigering via checkout:</p>
+          <p className="mt-4">Parallell redigering via utcheckning:</p>
           <ol className="list-decimal space-y-2 pl-5">
             <li>Checka ut ett område på områdessidan och ladda ner utcheckning .ocd.</li>
             <li>Redigera i OCAD och checka in filen.</li>
@@ -127,7 +127,7 @@ export async function HelpPageContent() {
           <HelpProcessDiagram
             title="Översikt — huvudflöden i systemet"
             chart={overviewSystem}
-            caption="Versionshantering är kärnflödet; checkout, banor, kartförslag och verifiering sker parallellt."
+            caption="Versionshantering är kärnflödet; utcheckning, banor, kartförslag och verifiering sker parallellt."
           />
         </HelpSection>
 
@@ -169,7 +169,7 @@ export async function HelpPageContent() {
             items={[
               "«?» — i rubrikraden bredvid avsnittets titel, eller i tabellens kolumnrubriker (t.ex. versionshistorik)",
               "Behörighet — visar din roll (läsare, redaktör eller administratör) och vad den innebär",
-              "Notiser — kryssa i e-postnotiser vid nya versioner, checkout och incheckning; valfritt bifoga .ocd",
+              "Notiser — kryssa i e-postnotiser vid nya versioner, utcheckning och incheckning; valfritt bifoga .ocd",
               "Lösenord — byt lösenord med nuvarande lösenord som bekräftelse",
             ]}
           />
@@ -215,7 +215,7 @@ export async function HelpPageContent() {
                   <td className="px-4 py-3 font-medium">Administratör</td>
                   <td className="px-4 py-3">
                     Allt redaktör kan, plus skapa områden, redigera områdesnamn, radera områden,
-                    godkänna konton, avbryta checkouts, integrera incheckningar och hantera
+                    godkänna konton, avbryta utcheckningar, integrera incheckningar och hantera
                     systeminställningar
                   </td>
                 </tr>
@@ -313,9 +313,9 @@ export async function HelpPageContent() {
 
         <HelpSection id="checkout" title="Checka ut och in">
           <p>
-            Checkout låter redaktörer reservera ett delområde på kartan, ladda ner en utcheckning
+            Utcheckning låter redaktörer reservera ett delområde på kartan, ladda ner en utcheckning
             .ocd-fil för redigering i OCAD, och sedan checka in ändringarna för granskning och
-            integration. Alla inloggade användare ser aktiva checkout-områden som färgade
+            integration. Alla inloggade användare ser aktiva utcheckningsområden som färgade
             överlagringar med vem som checkat ut och när.
           </p>
 
@@ -327,18 +327,18 @@ export async function HelpPageContent() {
                   "Öppna området och klicka Checka ut område (knappen bredvid karttiteln)",
                   "Välj verktyg: rektangel eller polygon",
                   "Rita området på kartan och bekräfta urvalet",
-                  "Klicka Checka ut område — du kommer till checkout-detaljsidan",
+                  "Klicka Checka ut område — du kommer till utcheckningssidan",
                   "Ladda ner utcheckning .ocd och redigera i OCAD — filen genereras av systemet; öppna och spara i OCAD innan du redigerar",
-                  "Överlappande checkouts blockeras — vänta tills ett område frigörs",
+                  "Överlappande utcheckningar blockeras — vänta tills ett område frigörs",
                 ]}
               />
 
               <h3 className="font-medium text-slate-900">Checka in och integrera</h3>
               <HelpList
                 items={[
-                  "Ladda upp den redigerade .ocd-filen via Checka in på checkout-sidan",
+                  "Ladda upp den redigerade .ocd-filen via Checka in på utcheckningssidan",
                   "Granska utcheckningsdiff mot aktuell version (tillagda, borttagna, ändrade)",
-                  "Bekräfta integration — checkout går till admin-bekräftelse",
+                  "Bekräfta integration — utcheckningen går till admin-bekräftelse",
                   "Administratör bekräftar och integrerar — en ny opublicerad kartversion skapas (publicera i versionshistoriken)",
                   "Efter integration: jämför, granska och publicera så att läsare ser ändringarna",
                   "Vid incheckning skickas e-post med .ocd-bilaga till admin och prenumeranter med «Bifoga .ocd»",
@@ -347,15 +347,15 @@ export async function HelpPageContent() {
             </>
           ) : (
             <p>
-              Som läsare kan du se aktiva checkout-områden på kartfilens sida, men du kan inte
-              skapa egna checkouts. Kontakta en redaktör om du behöver redigera kartor.
+              Som läsare kan du se aktiva utcheckningsområden på kartfilens sida, men du kan inte
+              skapa egna utcheckningar. Kontakta en redaktör om du behöver redigera kartor.
             </p>
           )}
 
           <h3 className="font-medium text-slate-900">Synliga överlagringar</h3>
           <p>
-            På områdessidan visas färgade ytor för alla aktiva checkouts. Varje färg motsvarar
-            en användare och visar vem som arbetar i området och när checkout skapades. Det hjälper
+            På områdessidan visas färgade ytor för alla aktiva utcheckningar. Varje färg motsvarar
+            en användare och visar vem som arbetar i området och när utcheckningen skapades. Det hjälper
             teamet undvika parallella ändringar i samma del av kartan.
           </p>
 
@@ -364,10 +364,10 @@ export async function HelpPageContent() {
               <h3 className="font-medium text-slate-900">Administratör</h3>
               <HelpList
                 items={[
-                  "Avbryt checkout (tvinga avbryt) med valfri anledning om arbetet behöver stoppas",
+                  "Avbryt utcheckning (tvinga avbryt) med valfri anledning om arbetet behöver stoppas",
                   "Bekräfta och integrera efter att användaren bekräftat diff",
                   "Bekräfta granskning (kryssruta) innan integration genomförs",
-                  "Vid full uppladdning av hel karta blockeras uppladdning vid aktiva checkouts — admin kan bekräfta undantag",
+                  "Vid full uppladdning av hel karta blockeras uppladdning vid aktiva utcheckningar — admin kan bekräfta undantag",
                 ]}
               />
             </>
@@ -375,19 +375,19 @@ export async function HelpPageContent() {
 
           {showEditor && (
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
-              Ladda inte upp en hel karta (.ocd) medan aktiva checkouts pågår — systemet blockerar
+              Ladda inte upp en hel karta (.ocd) medan aktiva utcheckningar pågår — systemet blockerar
               det för redaktörer. Administratörer kan ladda upp efter explicit bekräftelse.
             </p>
           )}
 
           <h3 className="font-medium text-slate-900">Påminnelser</h3>
           <p>
-            Om en checkout är aktiv längre än sju dagar (standard, konfigurerbart av administratör)
-            får checkout-ägaren ett påminnelsemail. Admin får påminnelse om checkouts som väntar
+            Om en utcheckning är aktiv längre än sju dagar (standard, konfigurerbart av administratör)
+            får utcheckningsägaren ett påminnelsemail. Admin får påminnelse om utcheckningar som väntar
             på integration.
           </p>
           <HelpProcessDiagram
-            title="Status — checkout"
+            title="Status — utcheckning"
             chart={checkoutFlow}
             caption="ACTIVE → incheckad → väntar på admin → integrerad (ny version). Admin kan avbryta från ACTIVE."
           />
@@ -497,7 +497,7 @@ export async function HelpPageContent() {
           <p>
             Med <strong>Kartförslag</strong> kan alla godkända användare markera och beskriva
             terrängändringar på <strong>publicerade</strong> kartversioner — utan att röra
-            kartfilen. Förslagen granskas av redaktörer och kan kopplas till checkout vid behov.
+            kartfilen. Förslagen granskas av redaktörer och kan kopplas till utcheckning vid behov.
           </p>
           <HelpList
             items={[
@@ -513,10 +513,10 @@ export async function HelpPageContent() {
               "Klicka «Skicka in kartförslag» i verktygsraden när du är klar — då fyller du i kategori och beskrivning i dialogen",
               "I dialogen: «Ta foto» öppnar kameran på mobil (direktfoto), «Välj bild» plockar från albumet",
               "Skicka-sektionen ovanför kartan visar antal tillagda ändringar innan du skickar",
-              "Öppna och pågående förslag visas på kartan — klicka markeringen eller ett förslag i listan på områdessidan (zoomar kartan till markeringen)",
+              "Öppna och pågående förslag från alla versioner visas på områdessidans karta (underlag: senaste publicerade version) — klicka markeringen eller ett förslag i listan",
               "På detaljsidan zoomas kartan automatiskt till markeringen; «Zooma till markering» finns kvar om du vill fokusera om",
               "Växla «Visa kartförslag» i kartvyn för att dölja lagret",
-              "Redaktörer markerar som Pågår, Införd eller Avvisad och kan koppla checkout",
+              "Redaktörer markerar som Pågår, Införd eller Avvisad och kan koppla utcheckning",
               "Vid Pågår, Införd eller Avvisad visas vem som satte statusen och när (detaljsida och lista)",
               "Du kan redigera egna öppna förslag (text och markering) via Redigera på detaljsidan",
               "Förslag gäller den version du markerade — vid ny publicerad version visas «Gäller version N»",
@@ -526,7 +526,7 @@ export async function HelpPageContent() {
           />
           <p className="rounded-lg border border-[#FD3DB5]/30 bg-[#FD3DB5]/10 px-4 py-3 text-[#9D0066]">
             Kartförslag är <strong>förslag</strong>, inte en del av kartan. Terräng ändras fortfarande
-            via checkout och OCAD-redigering.
+            via utcheckning och OCAD-redigering.
           </p>
           <HelpProcessDiagram title="Status — kartförslag" chart={suggestionFlow} />
           <HelpProcessDiagram title="Steg för steg — skicka in kartförslag" chart={suggestionSubmit} />
@@ -542,6 +542,7 @@ export async function HelpPageContent() {
             <HelpList
               items={[
                 "Endast en version kan vara publicerad åt gången per område",
+                "Gul statusbanner på områdessidan när kartförslag väntar, senaste version inte är publicerad eller det finns utcheckade områden — med uppdelning per versionsnummer för kartförslag",
                 "Under Kartförslag anges vilken version som är publicerad för läsare",
                 "Kryssa i Publicerad i versionshistoriken för att göra versionen synlig för läsare — tidigare publicerad version avpubliceras då automatiskt",
                 "Versioner med parsningsfel kan inte publiceras",
@@ -564,9 +565,9 @@ export async function HelpPageContent() {
         <HelpSection id="jamfor" title="Jämföra versioner">
           <p>
             Jämförelsen visar skillnader mellan två versioner: tillagda, borttagna och ändrade
-            kartobjekt. Du når jämförelsen via knappen <strong>Jämför</strong> i
-            versionshistoriken, via <strong>Jämför senaste två versioner</strong>, eller automatiskt
-            efter uppladdning.
+            kartobjekt. Du når jämförelsen via <strong>Jämför versioner</strong> ovanför
+            versionshistoriken (välj två valfria versioner), via knappen <strong>Jämför</strong> i
+            tabellen, eller automatiskt efter uppladdning.
           </p>
 
           <h3 className="font-medium text-slate-900">Färgkoder</h3>
@@ -720,17 +721,17 @@ export async function HelpPageContent() {
             <p>
               Administratörer hanterar systemet via flikarna{" "}
               <Link href="/admin/users" className="link-primary">Användare</Link>,{" "}
-              <Link href="/admin/checkouts" className="link-primary">Checkouts</Link>,{" "}
+              <Link href="/admin/checkouts" className="link-primary">Utcheckningar</Link>,{" "}
               <Link href="/admin/lagring" className="link-primary">Lagring</Link>,{" "}
               <Link href="/admin/loggning" className="link-primary">Loggning</Link>,{" "}
               <Link href="/admin/feedback" className="link-primary">Feedback</Link> och{" "}
               <Link href="/admin/settings" className="link-primary">Inställningar</Link>.
             </p>
 
-            <h3 className="font-medium text-slate-900">Checkouts</h3>
+            <h3 className="font-medium text-slate-900">Utcheckningar</h3>
             <p>
               På <Link href="/admin/checkouts" className="link-primary">/admin/checkouts</Link>{" "}
-              ser du checkouts som väntar på admin-integration efter att redaktören bekräftat diff.
+              ser du utcheckningar som väntar på admin-integration efter att redaktören bekräftat diff.
             </p>
 
             <h3 className="font-medium text-slate-900">Användarhantering</h3>
@@ -745,7 +746,7 @@ export async function HelpPageContent() {
                 "Avvisa konton som inte ska få tillgång",
                 "Skapa konton manuellt med e-post, namn, lösenord och roll",
                 "Redigera befintliga användare (namn, e-post, roll)",
-                "Notis — prenumerera på e-post vid nya versioner och checkout-händelser (användare kan också styra detta i Min profil)",
+                "Notis — prenumerera på e-post vid nya versioner och utcheckningshändelser (användare kan också styra detta i Min profil)",
                 "Bifoga .ocd — få kartfilen som bilaga i notiser (kräver Notis)",
                 "Senaste inloggning visas i listan",
               ]}
@@ -797,12 +798,12 @@ export async function HelpPageContent() {
                 "Konto godkänt — till användaren med tilldelad behörighet",
                 "Tillfälligt lösenord — till användare som begärt återställning",
                 "Ny kartversion uppladdad — med valfri .ocd-bilaga till berättigade mottagare",
-                "Ny checkout skapad — till checkout-ägare och prenumeranter",
-                "Checkin inskickad — med .ocd-bilaga till admin och prenumeranter med «Bifoga .ocd»",
+                "Ny utcheckning skapad — till utcheckningsägare och prenumeranter",
+                "Incheckning inskickad — med .ocd-bilaga till admin och prenumeranter med «Bifoga .ocd»",
                 "Användare bekräftat integration — till prenumeranter",
-                "Checkout integrerad — till checkout-ägare och prenumeranter",
-                "Checkout avbruten av admin — till checkout-ägare och prenumeranter",
-                "Påminnelse om gammal checkout — till checkout-ägare efter 7 dagar (konfigurerbart)",
+                "Utcheckning integrerad — till utcheckningsägare och prenumeranter",
+                "Utcheckning avbruten av admin — till utcheckningsägare och prenumeranter",
+                "Påminnelse om gammal utcheckning — till utcheckningsägare efter 7 dagar (konfigurerbart)",
               ]}
             />
 
@@ -852,9 +853,9 @@ export async function HelpPageContent() {
               </p>
             </div>
             <div>
-              <h3 className="font-medium text-slate-900">Vad är checkout?</h3>
+              <h3 className="font-medium text-slate-900">Vad är utcheckning?</h3>
               <p className="mt-1">
-                Checkout låter redaktörer reservera ett kartområde, ladda ner en utcheckning .ocd,
+                Utcheckning låter redaktörer reservera ett kartområde, ladda ner en utcheckning .ocd,
                 redigera i OCAD och checka in ändringarna för granskning. Andra ser ditt område som
                 en färgad överlagring på kartan. Efter diff-granskning bekräftar du integrationen,
                 och en administratör slår ihop ändringarna i en ny kartversion.
@@ -872,7 +873,7 @@ export async function HelpPageContent() {
               <h3 className="font-medium text-slate-900">Påverkar banor kartfilen?</h3>
               <p className="mt-1">
                 Nej. Banor är overlay-lager som lagras separat. Kartversioner ändras bara via
-                uppladdning eller checkout-integration.
+                uppladdning eller utcheckningsintegration.
               </p>
             </div>
             <div>
@@ -921,8 +922,8 @@ export async function HelpPageContent() {
             <div>
               <h3 className="font-medium text-slate-900">Varför varnas jag vid uppladdning?</h3>
               <p className="mt-1">
-                Om det finns aktiva checkouts varnar systemet innan du laddar upp en hel karta.
-                Full uppladdning kan påverka parallellt arbete i utcheckade områden. Använd checkout
+                Om det finns aktiva utcheckningar varnar systemet innan du laddar upp en hel karta.
+                Full uppladdning kan påverka parallellt arbete i utcheckade områden. Använd utcheckning
                 och integration om du redigerat via utcheckningsfiler.
               </p>
             </div>

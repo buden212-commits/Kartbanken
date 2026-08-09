@@ -85,12 +85,12 @@ export function CheckoutVersionContextBanner({
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
       <p>
-        <span className="font-medium text-slate-900">Checkout baserad på:</span> v
+        <span className="font-medium text-slate-900">Utcheckning baserad på:</span> v
         {baseVersionNumber}
         {baseVersionPublished ? " (publicerad)" : " (opublicerad)"}
       </p>
       <p className="mt-1">
-        <span className="font-medium text-slate-900">Aktuell head:</span> v{headVersionNumber}
+        <span className="font-medium text-slate-900">Aktuell version:</span> v{headVersionNumber}
         {headVersionPublished ? " (publicerad)" : " (opublicerad)"}
         {publishedVersionNumber != null && !headVersionPublished && (
           <> · Läsare ser v{publishedVersionNumber}</>
@@ -98,7 +98,7 @@ export function CheckoutVersionContextBanner({
       </p>
       {headChanged && (
         <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-amber-900">
-          Head har ändrats sedan checkout skapades. Diff och integration utgår från v
+          Aktuell version har ändrats sedan utcheckningen skapades. Diff och integration utgår från v
           {headVersionNumber}.
         </p>
       )}

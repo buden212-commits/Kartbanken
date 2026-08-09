@@ -31,7 +31,7 @@ export async function GET(request: Request, { params }: RouteParams) {
 
   const checkout = await getCheckoutById(map.id, id);
   if (!checkout) {
-    return NextResponse.json({ error: "Checkout hittades inte" }, { status: 404 });
+    return NextResponse.json({ error: "Utcheckning hittades inte" }, { status: 404 });
   }
 
   const canAccess =
@@ -80,7 +80,7 @@ export async function GET(request: Request, { params }: RouteParams) {
   const sourcePath = checkout.checkinStoragePath ?? checkout.exportStoragePath;
   if (!sourcePath) {
     return NextResponse.json(
-      { error: "Checkin-/utcheckningsfil saknas för export" },
+      { error: "Inchecknings- eller utcheckningsfil saknas för export" },
       { status: 404 },
     );
   }
@@ -88,7 +88,7 @@ export async function GET(request: Request, { params }: RouteParams) {
   try {
     const sourceBuffer = await readStoredFile(sourcePath);
     const exported = exportObjectsByIndices(sourceBuffer, new Set(indices));
-    const fileName = `${map.title.replace(/\s+/g, "-")}-checkout-${id.slice(0, 8)}-felobjekt.ocd`;
+    const fileName = `${map.title.replace(/\s+/g, "-")}-utcheckning-${id.slice(0, 8)}-felobjekt.ocd`;
 
     await logAction(session.user.id, "DOWNLOAD", "MapCheckout", checkout.id, {
       mapSlug: slug,

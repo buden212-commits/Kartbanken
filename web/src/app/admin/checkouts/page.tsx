@@ -24,14 +24,14 @@ export default async function AdminCheckoutsPage() {
 
       <section className="card mt-8">
         <HelpSectionHeading section="checkout">
-          Checkouts som väntar på integration ({pending.length})
+          Utcheckningar som väntar på integration ({pending.length})
         </HelpSectionHeading>
         <p className="mt-1 text-sm text-slate-600">
           Användaren har bekräftat diff — admin måste integrera innan ändringarna blir en ny version.
         </p>
 
         {pending.length === 0 ? (
-          <p className="mt-4 text-sm text-slate-500">Inga checkouts väntar just nu.</p>
+          <p className="mt-4 text-sm text-slate-500">Inga utcheckningar väntar just nu.</p>
         ) : (
           <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
             <table className="w-full min-w-[640px] text-sm">

@@ -625,7 +625,7 @@ export function SuggestionDetailClient({
           {checkoutOptions.length > 0 && (
             <div>
               <label htmlFor="checkoutId" className="form-label">
-                Koppla checkout (valfritt, vid införande)
+                Koppla utcheckning (valfritt, vid införande)
               </label>
               <select
                 id="checkoutId"
@@ -640,7 +640,7 @@ export function SuggestionDetailClient({
                 }}
                 className="form-input"
               >
-                <option value="">— Ingen checkout —</option>
+                <option value="">— Ingen utcheckning —</option>
                 {checkoutOptions.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.label}

@@ -48,10 +48,10 @@ export function CheckoutListPanel({
   }
 
   return (
-    <section className="mt-10">
+    <section className="mt-10" id="utcheckningar">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-medium text-slate-900">
-          Aktiva checkouts ({checkouts.length})
+          Aktiva utcheckningar ({checkouts.length})
         </h2>
         <CheckoutAreaCta
           mapSlug={mapSlug}
@@ -62,7 +62,7 @@ export function CheckoutListPanel({
       </div>
 
       {checkouts.length === 0 ? (
-        <p className="mt-3 text-sm text-slate-500">Inga aktiva checkouts.</p>
+        <p className="mt-3 text-sm text-slate-500">Inga aktiva utcheckningar.</p>
       ) : (
         <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
           <table className="w-full min-w-[640px] text-sm">

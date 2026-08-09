@@ -74,7 +74,7 @@ export default async function CheckoutDetailPage({ params }: PageProps) {
         ← {map.title}
       </Link>
       <div className="mt-4 flex items-start justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">Checkout</h1>
+        <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">Utcheckning</h1>
         <HelpLinkIcon section="checkout" className="mt-1 shrink-0" />
       </div>
       <p className="mt-2 text-sm text-slate-600">

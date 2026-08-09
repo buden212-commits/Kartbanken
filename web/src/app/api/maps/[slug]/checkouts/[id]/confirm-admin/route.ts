@@ -25,7 +25,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
   if (session instanceof NextResponse) return session;
 
   if (!canAdminConfirmIntegration(session.user.role)) {
-    return NextResponse.json({ error: "Endast admin kan integrera checkouts" }, { status: 403 });
+    return NextResponse.json({ error: "Endast admin kan integrera utcheckningar" }, { status: 403 });
   }
 
   const { slug, id } = await params;
@@ -39,12 +39,12 @@ export async function POST(_request: Request, { params }: RouteParams) {
 
   const checkout = await getCheckoutById(map.id, id);
   if (!checkout) {
-    return NextResponse.json({ error: "Checkout hittades inte" }, { status: 404 });
+    return NextResponse.json({ error: "Utcheckning hittades inte" }, { status: 404 });
   }
 
   if (checkout.status !== CheckoutStatus.PENDING_ADMIN_CONFIRM) {
     return NextResponse.json(
-      { error: "Checkout väntar inte på admin-bekräftelse" },
+      { error: "Utcheckningen väntar inte på admin-bekräftelse" },
       { status: 400 },
     );
   }

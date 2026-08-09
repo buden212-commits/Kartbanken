@@ -30,7 +30,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
 
   const checkout = await getCheckoutById(map.id, id);
   if (!checkout) {
-    return NextResponse.json({ error: "Checkout hittades inte" }, { status: 404 });
+    return NextResponse.json({ error: "Utcheckning hittades inte" }, { status: 404 });
   }
 
   const canViewDetail =
@@ -38,7 +38,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
     canConfirmCheckoutIntegration(session.user.role, checkout.userId, session.user.id);
 
   if (!canViewDetail) {
-    return NextResponse.json({ error: "Ingen behörighet att visa checkout" }, { status: 403 });
+    return NextResponse.json({ error: "Ingen behörighet att visa utcheckning" }, { status: 403 });
   }
 
   return NextResponse.json(serializeCheckoutResponse(checkout));
@@ -49,7 +49,7 @@ export async function DELETE(request: Request, { params }: RouteParams) {
   if (session instanceof NextResponse) return session;
 
   if (!canCancelCheckout(session.user.role)) {
-    return NextResponse.json({ error: "Endast admin kan avbryta checkouts" }, { status: 403 });
+    return NextResponse.json({ error: "Endast admin kan avbryta utcheckningar" }, { status: 403 });
   }
 
   const { slug, id } = await params;
@@ -63,7 +63,7 @@ export async function DELETE(request: Request, { params }: RouteParams) {
 
   const checkout = await getCheckoutById(map.id, id);
   if (!checkout) {
-    return NextResponse.json({ error: "Checkout hittades inte" }, { status: 404 });
+    return NextResponse.json({ error: "Utcheckning hittades inte" }, { status: 404 });
   }
 
   if (
@@ -71,7 +71,7 @@ export async function DELETE(request: Request, { params }: RouteParams) {
     checkout.status === CheckoutStatus.CANCELLED
   ) {
     return NextResponse.json(
-      { error: "Checkout kan inte avbrytas i nuvarande status" },
+      { error: "Utcheckningen kan inte avbrytas i nuvarande status" },
       { status: 400 },
     );
   }
@@ -93,7 +93,7 @@ export async function DELETE(request: Request, { params }: RouteParams) {
 
   if (result.count === 0) {
     return NextResponse.json(
-      { error: "Checkout kunde inte avbrytas (redan avslutad?)" },
+      { error: "Utcheckningen kunde inte avbrytas (redan avslutad?)" },
       { status: 409 },
     );
   }

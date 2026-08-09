@@ -12,7 +12,7 @@ import {
 import type { SuggestionOverlayItem, SuggestionSummary } from "@/lib/suggestion/types";
 import { SuggestionListPanel } from "@/components/suggestion/suggestion-list-panel";
 
-export function useSuggestionOverlays(mapSlug: string, mapVersionId: string) {
+export function useSuggestionOverlays(mapSlug: string, mapVersionId?: string | null) {
   const [overlays, setOverlays] = useState<SuggestionOverlayItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -21,9 +21,11 @@ export function useSuggestionOverlays(mapSlug: string, mapVersionId: string) {
     setLoading(true);
     void (async () => {
       try {
-        const res = await fetch(
-          `/api/maps/${mapSlug}/suggestions?overlay=1&mapVersionId=${encodeURIComponent(mapVersionId)}`,
-        );
+        const params = new URLSearchParams({ overlay: "1" });
+        if (mapVersionId) {
+          params.set("mapVersionId", mapVersionId);
+        }
+        const res = await fetch(`/api/maps/${mapSlug}/suggestions?${params.toString()}`);
         if (!res.ok) return;
         const data = (await res.json()) as { overlays?: SuggestionOverlayItem[] };
         if (!cancelled) {
@@ -36,7 +38,7 @@ export function useSuggestionOverlays(mapSlug: string, mapVersionId: string) {
     return () => {
       cancelled = true;
     };
-  }, [mapSlug, mapVersionId]);
+  }, [mapSlug, mapVersionId ?? ""]);
 
   return { overlays, loading };
 }
@@ -94,7 +96,7 @@ export function SuggestionOverlayToggle({
 /** Hook returning overlay renderer + toggle UI for embedding in DiffMapPanel. */
 export function useSuggestionMapOverlayControls(
   mapSlug: string,
-  mapVersionId: string,
+  mapVersionId?: string | null,
   defaultEnabled = true,
 ) {
   const router = useRouter();
@@ -145,14 +147,14 @@ export function SuggestionOverviewMap({
     requestId: number;
   } | null;
 }) {
-  const { renderOverlay, toggle } = useSuggestionMapOverlayControls(mapSlug, versionId);
+  const { renderOverlay, toggle } = useSuggestionMapOverlayControls(mapSlug, null);
 
   return (
     <div>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-slate-600">
-          Öppna och pågående kartförslag på senaste publicerade version (v{versionNumber}).
-          Klicka på en markering för att öppna förslaget.
+          Öppna och pågående kartförslag från alla versioner. Kartan visar senaste publicerade
+          version (v{versionNumber}). Klicka på en markering för att öppna förslaget.
         </p>
         {toggle}
       </div>
@@ -183,7 +185,7 @@ export function SuggestionAreaSection({
   canReview: boolean;
   isAdmin: boolean;
 }) {
-  const { overlays } = useSuggestionOverlays(mapSlug, versionId);
+  const { overlays } = useSuggestionOverlays(mapSlug, null);
   const fitRequestIdRef = useRef(0);
   const [fitGeoBbox, setFitGeoBbox] = useState<{
     bbox: [number, number, number, number];

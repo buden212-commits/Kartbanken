@@ -14,7 +14,7 @@ export default async function HelpHubPage() {
       href: "/hjalp/guide",
       title: "Användarguide",
       description:
-        "Kom igång, roller, områden, versioner, checkout, banor, kartförslag, jämförelse och export.",
+        "Kom igång, roller, områden, versioner, utcheckning, banor, kartförslag, jämförelse och export.",
       badge: null,
     },
     {

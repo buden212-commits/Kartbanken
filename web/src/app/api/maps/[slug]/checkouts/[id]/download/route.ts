@@ -23,7 +23,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
 
   const checkout = await getCheckoutById(map.id, id);
   if (!checkout) {
-    return NextResponse.json({ error: "Checkout hittades inte" }, { status: 404 });
+    return NextResponse.json({ error: "Utcheckning hittades inte" }, { status: 404 });
   }
 
   const canDownload =
@@ -40,7 +40,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
 
   try {
     const buffer = await readStoredFile(checkout.exportStoragePath);
-    const fileName = `${map.title.replace(/\s+/g, "-")}-checkout-${id.slice(0, 8)}.ocd`;
+    const fileName = `${map.title.replace(/\s+/g, "-")}-utcheckning-${id.slice(0, 8)}.ocd`;
 
     await logAction(session.user.id, "DOWNLOAD", "MapCheckout", checkout.id, {
       mapSlug: slug,

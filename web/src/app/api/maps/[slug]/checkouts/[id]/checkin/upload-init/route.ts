@@ -24,11 +24,11 @@ export async function POST(request: Request, { params }: RouteParams) {
 
   const checkout = await getCheckoutById(map.id, id);
   if (!checkout) {
-    return NextResponse.json({ error: "Checkout hittades inte" }, { status: 404 });
+    return NextResponse.json({ error: "Utcheckning hittades inte" }, { status: 404 });
   }
 
   if (checkout.userId !== session.user.id && session.user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Endast checkout-ägaren kan checka in" }, { status: 403 });
+    return NextResponse.json({ error: "Endast utcheckningsägaren kan checka in" }, { status: 403 });
   }
 
   let body: { filename?: string; size?: number; comment?: string };

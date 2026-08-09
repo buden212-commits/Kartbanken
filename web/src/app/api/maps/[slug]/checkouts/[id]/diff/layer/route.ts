@@ -22,7 +22,7 @@ async function loadAuthorizedCheckout(slug: string, id: string, session: AuthSes
 
   const checkout = await getCheckoutById(map.id, id);
   if (!checkout) {
-    return { error: NextResponse.json({ error: "Checkout hittades inte" }, { status: 404 }) };
+    return { error: NextResponse.json({ error: "Utcheckning hittades inte" }, { status: 404 }) };
   }
 
   const canView =

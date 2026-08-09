@@ -198,12 +198,12 @@ function buildConflictMessage(
   const userLabel = formatUserLabel(checkout);
   if (reason === "objectIds") {
     const count = overlappingObjectIds.length;
-    return `Området delar ${count} kartobjekt med en aktiv checkout av ${userLabel}.`;
+    return `Området delar ${count} kartobjekt med en aktiv utcheckning av ${userLabel}.`;
   }
   if (reason === "both") {
-    return `Området överlappar och delar kartobjekt med en aktiv checkout av ${userLabel}.`;
+    return `Området överlappar och delar kartobjekt med en aktiv utcheckning av ${userLabel}.`;
   }
-  return `Området överlappar en aktiv checkout av ${userLabel}.`;
+  return `Området överlappar en aktiv utcheckning av ${userLabel}.`;
 }
 
 export function detectCheckoutConflicts(

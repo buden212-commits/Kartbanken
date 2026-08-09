@@ -27,7 +27,7 @@ export function HelpExportPdfButton({ userLabel, subtitle }: Props) {
         coverTitle: "kartor.ifkmora.se — Hjälp",
         coverSubtitle:
           subtitle ??
-          "Guide till områden, versionshantering, checkout, jämförelse och export av orienteringskartor.",
+          "Guide till områden, versionshantering, utcheckning, jämförelse och export av orienteringskartor.",
         userLabel,
       });
     } catch (err) {

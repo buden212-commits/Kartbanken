@@ -54,8 +54,8 @@ export async function checkVersionUploadGuards(
     return {
       ok: false,
       error: isAdmin
-        ? `Det finns ${activeCheckouts.length} aktiv(a) checkout(s). Bekräfta att du vill ladda upp hel karta ändå.`
-        : `Det finns ${activeCheckouts.length} aktiv(a) checkout(s). Vänta tills de är integrerade eller avbrutna innan du laddar upp en hel karta.`,
+        ? `Det finns ${activeCheckouts.length === 1 ? "1 aktiv utcheckning" : `${activeCheckouts.length} aktiva utcheckningar`}. Bekräfta att du vill ladda upp hel karta ändå.`
+        : `Det finns ${activeCheckouts.length === 1 ? "1 aktiv utcheckning" : `${activeCheckouts.length} aktiva utcheckningar`}. Vänta tills de är integrerade eller avbrutna innan du laddar upp en hel karta.`,
       code: isAdmin ? "ACTIVE_CHECKOUTS_ADMIN" : "ACTIVE_CHECKOUTS",
       activeCheckoutCount: activeCheckouts.length,
     };

@@ -202,7 +202,7 @@ export function buildModifiedCopySkippedWarning(
 export function buildOutOfScopeWarnings(messages: string[]): IntegrationWarning[] {
   return messages.map((message) => ({
     code: "out_of_scope" as const,
-    title: "Ändring utanför checkout-urval",
+    title: "Ändring utanför utcheckningsurval",
     reason: message,
     objects: [],
   }));

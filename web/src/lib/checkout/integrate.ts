@@ -97,18 +97,18 @@ export async function integrateCheckout(
     });
 
     if (!checkout) {
-      throw new Error("Checkout hittades inte");
+      throw new Error("Utcheckning hittades inte");
     }
 
     logCtx.mapFileId = checkout.mapFileId;
     logIntegrationStep("start", logCtx, { status: checkout.status });
 
     if (checkout.status !== CheckoutStatus.PENDING_ADMIN_CONFIRM) {
-      throw new Error("Checkout väntar inte på admin-bekräftelse");
+      throw new Error("Utcheckningen väntar inte på admin-bekräftelse");
     }
 
     if (!checkout.checkinStoragePath) {
-      throw new Error("Checkout saknar incheckad fil");
+      throw new Error("Utcheckningen saknar incheckad fil");
     }
 
     logCtx.checkinPath = checkout.checkinStoragePath;
@@ -284,13 +284,13 @@ export async function integrateCheckout(
         mapFileId: checkout.mapFileId,
         versionNumber: nextVersionNumber,
         storagePath: storedRef,
-        originalFilename: `integrerad-checkout-${checkout.id.slice(0, 8)}.ocd`,
+        originalFilename: `integrerad-utcheckning-${checkout.id.slice(0, 8)}.ocd`,
         fileSizeBytes: working.byteLength,
         contentHash,
         uploadedById: integratedById,
         comment:
           checkout.integrationComment?.trim() ||
-          `Integrerad checkout ${checkout.id.slice(0, 8)}`,
+          `Integrerad utcheckning ${checkout.id.slice(0, 8)}`,
         parseStatus: "PENDING",
       },
     });

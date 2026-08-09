@@ -12,15 +12,17 @@ import { prisma } from "@/lib/prisma";
 import { UploadVersionForm } from "@/components/upload-version-form";
 import { HelpSectionHeading } from "@/components/help-link-icon";
 import { VersionHistoryList } from "@/components/version-history-list";
+import { VersionComparePicker } from "@/components/version-compare-picker";
 import { CheckoutAreaCta } from "@/components/checkout-area-cta";
 import { CheckoutListPanel } from "@/components/checkout-list-panel";
 import { CheckoutOverviewMap } from "@/components/checkout-overview-map";
 import { SuggestionAreaSection } from "@/components/suggestion/suggestion-map-overlay";
 import { CourseListPanel } from "@/components/course/course-list-panel";
-import { listSuggestionsForMap, serializeSuggestionSummary, getLatestPublishedVersionNumber } from "@/lib/suggestion/repository";
+import { listPendingSuggestionsForMap, serializeSuggestionSummary, getLatestPublishedVersionNumber, listPendingSuggestionsByVersion } from "@/lib/suggestion/repository";
 import { Role } from "@/lib/roles";
 import { CheckoutHistoryPanel } from "@/components/checkout-history-panel";
 import { MapArchiveButton } from "@/components/map-archive-button";
+import { AreaStatusBanner } from "@/components/area-status-banner";
 
 type PageProps = { params: Promise<{ slug: string }> };
 
@@ -57,6 +59,9 @@ export default async function MapDetailPage({ params }: PageProps) {
   const headVersionId = await getHeadVersionId(map.id);
   const checkoutListItems = activeCheckouts.map(serializeCheckoutResponse);
 
+  const pendingSuggestionBreakdown =
+    session?.user?.id ? await listPendingSuggestionsByVersion(map.id) : [];
+
   const courseList =
     session?.user?.id && role && canCreateCourse(role)
       ? (await listCoursesForMap(map.id, session.user.id)).map(serializeCourseSummary)
@@ -66,7 +71,7 @@ export default async function MapDetailPage({ params }: PageProps) {
     session?.user?.id && role && canCreateMapSuggestion(role)
       ? await (async () => {
           const [rows, latestPublished] = await Promise.all([
-            listSuggestionsForMap(map.id),
+            listPendingSuggestionsForMap(map.id),
             getLatestPublishedVersionNumber(map.id),
           ]);
           return rows.map((s) => serializeSuggestionSummary(s, latestPublished));
@@ -105,12 +110,8 @@ export default async function MapDetailPage({ params }: PageProps) {
 
   const publishedVersions = map.versions.filter((v) => v.isPublished);
   const latestPublishedVersion = publishedVersions[0] ?? null;
-  const latestComparePair =
-    publishedVersions.length >= 2
-      ? [publishedVersions[1]!, publishedVersions[0]!]
-      : canManagePublication && map.versions.length >= 2
-        ? [map.versions[1]!, map.versions[0]!]
-        : null;
+  const headVersion = map.versions[0] ?? null;
+  const comparableVersions = versionHistoryItems.filter((v) => v.canView);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
@@ -147,6 +148,20 @@ export default async function MapDetailPage({ params }: PageProps) {
         </div>
       </div>
 
+      {session?.user?.id && !mapArchived && (
+        <AreaStatusBanner
+          mapSlug={map.slug}
+          headVersionNumber={headVersion?.versionNumber ?? null}
+          headVersionId={headVersion?.id ?? headVersionId}
+          headIsPublished={headVersion?.isPublished ?? false}
+          publishedVersionNumber={latestPublishedVersion?.versionNumber ?? null}
+          publishedVersionId={latestPublishedVersion?.id ?? null}
+          suggestionBreakdown={pendingSuggestionBreakdown}
+          activeCheckoutCount={activeCheckouts.length}
+          showVersionStatus={canManagePublication}
+        />
+      )}
+
       {canUploadVersion && !mapArchived && (
         <section className="card mt-8">
           <HelpSectionHeading section="versioner">Ladda upp ny version</HelpSectionHeading>
@@ -176,15 +191,21 @@ export default async function MapDetailPage({ params }: PageProps) {
           <h2 className="text-lg font-medium text-slate-900">
             Versionshistorik ({map.versions.length})
           </h2>
-          {latestComparePair && (
-            <Link
-              href={`/maps/${map.slug}/compare?v1=${latestComparePair[0].id}&v2=${latestComparePair[1].id}`}
-              className="rounded-lg border border-ifk-blue/30 bg-ifk-blue-pale px-4 py-2 text-sm font-medium text-ifk-blue transition hover:border-ifk-blue hover:bg-ifk-blue-muted"
-            >
-              Jämför senaste två versioner
-            </Link>
-          )}
         </div>
+
+        {comparableVersions.length >= 2 && (
+          <div className="mt-4">
+            <VersionComparePicker
+              mapSlug={map.slug}
+              versions={comparableVersions.map((v) => ({
+                id: v.id,
+                versionNumber: v.versionNumber,
+                uploadedAt: v.uploadedAt,
+                isPublished: v.isPublished,
+              }))}
+            />
+          </div>
+        )}
 
         {map.versions.length === 0 ? (
           <p className="mt-4 text-sm text-slate-500">Inga versioner uppladdade ännu.</p>
@@ -214,7 +235,7 @@ export default async function MapDetailPage({ params }: PageProps) {
 
       {headVersionId && activeCheckouts.length > 0 && (
         <section className="mt-10">
-          <h2 className="text-lg font-medium text-slate-900">Checkout-områden på kartan</h2>
+          <h2 className="text-lg font-medium text-slate-900">Utcheckningsområden på kartan</h2>
           <p className="mt-1 text-sm text-slate-600">
             Färgade ytor visar vem som checkat ut vad (read-only).
           </p>

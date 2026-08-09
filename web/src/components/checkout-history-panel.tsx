@@ -21,9 +21,9 @@ export function CheckoutHistoryPanel({ mapSlug, items }: Props) {
 
   return (
     <section className="mt-10">
-      <h2 className="text-lg font-medium text-slate-900">Checkout-historik</h2>
+      <h2 className="text-lg font-medium text-slate-900">Utcheckningshistorik</h2>
       <p className="mt-1 text-sm text-slate-600">
-        Avslutade checkouts — integrerade och avbrutna.
+        Avslutade utcheckningar — integrerade och avbrutna.
       </p>
       <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full min-w-[640px] text-sm">

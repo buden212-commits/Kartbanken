@@ -31,7 +31,6 @@ export async function GET(_request: Request, { params }: RouteParams) {
     where: {
       mapFileId: map.id,
       status: { in: [SuggestionStatus.OPEN, SuggestionStatus.IN_PROGRESS] },
-      mapVersion: { isPublished: true },
     },
     orderBy: { createdAt: "asc" },
     include: {
