@@ -35,7 +35,10 @@ export type AuditAction =
   | "SUGGESTION_REVIEWED"
   | "SUGGESTION_DELETED"
   | "SUGGESTION_REPORT_EXPORT"
-  | "MAP_GEOTIFF_EXPORT";
+  | "MAP_GEOTIFF_EXPORT"
+  | "FEEDBACK_CREATED"
+  | "FEEDBACK_REVIEWED"
+  | "FEEDBACK_VOTED";
 
 export type EmailSentAuditMetadata = {
   kind: "checkin" | "new_upload" | "test";

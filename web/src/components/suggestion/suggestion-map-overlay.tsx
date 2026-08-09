@@ -229,6 +229,7 @@ export function SuggestionAreaSection({
         isAdmin={isAdmin}
         onZoomToSuggestion={zoomToSuggestion}
         highlightedSuggestionId={highlightedId}
+        publishedVersionNumber={versionNumber}
       />
     </>
   );

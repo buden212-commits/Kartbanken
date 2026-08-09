@@ -8,6 +8,40 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-09",
+    title: "Feedback — buggar och förbättringsförslag",
+    items: [
+      "Hjälpen är uppdelad: översikt (/hjalp), guide (/hjalp/guide), buggar, förbättringsförslag och release notes",
+      "Alla godkända användare kan rapportera buggar och föreslå förbättringar",
+      "Tumme upp på förbättringsförslag — en röst per person",
+      "Admin kvitterar under Admin → Feedback (fixad, byggd, avvisad m.m.)",
+    ],
+  },
+  {
+    date: "2026-08-09",
+    title: "Kartförslag — publicerad version",
+    items: [
+      "Under Kartförslag anges vilken version som är publicerad (t.ex. «Publicerad version: v13»)",
+    ],
+  },
+  {
+    date: "2026-08-09",
+    title: "Publicering — info i kartförslagslistan",
+    items: [
+      "Versionsstatus och publiceringsknappar visas nu under Kartförslag (för redaktörer) i stället för en separat banner högst upp",
+      "Äldre opublicerade utkast (t.ex. v11, v12 när v13 redan är publicerad) förklaras tydligt — utan knapp för att publicera dem",
+      "Nyare opublicerad version än läsarna ser: jämför och publicera direkt från kartförslagssektionen",
+    ],
+  },
+  {
+    date: "2026-08-09",
+    title: "Banner — bara när nyare version väntar publicering",
+    items: [
+      "Gul banner visas bara om det finns en opublicerad version nyare än den läsare redan ser — inte för äldre utkast (t.ex. v11, v12 när v13 redan är publicerad)",
+      "Tydligare formulering: «Läsare ser v13 — publicera v14 när den ska ersätta den»",
+    ],
+  },
+  {
+    date: "2026-08-09",
     title: "Versionshistorik — tooltips i åtgärdskolumnen",
     items: [
       "Ikonerna under Åtgärder visar nu rätt tooltip (ladda ner, jämför, öppna i nytt fönster, radera) i stället för «Öppna karta»",

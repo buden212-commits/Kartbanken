@@ -4,7 +4,6 @@ import { auth } from "@/auth";
 import { canAdmin, canCheckout, canCreateCourse, canCreateMapSuggestion, canReviewMapSuggestion, canUpload } from "@/lib/auth/permissions";
 import { MapTitleEditor } from "@/components/map-title-editor";
 import { findActiveCheckoutsForMap, findCheckoutHistoryForMap, getHeadVersionId, serializeCheckoutResponse } from "@/lib/checkout/repository";
-import { getMapVersionContext } from "@/lib/maps/version-context";
 import { isMapArchived } from "@/lib/maps/archive-map";
 import { listCoursesForMap, serializeCourseSummary } from "@/lib/course/repository";
 import { versionVisibilityFilter } from "@/lib/maps/version-query";
@@ -20,7 +19,6 @@ import { SuggestionAreaSection } from "@/components/suggestion/suggestion-map-ov
 import { CourseListPanel } from "@/components/course/course-list-panel";
 import { listSuggestionsForMap, serializeSuggestionSummary, getLatestPublishedVersionNumber } from "@/lib/suggestion/repository";
 import { Role } from "@/lib/roles";
-import { UnpublishedVersionBanner } from "@/components/unpublished-version-banner";
 import { CheckoutHistoryPanel } from "@/components/checkout-history-panel";
 import { MapArchiveButton } from "@/components/map-archive-button";
 
@@ -53,7 +51,6 @@ export default async function MapDetailPage({ params }: PageProps) {
   if (!map) notFound();
 
   const mapArchived = isMapArchived(map.archivedAt);
-  const versionContext = await getMapVersionContext(map.id);
   const checkoutHistory = await findCheckoutHistoryForMap(map.id);
 
   const activeCheckouts = await findActiveCheckoutsForMap(map.id);
@@ -149,24 +146,6 @@ export default async function MapDetailPage({ params }: PageProps) {
           )}
         </div>
       </div>
-
-      {canManagePublication && (
-        <UnpublishedVersionBanner
-          mapSlug={map.slug}
-          publishedVersionNumber={versionContext.published?.versionNumber ?? null}
-          publishedVersionId={versionContext.published?.id ?? null}
-          unpublishedVersions={map.versions
-            .filter((v) => !v.isPublished)
-            .map((v) => ({
-              id: v.id,
-              versionNumber: v.versionNumber,
-              parseStatus: v.parseStatus,
-              previousVersionId: map.versions.find((p) => p.versionNumber === v.versionNumber - 1)
-                ?.id,
-            }))}
-          canManage={canManagePublication}
-        />
-      )}
 
       {canUploadVersion && !mapArchived && (
         <section className="card mt-8">

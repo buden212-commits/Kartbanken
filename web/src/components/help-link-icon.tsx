@@ -17,7 +17,7 @@ export function HelpLinkIcon({ section, className = "", label, compact = false }
   const sizeClass = compact ? "h-5 w-5 text-xs" : "h-7 w-7 text-sm";
   return (
     <Link
-      href={`/hjalp#${section}`}
+      href={`/hjalp/guide#${section}`}
       className={`${iconBaseClass} ${sizeClass} ${className}`.trim()}
       title={`Hjälp: ${sectionLabel}`}
       aria-label={label ?? `Hjälp om ${sectionLabel}`}

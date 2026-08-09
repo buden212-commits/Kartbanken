@@ -12,6 +12,7 @@ export type HelpSectionId =
   | "jamfor"
   | "verifiera"
   | "kartvy"
+  | "feedback"
   | "admin"
   | "faq";
 
@@ -28,6 +29,7 @@ export const helpSectionLabels: Record<HelpSectionId, string> = {
   jamfor: "Jämföra versioner",
   verifiera: "Verifiera",
   kartvy: "Visa karta och export",
+  feedback: "Feedback om tjänsten",
   admin: "Administration",
   faq: "Vanliga frågor",
 };

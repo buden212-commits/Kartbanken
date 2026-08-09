@@ -20,6 +20,7 @@ type Props = {
   /** Zoom the area overview map to this suggestion (områdessidan). */
   onZoomToSuggestion?: (id: string) => void;
   highlightedSuggestionId?: string | null;
+  publishedVersionNumber?: number | null;
 };
 
 function statusBadgeClass(status: SuggestionSummary["status"]): string {
@@ -42,6 +43,7 @@ export function SuggestionListPanel({
   isAdmin,
   onZoomToSuggestion,
   highlightedSuggestionId = null,
+  publishedVersionNumber = null,
 }: Props) {
   const router = useRouter();
   const [filter, setFilter] = useState<string>("OPEN");
@@ -129,6 +131,9 @@ export function SuggestionListPanel({
       </div>
       <p className="mt-1 text-sm text-slate-600">
         Förslag på ändringar i terrängen. Syns på publicerade versioner och granskas av redaktörer.
+        {publishedVersionNumber != null && (
+          <> Publicerad version: <strong>v{publishedVersionNumber}</strong>.</>
+        )}
       </p>
 
       {error && (

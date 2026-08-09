@@ -2,7 +2,6 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { auth } from "@/auth";
 import { HelpProcessDiagram } from "@/components/help-process-diagram";
-import { HelpReleaseNotes } from "@/components/help-release-notes";
 import { canAdmin, canUpload, roleLabel } from "@/lib/auth/permissions";
 import {
   accountRegistration,
@@ -39,8 +38,8 @@ const sections = [
   { id: "jamfor", label: "Jämföra versioner" },
   { id: "verifiera", label: "Verifiera" },
   { id: "kartvy", label: "Visa karta och export" },
+  { id: "feedback", label: "Feedback om tjänsten" },
   { id: "admin", label: "Administration", adminOnly: true },
-  { id: "release-notes", label: "Release notes" },
   { id: "faq", label: "Vanliga frågor" },
 ] as const;
 
@@ -81,7 +80,7 @@ export async function HelpPageContent() {
 
   return (
     <div className="grid gap-10 lg:grid-cols-[220px_1fr] lg:gap-12">
-      <nav className="lg:sticky lg:top-24 lg:self-start">
+      <nav className="lg:sticky lg:top-24 lg:self-start" data-help-export-skip="true">
         <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Innehåll</p>
         <ul className="mt-3 space-y-1 text-sm">
           {visibleSections.map((s) => (
@@ -97,7 +96,7 @@ export async function HelpPageContent() {
         </ul>
       </nav>
 
-      <div className="space-y-12">
+      <div id="help-export-body" className="space-y-12">
         <HelpSection id="oversikt" title="Översikt">
           <p>
             <strong>kartor.ifkmora.se</strong> är IFK Mora OK:s system för versionshantering och
@@ -181,7 +180,7 @@ export async function HelpPageContent() {
               "Område — startsidan med alla kartområden",
               "Visste du att… — dagens tips om en funktion du kanske inte känner till (länk till hjälpen)",
               "Verifiera — tillfällig jämförelse utan uppladdning",
-              "Hjälp — den här sidan (inklusive release notes)",
+              "Hjälp — översikt, guide, buggar och förbättringsförslag (/hjalp)",
               "Admin — användare, lagring, loggning och inställningar (endast administratörer)",
             ]}
           />
@@ -543,7 +542,7 @@ export async function HelpPageContent() {
             <HelpList
               items={[
                 "Endast en version kan vara publicerad åt gången per område",
-                "Gul banner på områdessidan listar opublicerade versionsnummer (t.ex. v4, v5) med knappar för jämförelse och publicering",
+                "Under Kartförslag anges vilken version som är publicerad för läsare",
                 "Kryssa i Publicerad i versionshistoriken för att göra versionen synlig för läsare — tidigare publicerad version avpubliceras då automatiskt",
                 "Versioner med parsningsfel kan inte publiceras",
                 "Markera Rek. för intern rekommenderad version (valfritt komplement till publicering)",
@@ -694,6 +693,28 @@ export async function HelpPageContent() {
           <HelpProcessDiagram title="Flöde — visa karta och export" chart={mapViewExport} />
         </HelpSection>
 
+        <HelpSection id="feedback" title="Feedback om tjänsten">
+          <p>
+            Buggar och förbättringsförslag om <strong>kartor.ifkmora.se</strong> hanteras separat
+            från kartförslag (som gäller terräng på kartan).
+          </p>
+          <HelpList
+            items={[
+              "Rapportera bugg — fel i tjänsten, med valfria steg för att återskapa",
+              "Förbättringsförslag — idéer om nya funktioner; andra kan rösta med tumme upp",
+              "Admin kvitterar när buggen är fixad eller förslaget byggts/avvisats",
+            ]}
+          />
+          <div className="flex flex-wrap gap-4 text-sm">
+            <Link href="/hjalp/buggar" className="link-primary">
+              Rapportera bugg →
+            </Link>
+            <Link href="/hjalp/forbattringar" className="link-primary">
+              Förbättringsförslag →
+            </Link>
+          </div>
+        </HelpSection>
+
         {showAdmin && (
           <HelpSection id="admin" title="Administration">
             <p>
@@ -701,7 +722,8 @@ export async function HelpPageContent() {
               <Link href="/admin/users" className="link-primary">Användare</Link>,{" "}
               <Link href="/admin/checkouts" className="link-primary">Checkouts</Link>,{" "}
               <Link href="/admin/lagring" className="link-primary">Lagring</Link>,{" "}
-              <Link href="/admin/loggning" className="link-primary">Loggning</Link> och{" "}
+              <Link href="/admin/loggning" className="link-primary">Loggning</Link>,{" "}
+              <Link href="/admin/feedback" className="link-primary">Feedback</Link> och{" "}
               <Link href="/admin/settings" className="link-primary">Inställningar</Link>.
             </p>
 
@@ -799,8 +821,6 @@ export async function HelpPageContent() {
           </HelpSection>
         )}
 
-        <HelpReleaseNotes />
-
         <HelpSection id="faq" title="Vanliga frågor">
           <div className="space-y-6">
             <div>
@@ -824,8 +844,11 @@ export async function HelpPageContent() {
             <div>
               <h3 className="font-medium text-slate-900">Var hittar jag release notes?</h3>
               <p className="mt-1">
-                Scrolla till avsnittet <a href="#release-notes" className="link-primary">Release notes</a>{" "}
-                på den här sidan — där listas nya funktioner med datum.
+                Scrolla till avsnittet{" "}
+                <Link href="/hjalp/release-notes" className="link-primary">
+                  Release notes
+                </Link>{" "}
+                — där listas nya funktioner med datum.
               </p>
             </div>
             <div>
