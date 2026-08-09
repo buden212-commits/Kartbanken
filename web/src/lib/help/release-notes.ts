@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-09",
+    title: "Kartförslag — alla aktiva versioner på kartan",
+    items: [
+      "Kartförslag på kartan och i listan visar alla öppna och pågående förslag oavsett version — kartan visar fortfarande senaste publicerade version som underlag",
+      "Införda och avvisade förslag visas inte längre i listan på områdessidan",
+    ],
+  },
+  {
+    date: "2026-08-09",
     title: "Statusbanner — kartförslag per version",
     items: [
       "Gul banner visar nu hur många öppna och pågående kartförslag som finns på varje version (t.ex. v13: 3 öppna · v11: 1 öppen, gäller äldre version)",

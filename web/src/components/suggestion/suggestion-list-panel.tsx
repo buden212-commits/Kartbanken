@@ -46,7 +46,7 @@ export function SuggestionListPanel({
   publishedVersionNumber = null,
 }: Props) {
   const router = useRouter();
-  const [filter, setFilter] = useState<string>("OPEN");
+  const [filter, setFilter] = useState<string>("ALL");
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [exportingPdf, setExportingPdf] = useState(false);
@@ -121,16 +121,15 @@ export function SuggestionListPanel({
             onChange={(e) => setFilter(e.target.value)}
             className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
           >
+          <option value="ALL">Alla aktiva</option>
           <option value="OPEN">Öppna</option>
           <option value="IN_PROGRESS">Pågår</option>
-          <option value="IMPLEMENTED">Införda</option>
-          <option value="REJECTED">Avvisade</option>
-          <option value="ALL">Alla</option>
         </select>
         </div>
       </div>
       <p className="mt-1 text-sm text-slate-600">
-        Förslag på ändringar i terrängen. Syns på publicerade versioner och granskas av redaktörer.
+        Öppna och pågående förslag från alla versioner. Kartan ovan visar senaste publicerade
+        version.
         {publishedVersionNumber != null && (
           <> Publicerad version: <strong>v{publishedVersionNumber}</strong>.</>
         )}

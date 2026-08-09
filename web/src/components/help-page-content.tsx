@@ -513,7 +513,7 @@ export async function HelpPageContent() {
               "Klicka «Skicka in kartförslag» i verktygsraden när du är klar — då fyller du i kategori och beskrivning i dialogen",
               "I dialogen: «Ta foto» öppnar kameran på mobil (direktfoto), «Välj bild» plockar från albumet",
               "Skicka-sektionen ovanför kartan visar antal tillagda ändringar innan du skickar",
-              "Öppna och pågående förslag visas på kartan — klicka markeringen eller ett förslag i listan på områdessidan (zoomar kartan till markeringen)",
+              "Öppna och pågående förslag från alla versioner visas på områdessidans karta (underlag: senaste publicerade version) — klicka markeringen eller ett förslag i listan",
               "På detaljsidan zoomas kartan automatiskt till markeringen; «Zooma till markering» finns kvar om du vill fokusera om",
               "Växla «Visa kartförslag» i kartvyn för att dölja lagret",
               "Redaktörer markerar som Pågår, Införd eller Avvisad och kan koppla checkout",

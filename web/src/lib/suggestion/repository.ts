@@ -161,6 +161,18 @@ export async function listSuggestionsForMap(mapFileId: string, status?: string) 
   });
 }
 
+export async function listPendingSuggestionsForMap(mapFileId: string) {
+  return prisma.mapSuggestion.findMany({
+    where: {
+      mapFileId,
+      mapVersion: { isPublished: true },
+      status: { in: [SuggestionStatus.OPEN, SuggestionStatus.IN_PROGRESS] },
+    },
+    select: suggestionWithUserSelect,
+    orderBy: [{ createdAt: "desc" }],
+  });
+}
+
 export async function listSuggestionOverlaysForVersion(
   mapFileId: string,
   mapVersionId: string,
@@ -169,6 +181,36 @@ export async function listSuggestionOverlaysForVersion(
     where: {
       mapFileId,
       mapVersionId,
+      status: { in: [SuggestionStatus.OPEN, SuggestionStatus.IN_PROGRESS] },
+      mapVersion: { isPublished: true },
+    },
+    select: {
+      id: true,
+      status: true,
+      category: true,
+      objects: {
+        orderBy: { sortOrder: "asc" },
+        select: { geometryJson: true },
+      },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return rows.flatMap((row) =>
+    row.objects.map((obj) => ({
+      id: row.id,
+      status: row.status as SuggestionSummary["status"],
+      category: row.category as SuggestionSummary["category"],
+      geometry: parseGeometryJson(obj.geometryJson),
+    })),
+  );
+}
+
+/** Öppna och pågående kartförslag på alla publicerade versioner (för områdessidan). */
+export async function listPendingSuggestionOverlaysForMap(mapFileId: string) {
+  const rows = await prisma.mapSuggestion.findMany({
+    where: {
+      mapFileId,
       status: { in: [SuggestionStatus.OPEN, SuggestionStatus.IN_PROGRESS] },
       mapVersion: { isPublished: true },
     },

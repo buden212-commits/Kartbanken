@@ -15,6 +15,7 @@ import {
   createSuggestion,
   getLatestPublishedVersionNumber,
   listSuggestionOverlaysForVersion,
+  listPendingSuggestionOverlaysForMap,
   listSuggestionsForMap,
   serializeSuggestionDetail,
   serializeSuggestionSummary,
@@ -55,17 +56,26 @@ export async function GET(request: Request, { params }: RouteParams) {
   const mapVersionId = url.searchParams.get("mapVersionId") ?? undefined;
 
   if (overlay) {
-    if (!mapVersionId) {
-      return NextResponse.json({ error: "mapVersionId krävs för overlay" }, { status: 400 });
+    if (mapVersionId) {
+      const version = await prisma.mapVersion.findFirst({
+        where: { id: mapVersionId, mapFileId: map.id, isPublished: true },
+        select: { id: true },
+      });
+      if (!version) {
+        return NextResponse.json({ error: "Version hittades inte" }, { status: 404 });
+      }
+      const items = await listSuggestionOverlaysForVersion(map.id, version.id);
+      return NextResponse.json({
+        overlays: items.map((item) => ({
+          id: item.id,
+          status: item.status,
+          categoryLabel: SUGGESTION_CATEGORY_LABELS[item.category],
+          geometry: item.geometry,
+        })),
+      });
     }
-    const version = await prisma.mapVersion.findFirst({
-      where: { id: mapVersionId, mapFileId: map.id, isPublished: true },
-      select: { id: true },
-    });
-    if (!version) {
-      return NextResponse.json({ error: "Version hittades inte" }, { status: 404 });
-    }
-    const items = await listSuggestionOverlaysForVersion(map.id, version.id);
+
+    const items = await listPendingSuggestionOverlaysForMap(map.id);
     return NextResponse.json({
       overlays: items.map((item) => ({
         id: item.id,

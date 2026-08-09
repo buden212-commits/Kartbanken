@@ -18,7 +18,7 @@ import { CheckoutListPanel } from "@/components/checkout-list-panel";
 import { CheckoutOverviewMap } from "@/components/checkout-overview-map";
 import { SuggestionAreaSection } from "@/components/suggestion/suggestion-map-overlay";
 import { CourseListPanel } from "@/components/course/course-list-panel";
-import { listSuggestionsForMap, serializeSuggestionSummary, getLatestPublishedVersionNumber, listPendingSuggestionsByVersion } from "@/lib/suggestion/repository";
+import { listPendingSuggestionsForMap, serializeSuggestionSummary, getLatestPublishedVersionNumber, listPendingSuggestionsByVersion } from "@/lib/suggestion/repository";
 import { Role } from "@/lib/roles";
 import { CheckoutHistoryPanel } from "@/components/checkout-history-panel";
 import { MapArchiveButton } from "@/components/map-archive-button";
@@ -71,7 +71,7 @@ export default async function MapDetailPage({ params }: PageProps) {
     session?.user?.id && role && canCreateMapSuggestion(role)
       ? await (async () => {
           const [rows, latestPublished] = await Promise.all([
-            listSuggestionsForMap(map.id),
+            listPendingSuggestionsForMap(map.id),
             getLatestPublishedVersionNumber(map.id),
           ]);
           return rows.map((s) => serializeSuggestionSummary(s, latestPublished));
