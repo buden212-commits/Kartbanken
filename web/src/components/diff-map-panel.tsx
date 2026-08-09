@@ -46,13 +46,6 @@ type GpsFix = {
   longitude: number;
 };
 
-type GpsFix = {
-  mapCoord: [number, number];
-  accuracyMeters: number;
-  latitude: number;
-  longitude: number;
-};
-
 type Bbox = [number, number, number, number];
 
 type FocusTarget = {
@@ -600,10 +593,6 @@ export function DiffMapPanel({
       setOcdSymbolDialogOpen(true);
       return;
     }
-  }, [fullViewBox, loading, focusTarget, fitGeoBbox, fitWholeMap]);
-
-  useEffect(() => {
-    if (!focusTarget || !fullViewBox || loading) return;
 
     await performExport();
   }, [exportFrame, exportSettings.outputFormat, exportSettings.includeSuggestions, performExport]);
@@ -697,47 +686,6 @@ export function DiffMapPanel({
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [fitGeoBbox, fullViewBox, loading, rootTransform, maxZoom]);
-
-  useEffect(() => {
-    if (!fitGeoBbox || !fullViewBox || loading) return;
-
-    const apply = () => {
-      const viewport = viewportRef.current;
-      if (!viewport) return false;
-      const rect = viewport.getBoundingClientRect();
-      if (rect.width < 10 || rect.height < 10) return false;
-
-      const [minX, minY, maxX, maxY] = fitGeoBbox.bbox;
-      const next = focusOnTarget(
-        {
-          bbox: fitGeoBbox.bbox,
-          centroid: [(minX + maxX) / 2, (minY + maxY) / 2],
-          objectType: "area",
-        },
-        rootTransform,
-        fullViewBox,
-        rect.width,
-        rect.height,
-      );
-      if (!next) return false;
-      setPan(next.pan);
-      setZoom(next.zoom);
-      return true;
-    };
-
-    if (apply()) return;
-
-    // Viewport may not have layout yet (fullscreen flex) — retry next frames.
-    let tries = 0;
-    let raf = 0;
-    const tick = () => {
-      tries += 1;
-      if (apply() || tries >= 20) return;
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [fitGeoBbox, fullViewBox, loading, rootTransform]);
 
   const adjustZoom = useCallback((factor: number, focal?: { x: number; y: number }) => {
     const viewport = viewportRef.current;

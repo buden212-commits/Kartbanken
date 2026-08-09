@@ -8,6 +8,13 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-09",
+    title: "Kartexport — exportknapp fungerar igen",
+    items: [
+      "Export från kartvyn (PDF, GeoTIFF, OCD) fungerar igen efter merge-fix",
+    ],
+  },
+  {
+    date: "2026-08-09",
     title: "Feedback — buggar och förbättringsförslag",
     items: [
       "Hjälpen är uppdelad: översikt (/hjalp), guide (/hjalp/guide), buggar, förbättringsförslag och release notes",
