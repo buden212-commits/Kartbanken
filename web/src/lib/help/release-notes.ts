@@ -19,6 +19,8 @@ export const releaseNotes: ReleaseNote[] = [
       "Versionshistorik: rätt tooltips på åtgärdsikonerna (ladda ner, jämför, m.m.)",
       "Kartexport (PDF, GeoTIFF, OCD) fungerar igen",
       "Konsekvent svenska i gränssnittet — «utcheckningar» i stället för «checkouts»; «aktuell version» i stället för «head»",
+      "Release notes samlade till en post per dag (9 augusti–1 augusti)",
+      "Fix: dubbel admin-meny på sidan Användarhantering",
     ],
   },
   {
