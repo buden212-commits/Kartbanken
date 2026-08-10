@@ -752,6 +752,10 @@ export function DiffMapPanel({
     (e: React.PointerEvent) => {
       if (e.pointerType === "mouse" && e.button !== 0) return;
 
+      if ((e.target as Element).closest("[data-map-toolbar]")) {
+        return;
+      }
+
       const viewport = viewportRef.current;
       if (!viewport) return;
 

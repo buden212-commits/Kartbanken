@@ -13,7 +13,7 @@ export const releaseNotes: ReleaseNote[] = [
       "Kartförslag på kartan visar nummer (1, 2, 3 …) vid varje markering — inte kategorinamn",
       "Punktmarkeringar är mindre och visas som en enkel prick utan kontur",
       "Ritverktyg (punkt, rektangel, polygon, linje, radera) som ikoner med tooltip till höger på kartan vid «Föreslå kartändring»",
-      "Åtgärdsknapparna (Lägg till ändring, Rensa, Skicka in) ligger uppe till höger på kartan",
+      "Fix: verktygsknappar på kartan fångar klick utan att samtidigt rita i kartan",
       "Fix: öppna och pågående kartförslag från äldre (opublicerade) versioner går att öppna från listan och kartan — tidigare gav de felmeddelandet «hittades inte»",
       "Fix: «Exportera PDF» på hjälpsidan fungerar igen — exporten väntar på att guiden laddats och fastnar inte längre på processdiagram",
     ],

@@ -32,10 +32,19 @@ function ToolbarTooltip({ label }: { label: string }) {
   );
 }
 
-function PinIcon() {
+function stopMapPointer(e: React.PointerEvent | React.MouseEvent) {
+  e.stopPropagation();
+}
+
+function PointIcon({ active }: { active: boolean }) {
   return (
     <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
-      <circle cx="10" cy="10" r="4" fill="currentColor" />
+      <circle
+        cx="10"
+        cy="10"
+        r="5"
+        className={active ? "fill-white" : "fill-[#FD3DB5]"}
+      />
     </svg>
   );
 }
@@ -98,10 +107,10 @@ function DeleteIcon() {
   );
 }
 
-function ToolIcon({ tool }: { tool: SuggestionDrawTool }) {
+function ToolIcon({ tool, active }: { tool: SuggestionDrawTool; active: boolean }) {
   switch (tool) {
     case "pin":
-      return <PinIcon />;
+      return <PointIcon active={active} />;
     case "rectangle":
       return <RectangleIcon />;
     case "polygon":
@@ -122,9 +131,11 @@ type Props = {
 export function SuggestionMapDrawToolbar({ tool, onToolChange, disabled = false }: Props) {
   return (
     <div
-      className="pointer-events-auto absolute right-2 top-1/2 z-30 flex -translate-y-1/2 flex-col gap-1 rounded-xl border border-slate-200 bg-white/95 p-1 shadow-lg backdrop-blur sm:right-3"
+      data-map-toolbar
+      className="pointer-events-auto absolute right-2 top-1/2 z-40 flex -translate-y-1/2 flex-col gap-1 rounded-xl border border-slate-200 bg-white/95 p-1 shadow-lg backdrop-blur sm:right-3"
       role="toolbar"
       aria-label="Ritverktyg"
+      onPointerDown={stopMapPointer}
     >
       {DRAW_TOOLS.map((drawTool) => {
         const active = tool === drawTool && !disabled;
@@ -143,9 +154,10 @@ export function SuggestionMapDrawToolbar({ tool, onToolChange, disabled = false 
             aria-label={label}
             aria-pressed={active}
             onClick={() => onToolChange(drawTool)}
+            onPointerDown={stopMapPointer}
             className={className}
           >
-            <ToolIcon tool={drawTool} />
+            <ToolIcon tool={drawTool} active={active} />
             <ToolbarTooltip label={label} />
           </button>
         );
@@ -176,25 +188,34 @@ export function SuggestionMapActionToolbar({
 }: ActionToolbarProps) {
   return (
     <div
-      className="pointer-events-auto absolute right-2 top-2 z-30 flex max-w-[calc(100%-4.5rem)] flex-wrap justify-end gap-1.5 rounded-xl border border-slate-200 bg-white/95 p-1.5 shadow-lg backdrop-blur sm:right-3 sm:top-3"
+      data-map-toolbar
+      className="pointer-events-auto absolute right-2 top-2 z-40 flex max-w-[calc(100%-4.5rem)] flex-wrap justify-end gap-1.5 rounded-xl border border-slate-200 bg-white/95 p-1.5 shadow-lg backdrop-blur sm:right-3 sm:top-3"
       role="toolbar"
       aria-label="Åtgärder"
+      onPointerDown={stopMapPointer}
     >
       <button
         type="button"
         disabled={!canAddMarking}
         onClick={onAddMarking}
+        onPointerDown={stopMapPointer}
         className={canAddMarking ? actionBtnPrimary : actionBtnNeutral}
       >
         Lägg till ändring
       </button>
-      <button type="button" onClick={onClear} className={actionBtnNeutral}>
+      <button
+        type="button"
+        onClick={onClear}
+        onPointerDown={stopMapPointer}
+        className={actionBtnNeutral}
+      >
         Rensa
       </button>
       <button
         type="button"
         disabled={markingCount < 1}
         onClick={onSubmit}
+        onPointerDown={stopMapPointer}
         className={markingCount > 0 ? actionBtnPrimary : actionBtnNeutral}
       >
         {markingCount > 0
