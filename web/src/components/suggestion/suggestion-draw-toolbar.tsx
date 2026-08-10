@@ -13,11 +13,10 @@ export const SUGGESTION_DRAW_TOOL_LABELS: Record<SuggestionDrawTool, string> = {
 const DRAW_TOOLS: SuggestionDrawTool[] = ["pin", "rectangle", "polygon", "line", "delete"];
 
 const iconBtnBase =
-  "group relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border bg-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ifk-blue/30 disabled:cursor-not-allowed disabled:opacity-50";
-const iconBtnActive = "border-ifk-blue bg-ifk-blue text-white hover:bg-ifk-blue";
+  "group relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border-2 bg-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ifk-blue/30 disabled:cursor-not-allowed disabled:opacity-50";
+const iconBtnActive = "border-red-600";
 const iconBtnInactive =
-  "border-slate-200 text-slate-600 hover:border-ifk-blue/40 hover:bg-ifk-blue-pale hover:text-ifk-blue";
-const iconBtnDeleteActive = "border-red-600 bg-red-600 text-white hover:bg-red-700";
+  "border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50";
 const iconBtnDeleteInactive =
   "border-slate-200 text-red-600 hover:border-red-200 hover:bg-red-50";
 
@@ -36,15 +35,10 @@ function stopMapPointer(e: React.PointerEvent | React.MouseEvent) {
   e.stopPropagation();
 }
 
-function PointIcon({ active }: { active: boolean }) {
+function PointIcon() {
   return (
     <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
-      <circle
-        cx="10"
-        cy="10"
-        r="5"
-        className={active ? "fill-white" : "fill-[#FD3DB5]"}
-      />
+      <circle cx="10" cy="10" r="5" className="fill-[#FD3DB5]" />
     </svg>
   );
 }
@@ -107,10 +101,10 @@ function DeleteIcon() {
   );
 }
 
-function ToolIcon({ tool, active }: { tool: SuggestionDrawTool; active: boolean }) {
+function ToolIcon({ tool }: { tool: SuggestionDrawTool }) {
   switch (tool) {
     case "pin":
-      return <PointIcon active={active} />;
+      return <PointIcon />;
     case "rectangle":
       return <RectangleIcon />;
     case "polygon":
@@ -142,7 +136,7 @@ export function SuggestionMapDrawToolbar({ tool, onToolChange, disabled = false 
         const label = SUGGESTION_DRAW_TOOL_LABELS[drawTool];
         const className =
           drawTool === "delete"
-            ? `${iconBtnBase} ${active ? iconBtnDeleteActive : iconBtnDeleteInactive}`
+            ? `${iconBtnBase} ${active ? iconBtnActive : iconBtnDeleteInactive}`
             : `${iconBtnBase} ${active ? iconBtnActive : iconBtnInactive}`;
 
         return (
@@ -157,7 +151,7 @@ export function SuggestionMapDrawToolbar({ tool, onToolChange, disabled = false 
             onPointerDown={stopMapPointer}
             className={className}
           >
-            <ToolIcon tool={drawTool} active={active} />
+            <ToolIcon tool={drawTool} />
             <ToolbarTooltip label={label} />
           </button>
         );
