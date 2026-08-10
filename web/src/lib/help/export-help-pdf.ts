@@ -53,62 +53,89 @@ function fitImage(
   return { w: imgW * scale, h: imgH * scale };
 }
 
-async function svgElementToPng(
+const SVG_RASTER_TIMEOUT_MS = 5000;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), timeoutMs);
+    promise
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch(() => {
+        clearTimeout(timer);
+        resolve(null);
+      });
+  });
+}
+
+async function svgElementToPngInner(
   svg: SVGElement,
 ): Promise<{ dataUrl: string; width: number; height: number } | null> {
-  try {
-    const clone = svg.cloneNode(true) as SVGElement;
-    if (!clone.getAttribute("xmlns")) {
-      clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-    }
+  const clone = svg.cloneNode(true) as SVGElement;
+  if (!clone.getAttribute("xmlns")) {
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  }
 
-    const viewBox = clone.getAttribute("viewBox")?.split(/\s+/).map(Number);
-    const rect = svg.getBoundingClientRect();
-    const width =
-      viewBox && viewBox.length >= 4
-        ? viewBox[2]!
-        : rect.width || Number(clone.getAttribute("width")) || 400;
-    const height =
-      viewBox && viewBox.length >= 4
-        ? viewBox[3]!
-        : rect.height || Number(clone.getAttribute("height")) || 300;
+  const viewBox = clone.getAttribute("viewBox")?.split(/\s+/).map(Number);
+  const rect = svg.getBoundingClientRect();
+  const width =
+    viewBox && viewBox.length >= 4
+      ? viewBox[2]!
+      : rect.width || Number(clone.getAttribute("width")) || 400;
+  const height =
+    viewBox && viewBox.length >= 4
+      ? viewBox[3]!
+      : rect.height || Number(clone.getAttribute("height")) || 300;
 
-    clone.setAttribute("width", String(width));
-    clone.setAttribute("height", String(height));
+  clone.setAttribute("width", String(width));
+  clone.setAttribute("height", String(height));
 
-    const svgString = new XMLSerializer().serializeToString(clone);
-    const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
+  const svgString = new XMLSerializer().serializeToString(clone);
+  const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
 
-    return await new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
+  return await new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
         const scale = 2;
         const canvas = document.createElement("canvas");
         canvas.width = Math.max(1, Math.round(width * scale));
         canvas.height = Math.max(1, Math.round(height * scale));
         const ctx = canvas.getContext("2d");
         if (!ctx) {
-          URL.revokeObjectURL(url);
           resolve(null);
           return;
         }
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        URL.revokeObjectURL(url);
         resolve({
           dataUrl: canvas.toDataURL("image/png"),
           width: canvas.width,
           height: canvas.height,
         });
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
+      } catch {
         resolve(null);
-      };
-      img.src = url;
-    });
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    };
+    img.src = url;
+  });
+}
+
+async function svgElementToPng(
+  svg: SVGElement,
+): Promise<{ dataUrl: string; width: number; height: number } | null> {
+  try {
+    return await withTimeout(svgElementToPngInner(svg), SVG_RASTER_TIMEOUT_MS);
   } catch {
     return null;
   }
@@ -130,7 +157,19 @@ async function waitForDiagrams(root: HTMLElement, timeoutMs = 15000): Promise<vo
 
 function isHidden(el: Element): boolean {
   if (!(el instanceof HTMLElement)) return false;
-  return el.classList.contains("hidden") || el.offsetParent === null;
+  if (el.classList.contains("hidden")) return true;
+  const style = window.getComputedStyle(el);
+  return style.display === "none" || style.visibility === "hidden";
+}
+
+export async function waitForHelpExportRoot(timeoutMs = 10000): Promise<HTMLElement> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const root = document.getElementById("help-export-body");
+    if (root?.querySelector("section")) return root;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error("Kunde inte hitta hjälpinnehållet");
 }
 
 async function renderNode(
@@ -232,8 +271,12 @@ async function renderNode(
         const maxH = 90;
         const { w, h } = fitImage(png.width, png.height, maxW, maxH);
         y = ensureSpace(pdf, y, h + 4);
-        pdf.addImage(png.dataUrl, "PNG", MARGIN, y, w, h);
-        y += h + 3;
+        try {
+          pdf.addImage(png.dataUrl, "PNG", MARGIN, y, w, h);
+          y += h + 3;
+        } catch {
+          // Skip diagram image if raster data is invalid.
+        }
       }
     }
 

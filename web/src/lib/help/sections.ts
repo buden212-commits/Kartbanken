@@ -1,4 +1,4 @@
-/** Hjälpavsnitt på /hjalp — id matchar anchor i help-page-content.tsx */
+/** Hjälpavsnitt i guiden — id matchar anchor i help-page-content.tsx */
 export type HelpSectionId =
   | "oversikt"
   | "kom-igang"
@@ -33,3 +33,7 @@ export const helpSectionLabels: Record<HelpSectionId, string> = {
   admin: "Administration",
   faq: "Vanliga frågor",
 };
+
+export function helpSectionHref(section: HelpSectionId): string {
+  return `/hjalp/guide#${section}`;
+}

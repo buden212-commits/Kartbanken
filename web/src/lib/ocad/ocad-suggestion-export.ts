@@ -79,6 +79,9 @@ function isActiveObject(obj: { objIndex?: { status: number } }): boolean {
 }
 
 function geometryLabel(geometry: SuggestionGeometry, index: number): string {
+  if (geometry.type === "Point" && geometry.intent === "delete") {
+    return `Markering ${index + 1} (radera objekt)`;
+  }
   switch (geometry.type) {
     case "Point":
       return `Markering ${index + 1} (punkt)`;
@@ -330,6 +333,11 @@ export async function appendSuggestionsToOcadBuffer(
   let skipped = 0;
 
   for (const [index, geometry] of geometries.entries()) {
+    if (geometry.type === "Point" && geometry.intent === "delete") {
+      skipped++;
+      warnings.push(`${geometryLabel(geometry, index)}: hoppades över vid OCD-export (raderingsmarkering).`);
+      continue;
+    }
     const label = geometryLabel(geometry, index);
     try {
       const spec = geometryToObjectSpec(geometry, mapping, symbolSource, label);

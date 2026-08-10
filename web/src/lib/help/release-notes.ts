@@ -7,6 +7,17 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-08-10",
+    title: "Kartförslag och hjälp-PDF",
+    items: [
+      "Kartförslag på kartan visar nummer (1, 2, 3 …) vid varje markering — inte kategorinamn",
+      "Punktmarkeringar är mindre och visas som en enkel prick utan kontur",
+      "Ritverktyg (punkt, rektangel, polygon, linje, radera) som ikoner med tooltip till höger på kartan vid «Föreslå kartändring»",
+      "Fix: öppna och pågående kartförslag från äldre (opublicerade) versioner går att öppna från listan och kartan — tidigare gav de felmeddelandet «hittades inte»",
+      "Fix: «Exportera PDF» på hjälpsidan fungerar igen — exporten väntar på att guiden laddats och fastnar inte längre på processdiagram",
+    ],
+  },
+  {
     date: "2026-08-09",
     title: "Områdessidan, kartförslag och feedback",
     items: [
@@ -21,6 +32,7 @@ export const releaseNotes: ReleaseNote[] = [
       "Konsekvent svenska i gränssnittet — «utcheckningar» i stället för «checkouts»; «aktuell version» i stället för «head»",
       "Release notes samlade till en post per dag (9 augusti–1 augusti)",
       "Fix: dubbel admin-meny på sidan Användarhantering",
+      "Fix: «Visste du att…»-tips länkar till rätt avsnitt i användarguiden",
     ],
   },
   {

@@ -69,7 +69,7 @@ export async function GET(request: Request, { params }: RouteParams) {
         overlays: items.map((item) => ({
           id: item.id,
           status: item.status,
-          categoryLabel: SUGGESTION_CATEGORY_LABELS[item.category],
+          markingLabel: String(item.sortOrder + 1),
           geometry: item.geometry,
         })),
       });
@@ -80,7 +80,7 @@ export async function GET(request: Request, { params }: RouteParams) {
       overlays: items.map((item) => ({
         id: item.id,
         status: item.status,
-        categoryLabel: SUGGESTION_CATEGORY_LABELS[item.category],
+        markingLabel: String(item.sortOrder + 1),
         geometry: item.geometry,
       })),
     });

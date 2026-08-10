@@ -189,7 +189,7 @@ export async function listSuggestionOverlaysForVersion(
       category: true,
       objects: {
         orderBy: { sortOrder: "asc" },
-        select: { geometryJson: true },
+        select: { geometryJson: true, sortOrder: true },
       },
     },
     orderBy: { createdAt: "asc" },
@@ -200,6 +200,7 @@ export async function listSuggestionOverlaysForVersion(
       id: row.id,
       status: row.status as SuggestionSummary["status"],
       category: row.category as SuggestionSummary["category"],
+      sortOrder: obj.sortOrder,
       geometry: parseGeometryJson(obj.geometryJson),
     })),
   );
@@ -218,7 +219,7 @@ export async function listPendingSuggestionOverlaysForMap(mapFileId: string) {
       category: true,
       objects: {
         orderBy: { sortOrder: "asc" },
-        select: { geometryJson: true },
+        select: { geometryJson: true, sortOrder: true },
       },
     },
     orderBy: { createdAt: "asc" },
@@ -229,6 +230,7 @@ export async function listPendingSuggestionOverlaysForMap(mapFileId: string) {
       id: row.id,
       status: row.status as SuggestionSummary["status"],
       category: row.category as SuggestionSummary["category"],
+      sortOrder: obj.sortOrder,
       geometry: parseGeometryJson(obj.geometryJson),
     })),
   );

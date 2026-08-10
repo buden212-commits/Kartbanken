@@ -64,7 +64,7 @@ function SuggestionOverlayShape({
         __html: renderSuggestionGeometrySvg(
           item.geometry,
           rootTransform,
-          liveMapRenderOptions({ label: item.categoryLabel }),
+          liveMapRenderOptions({ label: item.markingLabel }),
         ),
       }}
     />

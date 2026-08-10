@@ -42,9 +42,13 @@ export const SuggestionObjectType = {
 export type SuggestionObjectTypeValue =
   (typeof SuggestionObjectType)[keyof typeof SuggestionObjectType];
 
+export type SuggestionPointIntent = "delete";
+
 export type SuggestionPointGeometry = {
   type: "Point";
   coordinates: [number, number];
+  /** Marks an existing map object for removal (rendered as X). */
+  intent?: SuggestionPointIntent;
 };
 
 export type SuggestionBbox = {
@@ -78,7 +82,8 @@ export type SuggestionGeometry =
 export type SuggestionOverlayItem = {
   id: string;
   status: SuggestionStatusValue;
-  categoryLabel: string;
+  /** Numrerad markering inom förslaget (t.ex. "1", "2"). */
+  markingLabel: string;
   geometry: SuggestionGeometry;
 };
 

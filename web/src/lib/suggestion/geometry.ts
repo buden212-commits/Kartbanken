@@ -60,7 +60,28 @@ function labelScale(options?: SuggestionRenderOptions): number {
   return scale > 0 ? scale : 1;
 }
 
-export function renderSuggestionPinSvg(
+const DELETE_PIN_FILL = "#DC2626";
+const DELETE_PIN_STROKE = "#991B1B";
+
+export function isDeletePointGeometry(geometry: SuggestionGeometry): boolean {
+  return geometry.type === "Point" && geometry.intent === "delete";
+}
+
+export function suggestionGeometryTypeLabel(geometry: SuggestionGeometry): string {
+  if (isDeletePointGeometry(geometry)) return "Radera objekt";
+  switch (geometry.type) {
+    case "Point":
+      return "Punkt";
+    case "Bbox":
+      return "Rektangel";
+    case "Polygon":
+      return "Polygon";
+    case "LineString":
+      return "Linje";
+  }
+}
+
+export function renderSuggestionDeletePinSvg(
   geometry: SuggestionPointGeometry,
   rootTransform: SvgRootTransform,
   options?: SuggestionRenderOptions,
@@ -69,15 +90,39 @@ export function renderSuggestionPinSvg(
   const s = strokeScale(options);
   const ls = labelScale(options);
   const r = (options?.selected ? 22 : 16) * s;
+  const arm = r * 0.55;
   const labelOffset = 8 * s * ls;
+  const labelSize = 13 * s * ls;
+  const label = options?.label
+    ? `<text x="${x}" y="${y - r - labelOffset}" text-anchor="middle" font-size="${labelSize}" font-weight="700" fill="${DELETE_PIN_STROKE}">${escapeXml(options.label)}</text>`
+    : "";
+  return `<g data-suggestion-delete-pin="true">
+    <circle cx="${x}" cy="${y}" r="${r + 8 * s}" fill="${DELETE_PIN_FILL}" fill-opacity="0.25" stroke="${SUGGESTION_HALO}" stroke-width="${3 * s}"/>
+    <circle cx="${x}" cy="${y}" r="${r}" fill="${DELETE_PIN_FILL}" fill-opacity="0.92" stroke="${DELETE_PIN_STROKE}" stroke-width="${4 * s}"/>
+    <line x1="${x - arm}" y1="${y - arm}" x2="${x + arm}" y2="${y + arm}" stroke="white" stroke-width="${4 * s}" stroke-linecap="round"/>
+    <line x1="${x + arm}" y1="${y - arm}" x2="${x - arm}" y2="${y + arm}" stroke="white" stroke-width="${4 * s}" stroke-linecap="round"/>
+    <line x1="${x - arm}" y1="${y - arm}" x2="${x + arm}" y2="${y + arm}" stroke="${DELETE_PIN_STROKE}" stroke-width="${2 * s}" stroke-linecap="round"/>
+    <line x1="${x + arm}" y1="${y - arm}" x2="${x - arm}" y2="${y + arm}" stroke="${DELETE_PIN_STROKE}" stroke-width="${2 * s}" stroke-linecap="round"/>
+    ${label}
+  </g>`;
+}
+
+export function renderSuggestionPinSvg(
+  geometry: SuggestionPointGeometry,
+  rootTransform: SvgRootTransform,
+  options?: SuggestionRenderOptions,
+): string {
+  const [x, y] = geoToSvgUserPoint(geometry.coordinates, rootTransform);
+  const s = strokeScale(options);
+  const ls = labelScale(options);
+  const r = (options?.selected ? 6 : 4) * s;
+  const labelOffset = 6 * s * ls;
   const labelSize = 13 * s * ls;
   const label = options?.label
     ? `<text x="${x}" y="${y - r - labelOffset}" text-anchor="middle" font-size="${labelSize}" font-weight="700" fill="${SUGGESTION_ORANGE_STROKE}">${escapeXml(options.label)}</text>`
     : "";
   return `<g data-suggestion-pin="true">
-    <circle cx="${x}" cy="${y}" r="${r + 8 * s}" fill="${SUGGESTION_ORANGE}" fill-opacity="0.3" stroke="${SUGGESTION_HALO}" stroke-width="${3 * s}"/>
-    <circle cx="${x}" cy="${y}" r="${r}" fill="${SUGGESTION_ORANGE}" fill-opacity="0.95" stroke="${SUGGESTION_ORANGE_STROKE}" stroke-width="${4 * s}"/>
-    <circle cx="${x}" cy="${y}" r="${5 * s}" fill="white" stroke="${SUGGESTION_ORANGE_STROKE}" stroke-width="${1.5 * s}"/>
+    <circle cx="${x}" cy="${y}" r="${r}" fill="${SUGGESTION_ORANGE}"/>
     ${label}
   </g>`;
 }
@@ -173,6 +218,9 @@ export function renderSuggestionGeometrySvg(
   options?: SuggestionRenderOptions,
 ): string {
   if (geometry.type === "Point") {
+    if (geometry.intent === "delete") {
+      return renderSuggestionDeletePinSvg(geometry, rootTransform, options);
+    }
     return renderSuggestionPinSvg(geometry, rootTransform, options);
   }
   if (geometry.type === "Bbox") {
@@ -190,7 +238,12 @@ export function renderSuggestionObjectsSvg(
   options?: SuggestionRenderOptions,
 ): string {
   return objects
-    .map((obj) => renderSuggestionGeometrySvg(obj.geometry, rootTransform, options))
+    .map((obj) =>
+      renderSuggestionGeometrySvg(obj.geometry, rootTransform, {
+        ...options,
+        label: String(obj.sortOrder + 1),
+      }),
+    )
     .join("");
 }
 
@@ -206,7 +259,7 @@ export function buildSuggestionExportOverlaySvg(
       renderSuggestionGeometrySvg(
         item.geometry,
         rootTransform,
-        liveMapRenderOptions({ label: item.categoryLabel }),
+        liveMapRenderOptions({ label: item.markingLabel }),
       ),
     )
     .join("");

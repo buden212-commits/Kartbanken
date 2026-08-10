@@ -37,7 +37,11 @@ export function assertSuggestionViewAccess(
   if (!canCreateMapSuggestion(session.user.role)) {
     return NextResponse.json({ error: "Ingen behörighet" }, { status: 403 });
   }
-  if (!suggestion.mapVersion.isPublished) {
+  const pendingOnUnpublishedVersion =
+    !suggestion.mapVersion.isPublished &&
+    suggestion.status !== SuggestionStatus.OPEN &&
+    suggestion.status !== SuggestionStatus.IN_PROGRESS;
+  if (pendingOnUnpublishedVersion) {
     return NextResponse.json({ error: "Förslaget hittades inte" }, { status: 404 });
   }
   return null;
@@ -113,7 +117,13 @@ function validatePointGeometry(record: Record<string, unknown>): SuggestionPoint
   if (typeof x !== "number" || typeof y !== "number" || !Number.isFinite(x) || !Number.isFinite(y)) {
     return null;
   }
-  return { type: "Point", coordinates: [x, y] };
+  const intent = record.intent;
+  if (intent != null && intent !== "delete") return null;
+  return {
+    type: "Point",
+    coordinates: [x, y],
+    ...(intent === "delete" ? { intent: "delete" as const } : {}),
+  };
 }
 
 function validateBboxGeometry(record: Record<string, unknown>): SuggestionBboxGeometry | null {

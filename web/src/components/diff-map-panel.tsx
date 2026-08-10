@@ -110,6 +110,8 @@ type Props = {
   headerContent?: ReactNode;
   /** Extra row below the main toolbar (e.g. checkout draw tools). */
   secondaryHeaderContent?: ReactNode;
+  /** Floating controls inside the map viewport (e.g. draw tool icons). */
+  mapToolbarOverlay?: ReactNode;
   /** Omit outer border/radius when nested inside another panel. */
   unboxed?: boolean;
   showLayerPanel?: boolean;
@@ -255,6 +257,7 @@ export function DiffMapPanel({
   onDrawInterrupt,
   headerContent,
   secondaryHeaderContent,
+  mapToolbarOverlay,
   unboxed = false,
   showLayerPanel = true,
   onOcadMapScale,
@@ -1283,6 +1286,8 @@ export function DiffMapPanel({
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
       >
+        {mapToolbarOverlay}
+
         {loading && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/90 text-sm text-slate-600">
             Laddar kartbild…
@@ -1470,7 +1475,7 @@ export function DiffMapPanel({
           </div>
         )}
 
-        {!infoChange && !clickHint && !exportMode && (
+        {!infoChange && !clickHint && !exportMode && !mapToolbarOverlay && (
           <div className="pointer-events-none absolute right-3 top-3 z-20 max-w-[calc(100%-1.5rem)] rounded-lg border border-slate-200 bg-white/90 px-2 py-1 text-xs text-slate-500 shadow-sm">
             {interactionMode === "draw"
               ? "Ritläge — nyp med två fingrar för att zooma"

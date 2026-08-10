@@ -1,4 +1,5 @@
 import { Role, type Role as RoleType } from "@/lib/roles";
+import type { HelpSectionId } from "@/lib/help/sections";
 
 export type FeatureTipRole = typeof Role.READER | typeof Role.EDITOR | typeof Role.ADMIN;
 
@@ -6,7 +7,7 @@ export type FeatureTip = {
   id: string;
   title: string;
   body: string;
-  helpSectionId: string;
+  helpSectionId: HelpSectionId;
   href?: string;
   hrefLabel?: string;
   roles: FeatureTipRole[];

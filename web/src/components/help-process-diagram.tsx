@@ -25,7 +25,7 @@ export function HelpProcessDiagram({ chart, title, caption }: Props) {
           flowchart: {
             curve: "basis",
             padding: 16,
-            htmlLabels: true,
+            htmlLabels: false,
           },
           securityLevel: "strict",
         });

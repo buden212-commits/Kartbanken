@@ -27,6 +27,7 @@ import {
   liveMapRenderOptions,
   normalizeSuggestionBbox,
   renderSuggestionGeometrySvg,
+  suggestionGeometryTypeLabel,
 } from "@/lib/suggestion/geometry";
 import {
   evaluateGpsSample,
@@ -44,36 +45,21 @@ import {
   type SuggestionGeometry,
 } from "@/lib/suggestion/types";
 import { uploadSuggestionAttachment } from "@/lib/upload-client";
+import {
+  SuggestionMapDrawToolbar,
+  type SuggestionDrawTool,
+} from "@/components/suggestion/suggestion-draw-toolbar";
 
-type DrawTool = "pin" | "rectangle" | "polygon" | "line";
+type DrawTool = SuggestionDrawTool;
 
 const NEUTRAL_BTN =
   "rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50";
-
-const TOOL_ACTIVE =
-  "border-ifk-blue bg-ifk-blue text-white hover:bg-ifk-blue";
-const TOOL_INACTIVE =
-  "border-slate-300 text-slate-700 hover:border-ifk-blue hover:text-ifk-blue";
 
 type Props = {
   mapSlug: string;
   mapTitle: string;
   versionId: string;
   versionNumber: number;
-};
-
-const TOOL_LABELS: Record<DrawTool, string> = {
-  pin: "Punkt",
-  rectangle: "Rektangel",
-  polygon: "Polygon",
-  line: "Linje",
-};
-
-const GEOMETRY_TYPE_LABELS: Record<SuggestionGeometry["type"], string> = {
-  Point: "Punkt",
-  Bbox: "Rektangel",
-  Polygon: "Polygon",
-  LineString: "Linje",
 };
 
 type CreateMapPanelProps = {
@@ -101,6 +87,7 @@ type CreateMapPanelProps = {
     mapCoordRef: MutableRefObject<[number, number] | null>;
     recenterToken: number;
   };
+  mapToolbarOverlay: React.ReactNode;
 };
 
 const MAP_MODE_BTN =
@@ -132,6 +119,7 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
   canUseGpsTracking,
   onGpsTrackingToggle,
   gpsTrackFollow,
+  mapToolbarOverlay,
 }: CreateMapPanelProps) {
   const renderSvgOverlay = useCallback(
     (rootTransform: SvgRootTransform) => {
@@ -175,6 +163,7 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
       onOcadCrsReady={onOcadCrsReady}
       onOcadMapScale={onOcadMapScale}
       gpsTrackFollow={gpsTrackFollow}
+      mapToolbarOverlay={mapToolbarOverlay}
       secondaryHeaderContent={
         <div className="space-y-2 border-b border-slate-200 bg-slate-50 px-3 py-2 sm:px-4">
           {gpsTrackingStatus && (
@@ -529,8 +518,12 @@ export function SuggestionCreateClient({
       if (!pt) return;
       const geo = svgUserToGeoPoint(pt, rootTransformRef.current);
 
-      if (tool === "pin") {
-        setGeometry({ type: "Point", coordinates: geo });
+      if (tool === "pin" || tool === "delete") {
+        setGeometry({
+          type: "Point",
+          coordinates: geo,
+          ...(tool === "delete" ? { intent: "delete" as const } : {}),
+        });
         setDraftBbox(null);
         setPolygonPoints([]);
         setLinePoints([]);
@@ -630,13 +623,15 @@ export function SuggestionCreateClient({
     if (gpsTracking) {
       return `GPS-spårning — gå längs spåret du vill markera. Minst ${GPS_TRACK_MIN_DISTANCE_M} m mellan punkter. Klicka «Sluta spåra» när du är klar.`;
     }
-    return tool === "pin"
-      ? "Ritläge — klicka på kartan för att placera en punkt, klicka sedan Lägg till ändring."
-      : tool === "rectangle"
-        ? "Ritläge — dra en rektangel på kartan och klicka sedan Lägg till ändring."
-        : tool === "polygon"
-          ? "Ritläge — klicka hörn (minst 3), klicka sedan Lägg till ändring."
-          : "Ritläge — klicka punkter längs linjen (minst 2), klicka sedan Lägg till ändring.";
+    return tool === "delete"
+      ? "Ritläge — klicka på objektet som ska raderas, klicka sedan Lägg till ändring."
+      : tool === "pin"
+        ? "Ritläge — klicka på kartan för att placera en punkt, klicka sedan Lägg till ändring."
+        : tool === "rectangle"
+          ? "Ritläge — dra en rektangel på kartan och klicka sedan Lägg till ändring."
+          : tool === "polygon"
+            ? "Ritläge — klicka hörn (minst 3), klicka sedan Lägg till ändring."
+            : "Ritläge — klicka punkter längs linjen (minst 2), klicka sedan Lägg till ändring.";
   }, [tool, gpsTracking]);
 
   const gpsTrackingStatus = useMemo(() => {
@@ -830,19 +825,6 @@ export function SuggestionCreateClient({
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
-        {(Object.keys(TOOL_LABELS) as DrawTool[]).map((t) => (
-          <button
-            key={t}
-            type="button"
-            disabled={gpsTracking}
-            onClick={() => handleToolChange(t)}
-            className={`rounded-lg border px-3 py-1.5 text-sm ${
-              tool === t && !gpsTracking ? TOOL_ACTIVE : TOOL_INACTIVE
-            } disabled:cursor-not-allowed disabled:opacity-50`}
-          >
-            {TOOL_LABELS[t]}
-          </button>
-        ))}
         <button
           type="button"
           disabled={!canAddMarking}
@@ -902,6 +884,13 @@ export function SuggestionCreateClient({
           canUseGpsTracking={canUseGpsTracking}
           onGpsTrackingToggle={handleGpsTrackingToggle}
           gpsTrackFollow={gpsTrackFollow}
+          mapToolbarOverlay={
+            <SuggestionMapDrawToolbar
+              tool={tool}
+              onToolChange={handleToolChange}
+              disabled={gpsTracking}
+            />
+          }
         />
       </div>
 
@@ -928,7 +917,7 @@ export function SuggestionCreateClient({
                   className="flex items-center justify-between gap-2 text-sm text-slate-600"
                 >
                   <span>
-                    {index + 1}. {GEOMETRY_TYPE_LABELS[marking.type]}
+                    {index + 1}. {suggestionGeometryTypeLabel(marking)}
                   </span>
                   <button
                     type="button"

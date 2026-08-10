@@ -22,6 +22,10 @@ import {
   renderSuggestionObjectsSvg,
 } from "@/lib/suggestion/geometry";
 import {
+  SuggestionMapDrawToolbar,
+  type SuggestionDrawTool,
+} from "@/components/suggestion/suggestion-draw-toolbar";
+import {
   SUGGESTION_CATEGORY_LABELS,
   SUGGESTION_STATUS_LABELS,
   SuggestionStatus,
@@ -33,7 +37,7 @@ import {
 } from "@/lib/suggestion/types";
 import { formatDate, formatDateOnly } from "@/lib/format";
 
-type DrawTool = "pin" | "rectangle" | "polygon" | "line";
+type DrawTool = SuggestionDrawTool;
 
 type CheckoutOption = {
   id: string;
@@ -55,13 +59,6 @@ type Props = {
   isAdmin: boolean;
   checkoutOptions: CheckoutOption[];
   publishedVersions: VersionOption[];
-};
-
-const TOOL_LABELS: Record<DrawTool, string> = {
-  pin: "Punkt",
-  rectangle: "Rektangel",
-  polygon: "Polygon",
-  line: "Linje",
 };
 
 function statusBadgeClass(status: SuggestionStatusValue): string {
@@ -126,11 +123,6 @@ export function SuggestionDetailClient({
     (suggestion.status === SuggestionStatus.OPEN ||
       suggestion.status === SuggestionStatus.IN_PROGRESS);
 
-  const overlayLabel = useMemo(
-    () => SUGGESTION_CATEGORY_LABELS[suggestion.category],
-    [suggestion.category],
-  );
-
   const statusAttribution = useMemo(
     () =>
       formatSuggestionStatusAttribution(
@@ -156,8 +148,12 @@ export function SuggestionDetailClient({
       if (!pt) return;
       const geo = svgUserToGeoPoint(pt, rootTransformRef.current);
 
-      if (drawTool === "pin") {
-        setEditGeometry({ type: "Point", coordinates: geo });
+      if (drawTool === "pin" || drawTool === "delete") {
+        setEditGeometry({
+          type: "Point",
+          coordinates: geo,
+          ...(drawTool === "delete" ? { intent: "delete" as const } : {}),
+        });
         resetDrawDraft();
         return;
       }
@@ -507,37 +503,9 @@ export function SuggestionDetailClient({
       )}
 
       {editMode && redrawMarking && (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {(Object.keys(TOOL_LABELS) as DrawTool[]).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => {
-                setDrawTool(t);
-                resetDrawDraft();
-              }}
-              className={`rounded-lg border px-3 py-1.5 text-sm ${
-                drawTool === t
-                  ? "border-[#FD3DB5] bg-[#FD3DB5]/10 text-[#9D0066]"
-                  : "border-slate-300 text-slate-700 hover:bg-slate-50"
-              }`}
-            >
-              {TOOL_LABELS[t]}
-            </button>
-          ))}
-          {(drawTool === "polygon" || drawTool === "line") && (
-            <button
-              type="button"
-              disabled={
-                drawTool === "polygon" ? polygonPoints.length < 3 : linePoints.length < 2
-              }
-              onClick={confirmDrawDraft}
-              className="rounded-lg bg-[#FD3DB5] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#E835A5] disabled:opacity-50"
-            >
-              {drawTool === "polygon" ? "Slutför polygon" : "Slutför linje"}
-            </button>
-          )}
-        </div>
+        <p className="mt-4 text-sm text-slate-600">
+          Välj verktyg i verktygsraden till höger på kartan och rita om markeringen.
+        </p>
       )}
 
       <div className="mt-6">
@@ -549,8 +517,32 @@ export function SuggestionDetailClient({
           interactionMode={editMode && redrawMarking ? "draw" : "navigate"}
           drawPointerHandlers={editMode && redrawMarking ? drawPointerHandlers : undefined}
           fitGeoBbox={fitGeoBbox}
+          mapToolbarOverlay={
+            editMode && redrawMarking ? (
+              <SuggestionMapDrawToolbar
+                tool={drawTool}
+                onToolChange={(next) => {
+                  setDrawTool(next);
+                  resetDrawDraft();
+                }}
+              />
+            ) : null
+          }
           secondaryHeaderContent={
-            displayGeometries.length > 0 ? (
+            editMode && redrawMarking && (drawTool === "polygon" || drawTool === "line") ? (
+              <div className="border-b border-slate-200 bg-slate-50 px-3 py-2 sm:px-4">
+                <button
+                  type="button"
+                  disabled={
+                    drawTool === "polygon" ? polygonPoints.length < 3 : linePoints.length < 2
+                  }
+                  onClick={confirmDrawDraft}
+                  className="rounded-lg bg-[#FD3DB5] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#E835A5] disabled:opacity-50"
+                >
+                  {drawTool === "polygon" ? "Slutför polygon" : "Slutför linje"}
+                </button>
+              </div>
+            ) : displayGeometries.length > 0 ? (
               <button
                 type="button"
                 onClick={zoomToMarkings}
@@ -571,7 +563,7 @@ export function SuggestionDetailClient({
                 <g
                   dangerouslySetInnerHTML={{
                     __html: renderSuggestionGeometrySvg(displayGeometries[0]!, rootTransform, {
-                      label: overlayLabel,
+                      label: "1",
                       selected: true,
                       draft: Boolean(draftGeometry),
                       ...liveMapRenderOptions(),
@@ -591,7 +583,7 @@ export function SuggestionDetailClient({
                       sortOrder: obj.sortOrder,
                     })),
                     rootTransform,
-                    { label: overlayLabel, selected: true, ...liveMapRenderOptions() },
+                    { selected: true, ...liveMapRenderOptions() },
                   ),
                 }}
               />

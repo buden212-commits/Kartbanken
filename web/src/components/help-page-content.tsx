@@ -502,14 +502,15 @@ export async function HelpPageContent() {
           <HelpList
             items={[
               "Öppna en publicerad version via Visa karta och klicka Föreslå ändring",
-              "Välj punkt, rektangel, polygon eller linje och markera på kartan",
+              "Välj ritverktyg som ikoner till höger på kartan: punkt, rektangel, polygon, linje eller «Radera objektet» (rött X — pekar ut var något ska tas bort; beskriv vad i kommentaren)",
               "«GPS-spår» finns ovanför kartan (bredvid Rita/Navigera) — spelar in en linje med telefonens GPS (kräver georefererad karta)",
               "Under spårning zoomas kartan till skala 1:100 och följer din position var 10:e sekund",
               "GPS-spår filtreras (minst ca 4 m mellan punkter) och förenklas automatiskt innan linjen sparas",
               "Orimliga GPS-hopp filtreras bort och accepterade punkter utjämnas vid sämre mottagning — antal filtrerade hopp visas efter «Sluta spåra»",
               "Växla «Rita» / «Navigera» ovanför kartan — i Navigera kan du dra och nypa utan att rita; i Rita zoomar två fingrar utan att skapa markering",
-              "Klicka «Lägg till ändring» när markeringen är klar — punkt och rektangel aktiveras direkt efter klick/drag",
-              "Lägg till flera markeringar — varje markering numreras (1, 2, 3 …) på kartan",
+              "Klicka «Lägg till ändring» ovanför kartan när markeringen är klar — punkt, radera och rektangel aktiveras direkt efter klick/drag",
+              "Varje markering numreras (1, 2, 3 …) på kartan — inte kategorinamn",
+              "Lägg till flera markeringar innan du skickar in",
               "Klicka «Skicka in kartförslag» i verktygsraden när du är klar — då fyller du i kategori och beskrivning i dialogen",
               "I dialogen: «Ta foto» öppnar kameran på mobil (direktfoto), «Välj bild» plockar från albumet",
               "Skicka-sektionen ovanför kartan visar antal tillagda ändringar innan du skickar",
