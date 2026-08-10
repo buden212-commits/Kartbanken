@@ -35,8 +35,7 @@ function ToolbarTooltip({ label }: { label: string }) {
 function PinIcon() {
   return (
     <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
-      <circle cx="10" cy="10" r="5.5" fill="currentColor" />
-      <circle cx="10" cy="10" r="2" fill="white" fillOpacity="0.9" />
+      <circle cx="10" cy="10" r="4" fill="currentColor" />
     </svg>
   );
 }
@@ -151,6 +150,57 @@ export function SuggestionMapDrawToolbar({ tool, onToolChange, disabled = false 
           </button>
         );
       })}
+    </div>
+  );
+}
+
+const actionBtnNeutral =
+  "rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:px-3 sm:text-sm";
+const actionBtnPrimary =
+  "rounded-lg bg-ifk-blue px-2.5 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-ifk-blue/90 disabled:cursor-not-allowed disabled:opacity-50 sm:px-3 sm:text-sm";
+
+type ActionToolbarProps = {
+  canAddMarking: boolean;
+  markingCount: number;
+  onAddMarking: () => void;
+  onClear: () => void;
+  onSubmit: () => void;
+};
+
+export function SuggestionMapActionToolbar({
+  canAddMarking,
+  markingCount,
+  onAddMarking,
+  onClear,
+  onSubmit,
+}: ActionToolbarProps) {
+  return (
+    <div
+      className="pointer-events-auto absolute right-2 top-2 z-30 flex max-w-[calc(100%-4.5rem)] flex-wrap justify-end gap-1.5 rounded-xl border border-slate-200 bg-white/95 p-1.5 shadow-lg backdrop-blur sm:right-3 sm:top-3"
+      role="toolbar"
+      aria-label="Åtgärder"
+    >
+      <button
+        type="button"
+        disabled={!canAddMarking}
+        onClick={onAddMarking}
+        className={canAddMarking ? actionBtnPrimary : actionBtnNeutral}
+      >
+        Lägg till ändring
+      </button>
+      <button type="button" onClick={onClear} className={actionBtnNeutral}>
+        Rensa
+      </button>
+      <button
+        type="button"
+        disabled={markingCount < 1}
+        onClick={onSubmit}
+        className={markingCount > 0 ? actionBtnPrimary : actionBtnNeutral}
+      >
+        {markingCount > 0
+          ? `Skicka in kartförslag (${markingCount} st)`
+          : "Skicka in kartförslag"}
+      </button>
     </div>
   );
 }

@@ -46,14 +46,12 @@ import {
 } from "@/lib/suggestion/types";
 import { uploadSuggestionAttachment } from "@/lib/upload-client";
 import {
+  SuggestionMapActionToolbar,
   SuggestionMapDrawToolbar,
   type SuggestionDrawTool,
 } from "@/components/suggestion/suggestion-draw-toolbar";
 
 type DrawTool = SuggestionDrawTool;
-
-const NEUTRAL_BTN =
-  "rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50";
 
 type Props = {
   mapSlug: string;
@@ -824,44 +822,6 @@ export function SuggestionCreateClient({
         <HelpLinkIcon section="kartforslag" className="mt-1 shrink-0" />
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        <button
-          type="button"
-          disabled={!canAddMarking}
-          onClick={handleAddMarking}
-          className={canAddMarking ? "btn-primary rounded-lg px-3 py-1.5 text-sm" : NEUTRAL_BTN}
-        >
-          Lägg till ändring
-        </button>
-        <button
-          type="button"
-          onClick={handleClearAll}
-          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-        >
-          Rensa
-        </button>
-        <button
-          type="button"
-          disabled={markings.length < 1}
-          onClick={handleOpenSubmitDialog}
-          className={
-            markings.length > 0
-              ? "btn-primary rounded-lg px-3 py-1.5 text-sm"
-              : NEUTRAL_BTN
-          }
-        >
-          {markings.length > 0
-            ? `Skicka in kartförslag (${markings.length} st)`
-            : "Skicka in kartförslag"}
-        </button>
-      </div>
-
-      {error && !submitDialogOpen && (
-        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-          {error}
-        </p>
-      )}
-
       <div className="mt-6">
         <SuggestionCreateMapPanel
           mapSlug={mapSlug}
@@ -885,14 +845,29 @@ export function SuggestionCreateClient({
           onGpsTrackingToggle={handleGpsTrackingToggle}
           gpsTrackFollow={gpsTrackFollow}
           mapToolbarOverlay={
-            <SuggestionMapDrawToolbar
-              tool={tool}
-              onToolChange={handleToolChange}
-              disabled={gpsTracking}
-            />
+            <>
+              <SuggestionMapActionToolbar
+                canAddMarking={canAddMarking}
+                markingCount={markings.length}
+                onAddMarking={handleAddMarking}
+                onClear={handleClearAll}
+                onSubmit={handleOpenSubmitDialog}
+              />
+              <SuggestionMapDrawToolbar
+                tool={tool}
+                onToolChange={handleToolChange}
+                disabled={gpsTracking}
+              />
+            </>
           }
         />
       </div>
+
+      {error && !submitDialogOpen && (
+        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          {error}
+        </p>
+      )}
 
       {submitDialogOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
