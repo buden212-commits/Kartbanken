@@ -7,13 +7,128 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-08-11",
+    title: "Kartförslag — Navigera som startläge",
+    items: [
+      "Kartan öppnas i «Navigera» så du kan panorera och zooma utan att råka rita",
+      "När du väljer ett ritverktyg aktiveras «Rita» automatiskt",
+    ],
+  },
+  {
+    date: "2026-08-11",
+    title: "Kartförslag — symbolnamn i beskrivningen",
+    items: [
+      "Infoga symbol visar beskrivningar från OCAD-filen (t.ex. «Sten»), grupperade under kartlager",
+      "Listan filtreras efter aktiv markering — punkt, linje eller yta",
+      "Symboler sorteras efter hur ofta de används på kartan — vanligast överst",
+      "Symbolval i en vertikal lista som är lättare att använda på mobil",
+      "När du väljer markering och symbol behålls raden (t.ex. «1. Punkt — Sten») — symbolen läggs alltid till i slutet av raden",
+      "Snabbval, sök och «Visa alla» när kartan har många symboler",
+    ],
+  },
+  {
+    date: "2026-08-11",
+    title: "Kartförslag — enklare beskrivning på mobil",
+    items: [
+      "Inskickningsdialogen förfyller en rad per markering (punkt, linje eller yta)",
+      "Hoppa till rätt markering via nummerknappar när du har flera ändringar",
+    ],
+  },
+  {
+    date: "2026-08-11",
+    title: "Admin — loggning",
+    items: [
+      "Loggsidan visar de senaste 50 händelserna först",
+      "Finns fler loggar kan du klicka «Visa alla» för att fälla ut hela listan",
+    ],
+  },
+  {
+    date: "2026-08-11",
+    title: "Läsare — tydligare behörigheter",
+    items: [
+      "Läsare ser inte utcheckningsområden, aktiva utcheckningar eller utcheckningshistorik",
+      "Områdeslistan visar bara områden med minst en publicerad kartversion",
+      "Knappen «Föreslå ändring» finns direkt på områdessidan när kartan är publicerad",
+      "Läsare kan inte välja .ocd-bilaga i e-postnotiser (gäller även befintliga prenumerationer)",
+    ],
+  },
+  {
+    date: "2026-08-11",
+    title: "Lägg bana — publicerad kartversion",
+    items: [
+      "Banläggning använder alltid den publicerade kartversionen — även för redaktörer när en nyare opublicerad version finns",
+      "Läsare kan lägga banor så länge det finns en publicerad version; utan publicerad version visas ett tydligt meddelande",
+      "PDF-export av banor baseras också på den publicerade versionen",
+    ],
+  },
+  {
+    date: "2026-08-11",
+    title: "Utcheckning — val av OCAD-format",
+    items: [
+      "Vid utcheckning väljer du OCAD-format (10, 11, 12 eller 2018) innan filen skapas — t.ex. OCAD 12 om du inte har OCAD 2018",
+      "Valt format visas på utcheckningssidan och i filnamnet vid nedladdning",
+    ],
+  },
+  {
+    date: "2026-08-10",
+    title: "Kartförslag — platsnoggrannhet",
+    items: [
+      "Vid inskickning anger du hur säker du är på platsen: Mycket säker, Ganska säker, Osäker eller Behöver fältverifiering",
+      "Platsnoggrannhet visas i listan, på detaljsidan och i PDF-export av öppna förslag",
+      "Standard är «Ganska säker»; befintliga förslag har samma standard",
+    ],
+  },
+  {
+    date: "2026-08-10",
+    title: "Kartförslag — Navigera-ikon",
+    items: [
+      "Tydligare hand-ikon för «Navigera» (större, fylld siluett med fem fingrar)",
+    ],
+  },
+  {
+    date: "2026-08-10",
+    title: "Hjälp-PDF",
+    items: [
+      "PDF-export från guiden inkluderar flödesscheman (Mermaid) som bilder",
+      "Fix: texter med « », pilar och andra specialtecken renderas korrekt i PDF (inte bokstav-för-bokstav)",
+      "Exportknappen väntar tills processdiagram är färdigladdade",
+    ],
+  },
+  {
+    date: "2026-08-10",
+    title: "Förbättrad diff-matchning",
+    items: [
+      "Alla diff-typer (version, verifiera, utcheckning) matchar objekt hybrid: först OCAD objectIndex, sedan position och geometri",
+      "Linjer jämförs med Hausdorff-avstånd — små vertex-justeringar inom tolerans (2 m) räknas inte som ändring",
+      "Upptäcker korsvis bytta objekt (samma positioner men ombytt innehåll) som tidigare kunde missas",
+    ],
+  },
+  {
+    date: "2026-08-10",
+    title: "Diff-changelista",
+    items: [
+      "Versionsjämförelse sparar fler ändringar i listan (standard upp till 50 000; env DIFF_MAX_STORED_CHANGES) — kartlagren byggs alltid på alla ändringar",
+      "Changelistan i diff-vyn pagineras (200 per sida) med tydlig varning om listan kapats vid lagring",
+    ],
+  },
+  {
+    date: "2026-08-10",
+    title: "Admin e-postinställningar",
+    items: [
+      "Under Admin → Inställningar: ange dagar till första utcheckningspåminnelse och intervall för upprepade påminnelser tills ärendet är hanterat",
+      "Flera admin-notisadresser kan anges (komma, semikolon eller radbrytning) — testmail skickas till alla",
+    ],
+  },
+  {
     date: "2026-08-10",
     title: "Kartförslag och hjälp-PDF",
     items: [
       "Kartförslag på kartan visar nummer (1, 2, 3 …) vid varje markering — inte kategorinamn",
       "Punktmarkeringar är mindre och visas som en enkel prick utan kontur",
       "Ritverktyg (punkt, rektangel, polygon, linje, radera) som ikoner med tooltip till höger på kartan vid «Föreslå kartändring»",
+      "GPS-spår som ikon i ritverktygsraden (mellan linje och radera); Rita och Navigera under ritverktygen till höger",
       "Valt ritverktyg markeras med röd ram — ikonen behålls synlig",
+      "Åtgärdsknappar (lägg till, rensa, skicka in) anpassade för mobil — full bredd längst ned på kartan; ritverktygen till höger flyttas upp på mobil",
       "Fix: öppna och pågående kartförslag från äldre (opublicerade) versioner går att öppna från listan och kartan — tidigare gav de felmeddelandet «hittades inte»",
       "Fix: «Exportera PDF» på hjälpsidan fungerar igen — exporten väntar på att guiden laddats och fastnar inte längre på processdiagram",
     ],

@@ -69,6 +69,16 @@ const OBJECT_INDEX_STATUS_OFFSET = 30;
 
 const SUPPORTED_SOURCE_VERSIONS = new Set([10, 11, 12, 18]);
 
+/** Read OCAD file version from buffer header without full parse. */
+export function readOcadHeaderVersion(buffer: Buffer): number {
+  const reader = new BufferReader(buffer);
+  const header = new FileHeader(reader);
+  if (!header.isValid()) {
+    throw new Error("Ogiltig OCAD-fil");
+  }
+  return header.version;
+}
+
 function pointXY(point: OcadPoint): [number, number] {
   const x = typeof point.x === "number" ? point.x : point[0];
   const y = typeof point.y === "number" ? point.y : point[1];

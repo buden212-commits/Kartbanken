@@ -16,6 +16,7 @@ import {
 } from "@/lib/checkout/types";
 import { notifyCheckoutCreated } from "@/lib/email";
 import { exportCheckoutSubset } from "@/lib/ocad/subset-export";
+import type { OcadExportVersion } from "@/lib/ocad/ocad-export-shared";
 import { prisma } from "@/lib/prisma";
 import {
   buildCheckoutExportPath,
@@ -31,6 +32,7 @@ export async function generateCheckoutExport(
   checkoutId: string,
   baseVersionId: string,
   selection: CheckoutSelection,
+  targetVersion: OcadExportVersion,
 ): Promise<string> {
   const version = await prisma.mapVersion.findUnique({ where: { id: baseVersionId } });
   if (!version) {
@@ -48,6 +50,7 @@ export async function generateCheckoutExport(
     sourceBuffer,
     version.originalFilename,
     enrichedSelection.geometry,
+    { targetVersion },
   );
 
   const exportPath = buildCheckoutExportPath(mapFileId, checkoutId);

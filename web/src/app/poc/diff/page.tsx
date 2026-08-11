@@ -150,10 +150,10 @@ export default async function PocDiffPage() {
               <section className="card">
                 <h2 className="text-lg font-medium text-slate-900">
                   Detaljerade ändringar
-                  {diff.changes.length < diff.added + diff.removed + diff.modified && (
-                    <span className="ml-2 text-sm font-normal text-slate-500">
-                      (visar {diff.changes.length} av{" "}
-                      {(diff.added + diff.removed + diff.modified).toLocaleString("sv-SE")})
+                  {diff.changesTruncated && (
+                    <span className="ml-2 text-sm font-normal text-amber-700">
+                      (listan begränsad till {diff.changes.length.toLocaleString("sv-SE")} av{" "}
+                      {diff.totalChanges.toLocaleString("sv-SE")})
                     </span>
                   )}
                 </h2>

@@ -6,7 +6,9 @@ import { findActiveCheckoutsForMap, getHeadVersionId } from "@/lib/checkout/repo
 import { serializeCheckoutResponse } from "@/lib/checkout/repository";
 import { CheckoutPageClient } from "@/components/checkout-page-client";
 import { HelpLinkIcon } from "@/components/help-link-icon";
+import { readOcadHeaderVersion } from "@/lib/ocad/ocad-export-server";
 import { prisma } from "@/lib/prisma";
+import { readStoredFile } from "@/lib/storage";
 
 type PageProps = { params: Promise<{ slug: string }> };
 
@@ -24,6 +26,21 @@ export default async function CheckoutCreatePage({ params }: PageProps) {
 
   const headVersionId = await getHeadVersionId(map.id);
   if (!headVersionId) notFound();
+
+  const headVersion = await prisma.mapVersion.findUnique({
+    where: { id: headVersionId },
+    select: { storagePath: true },
+  });
+
+  let sourceOcadVersion = 12;
+  if (headVersion) {
+    try {
+      const buffer = await readStoredFile(headVersion.storagePath);
+      sourceOcadVersion = readOcadHeaderVersion(buffer);
+    } catch {
+      sourceOcadVersion = 12;
+    }
+  }
 
   const checkouts = await findActiveCheckoutsForMap(map.id);
 
@@ -45,6 +62,7 @@ export default async function CheckoutCreatePage({ params }: PageProps) {
           mapSlug={map.slug}
           mapTitle={map.title}
           headVersionId={headVersionId}
+          sourceOcadVersion={sourceOcadVersion}
           existingCheckouts={checkouts.map(serializeCheckoutResponse)}
         />
       </div>

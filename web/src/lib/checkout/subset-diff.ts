@@ -222,7 +222,7 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
       fileNameA: emptyDiffInput.fileNameA,
       fileNameB: "checkin-subset.ocd",
     },
-    { toleranceMeters: TOLERANCE, maxChanges: 5000, matchByObjectIndex: true },
+    { toleranceMeters: TOLERANCE, matchByObjectIndex: true },
   );
 
   // Guard against false add/remove from rematching noise when content bags match.

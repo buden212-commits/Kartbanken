@@ -131,6 +131,7 @@ model MapCheckout {
   cancelReason        String?
   integrationComment  String?
   reminderSentAt      DateTime?
+  exportOcadVersion   Int       @default(12)
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
@@ -169,14 +170,16 @@ model AuditLog {
 }
 
 model AppSettings {
-  id                     String   @id @default("default")
-  smtpHost               String?
-  smtpPort               Int?
-  smtpUser               String?
-  smtpPassEncrypted      String?
-  adminNotificationEmail String?
-  enabled                Boolean  @default(false)
-  updatedAt              DateTime @updatedAt
+  id                         String   @id @default("default")
+  smtpHost                   String?
+  smtpPort                   Int?
+  smtpUser                   String?
+  smtpPassEncrypted          String?
+  adminNotificationEmail     String?
+  checkoutReminderDays       Int      @default(7)
+  checkoutReminderRepeatDays Int      @default(7)
+  enabled                    Boolean  @default(false)
+  updatedAt                  DateTime @updatedAt
 }
 
 model Course {
@@ -216,6 +219,7 @@ model MapSuggestion {
   createdById         String
   status              String   @default("OPEN")
   category            String
+  locationConfidence  String   @default("GANSKA_SAKER")
   title               String?
   comment             String
   reviewComment       String?

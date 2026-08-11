@@ -37,6 +37,30 @@ function makeObject(
   };
 }
 
+function makeLineObject(
+  objectIndex: number,
+  symbolNumber: number,
+  geometryHash: string,
+  vertices: [number, number][],
+): NormalizedOcadObject {
+  const xs = vertices.map((v) => v[0]);
+  const ys = vertices.map((v) => v[1]);
+  const centroid: [number, number] = [
+    xs.reduce((sum, x) => sum + x, 0) / xs.length,
+    ys.reduce((sum, y) => sum + y, 0) / ys.length,
+  ];
+  return {
+    objectIndex,
+    symbolNumber,
+    symbolName: `Symbol ${symbolNumber}`,
+    type: "line",
+    centroid,
+    bbox: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)],
+    geometryHash,
+    vertices,
+  };
+}
+
 const headObjects: NormalizedOcadObject[] = [
   makeObject(1, 101, "hash-a", [100, 200]),
   makeObject(2, 101, "hash-b", [150, 200]),
@@ -108,7 +132,7 @@ const editDiff = compareOcadObjects(
 
 assert(editDiff.added === 1, `expected 1 added, got ${editDiff.added}`);
 assert(editDiff.removed === 1, `expected 1 removed, got ${editDiff.removed}`);
-assert(editDiff.modified === 1, `expected 1 modified, got ${editDiff.modified}`);
+assert(editDiff.modified === 0, `slight move within tolerance should be unchanged, got modified=${editDiff.modified}`);
 assert(
   editDiff.changes.some((c) => c.changeType === "added" && c.objectIndex === 500),
   "new object index 500 must appear as added",
@@ -118,8 +142,8 @@ assert(
   "removed object index 2 must appear as removed",
 );
 assert(
-  editDiff.changes.some((c) => c.changeType === "modified" && c.objectIndex === 1),
-  "moved object index 1 must appear as modified",
+  !editDiff.changes.some((c) => c.changeType === "modified" && c.objectIndex === 1),
+  "object index 1 within tolerance must not appear as modified",
 );
 
 // Index-first matching: far move with same objectIndex must count as modified, not remove+add
@@ -131,6 +155,53 @@ const farMoveDiff = compareOcadObjects(
 );
 assert(farMoveDiff.modified === 1, `index-first far move expected modified, got ${farMoveDiff.modified}`);
 assert(farMoveDiff.added === 0 && farMoveDiff.removed === 0, "index-first far move must not be remove+add");
+
+// Hausdorff: små vertex-justeringar på linjer räknas som oförändrade inom tolerans
+const lineA = makeLineObject(10, 501, "line-h1", [
+  [100, 200],
+  [200, 200],
+]);
+const lineB = makeLineObject(10, 501, "line-h2", [
+  [100, 201],
+  [200, 201],
+]);
+const lineNearDiff = compareOcadObjects(
+  [lineA],
+  [lineB],
+  { fileNameA: "a.ocd", fileNameB: "b.ocd" },
+  { toleranceMeters: 2 },
+);
+assert(lineNearDiff.modified === 0, "line within Hausdorff tolerance should be unchanged");
+
+const lineFar = makeLineObject(10, 501, "line-h3", [
+  [100, 210],
+  [200, 210],
+]);
+const lineFarDiff = compareOcadObjects(
+  [lineA],
+  [lineFar],
+  { fileNameA: "a.ocd", fileNameB: "b.ocd" },
+  { toleranceMeters: 2 },
+);
+assert(lineFarDiff.modified === 1, "line beyond Hausdorff tolerance should be modified");
+
+// Swap detection: korsvis identiska positioner men bytt innehåll
+const swapA = [
+  makeObject(1, 601, "swap-h1", [100, 200]),
+  makeObject(2, 601, "swap-h2", [150, 200]),
+];
+const swapB = [
+  makeObject(1, 601, "swap-h2", [100, 200]),
+  makeObject(2, 601, "swap-h1", [150, 200]),
+];
+const swapDiff = compareOcadObjects(
+  swapA,
+  swapB,
+  { fileNameA: "a.ocd", fileNameB: "b.ocd" },
+  { toleranceMeters: 2 },
+);
+assert(swapDiff.modified === 2, `swapped pair should count as 2 modified, got ${swapDiff.modified}`);
+assert(swapDiff.added === 0 && swapDiff.removed === 0, "swapped pair must not be remove+add");
 
 assert(
   !objectIdsFromParsed([makeObject(-1, 0, "fake"), makeObject(1, 101, "hash-a")]).has("-1"),

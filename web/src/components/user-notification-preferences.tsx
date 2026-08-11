@@ -5,11 +5,13 @@ import { useState, useTransition } from "react";
 type Props = {
   initialNotifications: boolean;
   initialOcdAttachment: boolean;
+  showOcdAttachment?: boolean;
 };
 
 export function UserNotificationPreferences({
   initialNotifications,
   initialOcdAttachment,
+  showOcdAttachment = true,
 }: Props) {
   const [notifications, setNotifications] = useState(initialNotifications);
   const [ocdAttachment, setOcdAttachment] = useState(initialOcdAttachment);
@@ -67,6 +69,7 @@ export function UserNotificationPreferences({
           </span>
         </span>
       </label>
+      {showOcdAttachment && (
       <label
         className={`flex items-start gap-3 text-sm ${
           notifications ? "cursor-pointer text-slate-700" : "cursor-not-allowed text-slate-400"
@@ -86,6 +89,7 @@ export function UserNotificationPreferences({
           </span>
         </span>
       </label>
+      )}
       {error && (
         <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
           {error}

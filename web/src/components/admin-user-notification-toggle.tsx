@@ -7,6 +7,7 @@ type Props = {
   userId: string;
   initialNotifications: boolean;
   initialOcdAttachment: boolean;
+  showOcdAttachment?: boolean;
   disabled?: boolean;
   updateAction: (formData: FormData) => Promise<{ ok: true } | { ok: false; error: string }>;
 };
@@ -15,6 +16,7 @@ export function AdminUserNotificationToggle({
   userId,
   initialNotifications,
   initialOcdAttachment,
+  showOcdAttachment = true,
   disabled = false,
   updateAction,
 }: Props) {
@@ -66,6 +68,7 @@ export function AdminUserNotificationToggle({
         />
         <span className="whitespace-nowrap">Notis</span>
       </label>
+      {showOcdAttachment && (
       <label
         className={`inline-flex items-center gap-2 text-xs ${
           notifications ? "cursor-pointer text-slate-700" : "cursor-not-allowed text-slate-400"
@@ -81,6 +84,7 @@ export function AdminUserNotificationToggle({
         />
         <span className="whitespace-nowrap">Bifoga .ocd</span>
       </label>
+      )}
       {error && <span className="text-xs text-red-600">{error}</span>}
     </div>
   );

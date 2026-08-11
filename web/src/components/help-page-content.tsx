@@ -105,6 +105,11 @@ export async function HelpPageContent() {
             PDF eller OCAD, planera banor direkt på kartan, och — som redaktör — checka ut
             delområden för parallell redigering i OCAD.
           </p>
+          <p>
+            På guidesidan kan du ladda ner hela hjälpen som PDF (knappen{" "}
+            <strong>Exportera PDF</strong> högst upp), inklusive flödesscheman — vänta tills
+            knappen blir aktiv efter att diagrammen laddats.
+          </p>
           <p>Huvudflödet för versionshantering ser ut så här:</p>
           <ol className="list-decimal space-y-2 pl-5">
             <li>Logga in och välj ett område på startsidan.</li>
@@ -200,8 +205,9 @@ export async function HelpPageContent() {
                 <tr className="border-b border-slate-100">
                   <td className="px-4 py-3 font-medium">Läsare</td>
                   <td className="px-4 py-3">
-                    Ladda ner, visa och jämföra <strong>publicerade</strong> versioner. Skapa och
-                    redigera egna banor (privata som standard)
+                    Visar <strong>publicerade</strong> kartversioner, skapar kartförslag och egna
+                    banor. Ser bara områden med publicerad karta — inga utcheckningar. Kan få
+                    e-postnotiser men inte .ocd-bilaga.
                   </td>
                 </tr>
                 <tr className="border-b border-slate-100">
@@ -328,6 +334,7 @@ export async function HelpPageContent() {
                   "Välj verktyg: rektangel eller polygon",
                   "Rita området på kartan och bekräfta urvalet",
                   "Klicka Checka ut område — du kommer till utcheckningssidan",
+                  "Välj OCAD-format (t.ex. OCAD 12 eller OCAD 2018) — måste matcha din OCAD-installation",
                   "Ladda ner utcheckning .ocd och redigera i OCAD — filen genereras av systemet; öppna och spara i OCAD innan du redigerar",
                   "Överlappande utcheckningar blockeras — vänta tills ett område frigörs",
                 ]}
@@ -382,9 +389,10 @@ export async function HelpPageContent() {
 
           <h3 className="font-medium text-slate-900">Påminnelser</h3>
           <p>
-            Om en utcheckning är aktiv längre än sju dagar (standard, konfigurerbart av administratör)
-            får utcheckningsägaren ett påminnelsemail. Admin får påminnelse om utcheckningar som väntar
-            på integration.
+            Om en utcheckning är aktiv längre än angivet antal dagar (standard 7, konfigurerbart
+            under Admin → Inställningar) får utcheckningsägaren ett påminnelsemail. Påminnelsen
+            upprepas med angivet intervall tills ärendet är hanterat. Admin får påminnelse om
+            utcheckningar som väntar på integration.
           </p>
           <HelpProcessDiagram
             title="Status — utcheckning"
@@ -398,9 +406,9 @@ export async function HelpPageContent() {
 
         <HelpSection id="bana" title="Lägg bana">
           <p>
-            Med <strong>Lägg bana</strong> planerar du orienteringsbanor direkt ovanpå kartans
-            senaste version. Banor sparas separat och påverkar aldrig själva kartfilen — de är
-            overlay-lager som kan delas med andra användare.
+            Med <strong>Lägg bana</strong> planerar du orienteringsbanor ovanpå kartans{" "}
+            <strong>publicerade</strong> version. Banor sparas separat och påverkar aldrig själva
+            kartfilen — de är overlay-lager som kan delas med andra användare.
           </p>
           <p>
             Öppna banredigeraren via knappen <strong>Lägg bana</strong> på områdessidan, eller
@@ -480,8 +488,9 @@ export async function HelpPageContent() {
             ]}
           />
           <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-700">
-            Banor påverkar aldrig kartfilens versioner. Uppdateras kartan laddas banor mot den nya
-            aktuella versionen — kontrollera att banan fortfarande stämmer efter större kartändringar.
+            Banor påverkar aldrig kartfilens versioner. Banläggning använder alltid den publicerade
+            kartversionen — även om en nyare opublicerad version finns. När kartan publiceras med
+            större ändringar bör du kontrollera att befintliga banor fortfarande stämmer.
           </p>
 
           {!showEditor && (
@@ -503,15 +512,18 @@ export async function HelpPageContent() {
             items={[
               "Öppna en publicerad version via Visa karta och klicka Föreslå ändring",
               "Välj ritverktyg som ikoner till höger på kartan: punkt, rektangel, polygon, linje eller «Radera objektet» (rött X — pekar ut var något ska tas bort; beskriv vad i kommentaren)",
-              "«GPS-spår» finns ovanför kartan (bredvid Rita/Navigera) — spelar in en linje med telefonens GPS (kräver georefererad karta)",
+              "«GPS-spår» finns som ikon i ritverktygsraden till höger (mellan linje och radera) — spelar in en linje med telefonens GPS (kräver georefererad karta)",
               "Under spårning zoomas kartan till skala 1:100 och följer din position var 10:e sekund",
               "GPS-spår filtreras (minst ca 4 m mellan punkter) och förenklas automatiskt innan linjen sparas",
               "Orimliga GPS-hopp filtreras bort och accepterade punkter utjämnas vid sämre mottagning — antal filtrerade hopp visas efter «Sluta spåra»",
-              "Växla «Rita» / «Navigera» ovanför kartan — i Navigera kan du dra och nypa utan att rita; i Rita zoomar två fingrar utan att skapa markering",
-              "Klicka «Lägg till ändring» uppe till höger på kartan när markeringen är klar — punkt, radera och rektangel aktiveras direkt efter klick/drag",
+              "Kartan startar i «Navigera» — välj ett ritverktyg till höger för att aktivera «Rita» och börja markera",
+              "Växla «Rita» / «Navigera» via ikonerna till höger — i Navigera kan du dra och nypa utan att rita; i Rita zoomar två fingrar utan att skapa markering",
+              "Klicka «Lägg till ändring» på kartan när markeringen är klar — längst ned på mobil, uppe till höger på större skärm; punkt, radera och rektangel aktiveras direkt efter klick/drag",
               "Varje markering numreras (1, 2, 3 …) på kartan — inte kategorinamn",
               "Lägg till flera markeringar innan du skickar in",
-              "Klicka «Skicka in kartförslag» uppe till höger på kartan när du är klar — då fyller du i kategori och beskrivning i dialogen",
+              "Klicka «Skicka in kartförslag» på kartan när du är klar — längst ned på mobil, uppe till höger på större skärm — då fyller du i kategori, platsnoggrannhet och beskrivning i dialogen",
+              "Beskrivningen förfylls med en rad per markering (punkt, linje eller yta) — skriv vidare på varje rad",
+              "Välj aktiv markering och tryck på symbolnamn under beskrivningen — raden behålls (t.ex. «1. Punkt — Sten»); listan är vertikal, sorterad efter hur ofta symbolen används på kartan, filtreras efter punkt/linje/yta och grupperas under kartlager («Visa alla» och sök vid många symboler)",
               "I dialogen: «Ta foto» öppnar kameran på mobil (direktfoto), «Välj bild» plockar från albumet",
               "Skicka-sektionen ovanför kartan visar antal tillagda ändringar innan du skickar",
               "Öppna och pågående förslag från alla versioner visas på områdessidans karta (underlag: senaste publicerade version) — klicka markeringen eller ett förslag i listan",
@@ -596,9 +608,20 @@ export async function HelpPageContent() {
 
           <h3 className="font-medium text-slate-900">Detaljerade ändringar</h3>
           <p>
-            Fliken visar alla ändringar med filter (alla/tillagda/borttagna/ändrade) och sökning på
-            symbol, namn eller text. Fliken <strong>Ändringar per symbol</strong> summerar antal
-            per symboltyp.
+            Fliken visar ändringar med filter (alla/tillagda/borttagna/ändrade) och sökning på
+            symbol, namn eller text. Listan pagineras (200 per sida). Fliken{" "}
+            <strong>Ändringar per symbol</strong> summerar antal per symboltyp. Kartlagren
+            (tillagd/borttagen/ändrad) inkluderar alla objekt även om changelistan sparas med tak
+            (standard 50 000; miljövariabel <code>DIFF_MAX_STORED_CHANGES</code>).
+          </p>
+
+          <h3 className="font-medium text-slate-900">Hur objekt matchas</h3>
+          <p>
+            Systemet försöker först para ihop objekt med samma OCAD objectIndex (samma objekt i
+            filen), och matchar därefter kvarvarande objekt efter position inom 2 meter. Linjer
+            räknas som oförändrade om vertex ligger nära nog (Hausdorff-avstånd); små
+            justeringar missas inte längre som falska ändringar. Om två objekt bytt plats
+            (samma positioner men ombytt innehåll) markeras båda som ändrade.
           </p>
 
           <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
@@ -748,7 +771,7 @@ export async function HelpPageContent() {
                 "Skapa konton manuellt med e-post, namn, lösenord och roll",
                 "Redigera befintliga användare (namn, e-post, roll)",
                 "Notis — prenumerera på e-post vid nya versioner och utcheckningshändelser (användare kan också styra detta i Min profil)",
-                "Bifoga .ocd — få kartfilen som bilaga i notiser (kräver Notis)",
+                "Bifoga .ocd — få kartfilen som bilaga i notiser (kräver Notis; endast redaktör och administratör)",
                 "Senaste inloggning visas i listan",
               ]}
             />
@@ -765,8 +788,9 @@ export async function HelpPageContent() {
             <p>
               <Link href="/admin/loggning" className="link-primary">Loggning</Link> visar
               händelser i systemet: inloggningar, uppladdningar, utcheckningar, incheckningar,
-              e-postutskick med bifogad fil (och mottagare) med mera. Filtrera på användare eller
-              «System» och sortera på namn, aktivitet eller datum.
+              e-postutskick med bifogad fil (och mottagare) med mera. De senaste 50 händelserna
+              visas först — klicka <strong>Visa alla</strong> för att fälla ut resten. Filtrera på
+              användare eller «System» och sortera på namn, aktivitet eller datum.
             </p>
 
             <h3 className="font-medium text-slate-900">E-postinställningar (SMTP)</h3>
@@ -778,7 +802,9 @@ export async function HelpPageContent() {
               items={[
                 "SMTP-server och port (Gmail: smtp.gmail.com, port 587)",
                 "Gmail-adress som avsändare och Google App-lösenord (krävs — vanligt lösenord fungerar inte)",
-                "Admin-notis e-post — huvudmottagare; får alltid .ocd-bilaga vid versioner och incheckning",
+                "Admin-notis e-post — en eller flera mottagare (komma eller radbrytning); får alltid .ocd-bilaga vid versioner och incheckning",
+                "Utcheckningspåminnelse (dagar) — första påminnelse efter så många dagars aktiv utcheckning",
+                "Upprepa påminnelse (dagar) — ny påminnelse skickas med detta intervall tills ärendet är hanterat",
                 "Skicka testmail — verifiera SMTP utan bilaga",
                 "Skicka testmail med bifogad fil — verifiera att bilagor fungerar",
               ]}
@@ -804,7 +830,7 @@ export async function HelpPageContent() {
                 "Användare bekräftat integration — till prenumeranter",
                 "Utcheckning integrerad — till utcheckningsägare och prenumeranter",
                 "Utcheckning avbruten av admin — till utcheckningsägare och prenumeranter",
-                "Påminnelse om gammal utcheckning — till utcheckningsägare efter 7 dagar (konfigurerbart)",
+                "Påminnelse om gammal utcheckning — till utcheckningsägare (och admin vid väntande integration); dagar och upprepning konfigureras under Inställningar",
               ]}
             />
 
@@ -838,8 +864,9 @@ export async function HelpPageContent() {
               <p className="mt-1">
                 SMTP måste vara konfigurerat under Admin → Inställningar med Gmail app-lösenord.
                 Aktivera notiser under <strong>Min profil</strong> (klicka ditt namn i menyn) eller
-                be administratören kryssa i Notis under Admin → Användare. För .ocd-bilaga krävs
-                även «Bifoga .ocd». Skicka testmail för att verifiera. Kontrollera skräppost och
+                be administratören kryssa i Notis under Admin → Användare. .ocd-bilaga kan bara
+                aktiveras för redaktörer och administratörer. Skicka testmail för att verifiera.
+                Kontrollera skräppost och
                 att utskick loggas under Admin → Loggning.
               </p>
             </div>

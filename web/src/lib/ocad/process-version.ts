@@ -1,13 +1,17 @@
 import { compareOcadObjects } from "./diff";
 import type { OcadDiffResult } from "./diff-types";
-import { buildDiffLayerPath, generateDiffLayerSvgs } from "./diff-layers";
+import { changeIndicesByKind, limitStoredChanges } from "./diff-storage";
+import {
+  buildDiffLayerPath,
+  generateDiffLayerSvgs,
+  generateDiffLayerSvgsFromIndices,
+} from "./diff-layers";
 import { parseOcadBuffer } from "./read";
 import { buildPreviewSvgPath, generateAndStorePreviewSvg } from "./svg";
 import { readStoredFile } from "@/lib/storage";
 import { prisma } from "@/lib/prisma";
 
 const TOLERANCE = Number(process.env.DIFF_SPATIAL_TOLERANCE_M ?? 2);
-const MAX_STORED_CHANGES = 5000;
 
 export async function parseMapVersion(versionId: string): Promise<void> {
   const version = await prisma.mapVersion.findUnique({ where: { id: versionId } });
@@ -103,8 +107,11 @@ export async function computeVersionDiff(
       fileNameA: versionA.originalFilename,
       fileNameB: versionB.originalFilename,
     },
-    { toleranceMeters: TOLERANCE, maxChanges: MAX_STORED_CHANGES },
+    { toleranceMeters: TOLERANCE },
   );
+
+  const layerObjectIndices = changeIndicesByKind(diff.changes);
+  const stored = limitStoredChanges(diff.changes);
 
   let layerPaths = null;
   try {
@@ -125,6 +132,10 @@ export async function computeVersionDiff(
     unchanged: diff.unchanged,
     durationMs: diff.durationMs,
     toleranceMeters: diff.toleranceMeters,
+    totalChanges: stored.totalChanges,
+    changesTruncated: stored.changesTruncated,
+    maxChangesApplied: stored.maxChangesApplied,
+    layerObjectIndices,
     bySymbol: diff.bySymbol,
     versionA: diff.versionA,
     versionB: diff.versionB,
@@ -138,7 +149,7 @@ export async function computeVersionDiff(
       : null,
   });
 
-  const changesJson = JSON.stringify(diff.changes);
+  const changesJson = JSON.stringify(stored.changes);
 
   await prisma.versionDiff.upsert({
     where: {
@@ -161,7 +172,13 @@ export async function computeVersionDiff(
     },
   });
 
-  return diff;
+  return {
+    ...diff,
+    changes: stored.changes,
+    totalChanges: stored.totalChanges,
+    changesTruncated: stored.changesTruncated,
+    maxChangesApplied: stored.maxChangesApplied,
+  };
 }
 
 export async function ensureDiffLayers(
@@ -185,11 +202,30 @@ export async function ensureDiffLayers(
     readStoredFile(versionB.storagePath),
   ]);
 
-  const layerPaths = await generateDiffLayerSvgs(bufferA, bufferB, changes, {
-    added: buildDiffLayerPath(mapFileId, versionAId, versionBId, "added"),
-    removed: buildDiffLayerPath(mapFileId, versionAId, versionBId, "removed"),
-    modified: buildDiffLayerPath(mapFileId, versionAId, versionBId, "modified"),
-  });
+  const storedIndices = existingSummary.layerObjectIndices as
+    | { added?: number[]; removed?: number[]; modified?: number[] }
+    | undefined;
+
+  const layerPaths = storedIndices
+    ? await generateDiffLayerSvgsFromIndices(
+        bufferA,
+        bufferB,
+        {
+          added: new Set(storedIndices.added ?? []),
+          removed: new Set(storedIndices.removed ?? []),
+          modified: new Set(storedIndices.modified ?? []),
+        },
+        {
+          added: buildDiffLayerPath(mapFileId, versionAId, versionBId, "added"),
+          removed: buildDiffLayerPath(mapFileId, versionAId, versionBId, "removed"),
+          modified: buildDiffLayerPath(mapFileId, versionAId, versionBId, "modified"),
+        },
+      )
+    : await generateDiffLayerSvgs(bufferA, bufferB, changes, {
+        added: buildDiffLayerPath(mapFileId, versionAId, versionBId, "added"),
+        removed: buildDiffLayerPath(mapFileId, versionAId, versionBId, "removed"),
+        modified: buildDiffLayerPath(mapFileId, versionAId, versionBId, "modified"),
+      });
 
   const updatedSummary = {
     ...existingSummary,

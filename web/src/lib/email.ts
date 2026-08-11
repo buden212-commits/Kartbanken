@@ -971,25 +971,28 @@ async function notifyCheckoutCancelledAsync(
   await Promise.all(recipients.map((to) => sendMail({ to, subject, text, html })));
 }
 
-export function notifyCheckoutReminder(ctx: CheckoutMailContext & { days: number }): void {
+export function notifyCheckoutReminder(
+  ctx: CheckoutMailContext & { days: number; isRepeat?: boolean },
+): void {
   scheduleEmail(() => notifyCheckoutReminderAsync(ctx), "checkout reminder");
 }
 
 async function notifyCheckoutReminderAsync(
-  ctx: CheckoutMailContext & { days: number },
+  ctx: CheckoutMailContext & { days: number; isRepeat?: boolean },
 ): Promise<void> {
   if (!(await isEmailConfigured())) return;
 
   const url = checkoutDetailUrl(ctx.map.slug, ctx.checkoutId);
-  const subject = `Påminnelse: aktiv utcheckning — ${ctx.map.title}`;
-  const text = [
-    `Du har en aktiv utcheckning på ${ctx.map.title} som är äldre än ${ctx.days} dagar.`,
-    "",
-    `Checka in eller avbryt: ${url}`,
-  ].join("\n");
+  const subject = ctx.isRepeat
+    ? `Påminnelse (upprepning): aktiv utcheckning — ${ctx.map.title}`
+    : `Påminnelse: aktiv utcheckning — ${ctx.map.title}`;
+  const intro = ctx.isRepeat
+    ? `Du har fortfarande en aktiv utcheckning på ${ctx.map.title} som väntar på åtgärd.`
+    : `Du har en aktiv utcheckning på ${ctx.map.title} som är äldre än ${ctx.days} dagar.`;
+  const text = [intro, "", `Checka in eller avbryt: ${url}`].join("\n");
 
   const bodyHtml = `
-    <p style="margin:0 0 16px;">Du har en aktiv utcheckning på <strong>${escapeHtml(ctx.map.title)}</strong> som är äldre än ${ctx.days} dagar.</p>
+    <p style="margin:0 0 16px;">${escapeHtml(intro)}</p>
     <p style="margin:0;"><a href="${escapeHtml(url)}" style="display:inline-block;padding:10px 18px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:500;">Öppna utcheckning</a></p>
   `.trim();
 

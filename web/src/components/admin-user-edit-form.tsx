@@ -2,7 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition, type ReactNode } from "react";
-import { Role } from "@/lib/roles";
+import { canReceiveOcdAttachment } from "@/lib/auth/permissions";
+import { Role, type Role as RoleType } from "@/lib/roles";
 import { canSubscribeToNotifications } from "@/lib/settings/notification-recipients";
 import { HelpLinkIcon } from "@/components/help-link-icon";
 
@@ -37,6 +38,7 @@ function AdminUserEditFormPanel({
   const [pending, startTransition] = useTransition();
   const isSelf = user.id === currentUserId;
   const canSubscribe = canSubscribeToNotifications(user.role);
+  const showOcdAttachment = canReceiveOcdAttachment(user.role as RoleType);
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -152,6 +154,7 @@ function AdminUserEditFormPanel({
                 </span>
               </span>
             </label>
+            {showOcdAttachment && (
             <label className="inline-flex cursor-pointer items-start gap-2 text-sm text-slate-700">
               <input
                 type="checkbox"
@@ -167,6 +170,7 @@ function AdminUserEditFormPanel({
                 </span>
               </span>
             </label>
+            )}
           </div>
         )}
       </div>

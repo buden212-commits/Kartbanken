@@ -716,7 +716,7 @@ export function CourseEditorClient({
     <div className="flex flex-wrap items-center gap-2">
       <span className="text-sm font-medium text-slate-800">Lägg bana</span>
       <HelpLinkIcon section="bana" />
-      <span className="text-xs text-slate-500">· Aktuell version v{headVersionNumber}</span>
+      <span className="text-xs text-slate-500">· Publicerad version v{headVersionNumber}</span>
       <span className="text-xs font-medium text-slate-700">Banlängd: {courseLengthLabel}</span>
       {(["draw", "move", "delete"] as EditorTool[]).map((t) => (
         <button

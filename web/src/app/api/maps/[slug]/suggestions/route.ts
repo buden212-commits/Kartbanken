@@ -7,6 +7,7 @@ import {
   validateSuggestionCategory,
   validateSuggestionComment,
   validateSuggestionGeometries,
+  validateSuggestionLocationConfidence,
   validateSuggestionTitle,
   validateSuggestionAttachmentFilename,
 } from "@/lib/suggestion/access";
@@ -20,7 +21,7 @@ import {
   serializeSuggestionDetail,
   serializeSuggestionSummary,
 } from "@/lib/suggestion/repository";
-import { SUGGESTION_CATEGORY_LABELS } from "@/lib/suggestion/types";
+import { SUGGESTION_CATEGORY_LABELS, SUGGESTION_LOCATION_CONFIDENCE_LABELS } from "@/lib/suggestion/types";
 import { queueNotifyNewMapSuggestion } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
 import {
@@ -117,6 +118,7 @@ export async function POST(request: Request, { params }: RouteParams) {
   const contentType = request.headers.get("content-type") ?? "";
   let mapVersionId: string | null = null;
   let category: ReturnType<typeof validateSuggestionCategory> = null;
+  let locationConfidence: ReturnType<typeof validateSuggestionLocationConfidence> = null;
   let comment: ReturnType<typeof validateSuggestionComment> = null;
   let title: ReturnType<typeof validateSuggestionTitle> = null;
   let geometries: ReturnType<typeof validateSuggestionGeometries> = null;
@@ -132,6 +134,9 @@ export async function POST(request: Request, { params }: RouteParams) {
 
     mapVersionId = formData.get("mapVersionId")?.toString() ?? null;
     category = validateSuggestionCategory(formData.get("category"));
+    locationConfidence = validateSuggestionLocationConfidence(
+      formData.get("locationConfidence"),
+    );
     comment = validateSuggestionComment(formData.get("comment"));
     title = validateSuggestionTitle(formData.get("title"));
     try {
@@ -187,6 +192,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     const record = body as Record<string, unknown>;
     mapVersionId = typeof record.mapVersionId === "string" ? record.mapVersionId : null;
     category = validateSuggestionCategory(record.category);
+    locationConfidence = validateSuggestionLocationConfidence(record.locationConfidence);
     comment = validateSuggestionComment(record.comment);
     title = validateSuggestionTitle(record.title);
     geometries = parseSuggestionGeometriesFromRecord(record);
@@ -209,6 +215,9 @@ export async function POST(request: Request, { params }: RouteParams) {
   }
   if (!category) {
     return NextResponse.json({ error: "Ogiltig kategori" }, { status: 400 });
+  }
+  if (!locationConfidence) {
+    return NextResponse.json({ error: "Ange hur säker du är på platsen" }, { status: 400 });
   }
   if (!comment) {
     return NextResponse.json(
@@ -248,6 +257,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       mapVersionId: version.id,
       createdById: session.user.id,
       category,
+      locationConfidence,
       title,
       comment,
       geometries,
@@ -265,6 +275,8 @@ export async function POST(request: Request, { params }: RouteParams) {
     versionNumber: version.versionNumber,
     category,
     categoryLabel: SUGGESTION_CATEGORY_LABELS[category],
+    locationConfidence,
+    locationConfidenceLabel: SUGGESTION_LOCATION_CONFIDENCE_LABELS[locationConfidence],
   });
 
   queueNotifyNewMapSuggestion({

@@ -91,5 +91,8 @@ export function buildEmptyOcadDiffResult(
     unchanged: meta.objectCountB,
     bySymbol: [],
     changes: [],
+    totalChanges: 0,
+    changesTruncated: false,
+    maxChangesApplied: null,
   };
 }

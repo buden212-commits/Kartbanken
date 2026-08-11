@@ -119,6 +119,8 @@ type Props = {
   onOcadMapScale?: (scale: number) => void;
   /** Called when georeferenced CRS is loaded from preview (or cleared on reload). */
   onOcadCrsReady?: (crs: OcadCrsInfo | null) => void;
+  /** Called when OCAD layer tree is read from preview metadata. */
+  onOcadLayersReady?: (layers: OcadMapLayer[]) => void;
   /**
    * Fit the viewport to a geo bbox (no highlight). Bump requestId to re-apply.
    */
@@ -262,6 +264,7 @@ export function DiffMapPanel({
   showLayerPanel = true,
   onOcadMapScale,
   onOcadCrsReady,
+  onOcadLayersReady,
   fitGeoBbox = null,
   gpsTrackFollow = null,
 }: Props) {
@@ -342,6 +345,7 @@ export function DiffMapPanel({
     setFullSvgText(null);
     setMapLayers([]);
     setLayerVisibility({});
+    onOcadLayersReady?.([]);
     setOcadCrs(null);
     if (gpsWatchIdRef.current != null) {
       navigator.geolocation.clearWatch(gpsWatchIdRef.current);
@@ -378,6 +382,7 @@ export function DiffMapPanel({
         setOcadCrs(crs);
         setMapLayers(ocadLayers);
         setLayerVisibility(initialLayerVisibility(ocadLayers));
+        onOcadLayersReady?.(ocadLayers);
         setExportSettings((prev) => ({
           ...prev,
           ocadVersion: defaultOcadExportVersion(ocadFileVersion),

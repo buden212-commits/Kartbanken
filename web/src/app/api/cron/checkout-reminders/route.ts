@@ -6,14 +6,13 @@ import {
 import { CheckoutStatus } from "@/lib/checkout/types";
 import { notifyCheckoutReminder, notifyCheckoutUserConfirmed } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
+import {
+  resolveCheckoutReminderDays,
+  resolveCheckoutReminderRepeatDays,
+} from "@/lib/settings/app-settings";
 import { NextResponse } from "next/server";
 
 export const maxDuration = 120;
-
-function getReminderDays(): number {
-  const raw = Number(process.env.CHECKOUT_REMINDER_DAYS ?? 7);
-  return Number.isFinite(raw) && raw > 0 ? raw : 7;
-}
 
 function isAuthorized(request: Request): boolean {
   const cronSecret = process.env.CRON_SECRET?.trim();
@@ -27,9 +26,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const days = getReminderDays();
-  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-  const checkouts = await findCheckoutsNeedingReminder(cutoff);
+  const reminderDays = await resolveCheckoutReminderDays();
+  const repeatDays = await resolveCheckoutReminderRepeatDays();
+  const initialCutoff = new Date(Date.now() - reminderDays * 24 * 60 * 60 * 1000);
+  const repeatCutoff = new Date(Date.now() - repeatDays * 24 * 60 * 60 * 1000);
+  const checkouts = await findCheckoutsNeedingReminder(initialCutoff, repeatCutoff);
 
   let sent = 0;
 
@@ -39,6 +40,8 @@ export async function GET(request: Request) {
       select: { title: true, slug: true },
     });
     if (!map) continue;
+
+    const isRepeat = checkout.reminderSentAt != null;
 
     if (checkout.status === CheckoutStatus.PENDING_ADMIN_CONFIRM) {
       notifyCheckoutUserConfirmed({
@@ -51,17 +54,20 @@ export async function GET(request: Request) {
         checkoutId: checkout.id,
         map: { title: map.title, slug: map.slug },
         owner: { name: checkout.user.name, email: checkout.user.email },
-        days,
+        days: reminderDays,
+        isRepeat,
       });
     }
 
     await markReminderSent(checkout.id);
     await logAction(null, "CHECKOUT_REMINDER_SENT", "MapCheckout", checkout.id, {
       mapSlug: map.slug,
-      days,
+      days: reminderDays,
+      repeatDays,
+      isRepeat,
     });
     sent++;
   }
 
-  return NextResponse.json({ ok: true, sent, days });
+  return NextResponse.json({ ok: true, sent, reminderDays, repeatDays });
 }

@@ -33,6 +33,7 @@ import {
 import { screenToSvgPoint } from "@/lib/ocad/map-hit-test";
 
 import { DiffMapPanel, type MapDrawPointerHandlers } from "@/components/diff-map-panel";
+import { OCAD_EXPORT_VERSIONS, type OcadExportVersion } from "@/lib/ocad/ocad-export-shared";
 
 
 
@@ -81,6 +82,12 @@ type Props = {
   createError?: string | null;
 
   disabled?: boolean;
+
+  ocadVersion?: OcadExportVersion;
+
+  onOcadVersionChange?: (version: OcadExportVersion) => void;
+
+  sourceOcadVersionLabel?: string;
 
 };
 
@@ -193,6 +200,12 @@ export function CheckoutMapPanel({
   createError = null,
 
   disabled = false,
+
+  ocadVersion = 12,
+
+  onOcadVersionChange,
+
+  sourceOcadVersionLabel,
 
 }: Props) {
 
@@ -664,7 +677,7 @@ export function CheckoutMapPanel({
 
       {confirmedSelection && (
 
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-100 bg-emerald-50 px-3 py-2">
+        <div className="space-y-2 border-b border-emerald-100 bg-emerald-50 px-3 py-2">
 
           <p className="text-sm text-emerald-800">
 
@@ -680,23 +693,75 @@ export function CheckoutMapPanel({
 
           </p>
 
-          {onCreateCheckout && (
+          {onCreateCheckout && onOcadVersionChange && (
 
-            <button
+            <div className="flex flex-wrap items-end gap-3">
 
-              type="button"
+              <div>
 
-              disabled={disabled || createLoading}
+                <label htmlFor="checkout-ocad-version" className="text-xs font-medium text-slate-700">
 
-              onClick={onCreateCheckout}
+                  OCAD-format för utcheckning
 
-              className="shrink-0 rounded-md bg-ifk-blue px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                </label>
 
-            >
+                <select
 
-              {createLoading ? "Skapar utcheckning…" : "Checka ut område"}
+                  id="checkout-ocad-version"
 
-            </button>
+                  value={ocadVersion}
+
+                  onChange={(e) =>
+
+                    onOcadVersionChange(Number(e.target.value) as OcadExportVersion)
+
+                  }
+
+                  className="form-select mt-1 min-w-[140px]"
+
+                >
+
+                  {OCAD_EXPORT_VERSIONS.map((opt) => (
+
+                    <option key={opt.value} value={opt.value}>
+
+                      {opt.label}
+
+                    </option>
+
+                  ))}
+
+                </select>
+
+                {sourceOcadVersionLabel && (
+
+                  <p className="mt-1 text-xs text-slate-500">
+
+                    Källkarta: {sourceOcadVersionLabel}
+
+                  </p>
+
+                )}
+
+              </div>
+
+              <button
+
+                type="button"
+
+                disabled={disabled || createLoading}
+
+                onClick={onCreateCheckout}
+
+                className="shrink-0 rounded-md bg-ifk-blue px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+
+              >
+
+                {createLoading ? "Skapar utcheckning…" : "Checka ut område"}
+
+              </button>
+
+            </div>
 
           )}
 

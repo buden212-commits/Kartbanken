@@ -1,4 +1,5 @@
-import { resolveAdminNotificationEmail } from "@/lib/settings/app-settings";
+import { canReceiveOcdAttachment } from "@/lib/auth/permissions";
+import { resolveAdminNotificationEmails } from "@/lib/settings/app-settings";
 import { prisma } from "@/lib/prisma";
 import { Role, type Role as RoleType } from "@/lib/roles";
 
@@ -54,7 +55,10 @@ export async function setUserNotificationPreferences(
   }
 
   const receiveNotifications = preferences.receiveNotifications;
-  const receiveOcdAttachment = receiveNotifications && preferences.receiveOcdAttachment;
+  const receiveOcdAttachment =
+    receiveNotifications &&
+    canReceiveOcdAttachment(user.role as RoleType) &&
+    preferences.receiveOcdAttachment;
 
   await prisma.user.update({
     where: { id: userId },
@@ -103,7 +107,7 @@ export async function updateNotificationSubscribers(userIds: string[]): Promise<
 }
 
 export async function resolveNotificationRecipients(): Promise<string[]> {
-  const adminEmail = await resolveAdminNotificationEmail();
+  const adminEmails = await resolveAdminNotificationEmails();
   const subscribers = await prisma.user.findMany({
     where: {
       receiveNotifications: true,
@@ -113,7 +117,9 @@ export async function resolveNotificationRecipients(): Promise<string[]> {
   });
 
   const recipients = new Set<string>();
-  if (adminEmail) recipients.add(normalizeEmail(adminEmail));
+  for (const email of adminEmails) {
+    recipients.add(normalizeEmail(email));
+  }
   for (const user of subscribers) {
     if (user.email.trim()) recipients.add(normalizeEmail(user.email));
   }
@@ -124,14 +130,16 @@ export async function resolveNotificationRecipients(): Promise<string[]> {
 export async function resolveOcdAttachmentRecipients(): Promise<Set<string>> {
   const recipients = new Set<string>();
 
-  const adminEmail = await resolveAdminNotificationRecipient();
-  if (adminEmail) recipients.add(adminEmail);
+  const adminEmails = await resolveAdminNotificationEmails();
+  for (const email of adminEmails) {
+    recipients.add(normalizeEmail(email));
+  }
 
   const subscribers = await prisma.user.findMany({
     where: {
       receiveNotifications: true,
       receiveOcdAttachment: true,
-      role: { in: [Role.READER, Role.EDITOR, Role.ADMIN] },
+      role: { in: [Role.EDITOR, Role.ADMIN] },
     },
     select: { email: true },
   });
@@ -144,6 +152,6 @@ export async function resolveOcdAttachmentRecipients(): Promise<Set<string>> {
 }
 
 export async function resolveAdminNotificationRecipient(): Promise<string | null> {
-  const adminEmail = await resolveAdminNotificationEmail();
-  return adminEmail ? normalizeEmail(adminEmail) : null;
+  const adminEmails = await resolveAdminNotificationEmails();
+  return adminEmails[0] ? normalizeEmail(adminEmails[0]) : null;
 }

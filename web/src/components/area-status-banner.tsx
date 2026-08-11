@@ -19,6 +19,8 @@ type Props = {
   activeCheckoutCount: number;
   /** Visa opublicerad head-version (redaktörer). */
   showVersionStatus: boolean;
+  /** Visa utcheckningsstatus (redaktörer och administratörer). */
+  showCheckoutStatus?: boolean;
 };
 
 function formatSuggestionCounts(open: number, inProgress: number): string {
@@ -42,6 +44,7 @@ export function AreaStatusBanner({
   suggestionBreakdown,
   activeCheckoutCount,
   showVersionStatus,
+  showCheckoutStatus = true,
 }: Props) {
   const openSuggestionCount = suggestionBreakdown.reduce((sum, row) => sum + row.open, 0);
   const inProgressSuggestionCount = suggestionBreakdown.reduce(
@@ -53,7 +56,9 @@ export function AreaStatusBanner({
     showVersionStatus && headVersionNumber != null && !headIsPublished;
 
   const shouldShow =
-    pendingSuggestions > 0 || unpublishedHead || activeCheckoutCount > 0;
+    pendingSuggestions > 0 ||
+    unpublishedHead ||
+    (showCheckoutStatus && activeCheckoutCount > 0);
 
   if (!shouldShow) {
     return null;
@@ -135,7 +140,7 @@ export function AreaStatusBanner({
           </li>
         )}
 
-        {activeCheckoutCount > 0 && (
+        {showCheckoutStatus && activeCheckoutCount > 0 && (
           <li>
             <Link href={`/maps/${mapSlug}#utcheckningar`} className="text-ifk-blue hover:underline">
               {activeCheckoutCount === 1

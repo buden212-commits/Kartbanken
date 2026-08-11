@@ -65,8 +65,6 @@ export async function generateDiffLayerSvgs(
     modified: string;
   },
 ): Promise<DiffLayerPaths> {
-  const viewBounds = await resolveViewBounds(bufferB);
-
   const addedIndices = new Set(
     changes.filter((c) => c.changeType === "added").map((c) => c.objectIndex),
   );
@@ -77,12 +75,36 @@ export async function generateDiffLayerSvgs(
     changes.filter((c) => c.changeType === "modified").map((c) => c.objectIndex),
   );
 
+  return generateDiffLayerSvgsFromIndices(
+    bufferA,
+    bufferB,
+    { added: addedIndices, removed: removedIndices, modified: modifiedIndices },
+    storagePaths,
+  );
+}
+
+export async function generateDiffLayerSvgsFromIndices(
+  bufferA: Buffer,
+  bufferB: Buffer,
+  indices: {
+    added: Set<number>;
+    removed: Set<number>;
+    modified: Set<number>;
+  },
+  storagePaths: {
+    added: string;
+    removed: string;
+    modified: string;
+  },
+): Promise<DiffLayerPaths> {
+  const viewBounds = await resolveViewBounds(bufferB);
+
   const paths = storagePaths;
 
   const [addedSvg, removedSvg, modifiedSvg] = await Promise.all([
-    generateOcadSvgFiltered(bufferB, addedIndices, viewBounds),
-    generateOcadSvgFiltered(bufferA, removedIndices, viewBounds),
-    generateOcadSvgFiltered(bufferB, modifiedIndices, viewBounds),
+    generateOcadSvgFiltered(bufferB, indices.added, viewBounds),
+    generateOcadSvgFiltered(bufferA, indices.removed, viewBounds),
+    generateOcadSvgFiltered(bufferB, indices.modified, viewBounds),
   ]);
 
   await Promise.all([

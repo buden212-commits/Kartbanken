@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { assertVersionViewAccess, getMapVersionOr404 } from "@/lib/maps/version-lookup";
-import { getHeadVersionId } from "@/lib/checkout/repository";
+import { getLatestPublishedVersion } from "@/lib/maps/version-context";
 import { FullscreenMapViewer } from "@/components/fullscreen-map-viewer";
 import { prisma } from "@/lib/prisma";
 
@@ -38,7 +38,7 @@ export default async function FullscreenMapPage({ params }: PageProps) {
   });
   if (!version) notFound();
 
-  const headVersionId = await getHeadVersionId(lookup.map.id);
+  const publishedVersion = await getLatestPublishedVersion(lookup.map.id);
 
   return (
     <FullscreenMapViewer
@@ -46,7 +46,7 @@ export default async function FullscreenMapPage({ params }: PageProps) {
       mapTitle={lookup.map.title}
       versionId={version.id}
       versionNumber={version.versionNumber}
-      headVersionId={headVersionId ?? undefined}
+      publishedVersionId={publishedVersion?.id}
     />
   );
 }

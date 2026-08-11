@@ -10,6 +10,7 @@ import {
   SuggestionStatus,
   formatSuggestionStatusAttribution,
 } from "@/lib/suggestion/types";
+import { SuggestionLocationConfidenceBadge } from "@/components/suggestion/suggestion-location-confidence-field";
 import { formatDateOnly } from "@/lib/format";
 
 type Props = {
@@ -17,6 +18,7 @@ type Props = {
   suggestions: SuggestionSummary[];
   canReview: boolean;
   isAdmin: boolean;
+  publishedVersionId?: string | null;
   /** Zoom the area overview map to this suggestion (områdessidan). */
   onZoomToSuggestion?: (id: string) => void;
   highlightedSuggestionId?: string | null;
@@ -41,6 +43,7 @@ export function SuggestionListPanel({
   suggestions,
   canReview,
   isAdmin,
+  publishedVersionId = null,
   onZoomToSuggestion,
   highlightedSuggestionId = null,
   publishedVersionNumber = null,
@@ -106,6 +109,14 @@ export function SuggestionListPanel({
           {inProgressCount > 0 ? `, ${inProgressCount} pågår` : ""})
         </h2>
         <div className="flex flex-wrap items-center gap-2">
+          {publishedVersionId && (
+            <Link
+              href={`/maps/${mapSlug}/versions/${publishedVersionId}/suggest`}
+              className="rounded-lg bg-orange-600 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-orange-700"
+            >
+              Föreslå ändring
+            </Link>
+          )}
           {exportableCount > 0 && (
             <button
               type="button"
@@ -186,6 +197,9 @@ export function SuggestionListPanel({
                   {s.hasAttachment ? " 📷" : ""}
                 </Link>
                 <p className="mt-1 line-clamp-2 text-sm text-slate-600">{s.comment}</p>
+                <div className="mt-1.5">
+                  <SuggestionLocationConfidenceBadge value={s.locationConfidence} />
+                </div>
                 <p className={`mt-1 text-xs ${statusBadgeClass(s.status)}`}>
                   v{s.versionNumber}
                   {s.appliesToOlderVersion && (
@@ -220,9 +234,9 @@ export function SuggestionListPanel({
         </ul>
       )}
 
-      {!canReview && (
+      {!canReview && !publishedVersionId && (
         <p className="mt-3 text-xs text-slate-500">
-          Öppna en publicerad kartversion och välj «Föreslå ändring» för att lämna ett nytt förslag.
+          Kartförslag kräver en publicerad kartversion.
         </p>
       )}
     </section>

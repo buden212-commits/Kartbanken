@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { exportHelpPageToPdf, waitForHelpExportRoot } from "@/lib/help/export-help-pdf";
+import {
+  exportHelpPageToPdf,
+  helpExportDiagramsReady,
+  waitForHelpExportRoot,
+} from "@/lib/help/export-help-pdf";
 
 type Props = {
   userLabel?: string;
@@ -16,7 +20,8 @@ export function HelpExportPdfButton({ userLabel, subtitle }: Props) {
   useEffect(() => {
     function checkReady() {
       const root = document.getElementById("help-export-body");
-      return !!(root && root.querySelector("section"));
+      if (!root?.querySelector("section")) return false;
+      return helpExportDiagramsReady(root);
     }
 
     if (checkReady()) {
@@ -30,7 +35,12 @@ export function HelpExportPdfButton({ userLabel, subtitle }: Props) {
         observer.disconnect();
       }
     });
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["data-help-diagram-ready"],
+    });
     return () => observer.disconnect();
   }, []);
 
@@ -63,9 +73,9 @@ export function HelpExportPdfButton({ userLabel, subtitle }: Props) {
         onClick={() => void handleExport()}
         disabled={loading || !ready}
         className="btn-primary whitespace-nowrap disabled:opacity-50"
-        title={ready ? undefined : "Väntar på att hjälpinnehållet laddas…"}
+        title={ready ? undefined : "Väntar på att processdiagram laddas…"}
       >
-        {loading ? "Exporterar PDF…" : ready ? "Exportera PDF" : "Laddar…"}
+        {loading ? "Exporterar PDF…" : ready ? "Exportera PDF" : "Laddar diagram…"}
       </button>
       {error && <p className="max-w-xs text-right text-xs text-red-600">{error}</p>}
     </div>

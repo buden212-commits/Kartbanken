@@ -29,6 +29,7 @@ const checkoutWithUserSelect = {
   cancelReason: true,
   integrationComment: true,
   reminderSentAt: true,
+  exportOcadVersion: true,
   createdAt: true,
   updatedAt: true,
   user: {
@@ -107,6 +108,7 @@ export type CreateCheckoutInput = {
   selectionType: CheckoutSelectionType;
   selection: CheckoutSelection;
   exportStoragePath?: string | null;
+  exportOcadVersion?: number;
 };
 
 export async function createCheckout(input: CreateCheckoutInput) {
@@ -119,6 +121,7 @@ export async function createCheckout(input: CreateCheckoutInput) {
       selectionType: input.selectionType,
       selectionJson: serializeSelection(input.selection),
       exportStoragePath: input.exportStoragePath ?? null,
+      exportOcadVersion: input.exportOcadVersion ?? 12,
     },
     select: checkoutWithUserSelect,
   });
@@ -189,19 +192,37 @@ export async function findPendingAdminCheckouts() {
   });
 }
 
-export async function findCheckoutsNeedingReminder(olderThan: Date) {
+export async function findCheckoutsNeedingReminder(
+  initialOlderThan: Date,
+  repeatOlderThan: Date,
+) {
   return prisma.mapCheckout.findMany({
     where: {
       OR: [
         {
           status: CheckoutStatus.ACTIVE,
-          createdAt: { lt: olderThan },
-          reminderSentAt: null,
+          OR: [
+            {
+              reminderSentAt: null,
+              createdAt: { lt: initialOlderThan },
+            },
+            {
+              reminderSentAt: { lt: repeatOlderThan },
+            },
+          ],
         },
         {
           status: CheckoutStatus.PENDING_ADMIN_CONFIRM,
-          userConfirmedAt: { lt: olderThan },
-          reminderSentAt: null,
+          userConfirmedAt: { not: null },
+          OR: [
+            {
+              reminderSentAt: null,
+              userConfirmedAt: { lt: initialOlderThan },
+            },
+            {
+              reminderSentAt: { lt: repeatOlderThan },
+            },
+          ],
         },
       ],
     },
@@ -268,6 +289,7 @@ export function serializeCheckoutResponse(
     cancelReason: checkout.cancelReason,
     integrationComment: checkout.integrationComment,
     reminderSentAt: checkout.reminderSentAt?.toISOString() ?? null,
+    exportOcadVersion: checkout.exportOcadVersion,
     createdAt: checkout.createdAt.toISOString(),
     updatedAt: checkout.updatedAt.toISOString(),
     user: {

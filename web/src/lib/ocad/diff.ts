@@ -1,3 +1,8 @@
+import {
+  euclideanDistance as distance,
+  isGeometryModified,
+  markSwappedGeometryPairs,
+} from "./geometry-compare";
 import type { NormalizedOcadObject } from "./types";
 import type {
   ChangeType,
@@ -8,15 +13,14 @@ import type {
 } from "./diff-types";
 
 const DEFAULT_TOLERANCE_METERS = 2;
-const DEFAULT_MAX_CHANGES = 500;
 
 type IndexedObject = NormalizedOcadObject & { id: number };
 
-function distance(a: [number, number], b: [number, number]): number {
-  const dx = a[0] - b[0];
-  const dy = a[1] - b[1];
-  return Math.sqrt(dx * dx + dy * dy);
-}
+type MatchedPair = {
+  a: IndexedObject;
+  b: IndexedObject;
+  modified: boolean;
+};
 
 function cellKey(x: number, y: number, cellSize: number): string {
   return `${Math.floor(x / cellSize)},${Math.floor(y / cellSize)}`;
@@ -45,11 +49,16 @@ function neighborCellKeys(x: number, y: number, cellSize: number): string[] {
   return keys;
 }
 
+function pairIsModified(a: IndexedObject, b: IndexedObject, tolerance: number): boolean {
+  return isGeometryModified(a, b, tolerance);
+}
+
 function matchByObjectIndexFirst(
   groupA: IndexedObject[],
   groupB: IndexedObject[],
+  tolerance: number,
 ): {
-  matched: Array<{ a: IndexedObject; b: IndexedObject; modified: boolean }>;
+  matched: MatchedPair[];
   remainingA: IndexedObject[];
   remainingB: IndexedObject[];
 } {
@@ -61,7 +70,7 @@ function matchByObjectIndexFirst(
     byIndexA.set(obj.objectIndex, bucket);
   }
 
-  const matched: Array<{ a: IndexedObject; b: IndexedObject; modified: boolean }> = [];
+  const matched: MatchedPair[] = [];
   const usedA = new Set<number>();
   const usedB = new Set<number>();
 
@@ -74,9 +83,11 @@ function matchByObjectIndexFirst(
 
     usedA.add(objA.id);
     usedB.add(objB.id);
-    const modified =
-      objA.geometryHash !== objB.geometryHash || (objA.text ?? "") !== (objB.text ?? "");
-    matched.push({ a: objA, b: objB, modified });
+    matched.push({
+      a: objA,
+      b: objB,
+      modified: pairIsModified(objA, objB, tolerance),
+    });
   }
 
   return {
@@ -92,16 +103,16 @@ function matchSymbolGroup(
   tolerance: number,
   preferObjectIndex: boolean,
 ): {
-  matched: Array<{ a: IndexedObject; b: IndexedObject; modified: boolean }>;
+  matched: MatchedPair[];
   unmatchedA: IndexedObject[];
   unmatchedB: IndexedObject[];
 } {
-  let seedMatched: Array<{ a: IndexedObject; b: IndexedObject; modified: boolean }> = [];
+  let seedMatched: MatchedPair[] = [];
   let workA = groupA;
   let workB = groupB;
 
   if (preferObjectIndex) {
-    const indexed = matchByObjectIndexFirst(groupA, groupB);
+    const indexed = matchByObjectIndexFirst(groupA, groupB, tolerance);
     seedMatched = indexed.matched;
     workA = indexed.remainingA;
     workB = indexed.remainingB;
@@ -109,7 +120,7 @@ function matchSymbolGroup(
 
   const availableA = new Set(workA.map((o) => o.id));
   const byIdA = new Map(workA.map((o) => [o.id, o]));
-  const matched: Array<{ a: IndexedObject; b: IndexedObject; modified: boolean }> = [...seedMatched];
+  const matched: MatchedPair[] = [...seedMatched];
   const unmatchedB: IndexedObject[] = [];
 
   const hashBuckets = new Map<string, number[]>();
@@ -125,7 +136,6 @@ function matchSymbolGroup(
     let bestId: number | null = null;
     let bestDist = tolerance;
 
-    // Exakt geometri-match först (viktigt vid identiska filer)
     const hashCandidates = (hashBuckets.get(objB.geometryHash) ?? []).filter((id) =>
       availableA.has(id),
     );
@@ -139,7 +149,6 @@ function matchSymbolGroup(
       }
     }
 
-    // Spatial fallback
     if (bestId === null) {
       for (const key of neighborCellKeys(objB.centroid[0], objB.centroid[1], tolerance)) {
         for (const candidateId of index.get(key) ?? []) {
@@ -162,10 +171,14 @@ function matchSymbolGroup(
 
     const objA = byIdA.get(bestId)!;
     availableA.delete(bestId);
-    const modified =
-      objA.geometryHash !== objB.geometryHash || (objA.text ?? "") !== (objB.text ?? "");
-    matched.push({ a: objA, b: objB, modified });
+    matched.push({
+      a: objA,
+      b: objB,
+      modified: pairIsModified(objA, objB, tolerance),
+    });
   }
+
+  markSwappedGeometryPairs(matched);
 
   return {
     matched,
@@ -231,8 +244,7 @@ export function compareOcadObjects(
 ): OcadDiffResult {
   const started = Date.now();
   const tolerance = options.toleranceMeters ?? DEFAULT_TOLERANCE_METERS;
-  const maxChanges = options.maxChanges ?? DEFAULT_MAX_CHANGES;
-  const preferObjectIndex = options.matchByObjectIndex ?? false;
+  const preferObjectIndex = options.matchByObjectIndex ?? true;
 
   const indexedA = objectsA.map((o, id) => ({ ...o, id }));
   const indexedB = objectsB.map((o, id) => ({ ...o, id }));
@@ -286,6 +298,11 @@ export function compareOcadObjects(
     modified,
     unchanged,
     bySymbol: buildSymbolSummaries(allChanges),
-    changes: allChanges.slice(0, maxChanges),
+    changes: allChanges,
+    totalChanges: allChanges.length,
+    changesTruncated: false,
+    maxChangesApplied: null,
   };
 }
+
+export { isGeometryModified, markSwappedGeometryPairs, symmetricHausdorff } from "./geometry-compare";

@@ -1,7 +1,11 @@
+import { rasterizeSvgElement } from "./diagram-raster";
+import { wrapPdfText } from "./pdf-text";
+
 const PAGE_W = 210;
 const PAGE_H = 297;
 const MARGIN = 14;
 const CONTENT_W = PAGE_W - MARGIN * 2;
+const DIAGRAM_MAX_H = 110;
 
 export type ExportHelpPdfOptions = {
   root: HTMLElement;
@@ -36,7 +40,9 @@ function addWrappedText(
   if (opts.color) pdf.setTextColor(...opts.color);
   else pdf.setTextColor(0, 0, 0);
 
-  const lines = pdf.splitTextToSize(text, CONTENT_W) as string[];
+  const lines = wrapPdfText(pdf, text, CONTENT_W);
+  if (lines.length === 0) return y;
+
   const lineHeight = fontSize * 0.45;
   y = ensureSpace(pdf, y, lines.length * lineHeight + 2);
   pdf.text(lines, MARGIN, y);
@@ -53,105 +59,36 @@ function fitImage(
   return { w: imgW * scale, h: imgH * scale };
 }
 
-const SVG_RASTER_TIMEOUT_MS = 5000;
-
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(null), timeoutMs);
-    promise
-      .then((value) => {
-        clearTimeout(timer);
-        resolve(value);
-      })
-      .catch(() => {
-        clearTimeout(timer);
-        resolve(null);
-      });
-  });
-}
-
-async function svgElementToPngInner(
-  svg: SVGElement,
-): Promise<{ dataUrl: string; width: number; height: number } | null> {
-  const clone = svg.cloneNode(true) as SVGElement;
-  if (!clone.getAttribute("xmlns")) {
-    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-  }
-
-  const viewBox = clone.getAttribute("viewBox")?.split(/\s+/).map(Number);
-  const rect = svg.getBoundingClientRect();
-  const width =
-    viewBox && viewBox.length >= 4
-      ? viewBox[2]!
-      : rect.width || Number(clone.getAttribute("width")) || 400;
-  const height =
-    viewBox && viewBox.length >= 4
-      ? viewBox[3]!
-      : rect.height || Number(clone.getAttribute("height")) || 300;
-
-  clone.setAttribute("width", String(width));
-  clone.setAttribute("height", String(height));
-
-  const svgString = new XMLSerializer().serializeToString(clone);
-  const blob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-
-  return await new Promise((resolve) => {
-    const img = new Image();
-    img.onload = () => {
-      try {
-        const scale = 2;
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.max(1, Math.round(width * scale));
-        canvas.height = Math.max(1, Math.round(height * scale));
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          resolve(null);
-          return;
-        }
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve({
-          dataUrl: canvas.toDataURL("image/png"),
-          width: canvas.width,
-          height: canvas.height,
-        });
-      } catch {
-        resolve(null);
-      } finally {
-        URL.revokeObjectURL(url);
-      }
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      resolve(null);
-    };
-    img.src = url;
-  });
-}
-
-async function svgElementToPng(
-  svg: SVGElement,
-): Promise<{ dataUrl: string; width: number; height: number } | null> {
-  try {
-    return await withTimeout(svgElementToPngInner(svg), SVG_RASTER_TIMEOUT_MS);
-  } catch {
+function readPreRasterizedFigure(
+  figure: HTMLElement,
+): { dataUrl: string; width: number; height: number } | null {
+  const dataUrl = figure.dataset.helpDiagramPng;
+  const width = Number(figure.dataset.helpDiagramWidth);
+  const height = Number(figure.dataset.helpDiagramHeight);
+  if (!dataUrl || !Number.isFinite(width) || !Number.isFinite(height)) {
     return null;
   }
+  return { dataUrl, width, height };
 }
 
-async function waitForDiagrams(root: HTMLElement, timeoutMs = 15000): Promise<void> {
+async function waitForDiagrams(root: HTMLElement, timeoutMs = 30000): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    const figures = [...root.querySelectorAll("figure")];
+    const figures = [...root.querySelectorAll("figure")].filter((figure) =>
+      figure.querySelector("figcaption"),
+    );
+
+    if (figures.length === 0) return;
+
     const pending = figures.some((figure) => {
+      if (figure.dataset.helpDiagramReady === "true") return false;
+      if (figure.dataset.helpDiagramReady === "error") return false;
       if (figure.querySelector("[class*='text-red-600']")) return false;
-      if (figure.querySelector("svg")) return false;
-      return !!figure.querySelector("figcaption");
+      return true;
     });
+
     if (!pending) return;
-    await new Promise((resolve) => setTimeout(resolve, 250));
+    await new Promise((resolve) => setTimeout(resolve, 200));
   }
 }
 
@@ -170,6 +107,19 @@ export async function waitForHelpExportRoot(timeoutMs = 10000): Promise<HTMLElem
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error("Kunde inte hitta hjälpinnehållet");
+}
+
+export function helpExportDiagramsReady(root: HTMLElement): boolean {
+  const figures = [...root.querySelectorAll("figure")].filter((figure) =>
+    figure.querySelector("figcaption"),
+  );
+  if (figures.length === 0) return true;
+  return figures.every(
+    (figure) =>
+      figure.dataset.helpDiagramReady === "true" ||
+      figure.dataset.helpDiagramReady === "error" ||
+      !!figure.querySelector("[class*='text-red-600']"),
+  );
 }
 
 async function renderNode(
@@ -255,29 +205,39 @@ async function renderNode(
   }
 
   if (tag === "figure") {
-    const title = elementText(node.querySelector("figcaption"));
-    const caption = elementText(node.querySelector("p.text-xs"));
-    const svg = node.querySelector("svg");
+    const figure = node;
+    const title = elementText(figure.querySelector("figcaption"));
+    const caption = elementText(figure.querySelector("p.text-xs"));
+    const svg = figure.querySelector("svg");
 
     if (title) {
       y = ensureSpace(pdf, y, 8);
       y = addWrappedText(pdf, title, y, { fontSize: 10, bold: true, color: [60, 60, 60] });
     }
 
-    if (svg instanceof SVGElement) {
-      const png = await svgElementToPng(svg);
-      if (png) {
-        const maxW = CONTENT_W;
-        const maxH = 90;
-        const { w, h } = fitImage(png.width, png.height, maxW, maxH);
-        y = ensureSpace(pdf, y, h + 4);
-        try {
-          pdf.addImage(png.dataUrl, "PNG", MARGIN, y, w, h);
-          y += h + 3;
-        } catch {
-          // Skip diagram image if raster data is invalid.
-        }
+    let png = readPreRasterizedFigure(figure);
+    if (!png && svg instanceof SVGElement) {
+      png = await rasterizeSvgElement(svg);
+    }
+
+    if (png) {
+      const maxW = CONTENT_W;
+      const { w, h } = fitImage(png.width, png.height, maxW, DIAGRAM_MAX_H);
+      y = ensureSpace(pdf, y, h + 4);
+      try {
+        pdf.addImage(png.dataUrl, "PNG", MARGIN, y, w, h);
+        y += h + 3;
+      } catch {
+        y = addWrappedText(pdf, "(Diagram kunde inte bäddas in)", y, {
+          fontSize: 8,
+          color: [140, 140, 140],
+        });
       }
+    } else if (svg instanceof SVGElement) {
+      y = addWrappedText(pdf, "(Diagram kunde inte renderas i PDF)", y, {
+        fontSize: 8,
+        color: [140, 140, 140],
+      });
     }
 
     if (caption) {

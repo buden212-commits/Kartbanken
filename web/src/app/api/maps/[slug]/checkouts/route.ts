@@ -5,6 +5,7 @@ import {
   createCheckout,
   findActiveCheckoutsForMap,
   findActiveOverlapCandidates,
+  getCheckoutById,
   getHeadVersionId,
   serializeCheckoutResponse,
 } from "@/lib/checkout/repository";
@@ -15,6 +16,7 @@ import {
   runAfterResponse,
 } from "@/lib/checkout/create-checkout";
 import { CheckoutSelectionType } from "@/lib/checkout/types";
+import { parseOcadExportVersion } from "@/lib/ocad/ocad-export-shared";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -88,6 +90,11 @@ export async function POST(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Ogiltigt urval (selection)" }, { status: 400 });
   }
 
+  const exportOcadVersion = parseOcadExportVersion(record.ocadVersion);
+  if (!exportOcadVersion) {
+    return NextResponse.json({ error: "Ogiltigt OCAD-format för utcheckning" }, { status: 400 });
+  }
+
   const headVersionId = await getHeadVersionId(map.id);
   if (!headVersionId) {
     return NextResponse.json(
@@ -114,10 +121,17 @@ export async function POST(request: Request, { params }: RouteParams) {
     userId: session.user.id,
     selectionType,
     selection: parsedSelection,
+    exportOcadVersion,
   });
 
   try {
-    await generateCheckoutExport(map.id, checkout.id, headVersionId, parsedSelection);
+    await generateCheckoutExport(
+      map.id,
+      checkout.id,
+      headVersionId,
+      parsedSelection,
+      exportOcadVersion,
+    );
   } catch (err) {
     await prisma.mapCheckout.delete({ where: { id: checkout.id } });
     console.error("Checkout export failed:", err);
@@ -127,10 +141,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     );
   }
 
-  const refreshed = await prisma.mapCheckout.findUnique({
-    where: { id: checkout.id },
-    include: { user: { select: { id: true, name: true, email: true } } },
-  });
+  const refreshed = await getCheckoutById(map.id, checkout.id);
 
   runAfterResponse(async () => {
     if (refreshed) {
@@ -139,5 +150,5 @@ export async function POST(request: Request, { params }: RouteParams) {
   });
 
   const responseCheckout = refreshed ?? checkout;
-  return NextResponse.json(serializeCheckoutResponse(responseCheckout), { status: 201 });
+  return NextResponse.json(serializeCheckoutResponse(responseCheckout!), { status: 201 });
 }

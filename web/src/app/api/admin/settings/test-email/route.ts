@@ -1,10 +1,10 @@
 import { requireAdmin } from "@/lib/auth/api";
 import {
   formatSmtpErrorMessage,
-  getAdminNotificationEmail,
   isEmailConfigured,
   sendTestEmail,
 } from "@/lib/email";
+import { resolveAdminNotificationEmails } from "@/lib/settings/app-settings";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -20,10 +20,10 @@ export async function POST(request: Request) {
     );
   }
 
-  const to = await getAdminNotificationEmail();
-  if (!to) {
+  const recipients = await resolveAdminNotificationEmails();
+  if (recipients.length === 0) {
     return NextResponse.json(
-      { error: "Admin-notis e-post saknas. Ange mottagare i inställningarna eller .env." },
+      { error: "Admin-notis e-post saknas. Ange minst en mottagare i inställningarna eller .env." },
       { status: 400 },
     );
   }
@@ -37,11 +37,15 @@ export async function POST(request: Request) {
   }
 
   try {
-    await sendTestEmail(to, { withAttachment, triggeredByUserId: session.user.id });
+    for (const to of recipients) {
+      await sendTestEmail(to, { withAttachment, triggeredByUserId: session.user.id });
+    }
+
+    const recipientList = recipients.join(", ");
     return NextResponse.json({
       message: withAttachment
-        ? `Testmail med bifogad fil skickades till ${to}.`
-        : `Testmail skickades till ${to}.`,
+        ? `Testmail med bifogad fil skickades till ${recipientList}.`
+        : `Testmail skickades till ${recipientList}.`,
     });
   } catch (error) {
     return NextResponse.json({ error: formatSmtpErrorMessage(error) }, { status: 500 });

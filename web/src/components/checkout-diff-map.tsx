@@ -4,7 +4,8 @@ import { useMemo, useState } from "react";
 import type { OcadObjectChange } from "@/lib/ocad/diff-types";
 import type { ChangeType } from "@/lib/ocad/diff-types";
 import { DiffMapPanel } from "@/components/diff-map-panel";
-import { formatChangeCentroid, getChangeCentroid } from "@/lib/ocad/change-utils";
+import { DiffChangesList } from "@/components/diff-changes-list";
+import { getChangeCentroid } from "@/lib/ocad/change-utils";
 
 function getChangeBbox(change: OcadObjectChange): [number, number, number, number] {
   const bbox = change.bbox;
@@ -22,18 +23,6 @@ function getChangeBbox(change: OcadObjectChange): [number, number, number, numbe
   }
   return [0, 0, 0, 0];
 }
-
-const CHANGE_LABELS: Record<ChangeType, string> = {
-  added: "Tillagd",
-  removed: "Borttagen",
-  modified: "Ändrad",
-};
-
-const CHANGE_COLORS: Record<ChangeType, string> = {
-  added: "text-emerald-600",
-  removed: "text-red-600",
-  modified: "text-amber-600",
-};
 
 const CHANGE_TAB: Record<ChangeType, MapTab> = {
   added: "added",
@@ -264,46 +253,12 @@ export function CheckoutDiffMap({
               />
             </div>
 
-            <p className="mt-3 text-sm text-slate-500">
-              Visar {filteredChanges.length.toLocaleString("sv-SE")} av{" "}
-              {changes.length.toLocaleString("sv-SE")} ändringar. Klicka på en rad för att zooma
-              till objektet.
-            </p>
-
-            <ul className="mt-4 max-h-96 space-y-1 overflow-y-auto text-sm">
-              {filteredChanges.length === 0 ? (
-                <li className="py-6 text-center text-slate-500">Inga ändringar matchar filtret.</li>
-              ) : (
-                filteredChanges.map(({ change, index }) => (
-                  <li key={`${change.objectIndex}-${change.symbolNumber}-${index}`}>
-                    <button
-                      type="button"
-                      onClick={() => handleSelectChange(index)}
-                      className={`flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-3 py-2 text-left transition ${
-                        selectedIndex === index
-                          ? "bg-ifk-blue-pale ring-1 ring-ifk-blue"
-                          : "hover:bg-slate-50"
-                      }`}
-                    >
-                      <span className={`font-medium ${CHANGE_COLORS[change.changeType]}`}>
-                        {CHANGE_LABELS[change.changeType]}
-                      </span>
-                      <span className="font-mono text-slate-500">{change.symbolNumber}</span>
-                      <span>{change.symbolName}</span>
-                      {change.type === "point" && (
-                        <span className="text-xs text-slate-400">punkt</span>
-                      )}
-                      <span className="font-mono text-xs text-slate-500">
-                        {formatChangeCentroid(change)}
-                      </span>
-                      {change.text && (
-                        <span className="text-slate-600">&quot;{change.text}&quot;</span>
-                      )}
-                    </button>
-                  </li>
-                ))
-              )}
-            </ul>
+            <DiffChangesList
+              items={filteredChanges}
+              selectedIndex={selectedIndex}
+              onSelect={handleSelectChange}
+              listLength={changes.length}
+            />
           </div>
         </>
       )}

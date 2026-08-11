@@ -6,7 +6,7 @@ import { AdminUserNotificationToggle } from "@/components/admin-user-notificatio
 import { HelpLinkIcon, HelpSectionHeading } from "@/components/help-link-icon";
 import { logAction } from "@/lib/audit";
 import { hashPassword } from "@/lib/auth/password";
-import { canAdmin, roleLabel } from "@/lib/auth/permissions";
+import { canAdmin, canReceiveOcdAttachment, roleLabel } from "@/lib/auth/permissions";
 import { queueNotifyUserApproved } from "@/lib/email";
 import { formatDate } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
@@ -276,7 +276,9 @@ async function updateUser(formData: FormData): Promise<{ ok: true } | { ok: fals
   const receiveNotifications =
     canSubscribeToNotifications(nextRole) && formData.get("receiveNotifications") === "on";
   const receiveOcdAttachment =
-    receiveNotifications && formData.get("receiveOcdAttachment") === "on";
+    receiveNotifications &&
+    canReceiveOcdAttachment(nextRole) &&
+    formData.get("receiveOcdAttachment") === "on";
   const data: {
     name: string | null;
     email: string;
@@ -568,6 +570,7 @@ export default async function AdminUsersPage() {
                     userId={user.id}
                     initialNotifications={user.receiveNotifications}
                     initialOcdAttachment={user.receiveOcdAttachment}
+                    showOcdAttachment={canReceiveOcdAttachment(user.role as RoleType)}
                     updateAction={updateUserNotificationPreferences}
                   />
                 </div>
@@ -623,6 +626,7 @@ export default async function AdminUsersPage() {
                         userId={user.id}
                         initialNotifications={user.receiveNotifications}
                         initialOcdAttachment={user.receiveOcdAttachment}
+                        showOcdAttachment={canReceiveOcdAttachment(user.role as RoleType)}
                         updateAction={updateUserNotificationPreferences}
                       />
                     ) : (

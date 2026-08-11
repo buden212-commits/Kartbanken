@@ -26,13 +26,19 @@ import {
   type SuggestionDrawTool,
 } from "@/components/suggestion/suggestion-draw-toolbar";
 import {
+  SuggestionLocationConfidenceBadge,
+  SuggestionLocationConfidenceField,
+} from "@/components/suggestion/suggestion-location-confidence-field";
+import {
   SUGGESTION_CATEGORY_LABELS,
+  SUGGESTION_LOCATION_CONFIDENCE_LABELS,
   SUGGESTION_STATUS_LABELS,
   SuggestionStatus,
   formatSuggestionStatusAttribution,
   type SuggestionCategoryValue,
   type SuggestionDetail,
   type SuggestionGeometry,
+  type SuggestionLocationConfidenceValue,
   type SuggestionStatusValue,
 } from "@/lib/suggestion/types";
 import { formatDate, formatDateOnly } from "@/lib/format";
@@ -103,6 +109,8 @@ export function SuggestionDetailClient({
 
   const [editMode, setEditMode] = useState(false);
   const [editCategory, setEditCategory] = useState<SuggestionCategoryValue>(initial.category);
+  const [editLocationConfidence, setEditLocationConfidence] =
+    useState<SuggestionLocationConfidenceValue>(initial.locationConfidence);
   const [editTitle, setEditTitle] = useState(initial.title ?? "");
   const [editComment, setEditComment] = useState(initial.comment);
   const [editGeometry, setEditGeometry] = useState<SuggestionGeometry | null>(
@@ -322,6 +330,7 @@ export function SuggestionDetailClient({
 
   function startEdit() {
     setEditCategory(suggestion.category);
+    setEditLocationConfidence(suggestion.locationConfidence);
     setEditTitle(suggestion.title ?? "");
     setEditComment(suggestion.comment);
     setEditGeometry(suggestion.objects[0]?.geometry ?? null);
@@ -341,6 +350,7 @@ export function SuggestionDetailClient({
   async function saveEdit() {
     const body: Record<string, unknown> = {
       category: editCategory,
+      locationConfidence: editLocationConfidence,
       title: editTitle.trim() || null,
       comment: editComment,
     };
@@ -370,6 +380,9 @@ export function SuggestionDetailClient({
             v{suggestion.versionNumber} · {SUGGESTION_CATEGORY_LABELS[suggestion.category]} ·{" "}
             {formatDate(suggestion.createdAt)}
           </p>
+          <div className="mt-2">
+            <SuggestionLocationConfidenceBadge value={suggestion.locationConfidence} />
+          </div>
           {suggestion.appliesToOlderVersion && (
             <p className="mt-1 text-sm font-medium text-violet-700">
               Gäller version {suggestion.versionNumber}
@@ -418,6 +431,12 @@ export function SuggestionDetailClient({
               ))}
             </select>
           </div>
+          <SuggestionLocationConfidenceField
+            name="Hur säker är du på platsen på kartan?"
+            value={editLocationConfidence}
+            onChange={setEditLocationConfidence}
+            idPrefix="edit-location-confidence"
+          />
           <div>
             <label htmlFor="editTitle" className="form-label">
               Rubrik (valfritt)
@@ -475,6 +494,10 @@ export function SuggestionDetailClient({
           <p>
             <span className="font-medium text-slate-900">Skapad av:</span>{" "}
             {suggestion.createdBy.name?.trim() || suggestion.createdBy.email}
+          </p>
+          <p>
+            <span className="font-medium text-slate-900">Platsnoggrannhet:</span>{" "}
+            {SUGGESTION_LOCATION_CONFIDENCE_LABELS[suggestion.locationConfidence]}
           </p>
           <p className="whitespace-pre-wrap">{suggestion.comment}</p>
           {suggestion.reviewComment && (

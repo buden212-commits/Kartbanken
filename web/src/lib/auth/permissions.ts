@@ -17,7 +17,12 @@ export function canCheckout(role: RoleType): boolean {
 }
 
 export function canViewCheckouts(role: RoleType): boolean {
-  return canDownload(role);
+  return role === Role.EDITOR || role === Role.ADMIN;
+}
+
+/** Läsare får e-postnotiser men inte .ocd-bilaga. */
+export function canReceiveOcdAttachment(role: RoleType): boolean {
+  return role === Role.EDITOR || role === Role.ADMIN;
 }
 
 export function canCancelCheckout(role: RoleType): boolean {
@@ -109,7 +114,7 @@ export function roleDescription(role: RoleType): string {
     case Role.EDITOR:
       return "Allt läsare kan, plus ladda upp versioner, publicera/avpublicera, se opublicerade versioner och checka ut/in områden för OCAD-redigering.";
     case Role.READER:
-      return "Ladda ner, visa och jämföra publicerade versioner. Skapa och redigera egna banor (privata som standard).";
+      return "Visa publicerade kartversioner, skapa kartförslag och egna banor. Ser bara områden med publicerad karta — inga utcheckningar.";
     default:
       return "";
   }

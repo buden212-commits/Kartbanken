@@ -8,7 +8,7 @@ type Props = {
   mapTitle: string;
   versionId: string;
   versionNumber: number;
-  headVersionId?: string;
+  publishedVersionId?: string;
 };
 
 export function FullscreenMapViewer({
@@ -16,9 +16,9 @@ export function FullscreenMapViewer({
   mapTitle,
   versionId,
   versionNumber,
-  headVersionId,
+  publishedVersionId,
 }: Props) {
-  const isHead = headVersionId ? versionId === headVersionId : true;
+  const showCourseLink = publishedVersionId != null && versionId === publishedVersionId;
 
   return (
     <div className="flex h-dvh flex-col bg-white">
@@ -28,7 +28,7 @@ export function FullscreenMapViewer({
           <p className="text-xs text-slate-500">v{versionNumber}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {isHead && (
+          {showCourseLink && (
             <Link
               href={`/maps/${mapSlug}/bana`}
               className="rounded-md border border-ifk-blue/40 bg-ifk-blue-pale px-2.5 py-1.5 text-xs font-medium text-ifk-blue transition hover:border-ifk-blue"

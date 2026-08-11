@@ -20,6 +20,8 @@ import type { OcadObjectChange } from "@/lib/ocad/diff-types";
 
 import { CheckoutDiffMap } from "@/components/checkout-diff-map";
 
+import { ocadExportVersionLabel, parseOcadExportVersion } from "@/lib/ocad/ocad-export-shared";
+import type { OcadExportVersion } from "@/lib/ocad/ocad-export-shared";
 import { formatDate } from "@/lib/format";
 
 import { uploadCheckoutCheckin } from "@/lib/upload-client";
@@ -95,6 +97,8 @@ type CheckoutData = {
   user: { id: string; name: string | null; email: string };
 
   createdAt: string;
+
+  exportOcadVersion?: number;
 
   userConfirmedAt?: string | null;
 
@@ -784,6 +788,22 @@ export function CheckoutDetailClient({
 
           </div>
 
+          <div>
+
+            <dt className="text-slate-500">OCAD-format</dt>
+
+            <dd className="text-slate-900">
+
+              {ocadExportVersionLabel(
+
+                parseOcadExportVersion(checkout.exportOcadVersion) ?? (12 as OcadExportVersion),
+
+              )}
+
+            </dd>
+
+          </div>
+
         </dl>
 
 
@@ -798,7 +818,15 @@ export function CheckoutDetailClient({
 
           >
 
-            Ladda ner utcheckning .ocd
+            Ladda ner utcheckning .ocd (
+
+            {ocadExportVersionLabel(
+
+              parseOcadExportVersion(checkout.exportOcadVersion) ?? (12 as OcadExportVersion),
+
+            )}
+
+            )
 
           </a>
 

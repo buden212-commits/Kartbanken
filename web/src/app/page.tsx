@@ -6,7 +6,7 @@ import { FeatureTipCard } from "@/components/feature-tip-card";
 import { canAdmin } from "@/lib/auth/permissions";
 import { formatBytes, formatDate } from "@/lib/format";
 import { pickFeatureTip } from "@/lib/help/feature-tips";
-import { versionVisibilityFilter } from "@/lib/maps/version-query";
+import { versionVisibilityFilter, mapListWhereForRole } from "@/lib/maps/version-query";
 import { prisma } from "@/lib/prisma";
 
 export default async function HomePage() {
@@ -15,7 +15,7 @@ export default async function HomePage() {
   const visibilityFilter = versionVisibilityFilter(session?.user.role);
 
   const maps = await prisma.mapFile.findMany({
-    where: isAdmin ? undefined : { archivedAt: null },
+    where: mapListWhereForRole(session?.user.role, !!isAdmin),
     orderBy: { title: "asc" },
     select: {
       id: true,

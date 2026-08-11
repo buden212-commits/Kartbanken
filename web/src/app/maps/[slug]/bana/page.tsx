@@ -1,8 +1,9 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { canCreateCourse, canEditCourse, canViewCourse } from "@/lib/auth/permissions";
-import { getHeadVersionId } from "@/lib/checkout/repository";
 import { CourseEditorClient } from "@/components/course/course-editor-client";
+import { getLatestPublishedVersion } from "@/lib/maps/version-context";
 import { prisma } from "@/lib/prisma";
 
 export const maxDuration = 300;
@@ -31,14 +32,24 @@ export default async function CourseEditorPage({ params, searchParams }: PagePro
   });
   if (!map) notFound();
 
-  const headVersionId = await getHeadVersionId(map.id);
-  if (!headVersionId) notFound();
-
-  const headVersion = await prisma.mapVersion.findUnique({
-    where: { id: headVersionId },
-    select: { versionNumber: true },
-  });
-  if (!headVersion) notFound();
+  const publishedVersion = await getLatestPublishedVersion(map.id);
+  if (!publishedVersion) {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-16">
+        <h1 className="text-lg font-medium text-slate-900">Lägg bana</h1>
+        <p className="mt-3 text-sm text-slate-600">
+          Banläggning kräver en publicerad kartversion. Det finns ingen publicerad version av{" "}
+          <strong>{map.title}</strong> ännu.
+        </p>
+        <Link
+          href={`/maps/${slug}`}
+          className="mt-6 inline-block text-sm font-medium text-ifk-blue hover:underline"
+        >
+          Tillbaka till området
+        </Link>
+      </div>
+    );
+  }
 
   let canEdit = true;
   if (courseId) {
@@ -47,9 +58,7 @@ export default async function CourseEditorPage({ params, searchParams }: PagePro
       select: { createdById: true, isPublic: true, mapFileId: true },
     });
     if (!course || course.mapFileId !== map.id) notFound();
-    if (
-      !canViewCourse(session.user.role, course, session.user.id)
-    ) {
+    if (!canViewCourse(session.user.role, course, session.user.id)) {
       notFound();
     }
     canEdit = canEditCourse(session.user.role, course.createdById, session.user.id);
@@ -59,8 +68,8 @@ export default async function CourseEditorPage({ params, searchParams }: PagePro
     <CourseEditorClient
       mapSlug={slug}
       mapTitle={map.title}
-      headVersionId={headVersionId}
-      headVersionNumber={headVersion.versionNumber}
+      headVersionId={publishedVersion.id}
+      headVersionNumber={publishedVersion.versionNumber}
       initialCourseId={courseId ?? null}
       canEdit={canEdit}
       sessionUserId={session.user.id}

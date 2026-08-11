@@ -1,4 +1,5 @@
 import { compareOcadObjects } from "./diff";
+import { changeIndicesByKind, limitStoredChanges } from "./diff-storage";
 import type { OcadObjectChange } from "./diff-types";
 import { buildTempDiffLayerPath, generateDiffLayerSvgs } from "./diff-layers";
 import { parseOcadBuffer } from "./read";
@@ -11,7 +12,6 @@ import {
 import { randomUUID } from "crypto";
 
 const TOLERANCE = Number(process.env.DIFF_SPATIAL_TOLERANCE_M ?? 2);
-const MAX_STORED_CHANGES = 5000;
 
 /** Skip re-start om ett bakgrundsanrop redan kör (serverless kan ta flera minuter). */
 const PROCESSING_LEASE_MS = 2 * 60 * 1000;
@@ -33,6 +33,10 @@ export type TempCompareSummary = {
   unchanged: number;
   durationMs: number;
   toleranceMeters: number;
+  totalChanges: number;
+  changesTruncated: boolean;
+  maxChangesApplied: number | null;
+  layerObjectIndices: ReturnType<typeof changeIndicesByKind>;
   bySymbol: import("./diff-types").SymbolDiffSummary[];
   versionA: { fileName: string; objectCount: number };
   versionB: { fileName: string; objectCount: number };
@@ -208,8 +212,10 @@ export async function processTempCompareJob(jobId: string): Promise<void> {
         fileNameA: activeJob.fileNameA,
         fileNameB: activeJob.fileNameB,
       },
-      { toleranceMeters: TOLERANCE, maxChanges: MAX_STORED_CHANGES },
+      { toleranceMeters: TOLERANCE },
     );
+
+    const stored = limitStoredChanges(diff.changes);
 
     await generateAndStorePreviewSvg(bufferB, previewPath(jobId));
 
@@ -241,12 +247,16 @@ export async function processTempCompareJob(jobId: string): Promise<void> {
         unchanged: diff.unchanged,
         durationMs: diff.durationMs,
         toleranceMeters: diff.toleranceMeters,
+        totalChanges: stored.totalChanges,
+        changesTruncated: stored.changesTruncated,
+        maxChangesApplied: stored.maxChangesApplied,
+        layerObjectIndices: changeIndicesByKind(diff.changes),
         bySymbol: diff.bySymbol,
         versionA: diff.versionA,
         versionB: diff.versionB,
         layerPaths,
       },
-      changes: diff.changes,
+      changes: stored.changes,
     };
     await writeTempCompareJob(updated);
   } catch (err) {

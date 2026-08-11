@@ -27,7 +27,6 @@ import {
   liveMapRenderOptions,
   normalizeSuggestionBbox,
   renderSuggestionGeometrySvg,
-  suggestionGeometryTypeLabel,
 } from "@/lib/suggestion/geometry";
 import {
   evaluateGpsSample,
@@ -39,15 +38,26 @@ import {
   type GpsTrackSample,
 } from "@/lib/suggestion/gps-track";
 import {
+  SuggestionLocationConfidenceField,
+} from "@/components/suggestion/suggestion-location-confidence-field";
+import { SuggestionCommentField } from "@/components/suggestion/suggestion-comment-field";
+import {
+  buildSuggestionCommentTemplate,
+  suggestionMarkingGeometryLabel,
+} from "@/lib/suggestion/suggestion-comment-template";
+import type { OcadMapLayer } from "@/lib/ocad/layers";
+import {
+  DEFAULT_SUGGESTION_LOCATION_CONFIDENCE,
   MAX_SUGGESTION_GEOMETRIES,
   SUGGESTION_CATEGORY_LABELS,
   type SuggestionCategoryValue,
   type SuggestionGeometry,
+  type SuggestionLocationConfidenceValue,
 } from "@/lib/suggestion/types";
 import { uploadSuggestionAttachment } from "@/lib/upload-client";
 import {
   SuggestionMapActionToolbar,
-  SuggestionMapDrawToolbar,
+  SuggestionMapRightToolbars,
   type SuggestionDrawTool,
 } from "@/components/suggestion/suggestion-draw-toolbar";
 
@@ -64,7 +74,6 @@ type CreateMapPanelProps = {
   mapSlug: string;
   versionId: string;
   mapMode: "draw" | "navigate";
-  onMapModeChange: (mode: "draw" | "navigate") => void;
   drawPointerHandlers: MapDrawPointerHandlers;
   onDrawInterrupt: () => void;
   markings: SuggestionGeometry[];
@@ -76,10 +85,8 @@ type CreateMapPanelProps = {
   rootTransformRef: MutableRefObject<SvgRootTransform>;
   onOcadCrsReady: (crs: OcadCrsInfo | null) => void;
   onOcadMapScale: (scale: number) => void;
+  onOcadLayersReady: (layers: OcadMapLayer[]) => void;
   gpsTrackingStatus: string | null;
-  gpsTracking: boolean;
-  canUseGpsTracking: boolean;
-  onGpsTrackingToggle: () => void;
   gpsTrackFollow: {
     active: boolean;
     mapCoordRef: MutableRefObject<[number, number] | null>;
@@ -88,19 +95,10 @@ type CreateMapPanelProps = {
   mapToolbarOverlay: React.ReactNode;
 };
 
-const MAP_MODE_BTN =
-  "min-h-10 flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition sm:flex-none sm:min-h-9 sm:px-4";
-const MAP_MODE_ACTIVE = "border-ifk-blue bg-ifk-blue text-white";
-const MAP_MODE_INACTIVE =
-  "border-slate-300 bg-white text-slate-700 hover:border-ifk-blue hover:text-ifk-blue";
-const GPS_TRACK_BTN =
-  "min-h-10 w-full rounded-lg border px-3 py-2 text-sm font-medium transition sm:min-h-9 sm:w-auto sm:px-4";
-
 const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
   mapSlug,
   versionId,
   mapMode,
-  onMapModeChange,
   drawPointerHandlers,
   onDrawInterrupt,
   markings,
@@ -112,10 +110,8 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
   rootTransformRef,
   onOcadCrsReady,
   onOcadMapScale,
+  onOcadLayersReady,
   gpsTrackingStatus,
-  gpsTracking,
-  canUseGpsTracking,
-  onGpsTrackingToggle,
   gpsTrackFollow,
   mapToolbarOverlay,
 }: CreateMapPanelProps) {
@@ -160,6 +156,7 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
       renderSvgOverlay={renderSvgOverlay}
       onOcadCrsReady={onOcadCrsReady}
       onOcadMapScale={onOcadMapScale}
+      onOcadLayersReady={onOcadLayersReady}
       gpsTrackFollow={gpsTrackFollow}
       mapToolbarOverlay={mapToolbarOverlay}
       secondaryHeaderContent={
@@ -169,45 +166,6 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
               {gpsTrackingStatus}
             </p>
           )}
-          <button
-            type="button"
-            disabled={!canUseGpsTracking && !gpsTracking}
-            title={
-              canUseGpsTracking ? undefined : "GPS-spårning kräver georefererad karta"
-            }
-            onClick={onGpsTrackingToggle}
-            className={`${GPS_TRACK_BTN} ${
-              gpsTracking
-                ? "border-amber-600 bg-amber-600 text-white hover:bg-amber-700"
-                : canUseGpsTracking
-                  ? "border-ifk-blue bg-white text-ifk-blue hover:bg-ifk-blue/5"
-                  : "cursor-not-allowed border-slate-300 bg-slate-100 text-slate-400"
-            } disabled:cursor-not-allowed disabled:opacity-50`}
-          >
-            {gpsTracking ? "Sluta spåra" : "GPS-spår"}
-          </button>
-          <div
-            className="flex gap-2"
-            role="group"
-            aria-label="Kartläge"
-          >
-            <button
-              type="button"
-              onClick={() => onMapModeChange("draw")}
-              className={`${MAP_MODE_BTN} ${mapMode === "draw" ? MAP_MODE_ACTIVE : MAP_MODE_INACTIVE}`}
-              aria-pressed={mapMode === "draw"}
-            >
-              Rita
-            </button>
-            <button
-              type="button"
-              onClick={() => onMapModeChange("navigate")}
-              className={`${MAP_MODE_BTN} ${mapMode === "navigate" ? MAP_MODE_ACTIVE : MAP_MODE_INACTIVE}`}
-              aria-pressed={mapMode === "navigate"}
-            >
-              Navigera
-            </button>
-          </div>
           <p className={`text-xs ${mapMode === "draw" ? "text-amber-700" : "text-slate-600"}`}>
             {mapMode === "navigate"
               ? "Navigeringsläge — dra för att panorera och nyp med två fingrar för att zooma. Växla till Rita när du ska markera."
@@ -247,8 +205,9 @@ export function SuggestionCreateClient({
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const [tool, setTool] = useState<DrawTool>("pin");
-  const [mapMode, setMapMode] = useState<"draw" | "navigate">("draw");
+  const [mapMode, setMapMode] = useState<"draw" | "navigate">("navigate");
   const [ocadCrs, setOcadCrs] = useState<OcadCrsInfo | null>(null);
+  const [ocadLayers, setOcadLayers] = useState<OcadMapLayer[]>([]);
   const [ocadMapScale, setOcadMapScale] = useState(15000);
   const [gpsTracking, setGpsTracking] = useState(false);
   const [gpsTrackingRecenterToken, setGpsTrackingRecenterToken] = useState(0);
@@ -268,6 +227,9 @@ export function SuggestionCreateClient({
   const [polygonPoints, setPolygonPoints] = useState<[number, number][]>([]);
   const [linePoints, setLinePoints] = useState<[number, number][]>([]);
   const [category, setCategory] = useState<SuggestionCategoryValue>("FEL_I_TERRANG");
+  const [locationConfidence, setLocationConfidence] = useState<SuggestionLocationConfidenceValue>(
+    DEFAULT_SUGGESTION_LOCATION_CONFIDENCE,
+  );
   const [title, setTitle] = useState("");
   const [comment, setComment] = useState("");
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
@@ -278,6 +240,7 @@ export function SuggestionCreateClient({
 
   const clearFormFields = useCallback(() => {
     setCategory("FEL_I_TERRANG");
+    setLocationConfidence(DEFAULT_SUGGESTION_LOCATION_CONFIDENCE);
     setTitle("");
     setComment("");
     setAttachmentFile(null);
@@ -347,6 +310,10 @@ export function SuggestionCreateClient({
 
   const handleOcadMapScale = useCallback((scale: number) => {
     setOcadMapScale(scale);
+  }, []);
+
+  const handleOcadLayersReady = useCallback((layers: OcadMapLayer[]) => {
+    setOcadLayers(layers);
   }, []);
 
   const appendGpsSample = useCallback(
@@ -694,6 +661,7 @@ export function SuggestionCreateClient({
       cancelGpsTracking();
     }
     setTool(next);
+    setMapMode("draw");
     setGeometry(null);
     resetDraft();
     setGpsTrackSummary(null);
@@ -753,6 +721,9 @@ export function SuggestionCreateClient({
       return;
     }
     setError(null);
+    if (!comment.trim()) {
+      setComment(buildSuggestionCommentTemplate(markings));
+    }
     setSubmitDialogOpen(true);
   }
 
@@ -786,6 +757,7 @@ export function SuggestionCreateClient({
         body: JSON.stringify({
           mapVersionId: versionId,
           category,
+          locationConfidence,
           title: title.trim() || undefined,
           comment: submissionComment,
           geometries: markings,
@@ -827,7 +799,6 @@ export function SuggestionCreateClient({
           mapSlug={mapSlug}
           versionId={versionId}
           mapMode={mapMode}
-          onMapModeChange={setMapMode}
           drawPointerHandlers={drawPointerHandlers}
           onDrawInterrupt={handleDrawInterrupt}
           markings={markings}
@@ -839,10 +810,8 @@ export function SuggestionCreateClient({
           rootTransformRef={rootTransformRef}
           onOcadCrsReady={handleOcadCrsReady}
           onOcadMapScale={handleOcadMapScale}
+          onOcadLayersReady={handleOcadLayersReady}
           gpsTrackingStatus={gpsTrackingStatus}
-          gpsTracking={gpsTracking}
-          canUseGpsTracking={canUseGpsTracking}
-          onGpsTrackingToggle={handleGpsTrackingToggle}
           gpsTrackFollow={gpsTrackFollow}
           mapToolbarOverlay={
             <>
@@ -853,10 +822,15 @@ export function SuggestionCreateClient({
                 onClear={handleClearAll}
                 onSubmit={handleOpenSubmitDialog}
               />
-              <SuggestionMapDrawToolbar
+              <SuggestionMapRightToolbars
                 tool={tool}
                 onToolChange={handleToolChange}
-                disabled={gpsTracking}
+                drawDisabled={gpsTracking}
+                mapMode={mapMode}
+                onMapModeChange={setMapMode}
+                gpsTracking={gpsTracking}
+                canUseGpsTracking={canUseGpsTracking}
+                onGpsTrackingToggle={handleGpsTrackingToggle}
               />
             </>
           }
@@ -892,7 +866,7 @@ export function SuggestionCreateClient({
                   className="flex items-center justify-between gap-2 text-sm text-slate-600"
                 >
                   <span>
-                    {index + 1}. {suggestionGeometryTypeLabel(marking)}
+                    {index + 1}. {suggestionMarkingGeometryLabel(marking)}
                   </span>
                   <button
                     type="button"
@@ -922,6 +896,12 @@ export function SuggestionCreateClient({
                   ))}
                 </select>
               </div>
+              <SuggestionLocationConfidenceField
+                name="Hur säker är du på platsen på kartan?"
+                value={locationConfidence}
+                onChange={setLocationConfidence}
+                idPrefix="submit-location-confidence"
+              />
               <div>
                 <label htmlFor="title" className="form-label">
                   Rubrik (valfritt)
@@ -935,22 +915,13 @@ export function SuggestionCreateClient({
                   placeholder="Kort sammanfattning"
                 />
               </div>
-              <div>
-                <label htmlFor="comment" className="form-label">
-                  Beskrivning
-                </label>
-                <textarea
-                  id="comment"
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  required
-                  minLength={2}
-                  rows={4}
-                  autoFocus
-                  className="form-input"
-                  placeholder="Beskriv vad som är fel, saknas eller bör förklaras (minst 2 tecken)."
-                />
-              </div>
+              <SuggestionCommentField
+                value={comment}
+                onChange={setComment}
+                ocadLayers={ocadLayers}
+                markings={markings}
+                disabled={loading}
+              />
               <div>
                 <p className="form-label">Foto (valfritt)</p>
                 <div className="mt-1 flex flex-wrap gap-2">

@@ -8,6 +8,11 @@ import {
   checkoutStatusLabel,
   type CheckoutSelection,
 } from "@/lib/checkout/types";
+import {
+  defaultOcadExportVersion,
+  normalizeSourceVersion,
+  type OcadExportVersion,
+} from "@/lib/ocad/ocad-export-shared";
 
 type ExistingCheckout = {
   id: string;
@@ -22,6 +27,7 @@ type Props = {
   mapSlug: string;
   mapTitle: string;
   headVersionId: string;
+  sourceOcadVersion: number;
   existingCheckouts: ExistingCheckout[];
 };
 
@@ -29,6 +35,7 @@ export function CheckoutPageClient({
   mapSlug,
   mapTitle,
   headVersionId,
+  sourceOcadVersion,
   existingCheckouts,
 }: Props) {
   const router = useRouter();
@@ -36,8 +43,14 @@ export function CheckoutPageClient({
     selectionType: CheckoutSelectionType;
     selection: CheckoutSelection;
   } | null>(null);
+  const [ocadVersion, setOcadVersion] = useState<OcadExportVersion>(() =>
+    defaultOcadExportVersion(sourceOcadVersion),
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const sourceLabel =
+    normalizeSourceVersion(sourceOcadVersion) === 18 ? "OCAD 2018" : `OCAD ${normalizeSourceVersion(sourceOcadVersion)}`;
 
   const overlays = existingCheckouts.map((checkout, index) => ({
     id: checkout.id,
@@ -62,6 +75,7 @@ export function CheckoutPageClient({
       body: JSON.stringify({
         selectionType: selection.selectionType,
         selection: selection.selection,
+        ocadVersion,
       }),
     });
 
@@ -93,6 +107,9 @@ export function CheckoutPageClient({
         createLoading={loading}
         createError={error}
         disabled={loading}
+        ocadVersion={ocadVersion}
+        onOcadVersionChange={setOcadVersion}
+        sourceOcadVersionLabel={sourceLabel}
       />
 
       {existingCheckouts.length > 0 && (
@@ -118,8 +135,9 @@ export function CheckoutPageClient({
         </section>
       )}
 
-      <p className="mt-6 text-sm text-slate-500">
-        Utcheckning baseras på senaste version av {mapTitle}. Utcheckning .ocd genereras automatiskt.
+      <p className="mt-6 text-xs text-slate-500">
+        Kartfilen är {sourceLabel}. Välj samma format som din OCAD-installation — t.ex. OCAD 12 om
+        du inte har OCAD 2018.
       </p>
     </div>
   );

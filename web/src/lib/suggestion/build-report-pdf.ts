@@ -5,6 +5,7 @@ import { extractSvgInner } from "@/lib/ocad/svg-utils";
 import { readStoredFile } from "@/lib/storage";
 import {
   SUGGESTION_CATEGORY_LABELS,
+  SUGGESTION_LOCATION_CONFIDENCE_LABELS,
   SUGGESTION_STATUS_LABELS,
   type SuggestionGeometry,
 } from "@/lib/suggestion/types";
@@ -14,6 +15,7 @@ export type SuggestionReportItem = {
   id: string;
   status: string;
   category: string;
+  locationConfidence: string;
   title: string | null;
   comment: string;
   createdAt: Date;
@@ -116,6 +118,9 @@ export async function buildOpenSuggestionsReportPdf(input: {
     const meta = [
       SUGGESTION_STATUS_LABELS[s.status as keyof typeof SUGGESTION_STATUS_LABELS] ?? s.status,
       SUGGESTION_CATEGORY_LABELS[s.category as keyof typeof SUGGESTION_CATEGORY_LABELS] ?? s.category,
+      SUGGESTION_LOCATION_CONFIDENCE_LABELS[
+        s.locationConfidence as keyof typeof SUGGESTION_LOCATION_CONFIDENCE_LABELS
+      ] ?? s.locationConfidence,
       `v${s.versionNumber}`,
       s.createdBy.name?.trim() || s.createdBy.email,
       formatDateOnly(s.createdAt.toISOString()),

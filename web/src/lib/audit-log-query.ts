@@ -18,6 +18,7 @@ export type AuditLogUserOption = {
 };
 
 const LOG_LIMIT = 1000;
+export const AUDIT_LOG_INITIAL_VISIBLE = 50;
 
 function displayUserName(name: string | null | undefined, email: string | null | undefined): string {
   return name?.trim() || email?.trim() || "—";

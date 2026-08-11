@@ -32,14 +32,21 @@ export type OcadDiffResult = {
   unchanged: number;
   bySymbol: SymbolDiffSummary[];
   changes: OcadObjectChange[];
+  /** Antal poster i changes (samma som changes.length om inte trunkerat vid lagring). */
+  totalChanges: number;
+  changesTruncated: boolean;
+  maxChangesApplied: number | null;
 };
 
 export type OcadDiffOptions = {
   toleranceMeters?: number;
+  /**
+   * @deprecated Diff-motorn returnerar alla ändringar. Använd limitStoredChanges vid lagring.
+   */
   maxChanges?: number;
   /**
    * Prefer pairing objects with the same OCAD objectIndex before spatial matching.
-   * Use for checkout export↔checkin where indices are stable across edits.
+   * Default true for all diff-typer (hybrid objectIndex + spatial).
    */
   matchByObjectIndex?: boolean;
 };

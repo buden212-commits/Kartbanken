@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { canAdmin, canCheckout, canCreateCourse, canCreateMapSuggestion, canReviewMapSuggestion, canUpload } from "@/lib/auth/permissions";
+import { canAdmin, canCheckout, canCreateCourse, canCreateMapSuggestion, canReviewMapSuggestion, canUpload, canViewCheckouts } from "@/lib/auth/permissions";
 import { MapTitleEditor } from "@/components/map-title-editor";
 import { findActiveCheckoutsForMap, findCheckoutHistoryForMap, getHeadVersionId, serializeCheckoutResponse } from "@/lib/checkout/repository";
 import { isMapArchived } from "@/lib/maps/archive-map";
 import { listCoursesForMap, serializeCourseSummary } from "@/lib/course/repository";
 import { versionVisibilityFilter } from "@/lib/maps/version-query";
-import { canViewVersion } from "@/lib/auth/version-access";
+import { canViewVersion, isReader } from "@/lib/auth/version-access";
 import { prisma } from "@/lib/prisma";
 import { UploadVersionForm } from "@/components/upload-version-form";
 import { HelpSectionHeading } from "@/components/help-link-icon";
@@ -33,6 +33,7 @@ export default async function MapDetailPage({ params }: PageProps) {
   const canUploadVersion = !!(session && role && canUpload(role));
   const canManagePublication = canUploadVersion;
   const canCreateCheckout = !!(session && role && canCheckout(role));
+  const canSeeCheckouts = !!(session && role && canViewCheckouts(role));
   const isAdmin = !!(session && role && canAdmin(role));
 
   const map = await prisma.mapFile.findUnique({
@@ -111,6 +112,10 @@ export default async function MapDetailPage({ params }: PageProps) {
   const publishedVersions = map.versions.filter((v) => v.isPublished);
   const latestPublishedVersion = publishedVersions[0] ?? null;
   const headVersion = map.versions[0] ?? null;
+
+  if (role && isReader(role) && !latestPublishedVersion) {
+    notFound();
+  }
   const comparableVersions = versionHistoryItems.filter((v) => v.canView);
 
   return (
@@ -145,6 +150,14 @@ export default async function MapDetailPage({ params }: PageProps) {
               headVersionId={headVersionId}
             />
           )}
+          {latestPublishedVersion && role && canCreateMapSuggestion(role) && !mapArchived && (
+            <Link
+              href={`/maps/${map.slug}/versions/${latestPublishedVersion.id}/suggest`}
+              className="rounded-lg border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-medium text-orange-800 transition hover:border-orange-400"
+            >
+              Föreslå ändring
+            </Link>
+          )}
         </div>
       </div>
 
@@ -159,6 +172,7 @@ export default async function MapDetailPage({ params }: PageProps) {
           suggestionBreakdown={pendingSuggestionBreakdown}
           activeCheckoutCount={activeCheckouts.length}
           showVersionStatus={canManagePublication}
+          showCheckoutStatus={canSeeCheckouts}
         />
       )}
 
@@ -233,7 +247,7 @@ export default async function MapDetailPage({ params }: PageProps) {
         />
       )}
 
-      {headVersionId && activeCheckouts.length > 0 && (
+      {headVersionId && activeCheckouts.length > 0 && canSeeCheckouts && (
         <section className="mt-10">
           <h2 className="text-lg font-medium text-slate-900">Utcheckningsområden på kartan</h2>
           <p className="mt-1 text-sm text-slate-600">
@@ -247,7 +261,7 @@ export default async function MapDetailPage({ params }: PageProps) {
         </section>
       )}
 
-      {session?.user?.id && (
+      {session?.user?.id && canSeeCheckouts && (
         <>
           <CheckoutListPanel
             mapSlug={map.slug}
@@ -277,6 +291,7 @@ export default async function MapDetailPage({ params }: PageProps) {
           courses={courseList}
           sessionUserId={session.user.id}
           isAdmin={role === Role.ADMIN}
+          publishedVersionId={latestPublishedVersion?.id ?? null}
         />
       )}
     </div>

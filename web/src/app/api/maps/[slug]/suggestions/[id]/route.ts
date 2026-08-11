@@ -8,6 +8,7 @@ import {
   validateSuggestionCategory,
   validateSuggestionComment,
   validateSuggestionGeometry,
+  validateSuggestionLocationConfidence,
   validateSuggestionReviewStatus,
   validateSuggestionTitle,
 } from "@/lib/suggestion/access";
@@ -190,6 +191,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
   const updates: {
     category?: string;
+    locationConfidence?: string;
     title?: string | null;
     comment?: string;
     geometry?: NonNullable<ReturnType<typeof validateSuggestionGeometry>>;
@@ -201,6 +203,14 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Ogiltig kategori" }, { status: 400 });
     }
     updates.category = category;
+  }
+
+  if ("locationConfidence" in record) {
+    const locationConfidence = validateSuggestionLocationConfidence(record.locationConfidence);
+    if (!locationConfidence) {
+      return NextResponse.json({ error: "Ogiltig platsnoggrannhet" }, { status: 400 });
+    }
+    updates.locationConfidence = locationConfidence;
   }
 
   if ("title" in record) {

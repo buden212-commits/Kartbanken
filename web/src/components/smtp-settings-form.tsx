@@ -36,6 +36,8 @@ export function SmtpSettingsForm({ initialSettings }: Props) {
       smtpUser: formData.get("smtpUser")?.toString() ?? "",
       smtpPass: formData.get("smtpPass")?.toString() ?? "",
       adminNotificationEmail: formData.get("adminNotificationEmail")?.toString() ?? "",
+      checkoutReminderDays: Number(formData.get("checkoutReminderDays") ?? 7),
+      checkoutReminderRepeatDays: Number(formData.get("checkoutReminderRepeatDays") ?? 7),
       enabled: formData.get("enabled") === "on",
     };
 
@@ -101,7 +103,7 @@ export function SmtpSettingsForm({ initialSettings }: Props) {
   return (
     <div className="space-y-6">
       <form
-        key={`${settings.enabled}-${settings.smtpHost}-${settings.smtpPort}-${settings.smtpUser}-${settings.hasPassword}-${settings.adminNotificationEmail}`}
+        key={`${settings.enabled}-${settings.smtpHost}-${settings.smtpPort}-${settings.smtpUser}-${settings.hasPassword}-${settings.adminNotificationEmail}-${settings.checkoutReminderDays}-${settings.checkoutReminderRepeatDays}`}
         onSubmit={(event) => void handleSubmit(event)}
         className="grid gap-4 sm:grid-cols-2"
       >
@@ -188,18 +190,59 @@ export function SmtpSettingsForm({ initialSettings }: Props) {
           <label htmlFor="adminNotificationEmail" className="form-label">
             Admin-notis e-post
           </label>
-          <input
+          <textarea
             id="adminNotificationEmail"
             name="adminNotificationEmail"
-            type="email"
+            rows={3}
             defaultValue={settings.adminNotificationEmail}
-            className="form-input"
-            placeholder="admin@example.com"
+            className="form-input min-h-[5.5rem] resize-y"
+            placeholder="admin@example.com, redaktion@example.com"
           />
           <p className="mt-1 text-xs text-slate-500">
-            Huvudmottagare för notiser och kartkopior (.ocd) vid nya versioner om inget annat anges
-            per användare. Notisprenumeranter hanteras under Admin → Användare. Om tomt används
-            INITIAL_ADMIN_EMAIL från .env.
+            En eller flera adresser, separerade med komma, semikolon eller radbrytning. Huvudmottagare
+            för notiser och kartkopior (.ocd) vid nya versioner om inget annat anges per användare.
+            Notisprenumeranter hanteras under Admin → Användare. Om tomt används INITIAL_ADMIN_EMAIL
+            från .env.
+          </p>
+        </div>
+
+        <div>
+          <label htmlFor="checkoutReminderDays" className="form-label">
+            Utcheckningspåminnelse (dagar)
+          </label>
+          <input
+            id="checkoutReminderDays"
+            name="checkoutReminderDays"
+            type="number"
+            required
+            min={1}
+            max={365}
+            defaultValue={settings.checkoutReminderDays}
+            className="form-input"
+          />
+          <p className="mt-1 text-xs text-slate-500">
+            Första påminnelsen skickas när en utcheckning varit aktiv (eller väntat på admin) minst
+            så här många dagar.
+          </p>
+        </div>
+
+        <div>
+          <label htmlFor="checkoutReminderRepeatDays" className="form-label">
+            Upprepa påminnelse (dagar)
+          </label>
+          <input
+            id="checkoutReminderRepeatDays"
+            name="checkoutReminderRepeatDays"
+            type="number"
+            required
+            min={1}
+            max={365}
+            defaultValue={settings.checkoutReminderRepeatDays}
+            className="form-input"
+          />
+          <p className="mt-1 text-xs text-slate-500">
+            Ny påminnelse skickas med detta intervall tills utcheckningen är incheckad, integrerad
+            eller avbruten.
           </p>
         </div>
 
@@ -245,8 +288,8 @@ export function SmtpSettingsForm({ initialSettings }: Props) {
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
         <h3 className="text-sm font-medium text-slate-900">Testa e-post</h3>
         <p className="mt-1 text-sm text-slate-600">
-          Skickar testmail till admin-notisadressen. Använd bifogningstestet för att verifiera att
-          .ocd-filer följer med i notiser.
+          Skickar testmail till alla angivna admin-notisadresser. Använd bifogningstestet för att
+          verifiera att .ocd-filer följer med i notiser.
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <button

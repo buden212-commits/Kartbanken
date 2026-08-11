@@ -1,13 +1,14 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { formatDate } from "@/lib/format";
-import type {
-  AuditLogRow,
-  AuditLogSortDir,
-  AuditLogSortField,
-  AuditLogUserOption,
+import {
+  AUDIT_LOG_INITIAL_VISIBLE,
+  type AuditLogRow,
+  type AuditLogSortDir,
+  type AuditLogSortField,
+  type AuditLogUserOption,
 } from "@/lib/audit-log-query";
 
 type Props = {
@@ -35,6 +36,15 @@ export function AdminAuditLogPanel({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    setExpanded(false);
+  }, [userId, sort, dir, rows]);
+
+  const hasMore = rows.length > AUDIT_LOG_INITIAL_VISIBLE;
+  const visibleRows = expanded ? rows : rows.slice(0, AUDIT_LOG_INITIAL_VISIBLE);
+  const visibleCount = visibleRows.length;
 
   const pushParams = useCallback(
     (updates: Record<string, string | undefined>) => {
@@ -86,8 +96,12 @@ export function AdminAuditLogPanel({
           </select>
         </div>
         <p className="pb-2 text-sm text-slate-500">
-          Visar {rows.length} händelse{rows.length === 1 ? "" : "r"}
-          {truncated ? " (senaste 1000)" : ""}
+          {rows.length === 0
+            ? "Inga händelser"
+            : hasMore && !expanded
+              ? `Visar ${visibleCount} av ${rows.length} händelser`
+              : `Visar ${rows.length} händelse${rows.length === 1 ? "" : "r"}`}
+          {truncated ? " (max 1000 senaste)" : ""}
         </p>
       </div>
 
@@ -96,7 +110,7 @@ export function AdminAuditLogPanel({
       ) : (
         <>
           <ul className="mt-6 space-y-3 md:hidden">
-            {rows.map((row) => (
+            {visibleRows.map((row) => (
               <li
                 key={row.id}
                 className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
@@ -134,7 +148,7 @@ export function AdminAuditLogPanel({
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
+                {visibleRows.map((row) => (
                   <tr key={row.id} className="border-b border-slate-100 last:border-0">
                     <td className="px-4 py-3 pr-4 text-slate-900">{row.userName}</td>
                     <td className="py-3 pr-4 text-slate-700">{row.activity}</td>
@@ -146,6 +160,20 @@ export function AdminAuditLogPanel({
               </tbody>
             </table>
           </div>
+
+          {hasMore && (
+            <div className="mt-4 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setExpanded((value) => !value)}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-ifk-blue hover:text-ifk-blue"
+              >
+                {expanded
+                  ? `Visa färre (senaste ${AUDIT_LOG_INITIAL_VISIBLE})`
+                  : `Visa alla ${rows.length} händelser`}
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>

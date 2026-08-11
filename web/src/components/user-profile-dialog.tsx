@@ -3,7 +3,7 @@
 import { ChangePasswordForm } from "@/components/change-password-form";
 import { HelpLinkIcon } from "@/components/help-link-icon";
 import { UserNotificationPreferences } from "@/components/user-notification-preferences";
-import { roleDescription, roleLabel } from "@/lib/auth/permissions";
+import { roleDescription, roleLabel, canReceiveOcdAttachment } from "@/lib/auth/permissions";
 import { canSubscribeToNotifications } from "@/lib/settings/notification-recipients";
 import type { Role } from "@/lib/roles";
 
@@ -73,6 +73,7 @@ export function UserProfileDialog({
               <UserNotificationPreferences
                 initialNotifications={receiveNotifications}
                 initialOcdAttachment={receiveOcdAttachment}
+                showOcdAttachment={canReceiveOcdAttachment(role)}
               />
             </div>
           </section>

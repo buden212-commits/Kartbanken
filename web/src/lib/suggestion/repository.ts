@@ -14,6 +14,7 @@ const suggestionWithUserSelect = {
   createdById: true,
   status: true,
   category: true,
+  locationConfidence: true,
   title: true,
   comment: true,
   reviewComment: true,
@@ -58,6 +59,7 @@ export function serializeSuggestionSummary(
     id: string;
     status: string;
     category: string;
+    locationConfidence: string;
     title: string | null;
     comment: string;
     reviewedAt: Date | null;
@@ -76,6 +78,7 @@ export function serializeSuggestionSummary(
     id: suggestion.id,
     status: suggestion.status as SuggestionSummary["status"],
     category: suggestion.category as SuggestionSummary["category"],
+    locationConfidence: suggestion.locationConfidence as SuggestionSummary["locationConfidence"],
     title: suggestion.title,
     comment: suggestion.comment,
     createdAt: suggestion.createdAt.toISOString(),
@@ -99,6 +102,7 @@ export function serializeSuggestionDetail(
     id: string;
     status: string;
     category: string;
+    locationConfidence: string;
     title: string | null;
     comment: string;
     reviewComment: string | null;
@@ -322,6 +326,7 @@ export async function createSuggestion(params: {
   mapVersionId: string;
   createdById: string;
   category: string;
+  locationConfidence: string;
   title: string | null;
   comment: string;
   geometries: SuggestionGeometry[];
@@ -333,6 +338,7 @@ export async function createSuggestion(params: {
       mapVersionId: params.mapVersionId,
       createdById: params.createdById,
       category: params.category,
+      locationConfidence: params.locationConfidence,
       title: params.title,
       comment: params.comment,
       attachmentPath: params.attachmentPath ?? null,
@@ -359,6 +365,7 @@ export async function updateSuggestion(
   suggestionId: string,
   data: {
     category?: string;
+    locationConfidence?: string;
     title?: string | null;
     comment?: string;
     status?: string;

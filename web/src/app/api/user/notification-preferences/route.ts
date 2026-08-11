@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { canReceiveOcdAttachment } from "@/lib/auth/permissions";
 import { setUserNotificationPreferences } from "@/lib/settings/notification-recipients";
 
 export async function PATCH(request: Request) {
@@ -21,8 +22,10 @@ export async function PATCH(request: Request) {
 
   const receiveNotifications =
     "receiveNotifications" in body && body.receiveNotifications === true;
-  const receiveOcdAttachment =
+  const requestedOcdAttachment =
     "receiveOcdAttachment" in body && body.receiveOcdAttachment === true;
+  const receiveOcdAttachment =
+    canReceiveOcdAttachment(session.user.role) && requestedOcdAttachment;
 
   try {
     await setUserNotificationPreferences(session.user.id, {

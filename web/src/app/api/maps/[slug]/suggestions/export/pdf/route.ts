@@ -56,6 +56,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
     id: row.id,
     status: row.status,
     category: row.category,
+    locationConfidence: row.locationConfidence,
     title: row.title,
     comment: row.comment,
     createdAt: row.createdAt,

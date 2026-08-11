@@ -5,6 +5,8 @@ import {
   canConfirmCheckoutIntegration,
 } from "@/lib/auth/permissions";
 import { getCheckoutById } from "@/lib/checkout/repository";
+import { ocadExportVersionLabel, parseOcadExportVersion } from "@/lib/ocad/ocad-export-shared";
+import type { OcadExportVersion } from "@/lib/ocad/ocad-export-shared";
 import { prisma } from "@/lib/prisma";
 import { readStoredFile } from "@/lib/storage";
 import { NextResponse } from "next/server";
@@ -40,11 +42,14 @@ export async function GET(_request: Request, { params }: RouteParams) {
 
   try {
     const buffer = await readStoredFile(checkout.exportStoragePath);
-    const fileName = `${map.title.replace(/\s+/g, "-")}-utcheckning-${id.slice(0, 8)}.ocd`;
+    const version = parseOcadExportVersion(checkout.exportOcadVersion) ?? (12 as OcadExportVersion);
+    const fileName = `${map.title.replace(/\s+/g, "-")}-utcheckning-v${version}-${id.slice(0, 8)}.ocd`;
 
     await logAction(session.user.id, "DOWNLOAD", "MapCheckout", checkout.id, {
       mapSlug: slug,
       kind: "subset",
+      ocadVersion: version,
+      ocadVersionLabel: ocadExportVersionLabel(version),
     });
 
     return new NextResponse(new Uint8Array(buffer), {

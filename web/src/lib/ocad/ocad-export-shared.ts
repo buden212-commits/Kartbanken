@@ -67,11 +67,6 @@ export function defaultOcadExportVersion(
   return 12;
 }
 
-function versionLabel(version: number): string {
-  if (version === 18) return "OCAD 2018";
-  return `OCAD ${version}`;
-}
-
 export function buildVersionWarning(
   sourceVersion: number,
   targetVersion: number,
@@ -90,4 +85,21 @@ export function buildVersionWarning(
   }
 
   return `Filen sparades som ${versionLabel(targetVersion)} från källversion ${versionLabel(sourceVersion)}.`;
+}
+
+export function versionLabel(version: number): string {
+  if (version === 18) return "OCAD 2018";
+  return `OCAD ${version}`;
+}
+
+export function ocadExportVersionLabel(version: OcadExportVersion): string {
+  return OCAD_EXPORT_VERSIONS.find((entry) => entry.value === version)?.label ?? versionLabel(version);
+}
+
+export function parseOcadExportVersion(value: unknown): OcadExportVersion | null {
+  const numeric = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  return OCAD_EXPORT_VERSIONS.some((entry) => entry.value === numeric)
+    ? (numeric as OcadExportVersion)
+    : null;
 }

@@ -15,7 +15,7 @@ import {
 } from "@/lib/course/pdf-scale";
 import { migrateLegacyControlNumbers } from "@/lib/course/control-numbers";
 import { isControlSymbol } from "@/lib/course/symbols";
-import { getHeadVersionId } from "@/lib/checkout/repository";
+import { getLatestPublishedVersion } from "@/lib/maps/version-context";
 import { extractSvgInner } from "@/lib/ocad/svg-utils";
 import {
   computeCourseLengthMeters,
@@ -57,13 +57,16 @@ export async function GET(request: Request, { params }: RouteParams) {
   const denied = assertCourseViewAccess(session, course);
   if (denied) return denied;
 
-  const headVersionId = await getHeadVersionId(map.id);
-  if (!headVersionId) {
-    return NextResponse.json({ error: "Kartfilen saknar version" }, { status: 400 });
+  const publishedVersion = await getLatestPublishedVersion(map.id);
+  if (!publishedVersion) {
+    return NextResponse.json(
+      { error: "Kartfilen saknar publicerad version" },
+      { status: 400 },
+    );
   }
 
   const version = await prisma.mapVersion.findUnique({
-    where: { id: headVersionId },
+    where: { id: publishedVersion.id },
     select: { previewSvgPath: true, storagePath: true },
   });
   if (!version?.previewSvgPath) {

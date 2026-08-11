@@ -25,6 +25,52 @@ export const SUGGESTION_CATEGORY_LABELS: Record<SuggestionCategoryValue, string>
   ANNAT: "Annat",
 };
 
+/** Hur säker användaren är på platsen på kartan (alternativ C). */
+export const SuggestionLocationConfidence = {
+  MYCKET_SAKER: "MYCKET_SAKER",
+  GANSKA_SAKER: "GANSKA_SAKER",
+  OSAKER: "OSAKER",
+  BEHOVER_FALTVVERIFIERING: "BEHOVER_FALTVVERIFIERING",
+} as const;
+
+export type SuggestionLocationConfidenceValue =
+  (typeof SuggestionLocationConfidence)[keyof typeof SuggestionLocationConfidence];
+
+export const SUGGESTION_LOCATION_CONFIDENCE_LABELS: Record<
+  SuggestionLocationConfidenceValue,
+  string
+> = {
+  MYCKET_SAKER: "Mycket säker",
+  GANSKA_SAKER: "Ganska säker",
+  OSAKER: "Osäker",
+  BEHOVER_FALTVVERIFIERING: "Behöver fältverifiering",
+};
+
+export const DEFAULT_SUGGESTION_LOCATION_CONFIDENCE: SuggestionLocationConfidenceValue =
+  SuggestionLocationConfidence.GANSKA_SAKER;
+
+export const SUGGESTION_LOCATION_CONFIDENCE_ORDER: SuggestionLocationConfidenceValue[] = [
+  SuggestionLocationConfidence.MYCKET_SAKER,
+  SuggestionLocationConfidence.GANSKA_SAKER,
+  SuggestionLocationConfidence.OSAKER,
+  SuggestionLocationConfidence.BEHOVER_FALTVVERIFIERING,
+];
+
+export function suggestionLocationConfidenceBadgeClass(
+  value: SuggestionLocationConfidenceValue,
+): string {
+  switch (value) {
+    case SuggestionLocationConfidence.MYCKET_SAKER:
+      return "border-emerald-200 bg-emerald-50 text-emerald-900";
+    case SuggestionLocationConfidence.GANSKA_SAKER:
+      return "border-sky-200 bg-sky-50 text-sky-900";
+    case SuggestionLocationConfidence.OSAKER:
+      return "border-amber-200 bg-amber-50 text-amber-900";
+    case SuggestionLocationConfidence.BEHOVER_FALTVVERIFIERING:
+      return "border-orange-200 bg-orange-50 text-orange-900";
+  }
+}
+
 export const SUGGESTION_STATUS_LABELS: Record<SuggestionStatusValue, string> = {
   OPEN: "Öppen",
   IN_PROGRESS: "Pågår",
@@ -104,6 +150,7 @@ export type SuggestionSummary = {
   id: string;
   status: SuggestionStatusValue;
   category: SuggestionCategoryValue;
+  locationConfidence: SuggestionLocationConfidenceValue;
   title: string | null;
   comment: string;
   createdAt: string;

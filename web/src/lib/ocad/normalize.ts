@@ -110,6 +110,9 @@ export function normalizeFromGeoJson(
       centroid: computeCentroid(coords),
       bbox: computeBbox(coords),
       geometryHash: hashGeometry(feature.geometry, symbolNumber, text),
+      ...(type === "line" && coords.length >= 2
+        ? { vertices: coords.map(([x, y]) => [x, y] as [number, number]) }
+        : {}),
       text,
     });
   }

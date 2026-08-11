@@ -1,6 +1,8 @@
 import {
   SuggestionCategory,
   type SuggestionCategoryValue,
+  SuggestionLocationConfidence,
+  type SuggestionLocationConfidenceValue,
   SuggestionStatus,
   type SuggestionStatusValue,
   type SuggestionGeometry,
@@ -78,6 +80,15 @@ export function validateSuggestionCategory(value: unknown): SuggestionCategoryVa
   if (typeof value !== "string") return null;
   return (Object.values(SuggestionCategory) as string[]).includes(value)
     ? (value as SuggestionCategoryValue)
+    : null;
+}
+
+export function validateSuggestionLocationConfidence(
+  value: unknown,
+): SuggestionLocationConfidenceValue | null {
+  if (typeof value !== "string") return null;
+  return (Object.values(SuggestionLocationConfidence) as string[]).includes(value)
+    ? (value as SuggestionLocationConfidenceValue)
     : null;
 }
 

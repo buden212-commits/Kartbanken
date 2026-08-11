@@ -8,6 +8,8 @@ export type NormalizedOcadObject = {
   centroid: [number, number];
   bbox: [number, number, number, number];
   geometryHash: string;
+  /** Vertex-koordinater för linjer (Hausdorff-jämförelse). */
+  vertices?: [number, number][];
   text?: string;
 };
 
