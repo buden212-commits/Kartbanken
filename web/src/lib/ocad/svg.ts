@@ -432,7 +432,7 @@ export async function generateAndStorePreviewSvg(
   buffer: Buffer,
   storagePath: string,
 ): Promise<SvgBounds | null> {
-  const { svg, bounds } = await generateOcadSvg(buffer);
+  const { svg, bounds } = await generateOcadSvgLayered(buffer);
   await uploadFile(storagePath, Buffer.from(svg, "utf-8"));
   return bounds;
 }

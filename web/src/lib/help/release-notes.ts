@@ -8,10 +8,20 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-11",
+    title: "Kartförslag — tala in beskrivning",
+    items: [
+      "Knappen «Tala» vid beskrivningen låter dig säga ett symbolnamn (t.ex. «Sten») — texten matchas mot kartans symboler och infogas på aktiv markering",
+      "«Rensa» bredvid mikrofonen tömmer beskrivningsrutan",
+      "Fungerar i webbläsare som stödjer taligenkänning (t.ex. Chrome/Edge); knappen döljs annars",
+    ],
+  },
+  {
+    date: "2026-08-11",
     title: "Kartförslag — Navigera som startläge",
     items: [
       "Kartan öppnas i «Navigera» så du kan panorera och zooma utan att råka rita",
       "När du väljer ett ritverktyg aktiveras «Rita» automatiskt",
+      "«Tillbaka» finns både överst och nederst i inskickningsdialogen",
     ],
   },
   {
@@ -19,11 +29,11 @@ export const releaseNotes: ReleaseNote[] = [
     title: "Kartförslag — symbolnamn i beskrivningen",
     items: [
       "Infoga symbol visar beskrivningar från OCAD-filen (t.ex. «Sten»), grupperade under kartlager",
-      "Listan filtreras efter aktiv markering — punkt, linje eller yta",
+      "Listan filtreras efter aktiv markering — punkt, linje eller yta (vid «Punkt (radera)» visas alla symboltyper)",
       "Symboler sorteras efter hur ofta de används på kartan — vanligast överst",
       "Symbolval i en vertikal lista som är lättare att använda på mobil",
       "När du väljer markering och symbol behålls raden (t.ex. «1. Punkt — Sten») — symbolen läggs alltid till i slutet av raden",
-      "Snabbval, sök och «Visa alla» när kartan har många symboler",
+      "Snabbval, sök överst i listan och «Visa alla» när kartan har många symboler",
     ],
   },
   {

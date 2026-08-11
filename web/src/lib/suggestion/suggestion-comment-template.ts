@@ -16,17 +16,21 @@ export function suggestionMarkingGeometryLabel(geometry: SuggestionGeometry): st
   }
 }
 
-export type MarkingGeometryKind = "point" | "line" | "area";
+export type MarkingGeometryKind = "point" | "line" | "area" | "all";
 
 export function markingGeometryKind(geometry: SuggestionGeometry): MarkingGeometryKind {
-  if (isDeletePointGeometry(geometry) || geometry.type === "Point") return "point";
+  // Radera-markering: användaren pekar ut något att ta bort — visa alla symboltyper.
+  if (isDeletePointGeometry(geometry)) return "all";
+  if (geometry.type === "Point") return "point";
   if (geometry.type === "LineString") return "line";
   return "area";
 }
 
-/** OCAD symbol type: 1 point, 2 line, 3 area, 7 rectangle */
-export function ocadSymbolTypesForKind(kind: MarkingGeometryKind): number[] {
+/** OCAD symbol type: 1 point, 2 line, 3 area, 7 rectangle. `null` = ingen filtrering. */
+export function ocadSymbolTypesForKind(kind: MarkingGeometryKind): number[] | null {
   switch (kind) {
+    case "all":
+      return null;
     case "point":
       return [1];
     case "line":
@@ -125,9 +129,10 @@ export function groupOcadSymbolPicks(
     query?: string;
   },
 ): SuggestionSymbolGroup[] {
-  const allowedTypes = options?.geometryKind
-    ? new Set(ocadSymbolTypesForKind(options.geometryKind))
+  const allowedTypesList = options?.geometryKind
+    ? ocadSymbolTypesForKind(options.geometryKind)
     : null;
+  const allowedTypes = allowedTypesList ? new Set(allowedTypesList) : null;
   const q = options?.query?.trim().toLowerCase() ?? "";
 
   const filtered = picks.filter((pick) => {
@@ -217,4 +222,72 @@ export function insertTextAtCursor(
   const next = `${before}${insertion}${after}`;
   const cursor = selectionStart + insertion.length;
   return { next, cursor };
+}
+
+function normalizeSpeechText(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/[^a-z0-9åäö\s]/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function levenshteinDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  if (a.length === 0) return b.length;
+  if (b.length === 0) return a.length;
+  const prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let prevDiag = prev[0]!;
+    prev[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const temp = prev[j]!;
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      prev[j] = Math.min(prev[j]! + 1, prev[j - 1]! + 1, prevDiag + cost);
+      prevDiag = temp;
+    }
+  }
+  return prev[b.length]!;
+}
+
+/**
+ * Matchar talad text mot OCAD-symbolbeskrivningar.
+ * Returnerar bästa label, annars null (anropaaren kan infoga råtranscript).
+ */
+export function matchSpokenTextToSymbol(
+  spoken: string,
+  labels: string[],
+): string | null {
+  const query = normalizeSpeechText(spoken);
+  if (!query || labels.length === 0) return null;
+
+  let best: { label: string; score: number } | null = null;
+
+  for (const label of labels) {
+    const norm = normalizeSpeechText(label);
+    if (!norm) continue;
+
+    let score = 0;
+    if (norm === query) {
+      score = 1000;
+    } else if (norm.startsWith(query) || query.startsWith(norm)) {
+      score = 800 - Math.abs(norm.length - query.length);
+    } else if (norm.includes(query) || query.includes(norm)) {
+      score = 600 - Math.abs(norm.length - query.length);
+    } else {
+      const dist = levenshteinDistance(norm, query);
+      const maxLen = Math.max(norm.length, query.length);
+      const similarity = 1 - dist / maxLen;
+      if (similarity < 0.72) continue;
+      score = Math.round(similarity * 500);
+    }
+
+    if (!best || score > best.score) {
+      best = { label, score };
+    }
+  }
+
+  return best && best.score >= 360 ? best.label : null;
 }

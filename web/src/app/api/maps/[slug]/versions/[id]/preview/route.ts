@@ -12,12 +12,22 @@ import {
   svgBufferHasMetadata,
 } from "@/lib/ocad/svg";
 import { prisma } from "@/lib/prisma";
-import { readStoredFile, uploadFile } from "@/lib/storage";
+import { fileExists, readStoredFile, uploadFile } from "@/lib/storage";
 import { NextResponse } from "next/server";
 
 export const maxDuration = 300;
 
 type RouteParams = { params: Promise<{ slug: string; id: string }> };
+
+async function readPreviewOrNull(storagePath: string): Promise<Buffer | null> {
+  try {
+    if (!(await fileExists(storagePath))) return null;
+    return await readStoredFile(storagePath);
+  } catch (err) {
+    console.warn("Preview SVG kunde inte läsas, regenererar:", storagePath, err);
+    return null;
+  }
+}
 
 export async function GET(_request: Request, { params }: RouteParams) {
   const session = await requireSession();
@@ -39,12 +49,14 @@ export async function GET(_request: Request, { params }: RouteParams) {
   }
 
   let previewSvgPath = version.previewSvgPath;
+  let svgBuffer = previewSvgPath ? await readPreviewOrNull(previewSvgPath) : null;
 
-  if (!previewSvgPath) {
+  if (!svgBuffer) {
     previewSvgPath = buildPreviewSvgPath(version.mapFileId, version.versionNumber);
     try {
       const buffer = await readStoredFile(version.storagePath);
       await generateAndStorePreviewSvg(buffer, previewSvgPath);
+      svgBuffer = await readStoredFile(previewSvgPath);
       await prisma.mapVersion.update({
         where: { id: version.id },
         data: { previewSvgPath },
@@ -59,7 +71,6 @@ export async function GET(_request: Request, { params }: RouteParams) {
   }
 
   try {
-    let svgBuffer = await readStoredFile(previewSvgPath);
     let ocdBuffer: Buffer | null = null;
 
     const needsLayerUpgrade = !svgBufferHasLayers(svgBuffer);
@@ -71,11 +82,11 @@ export async function GET(_request: Request, { params }: RouteParams) {
       if (needsLayerUpgrade) {
         const { svg } = await generateOcadSvgLayered(ocdBuffer);
         svgBuffer = Buffer.from(svg, "utf-8");
-        await uploadFile(previewSvgPath, svgBuffer);
+        await uploadFile(previewSvgPath!, svgBuffer);
       } else if (needsMetadata) {
         const { buffer, changed } = await ensureSvgMetadata(svgBuffer, ocdBuffer);
         if (changed) {
-          await uploadFile(previewSvgPath, buffer);
+          await uploadFile(previewSvgPath!, buffer);
         }
         svgBuffer = buffer;
       }

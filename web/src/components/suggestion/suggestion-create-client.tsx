@@ -852,9 +852,22 @@ export function SuggestionCreateClient({
             onSubmit={(e) => void handleSubmit(e)}
             className="max-h-[90vh] w-full overflow-y-auto rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl"
           >
-            <HelpSectionHeading section="kartforslag" id="suggestion-submit-dialog-title">
-              Skicka in kartförslag
-            </HelpSectionHeading>
+            <div className="flex items-start justify-between gap-3">
+              <HelpSectionHeading section="kartforslag" id="suggestion-submit-dialog-title">
+                Skicka in kartförslag
+              </HelpSectionHeading>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={() => {
+                  setSubmitDialogOpen(false);
+                  setError(null);
+                }}
+                className="shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Tillbaka
+              </button>
+            </div>
             <p className="mt-1 text-sm text-slate-600">
               Fyll i uppgifterna nedan och skicka in {markings.length}{" "}
               {markings.length === 1 ? "ändring" : "ändringar"} tillsammans.

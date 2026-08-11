@@ -27,7 +27,7 @@ const lines = [
   `DATABASE_URL=${JSON.stringify(databaseUrl)}`,
   `DATABASE_URL_UNPOOLED=${JSON.stringify(databaseUrlUnpooled)}`,
   "NEXT_PUBLIC_APP_URL=http://localhost:3000",
-  "STORAGE_BACKEND=local",
+  "STORAGE_BACKEND=blob",
   "STORAGE_ROOT=./storage",
   "",
 ];

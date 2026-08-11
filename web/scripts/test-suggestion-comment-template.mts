@@ -10,6 +10,7 @@ import {
   groupOcadSymbolPicks,
   insertTextAtCursor,
   markingGeometryKind,
+  matchSpokenTextToSymbol,
   symbolDescriptionOnly,
   suggestionMarkingGeometryLabel,
 } from "@/lib/suggestion/suggestion-comment-template";
@@ -126,8 +127,24 @@ assert.deepEqual(
   ["Sten", "Stig"],
 );
 
+const allForDelete = groupOcadSymbolPicks(picks, { geometryKind: "all" });
+assert.equal(allForDelete.length, 2);
+assert.deepEqual(
+  flattenSymbolLabels(allForDelete),
+  ["Sten", "Stig"],
+);
+
 assert.equal(markingGeometryKind(markings[0]!), "point");
 assert.equal(markingGeometryKind(markings[1]!), "line");
 assert.equal(markingGeometryKind(markings[2]!), "area");
+assert.equal(
+  markingGeometryKind({ type: "Point", coordinates: [0, 0], intent: "delete" }),
+  "all",
+);
+
+assert.equal(matchSpokenTextToSymbol("Sten", ["Sten", "Stig"]), "Sten");
+assert.equal(matchSpokenTextToSymbol("sten.", ["Sten", "Stig"]), "Sten");
+assert.equal(matchSpokenTextToSymbol("stig", ["Sten", "Stig"]), "Stig");
+assert.equal(matchSpokenTextToSymbol("xyzzy", ["Sten", "Stig"]), null);
 
 console.log("suggestion-comment-template: ok");
