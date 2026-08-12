@@ -306,6 +306,8 @@ export function DiffMapPanel({
   const viewportRef = useRef<HTMLDivElement>(null);
   const gpsWatchIdRef = useRef<number | null>(null);
   const gpsCenteredOnceRef = useRef(false);
+  const gpsFixRef = useRef<GpsFix | null>(null);
+  gpsFixRef.current = gpsFix;
   const dragRef = useRef<{
     startX: number;
     startY: number;
@@ -1037,6 +1039,20 @@ export function DiffMapPanel({
     panToMapCoordAtDisplayScale,
   ]);
 
+  /** Min position: zoom 1:100 vid första fix, sedan panorera hit var 10:e sekund. */
+  useEffect(() => {
+    if (!gpsEnabled || !fullViewBox || gpsTrackFollow?.active) return;
+
+    const follow = () => {
+      const fix = gpsFixRef.current;
+      if (fix) panToMapCoordAtDisplayScale(fix.mapCoord);
+    };
+
+    follow();
+    const id = window.setInterval(follow, GPS_TRACK_FOLLOW_INTERVAL_MS);
+    return () => window.clearInterval(id);
+  }, [fullViewBox, gpsEnabled, gpsTrackFollow?.active, panToMapCoordAtDisplayScale]);
+
   const applyGpsPosition = useCallback(
     (coords: GeolocationCoordinates, autoCenter: boolean) => {
       if (!ocadCrs) return;
@@ -1077,10 +1093,11 @@ export function DiffMapPanel({
 
       if (autoCenter && !gpsCenteredOnceRef.current) {
         gpsCenteredOnceRef.current = true;
-        panToMapCoord(mapCoord, outside ? 2 : 10);
+        // Zoom till 1:100 och centrera direkt vid första fix (följs upp var 10:e s).
+        panToMapCoordAtDisplayScale(mapCoord);
       }
     },
-    [fullViewBox, ocadCrs, panToMapCoord, rootTransform],
+    [fullViewBox, ocadCrs, panToMapCoordAtDisplayScale, rootTransform],
   );
 
   const stopGps = useCallback(() => {
@@ -1220,8 +1237,9 @@ export function DiffMapPanel({
               {gpsFix && (
                 <button
                   type="button"
-                  onClick={() => panToMapCoord(gpsFix.mapCoord, 10)}
+                  onClick={() => panToMapCoordAtDisplayScale(gpsFix.mapCoord)}
                   className={toolbarBtnPrimary}
+                  title="Centrera på din position i skala 1:100"
                 >
                   Panorera hit
                 </button>

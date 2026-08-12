@@ -7,6 +7,13 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-08-12",
+    title: "Min position följer dig",
+    items: [
+      "Efter «Min position» zoomas kartan till skala 1:100 och panoreras till din plats var 10:e sekund tills du stoppar GPS",
+    ],
+  },
+  {
     date: "2026-08-11",
     title: "Kartförslag — tala in beskrivning",
     items: [
