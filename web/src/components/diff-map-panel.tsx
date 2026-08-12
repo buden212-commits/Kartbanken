@@ -129,7 +129,7 @@ type Props = {
     requestId: number;
   } | null;
   /**
-   * Kartförslag GPS-spår: håll skala 1:100 och centrera på senaste position var 10:e sekund.
+   * Kartförslag GPS-spår: håll skala 1:50 och centrera på senaste position var 10:e sekund.
    */
   gpsTrackFollow?: {
     active: boolean;
@@ -1014,8 +1014,8 @@ export function DiffMapPanel({
 
   const panToMapCoordAtDisplayScale = useCallback(
     (mapCoord: [number, number]) => {
-      const zoom100 = maxZoomForMapScale(ocadMapScaleRef.current);
-      panToMapCoord(mapCoord, zoom100, { markInteraction: false });
+      const zoomAtMinScale = maxZoomForMapScale(ocadMapScaleRef.current);
+      panToMapCoord(mapCoord, zoomAtMinScale, { markInteraction: false });
     },
     [panToMapCoord],
   );
@@ -1039,7 +1039,7 @@ export function DiffMapPanel({
     panToMapCoordAtDisplayScale,
   ]);
 
-  /** Min position: zoom 1:100 vid första fix, sedan panorera hit var 10:e sekund. */
+  /** Min position: zoom 1:50 vid första fix, sedan panorera hit var 10:e sekund. */
   useEffect(() => {
     if (!gpsEnabled || !fullViewBox || gpsTrackFollow?.active) return;
 
@@ -1093,7 +1093,7 @@ export function DiffMapPanel({
 
       if (autoCenter && !gpsCenteredOnceRef.current) {
         gpsCenteredOnceRef.current = true;
-        // Zoom till 1:100 och centrera direkt vid första fix (följs upp var 10:e s).
+        // Zoom till 1:50 och centrera direkt vid första fix (följs upp var 10:e s).
         panToMapCoordAtDisplayScale(mapCoord);
       }
     },
@@ -1239,7 +1239,7 @@ export function DiffMapPanel({
                   type="button"
                   onClick={() => panToMapCoordAtDisplayScale(gpsFix.mapCoord)}
                   className={toolbarBtnPrimary}
-                  title="Centrera på din position i skala 1:100"
+                  title="Centrera på din position i skala 1:50"
                 >
                   Panorera hit
                 </button>

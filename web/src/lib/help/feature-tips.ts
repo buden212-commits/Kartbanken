@@ -79,7 +79,7 @@ export const featureTips: FeatureTip[] = [
   {
     id: "gps-position",
     title: "Min position på kartan",
-    body: "På georefererade kartor visar Min position var du är, zooma till 1:100 och följer dig var 10:e sekund tills du stoppar GPS.",
+    body: "På georefererade kartor visar Min position var du är, zooma till 1:50 och följer dig var 10:e sekund tills du stoppar GPS.",
     helpSectionId: "kartvy",
     roles: [Role.READER, Role.EDITOR, Role.ADMIN],
     weight: 6,
