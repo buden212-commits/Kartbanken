@@ -8,6 +8,13 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-12",
+    title: "Snabbare inskickning av kartförslag",
+    items: [
+      "Inskickningsdialogen svarar snabbare när du skriver beskrivning och rubrik — kartan bakom omritas inte längre vid varje tangenttryckning",
+    ],
+  },
+  {
+    date: "2026-08-12",
     title: "Min position följer dig",
     items: [
       "Efter «Min position» zoomas kartan till skala 1:100 och panoreras till din plats var 10:e sekund tills du stoppar GPS",
