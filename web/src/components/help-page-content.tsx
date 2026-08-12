@@ -524,7 +524,7 @@ export async function HelpPageContent() {
               "Lägg till flera markeringar innan du skickar in",
               "Klicka «Skicka in kartförslag» på kartan när du är klar — längst ned på mobil, uppe till höger på större skärm — då fyller du i kategori, platsnoggrannhet och beskrivning i dialogen («Tillbaka» finns överst till höger och längst ned)",
               "Beskrivningen förfylls med en rad per markering (punkt, linje eller yta) — skriv vidare på varje rad",
-              "Välj aktiv markering och tryck på symbolnamn under beskrivningen — raden behålls (t.ex. «1. Punkt — Sten»); sökfältet ligger överst, listan är vertikal, sorterad efter hur ofta symbolen används på kartan, filtreras efter punkt/linje/yta (vid «Punkt (radera)» visas alla typer) och grupperas under kartlager («Visa alla» vid många symboler)",
+              "Öppna «Infoga symbol för markering» under beskrivningen (ihopfälld som standard) — välj aktiv markering och symbolnamn; raden behålls (t.ex. «1. Punkt — Sten»); sökfältet ligger överst, listan är vertikal, sorterad efter hur ofta symbolen används på kartan, filtreras efter punkt/linje/yta (vid «Punkt (radera)» visas alla typer) och grupperas under kartlager («Visa alla» vid många symboler)",
               "«Tala» vid beskrivningen (i webbläsare som stödjer det) låter dig säga ett symbolnamn — det matchas mot kartans symboler och infogas på aktiv markering; «Rensa» tömmer beskrivningsrutan",
               "I dialogen: «Ta foto» öppnar kameran på mobil (direktfoto), «Välj bild» plockar från albumet",
               "Skicka-sektionen ovanför kartan visar antal tillagda ändringar innan du skickar",
