@@ -24,6 +24,14 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
+      - name: Require VERCEL_TOKEN
+        run: |
+          if [ -z "${{ secrets.VERCEL_TOKEN }}" ]; then
+            echo "Saknar GitHub Actions secret VERCEL_TOKEN."
+            echo "Skapa token på https://vercel.com/account/tokens och lägg till under Settings → Secrets → Actions."
+            exit 1
+          fi
+
       - name: Install Vercel CLI
         run: npm install -g vercel@58
 
