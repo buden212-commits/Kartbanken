@@ -8,6 +8,13 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-12",
+    title: "Kartförslag — ihopfälld symbolhjälp",
+    items: [
+      "«Infoga symbol för markering» är ihopfälld som standard — öppna sektionen när du vill välja symbol (gäller även på mobil)",
+    ],
+  },
+  {
+    date: "2026-08-12",
     title: "Närmare inzoom på kartan",
     items: [
       "Du kan zooma in till skala 1:50 (tidigare max 1:100)",

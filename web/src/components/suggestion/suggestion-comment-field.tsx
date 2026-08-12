@@ -98,140 +98,174 @@ const SymbolInsertPanel = memo(function SymbolInsertPanel({
   onFocusMarking,
   onInsertSymbol,
 }: SymbolInsertPanelProps) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (markings.length === 0 && symbolPicks.length === 0) {
+    return (
+      <p className="text-xs text-slate-500">
+        Symboler laddas från kartfilen — om listan är tom, skriv terrängtyp manuellt.
+      </p>
+    );
+  }
+
+  const summaryLabel = activeMarking
+    ? `Infoga symbol för markering ${activeMarkingIndex + 1} (${suggestionMarkingGeometryLabel(activeMarking)})`
+    : "Infoga symbol för markering";
+
   return (
-    <>
-      {markings.length > 0 && (
-        <div>
-          <p className="text-xs font-medium text-slate-600">Aktiv markering</p>
-          <div className="mt-1.5 flex flex-col gap-1.5">
-            {markings.map((marking, index) => (
-              <button
-                key={index}
-                type="button"
-                disabled={disabled}
-                onClick={() => onFocusMarking(index)}
-                className={index === activeMarkingIndex ? chipBtnActive : chipBtn}
-                title={suggestionMarkingGeometryLabel(marking)}
-              >
-                {index + 1} · {suggestionMarkingGeometryLabel(marking)}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+    <div className="rounded-lg border border-slate-200 bg-slate-50">
+      <button
+        type="button"
+        disabled={disabled}
+        aria-expanded={expanded}
+        onClick={() => setExpanded((prev) => !prev)}
+        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-slate-100/80 disabled:opacity-50"
+      >
+        <span>
+          {summaryLabel}
+          {!expanded && totalUnfilteredCount > 0 ? (
+            <span className="font-normal text-slate-500"> · {totalUnfilteredCount} val</span>
+          ) : null}
+        </span>
+        <span className="shrink-0 text-xs font-normal text-slate-500" aria-hidden>
+          {expanded ? "Dölj" : "Visa"}
+        </span>
+      </button>
 
-      {symbolPicks.length > 0 && (
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <p className="text-xs font-medium text-slate-700">
-            Infoga symbol
-            {activeMarking
-              ? ` för markering ${activeMarkingIndex + 1} (${suggestionMarkingGeometryLabel(activeMarking)})`
-              : ""}
-            {totalSymbolCount > 0 ? ` · ${totalSymbolCount} val` : " · inga matchande symboler"}
-          </p>
-
-          <input
-            type="search"
-            value={layerQuery}
-            onChange={(e) => {
-              onLayerQueryChange(e.target.value);
-              if (e.target.value.trim()) onShowAllLayers(true);
-            }}
-            disabled={disabled}
-            placeholder="Sök symbol eller grupp…"
-            className="form-input mt-2 py-1.5 text-sm"
-            aria-label="Sök symbol"
-          />
-
-          {!showFullList && quickLabels.length > 0 && (
-            <div className="mt-2 flex flex-col gap-1.5">
-              {quickLabels.map((label) => (
-                <button
-                  key={label}
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => onInsertSymbol(label)}
-                  className={chipBtn}
-                >
-                  {label}
-                </button>
-              ))}
+      {expanded && (
+        <div className="space-y-3 border-t border-slate-200 px-3 py-3">
+          {markings.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-slate-600">Aktiv markering</p>
+              <div className="mt-1.5 flex flex-col gap-1.5">
+                {markings.map((marking, index) => (
+                  <button
+                    key={index}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => onFocusMarking(index)}
+                    className={index === activeMarkingIndex ? chipBtnActive : chipBtn}
+                    title={suggestionMarkingGeometryLabel(marking)}
+                  >
+                    {index + 1} · {suggestionMarkingGeometryLabel(marking)}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
-          {showFullList && (
-            <div className="mt-2 max-h-56 overflow-y-auto rounded-md border border-slate-200 bg-white p-2">
-              {groupedSymbols.length === 0 ? (
-                <p className="px-1 py-2 text-sm text-slate-500">
-                  Inga symboler matchar{layerQuery.trim() ? " sökningen" : " för denna markeringstyp"}.
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {groupedSymbols.map((group) => (
-                    <div key={group.groupName}>
-                      <p className="text-xs font-semibold text-slate-500">{group.groupName}</p>
-                      <div className="mt-1 flex flex-col gap-1.5">
-                        {group.symbols.map((symbol) => (
-                          <button
-                            key={`${group.groupName}-${symbol.label}`}
-                            type="button"
-                            disabled={disabled}
-                            onClick={() => onInsertSymbol(symbol.label)}
-                            className={chipBtn}
-                          >
-                            {symbol.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+          {symbolPicks.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-slate-700">
+                Symboler
+                {totalSymbolCount > 0 ? ` · ${totalSymbolCount} val` : " · inga matchande symboler"}
+              </p>
+
+              <input
+                type="search"
+                value={layerQuery}
+                onChange={(e) => {
+                  onLayerQueryChange(e.target.value);
+                  if (e.target.value.trim()) onShowAllLayers(true);
+                }}
+                disabled={disabled}
+                placeholder="Sök symbol eller grupp…"
+                className="form-input mt-2 py-1.5 text-sm"
+                aria-label="Sök symbol"
+              />
+
+              {!showFullList && quickLabels.length > 0 && (
+                <div className="mt-2 flex flex-col gap-1.5">
+                  {quickLabels.map((label) => (
+                    <button
+                      key={label}
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => onInsertSymbol(label)}
+                      className={chipBtn}
+                    >
+                      {label}
+                    </button>
                   ))}
                 </div>
               )}
-            </div>
-          )}
 
-          {hasManySymbols && (
-            <div className="mt-2">
-              {!showAllLayers && !layerQuery.trim() ? (
-                <button
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => onShowAllLayers(true)}
-                  className="text-sm font-medium text-ifk-blue hover:underline"
-                >
-                  Visa alla symboler…
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => {
-                    onShowAllLayers(false);
-                    onLayerQueryChange("");
-                  }}
-                  className="text-xs text-slate-500 hover:text-slate-700"
-                >
-                  Dölj listan
-                </button>
+              {showFullList && (
+                <div className="mt-2 max-h-56 overflow-y-auto rounded-md border border-slate-200 bg-white p-2">
+                  {groupedSymbols.length === 0 ? (
+                    <p className="px-1 py-2 text-sm text-slate-500">
+                      Inga symboler matchar
+                      {layerQuery.trim() ? " sökningen" : " för denna markeringstyp"}.
+                    </p>
+                  ) : (
+                    <div className="space-y-3">
+                      {groupedSymbols.map((group) => (
+                        <div key={group.groupName}>
+                          <p className="text-xs font-semibold text-slate-500">{group.groupName}</p>
+                          <div className="mt-1 flex flex-col gap-1.5">
+                            {group.symbols.map((symbol) => (
+                              <button
+                                key={`${group.groupName}-${symbol.label}`}
+                                type="button"
+                                disabled={disabled}
+                                onClick={() => onInsertSymbol(symbol.label)}
+                                className={chipBtn}
+                              >
+                                {symbol.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {hasManySymbols && (
+                <div className="mt-2">
+                  {!showAllLayers && !layerQuery.trim() ? (
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => onShowAllLayers(true)}
+                      className="text-sm font-medium text-ifk-blue hover:underline"
+                    >
+                      Visa alla symboler…
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => {
+                        onShowAllLayers(false);
+                        onLayerQueryChange("");
+                      }}
+                      className="text-xs text-slate-500 hover:text-slate-700"
+                    >
+                      Dölj listan
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {totalUnfilteredCount === 0 && activeMarking && (
+                <p className="mt-2 text-xs text-slate-500">
+                  Inga {suggestionMarkingGeometryLabel(activeMarking).toLowerCase()}-symboler med
+                  objekt på kartan. Skriv manuellt eller byt markering.
+                </p>
               )}
             </div>
           )}
 
-          {totalUnfilteredCount === 0 && activeMarking && (
-            <p className="mt-2 text-xs text-slate-500">
-              Inga {suggestionMarkingGeometryLabel(activeMarking).toLowerCase()}-symboler med objekt på
-              kartan. Skriv manuellt eller byt markering.
+          {symbolPicks.length === 0 && (
+            <p className="text-xs text-slate-500">
+              Symboler laddas från kartfilen — om listan är tom, skriv terrängtyp manuellt.
             </p>
           )}
         </div>
       )}
-
-      {symbolPicks.length === 0 && (
-        <p className="text-xs text-slate-500">
-          Symboler laddas från kartfilen — om listan är tom, skriv terrängtyp manuellt.
-        </p>
-      )}
-    </>
+    </div>
   );
 });
 
@@ -481,7 +515,8 @@ export function SuggestionCommentField({
           placeholder="Beskriv vad som är fel, saknas eller bör förklaras (minst 2 tecken)."
         />
         <p className="mt-1 text-xs text-slate-500">
-          En rad per markering. Välj markering och tryck på symbolnamn nedan, eller skriv fritt
+          En rad per markering. Skriv fritt, eller öppna «Infoga symbol för markering» för
+          symbolval
           {speechSupported ? " — eller tala in (t.ex. «Sten»)." : "."}
         </p>
         {speechStatus && (
