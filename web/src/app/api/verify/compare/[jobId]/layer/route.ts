@@ -1,6 +1,7 @@
 import { requireSession } from "@/lib/auth/api";
 import { readTempCompareJob } from "@/lib/ocad/temp-compare";
 import { readStoredFile } from "@/lib/storage";
+import { SVG_RESPONSE_SECURITY_HEADERS } from "@/lib/security/svg-sanitize";
 import { NextResponse } from "next/server";
 
 export const maxDuration = 300;
@@ -43,7 +44,7 @@ export async function GET(request: Request, { params }: RouteParams) {
     const svg = await readStoredFile(storagePath);
     return new NextResponse(new Uint8Array(svg), {
       headers: {
-        "Content-Type": "image/svg+xml; charset=utf-8",
+        ...SVG_RESPONSE_SECURITY_HEADERS,
         "Cache-Control": "private, max-age=3600",
       },
     });

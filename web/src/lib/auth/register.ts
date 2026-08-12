@@ -1,9 +1,11 @@
 "use server";
 
+import { logAction } from "@/lib/audit";
 import { hashPassword } from "@/lib/auth/password";
 import { notifyAdminOfNewRegistration } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
 import { Role } from "@/lib/roles";
+import { rateLimit } from "@/lib/security/rate-limit";
 
 export type RegisterResult =
   | { ok: true }
@@ -14,7 +16,8 @@ export type RegisterResult =
         | "password_mismatch"
         | "password_too_short"
         | "invalid_email"
-        | "missing_name";
+        | "missing_name"
+        | "rate_limited";
     };
 
 export async function registerUser(formData: FormData): Promise<RegisterResult> {
@@ -29,6 +32,11 @@ export async function registerUser(formData: FormData): Promise<RegisterResult> 
 
   if (!email || !email.includes("@")) {
     return { ok: false, error: "invalid_email" };
+  }
+
+  const rl = rateLimit(`register:${email}`, { limit: 5, windowMs: 60 * 60 * 1000 });
+  if (!rl.ok) {
+    return { ok: false, error: "rate_limited" };
   }
 
   if (!password || password.length < 8) {
@@ -46,7 +54,7 @@ export async function registerUser(formData: FormData): Promise<RegisterResult> 
 
   const passwordHash = await hashPassword(password);
 
-  await prisma.user.create({
+  const created = await prisma.user.create({
     data: {
       name,
       email,
@@ -56,6 +64,8 @@ export async function registerUser(formData: FormData): Promise<RegisterResult> 
       approvedById: null,
     },
   });
+
+  await logAction(created.id, "USER_CREATED", "User", created.id, { email });
 
   void notifyAdminOfNewRegistration({ name, email }).catch((err) => {
     console.error("[email] Failed to send new user notification:", err);

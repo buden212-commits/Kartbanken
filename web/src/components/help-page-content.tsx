@@ -861,6 +861,8 @@ export async function HelpPageContent() {
                 Kontot kan vänta på godkännande eller ha avvisats. Skapa konto om du saknar konto
                 och kontakta klubbens administratör. Godkända konton kan logga in direkt. Har du
                 glömt lösenordet, använd <strong>Glömt lösenord?</strong> på inloggningssidan.
+                Efter många misslyckade försök kan inloggning tillfälligt blockeras — vänta en
+                stund och försök igen.
               </p>
             </div>
             <div>

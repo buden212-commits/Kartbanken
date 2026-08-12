@@ -8,6 +8,17 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-12",
+    title: "Säkerhetsförbättringar",
+    items: [
+      "Striktare behörighetskontroll: roller och «måste byta lösenord» hämtas från databasen, inte från webbläsaren",
+      "Säkrare filuppladdning till molnlagring — sökvägar binds till rätt karta/version",
+      "Begränsning av antal försök vid inloggning, registrering och «glömt lösenord»",
+      "Säkerhetsrubriker i webbläsaren (bl.a. mot clickjacking och MIME-sniffning)",
+      "Kart-SVG saneras innan den visas, och preview-svar får striktare säkerhetsrubriker",
+    ],
+  },
+  {
+    date: "2026-08-12",
     title: "Kartförslag — ihopfälld symbolhjälp",
     items: [
       "«Infoga symbol för markering» är ihopfälld som standard — öppna sektionen när du vill välja symbol (gäller även på mobil)",
