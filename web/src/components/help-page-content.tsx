@@ -512,8 +512,9 @@ export async function HelpPageContent() {
             items={[
               "Öppna en publicerad version via Visa karta och klicka Föreslå ändring",
               "Välj ritverktyg som ikoner till höger på kartan: punkt, rektangel, polygon, linje eller «Radera objektet» (rött X — pekar ut var något ska tas bort; beskriv vad i kommentaren)",
+              "«Min position» zooma till skala 1:50 och panorera till dig var 10:e sekund tills du stoppar GPS",
               "«GPS-spår» finns som ikon i ritverktygsraden till höger (mellan linje och radera) — spelar in en linje med telefonens GPS (kräver georefererad karta)",
-              "Under spårning zoomas kartan till skala 1:100 och följer din position var 10:e sekund",
+              "Under spårning zoomas kartan till skala 1:50 och följer din position var 10:e sekund",
               "GPS-spår filtreras (minst ca 4 m mellan punkter) och förenklas automatiskt innan linjen sparas",
               "Orimliga GPS-hopp filtreras bort och accepterade punkter utjämnas vid sämre mottagning — antal filtrerade hopp visas efter «Sluta spåra»",
               "Kartan startar i «Navigera» — välj ett ritverktyg till höger för att aktivera «Rita» och börja markera",
@@ -662,7 +663,7 @@ export async function HelpPageContent() {
               "Knapparna + och − zoomar in respektive ut med 50 % per klick",
               "Mushjul zoomar också i 50 %-steg",
               "Skalan i verktygsraden visar nominal kartskala (t.ex. 1:15 000 vid «Hela kartan») — zoom in ger finare skala (t.ex. 1:7 500)",
-              "Max inzoom motsvarar skala 1:100 (kartfilens skala delat med zoomnivån)",
+              "Max inzoom motsvarar skala 1:50 (kartfilens skala delat med zoomnivån)",
               "Hela kartan — återställer vyn så att hela kartan syns",
               "Dra i kartan för att panorera",
             ]}
@@ -681,11 +682,13 @@ export async function HelpPageContent() {
 
           <h3 className="font-medium text-slate-900">Min position (GPS)</h3>
           <p>
-            I kartvyn finns knappen <strong>Min position</strong> om kartan är georefererad och din
-            enhet stödjer GPS. Ett fast sikte (crosshair) visar var du befinner dig på kartan —
-            siktet behåller samma storlek på skärmen oavsett zoomnivå. Statusraden visar
-            positionsnoggrannhet. Använd <strong>Panorera hit</strong> för att centrera kartan på
-            din position, eller <strong>Stoppa GPS</strong> när du är klar.
+            I kartvyn (även under «Föreslå kartändringar») finns knappen{" "}
+            <strong>Min position</strong> om kartan är georefererad och din enhet stödjer GPS. Ett
+            fast sikte (crosshair) visar var du befinner dig — siktet behåller samma storlek på
+            skärmen oavsett zoomnivå. När GPS är på zoomas kartan till skala 1:50 och panoreras till
+            din position var 10:e sekund tills du trycker <strong>Stoppa GPS</strong>. Statusraden
+            visar positionsnoggrannhet. <strong>Panorera hit</strong> centrerar manuellt i samma
+            skala.
           </p>
           <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-700">
             GPS kräver georefererad karta och fungerar bäst utomhus med bra mottagning. Om kartan
