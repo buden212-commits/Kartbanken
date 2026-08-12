@@ -17,6 +17,7 @@
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "env:sync-local": "tsx scripts/sync-local-env.mts",
+    "deploy:prod": "tsx scripts/deploy-prod.mts",
     "check:help": "tsx scripts/check-help-updated.mts",
     "licenses:notices": "tsx scripts/generate-third-party-notices.mts",
     "hooks:install": "tsx ../scripts/setup-git-hooks.mts",
