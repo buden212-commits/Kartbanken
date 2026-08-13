@@ -8,6 +8,13 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-13",
+    title: "GPS-noggrannhet syns tydligare",
+    items: [
+      "När positionsnoggrannheten är Osäker (över ca 20 m) blir GPS-markeringen och statusraden röda",
+    ],
+  },
+  {
+    date: "2026-08-13",
     title: "OCD-export av kartförslag",
     items: [
       "«Exportera endast kartförslag» skapar åter en giltig OCAD-fil — tidigare kunde filen bli korrupt och OCAD visa internt fel vid öppning",

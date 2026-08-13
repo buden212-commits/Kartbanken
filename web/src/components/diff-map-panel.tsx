@@ -150,6 +150,8 @@ const POINT_HIGHLIGHT_RADIUS_M = 5; // 10 m diameter in map units (meters)
 const DRAG_THRESHOLD_PX = 5;
 /** Fixed screen size for GPS reticle (overlay is outside zoom transform). */
 const GPS_CROSSHAIR_SIZE_PX = 28;
+/** Accuracy above this (meters) is shown as Osäker — marker and status turn red. */
+const GPS_UNCERTAIN_ACCURACY_M = 20;
 /** Re-center interval while recording a kartförslag GPS track. */
 const GPS_TRACK_FOLLOW_INTERVAL_MS = 10_000;
 
@@ -1076,9 +1078,9 @@ export function DiffMapPanel({
       });
       setGpsError(null);
       setGpsStatus(
-        accuracyMeters <= 20
+        accuracyMeters <= GPS_UNCERTAIN_ACCURACY_M
           ? `GPS ±${Math.round(accuracyMeters)} m`
-          : `GPS ±${Math.round(accuracyMeters)} m (osäker)`,
+          : `GPS ±${Math.round(accuracyMeters)} m (Osäker)`,
       );
 
       const vb = parseViewBoxString(fullViewBox);
@@ -1177,8 +1179,16 @@ export function DiffMapPanel({
     const x = pan.x + baseX * zoom;
     const y = pan.y + baseY * zoom;
 
-    return { x, y };
+    return {
+      x,
+      y,
+      uncertain: gpsFix.accuracyMeters > GPS_UNCERTAIN_ACCURACY_M,
+    };
   }, [fullViewBox, gpsFix, pan.x, pan.y, rootTransform, zoom]);
+
+  const gpsAccuracyUncertain = Boolean(
+    gpsFix && gpsFix.accuracyMeters > GPS_UNCERTAIN_ACCURACY_M,
+  );
 
   const highlightShape = focusTarget ? buildHighlightShape(focusTarget, rootTransform) : null;
   const exportBbox = exportFrame ? exportFrameBbox(exportFrame) : null;
@@ -1267,7 +1277,7 @@ export function DiffMapPanel({
       {(gpsStatus || gpsError) && (
         <div
           className={`border-b px-3 py-1.5 text-xs sm:px-4 ${
-            gpsError
+            gpsError || gpsAccuracyUncertain
               ? "border-red-200 bg-red-50 text-red-700"
               : "border-slate-200 bg-slate-50 text-slate-600"
           }`}
@@ -1421,7 +1431,7 @@ export function DiffMapPanel({
                 cy="14"
                 r="11"
                 fill="none"
-                stroke="#64748b"
+                stroke={gpsMarker.uncertain ? "#dc2626" : "#64748b"}
                 strokeWidth="1.5"
               />
               <line
@@ -1447,7 +1457,7 @@ export function DiffMapPanel({
                 y1="9.5"
                 x2="18.5"
                 y2="18.5"
-                stroke="#64748b"
+                stroke={gpsMarker.uncertain ? "#dc2626" : "#64748b"}
                 strokeWidth="1.5"
                 strokeLinecap="round"
               />
@@ -1456,7 +1466,7 @@ export function DiffMapPanel({
                 y1="9.5"
                 x2="9.5"
                 y2="18.5"
-                stroke="#64748b"
+                stroke={gpsMarker.uncertain ? "#dc2626" : "#64748b"}
                 strokeWidth="1.5"
                 strokeLinecap="round"
               />

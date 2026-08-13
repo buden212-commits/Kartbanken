@@ -687,8 +687,9 @@ export async function HelpPageContent() {
             fast sikte (crosshair) visar var du befinner dig — siktet behåller samma storlek på
             skärmen oavsett zoomnivå. När GPS är på zoomas kartan till skala 1:50 och panoreras till
             din position var 10:e sekund tills du trycker <strong>Stoppa GPS</strong>. Statusraden
-            visar positionsnoggrannhet. <strong>Panorera hit</strong> centrerar manuellt i samma
-            skala.
+            visar positionsnoggrannhet; vid sämre mottagning (över ca 20 m) visas{" "}
+            <strong>Osäker</strong> i rött och GPS-markeringen blir röd.{" "}
+            <strong>Panorera hit</strong> centrerar manuellt i samma skala.
           </p>
           <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-700">
             GPS kräver georefererad karta och fungerar bäst utomhus med bra mottagning. Om kartan
