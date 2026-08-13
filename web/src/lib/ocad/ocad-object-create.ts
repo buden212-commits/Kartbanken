@@ -149,13 +149,14 @@ export function writeTObject12(template: TObject12Template, coords: OcadCoord[])
   return buffer.subarray(0, offset);
 }
 
-export function defaultTObject12Template(sym: number): TObject12Template {
+export function defaultTObject12Template(sym: number, otp = 0): TObject12Template {
   const now = Date.now() / 86400000 + 2415018.5;
   return {
     sym,
-    otp: 0,
+    otp,
     unicode: true,
     ang: 0,
+    // -1 = använd symbolfärger; index Color sätts separat till giltigt färgnummer.
     col: -1,
     lineWidth: 0,
     diamFlags: 0,

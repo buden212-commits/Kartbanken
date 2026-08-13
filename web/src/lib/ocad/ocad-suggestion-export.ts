@@ -45,9 +45,10 @@ const { readOcad } = require("ocad2geojson") as {
       nDatabaseString?: number;
       objectStringType?: number;
       res1?: number;
-      objIndex?: { status: number; _index: number };
+      objIndex?: { status: number; _index: number; color?: number };
     }>;
-    symbols: Array<{ symNum: number; type: number }>;
+    symbols: Array<{ symNum: number; type: number; colors?: number[]; nColors?: number }>;
+    colors?: Array<{ number: number } | undefined>;
   }>;
 };
 
@@ -97,10 +98,12 @@ function geometryLabel(geometry: SuggestionGeometry, index: number): string {
 function templateFromObject(
   obj: OcadFileData["objects"][number],
   sym: number,
+  objType: number,
 ): TObject12Template {
   return {
     sym,
-    otp: obj.otp ?? 0,
+    // Always align otp with object type — mismatched/zero otp corrupts redraw in OCAD.
+    otp: objType,
     unicode: obj.unicode ?? true,
     ang: obj.ang ?? 0,
     col: obj.col ?? -1,
@@ -108,9 +111,9 @@ function templateFromObject(
     diamFlags: obj.diamFlags ?? 0,
     serverObjectId: obj.serverObjectId ?? 0,
     height: obj.height ?? 0,
-    creationDate: obj.creationDate ?? defaultTObject12Template(sym).creationDate,
+    creationDate: obj.creationDate ?? defaultTObject12Template(sym, objType).creationDate,
     multirepresentationId: obj.multirepresentationId ?? 0,
-    modificationDate: obj.modificationDate ?? defaultTObject12Template(sym).modificationDate,
+    modificationDate: obj.modificationDate ?? defaultTObject12Template(sym, objType).modificationDate,
     nText: 0,
     nObjectString: 0,
     nDatabaseString: 0,
@@ -175,17 +178,58 @@ function assertSymbolType(
   }
 }
 
+function resolveObjectColor(
+  ocadFile: OcadFileData,
+  sym: number,
+  preferred?: number | null,
+): number {
+  if (preferred != null && Number.isFinite(preferred) && preferred !== 0 && preferred !== -1) {
+    return Math.round(preferred);
+  }
+
+  const symbol = ocadFile.symbols.find((entry) => entry.symNum === sym);
+  const fromSymbol = symbol?.colors?.find((value) => Number.isFinite(value) && value > 0);
+  if (fromSymbol != null) return Math.round(fromSymbol);
+
+  const fromObject = ocadFile.objects.find(
+    (obj) => isActiveObject(obj) && obj.sym === sym && obj.col != null && obj.col > 0,
+  );
+  if (fromObject) return Math.round(fromObject.col);
+
+  const fromIndex = ocadFile.objects.find(
+    (obj) =>
+      isActiveObject(obj) &&
+      obj.objIndex?.color != null &&
+      obj.objIndex.color !== 0 &&
+      obj.objIndex.color !== -1,
+  );
+  if (fromIndex?.objIndex?.color != null) return Math.round(fromIndex.objIndex.color);
+
+  const fromTable = ocadFile.colors?.find((color) => color && color.number > 0);
+  if (fromTable) return Math.round(fromTable.number);
+
+  return 1;
+}
+
 function buildObjectSpec(
   template: TObject12Template,
   coords: OcadCoord[],
   objType: number,
+  color: number,
 ): NewObjectSpec {
-  const objectBytes = writeTObject12(template, coords);
+  const objectTemplate: TObject12Template = {
+    ...template,
+    otp: objType,
+    // Keep TObject.col aligned with index Color when we resolved a concrete number.
+    col: color > 0 ? color : template.col,
+  };
+  const objectBytes = writeTObject12(objectTemplate, coords);
   const bounds = computeCoordBounds(coords);
   return {
     objectBytes,
-    sym: template.sym,
+    sym: objectTemplate.sym,
     objType,
+    color,
     len: objectLenFromByteSize(objectBytes.length),
     rc: bounds,
   };
@@ -208,10 +252,11 @@ function geometryToObjectSpec(
       );
       const templateObj = findTemplateObject(ocadFile, mapping.point, OCAD_POINT_OBJECT);
       const template = templateObj
-        ? templateFromObject(templateObj, mapping.point)
-        : defaultTObject12Template(mapping.point);
+        ? templateFromObject(templateObj, mapping.point, OCAD_POINT_OBJECT)
+        : defaultTObject12Template(mapping.point, OCAD_POINT_OBJECT);
+      const color = resolveObjectColor(ocadFile, mapping.point, templateObj?.col ?? template.col);
       const [x, y] = geometry.coordinates;
-      return buildObjectSpec(template, [{ x, y }], OCAD_POINT_OBJECT);
+      return buildObjectSpec(template, [{ x, y }], OCAD_POINT_OBJECT, color);
     }
     case "LineString": {
       assertSymbolType(
@@ -223,13 +268,14 @@ function geometryToObjectSpec(
       );
       const templateObj = findTemplateObject(ocadFile, mapping.line, OCAD_LINE_OBJECT);
       const template = templateObj
-        ? templateFromObject(templateObj, mapping.line)
-        : defaultTObject12Template(mapping.line);
+        ? templateFromObject(templateObj, mapping.line, OCAD_LINE_OBJECT)
+        : defaultTObject12Template(mapping.line, OCAD_LINE_OBJECT);
+      const color = resolveObjectColor(ocadFile, mapping.line, templateObj?.col ?? template.col);
       const coords = geometry.coordinates.map(([x, y]) => ({ x, y }));
       if (coords.length < 2) {
         throw new Error(`${geometryName}: linjen har för få punkter (minst 2 krävs).`);
       }
-      return buildObjectSpec(template, coords, OCAD_LINE_OBJECT);
+      return buildObjectSpec(template, coords, OCAD_LINE_OBJECT, color);
     }
     case "Polygon": {
       assertSymbolType(
@@ -241,8 +287,9 @@ function geometryToObjectSpec(
       );
       const templateObj = findTemplateObject(ocadFile, mapping.area, OCAD_AREA_OBJECT);
       const template = templateObj
-        ? templateFromObject(templateObj, mapping.area)
-        : defaultTObject12Template(mapping.area);
+        ? templateFromObject(templateObj, mapping.area, OCAD_AREA_OBJECT)
+        : defaultTObject12Template(mapping.area, OCAD_AREA_OBJECT);
+      const color = resolveObjectColor(ocadFile, mapping.area, templateObj?.col ?? template.col);
       const ring = geometry.ring;
       if (ring.length < 3) {
         throw new Error(`${geometryName}: polygonen har för få hörn (minst 3 krävs).`);
@@ -255,7 +302,7 @@ function geometryToObjectSpec(
       }));
       const [fx, fy] = ring[0]!;
       coords.push({ x: fx, y: fy, yFlags: CORNER_Y_FLAG });
-      return buildObjectSpec(template, coords, OCAD_AREA_OBJECT);
+      return buildObjectSpec(template, coords, OCAD_AREA_OBJECT, color);
     }
     case "Bbox": {
       assertSymbolType(
@@ -267,8 +314,9 @@ function geometryToObjectSpec(
       );
       const templateObj = findTemplateObject(ocadFile, mapping.area, OCAD_AREA_OBJECT);
       const template = templateObj
-        ? templateFromObject(templateObj, mapping.area)
-        : defaultTObject12Template(mapping.area);
+        ? templateFromObject(templateObj, mapping.area, OCAD_AREA_OBJECT)
+        : defaultTObject12Template(mapping.area, OCAD_AREA_OBJECT);
+      const color = resolveObjectColor(ocadFile, mapping.area, templateObj?.col ?? template.col);
       const { minX, minY, maxX, maxY } = geometry.bbox;
       const coords: OcadCoord[] = [
         { x: minX, y: minY, yFlags: CORNER_Y_FLAG },
@@ -277,7 +325,7 @@ function geometryToObjectSpec(
         { x: minX, y: maxY },
         { x: minX, y: minY, yFlags: CORNER_Y_FLAG },
       ];
-      return buildObjectSpec(template, coords, OCAD_AREA_OBJECT);
+      return buildObjectSpec(template, coords, OCAD_AREA_OBJECT, color);
     }
   }
 }

@@ -716,6 +716,7 @@ export async function HelpPageContent() {
               "Kryssruta «Exportera endast kartförslag»: PDF och GeoTIFF ritar förslagen ovanpå kartan; OCD exporterar enbart markeringarna (inte grundkartan)",
               "GeoTIFF sparas med kartans projicerade koordinatsystem (EPSG) — kräver georefererad karta",
               "OCD med kartförslag: välj symbol för punkt, linje och yta i dialogen — exportfilen innehåller bara förslagens objekt med kartans befintliga symboler (OCAD 12/2018), inte grundkartan",
+              "Exporterad OCD-fil ska öppnas normalt i OCAD; om du får internt fel vid öppning, exportera igen efter senaste uppdateringen",
               "Dra exportramen på kartan till önskat utsnitt innan du exporterar",
             ]}
           />

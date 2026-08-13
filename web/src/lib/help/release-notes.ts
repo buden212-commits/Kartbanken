@@ -7,6 +7,13 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-08-13",
+    title: "OCD-export av kartförslag",
+    items: [
+      "«Exportera endast kartförslag» skapar åter en giltig OCAD-fil — tidigare kunde filen bli korrupt och OCAD visa internt fel vid öppning",
+    ],
+  },
+  {
     date: "2026-08-12",
     title: "Säkerhetsförbättringar",
     items: [

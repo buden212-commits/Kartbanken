@@ -24,13 +24,18 @@ function assert(condition: boolean, message: string): void {
 }
 
 function readObject(coords: OcadCoord[]) {
-  const bytes = writeTObject12(defaultTObject12Template(101), coords);
+  const bytes = writeTObject12(defaultTObject12Template(101, 2), coords);
   assert(bytes.length === TOBJECT12_HEADER_SIZE + coords.length * 8, "byte length mismatch");
 
   const reader = new BufferReader(bytes);
-  const obj = new TObject12(reader, { objType: 2, _index: 0 });
+  const obj = new TObject12(reader, { objType: 2, _index: 0 }) as {
+    nItem: number;
+    otp: number;
+    coordinates: Array<{ 0: number; 1: number; xFlags: number; yFlags: number }>;
+  };
   assert(reader.offset === bytes.length, `reader consumed ${reader.offset}, expected ${bytes.length}`);
   assert(obj.nItem === coords.length, "nItem mismatch");
+  assert(obj.otp === 2, "otp should be object type");
   for (let i = 0; i < coords.length; i++) {
     const expected = coords[i]!;
     const actual = obj.coordinates[i]!;
