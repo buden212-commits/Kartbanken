@@ -33,6 +33,18 @@ export function formatAuditActivity(action: string, metadataRaw: string | null):
   switch (action as AuditAction) {
     case "LOGIN":
       return "Inloggning";
+    case "LOGIN_FAILED":
+      return "Misslyckad inloggning";
+    case "USER_CREATED":
+      return "Användare skapad";
+    case "USER_DELETED":
+      return "Användare raderad";
+    case "USER_NOTIFICATIONS_UPDATED":
+      return "Aviseringsinställningar uppdaterade";
+    case "SETTINGS_UPDATED":
+      return "Systeminställningar uppdaterade";
+    case "TEST_EMAIL_SENT":
+      return "Testmail skickat";
     case "USER_UPDATED": {
       const next = metadata?.next as { email?: string } | undefined;
       const email = next?.email;

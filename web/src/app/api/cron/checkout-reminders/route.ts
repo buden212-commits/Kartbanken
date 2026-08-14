@@ -16,7 +16,10 @@ export const maxDuration = 120;
 
 function isAuthorized(request: Request): boolean {
   const cronSecret = process.env.CRON_SECRET?.trim();
-  if (!cronSecret) return process.env.NODE_ENV !== "production";
+  if (!cronSecret) {
+    // Fail closed i alla deployade miljöer; tillåt endast lokal development utan secret.
+    return process.env.NODE_ENV === "development" && !process.env.VERCEL;
+  }
   const auth = request.headers.get("authorization");
   return auth === `Bearer ${cronSecret}`;
 }

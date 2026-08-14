@@ -41,16 +41,20 @@ export async function generateCheckoutExport(
 
   const sourceBuffer = await readStoredFile(version.storagePath);
   const summary = await parseOcadBuffer(sourceBuffer, version.originalFilename);
+  const cropGeometry =
+    selection.importPartial && selection.importExtent
+      ? { type: CheckoutSelectionType.BBOX, bbox: selection.importExtent }
+      : selection.geometry;
   const enrichedSelection: CheckoutSelection = {
     ...selection,
-    objectIds: objectIdsFromSelection(summary.objects, selection.geometry),
+    objectIds: objectIdsFromSelection(summary.objects, cropGeometry),
   };
 
   const subset = await exportCheckoutSubset(
     sourceBuffer,
     version.originalFilename,
-    enrichedSelection.geometry,
-    { targetVersion },
+    cropGeometry,
+    { targetVersion, allowEmpty: selection.importPartial === true },
   );
 
   const exportPath = buildCheckoutExportPath(mapFileId, checkoutId);

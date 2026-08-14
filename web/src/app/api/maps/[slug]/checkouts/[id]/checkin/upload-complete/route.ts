@@ -10,6 +10,10 @@ import { CheckoutStatus } from "@/lib/checkout/types";
 import { notifyCheckinSubmitted } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
 import { deleteFile } from "@/lib/storage";
+import {
+  blobRefToPathname,
+  isCheckoutCheckinPath,
+} from "@/lib/storage/blob-path-security";
 import { NextResponse } from "next/server";
 
 type RouteParams = { params: Promise<{ slug: string; id: string }> };
@@ -51,6 +55,11 @@ export async function POST(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "blobUrl saknas" }, { status: 400 });
   }
 
+  const checkinPath = blobRefToPathname(body.blobUrl);
+  if (!isCheckoutCheckinPath(checkinPath, map.id, checkout.id)) {
+    return NextResponse.json({ error: "Ogiltig checkin-sökväg" }, { status: 400 });
+  }
+
   const integrationComment = body.comment?.trim() || null;
 
   if (checkout.checkinStoragePath) {
@@ -59,7 +68,7 @@ export async function POST(request: Request, { params }: RouteParams) {
 
   await updateCheckoutCheckin(
     checkout.id,
-    body.blobUrl,
+    checkinPath,
     CheckoutStatus.CHECKED_IN,
     integrationComment,
   );
@@ -75,7 +84,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     map: { title: map.title, slug: map.slug },
     owner: { name: checkout.user.name, email: checkout.user.email },
     checkin: {
-      storagePath: body.blobUrl,
+      storagePath: checkinPath,
       filename: `${map.title.replace(/\s+/g, "-")}-checkin.ocd`,
     },
   });

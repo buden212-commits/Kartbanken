@@ -20,6 +20,8 @@ export type OcadParseSummary = {
   ocadVersion: number;
   objectCount: number;
   symbolCount: number;
+  /** Alla symbolnummer i filens symboltabell (även oanvända). */
+  symbolNums: number[];
   warnings: string[];
   byType: Record<OcadObjectType, number>;
   topSymbols: Array<{

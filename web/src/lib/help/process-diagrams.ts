@@ -126,6 +126,18 @@ flowchart TD
   H --> I[Ny version i området]
 `;
 
+export const importPartialFlow = `
+flowchart TD
+  A[Importera delkarta] --> B[Ladda upp .ocd]
+  B --> C[Matcha symboler]
+  C -->|Saknade symboler| X[Stoppa — rätta symboluppsättning]
+  C -->|OK| D[Kontrollera läge på kartan]
+  D --> E[Granska kantobjekt]
+  E --> F[Granska ändringar i området]
+  F --> G[Skapa utcheckning i efterhand]
+  G --> H[Vanlig incheckningsdiff och admin-integration]
+`;
+
 export const courseFlow = `
 flowchart TD
   A[Lägg bana på områdessidan] --> B[Välj IOF-symbol och verktyg]

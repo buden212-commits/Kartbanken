@@ -12,6 +12,7 @@ import {
   checkoutSteps,
   compareFlow,
   courseFlow,
+  importPartialFlow,
   loginFlow,
   mapViewExport,
   notificationFlow,
@@ -123,6 +124,10 @@ export async function HelpPageContent() {
             <li>Redigera i OCAD och checka in filen.</li>
             <li>Granska diff, bekräfta och låt administratör integrera ändringarna.</li>
           </ol>
+          <p className="mt-4">
+            Har du redan en del-.ocd som aldrig checkades ut här: använd «Importera delkarta» på
+            områdessidan. Guiden skapar utcheckningen i efterhand.
+          </p>
           <p className="mt-4">Banplanering:</p>
           <ol className="list-decimal space-y-2 pl-5">
             <li>Öppna Lägg bana på områdessidan.</li>
@@ -214,7 +219,8 @@ export async function HelpPageContent() {
                   <td className="px-4 py-3 font-medium">Redaktör</td>
                   <td className="px-4 py-3">
                     Allt läsare kan, plus ladda upp versioner, publicera/avpublicera, se
-                    opublicerade versioner och checka ut/in områden för OCAD-redigering
+                    opublicerade versioner, checka ut/in områden och importera en delkarta som
+                    aldrig checkades ut här
                   </td>
                 </tr>
                 <tr>
@@ -339,6 +345,21 @@ export async function HelpPageContent() {
                   "Överlappande utcheckningar blockeras — vänta tills ett område frigörs",
                 ]}
               />
+
+              <h3 className="font-medium text-slate-900">Importera delkarta (utan föregående utcheckning)</h3>
+              <HelpList
+                items={[
+                  "Öppna området och klicka «Importera delkarta» (bredvid Checka ut område)",
+                  "Ladda upp den redigerade .ocd-filen — guiden jämför mot aktuell kartversion",
+                  "Steg 2: kontrollera att symbolnumren finns i den stora kartan — saknade symboler stoppar import",
+                  "Steg 3: blå ram på kartan visar delkartans utbredning — den ska ligga rätt",
+                  "Steg 4: orange/röda objekt skär kanten; röda kan vara klippta och får inte radera originalet utanför ramen",
+                  "Steg 5: se tillagda, borttagna och ändrade objekt i området",
+                  "Steg 6: bekräfta — systemet skapar en utcheckning i efterhand och checkar in filen",
+                  "Därefter granskar du diffen som vid vanlig incheckning; admin integrerar till en ny version",
+                ]}
+              />
+              <HelpProcessDiagram title="Steg för steg — importera delkarta" chart={importPartialFlow} />
 
               <h3 className="font-medium text-slate-900">Checka in och integrera</h3>
               <HelpList
@@ -687,8 +708,9 @@ export async function HelpPageContent() {
             fast sikte (crosshair) visar var du befinner dig — siktet behåller samma storlek på
             skärmen oavsett zoomnivå. När GPS är på zoomas kartan till skala 1:50 och panoreras till
             din position var 10:e sekund tills du trycker <strong>Stoppa GPS</strong>. Statusraden
-            visar positionsnoggrannhet. <strong>Panorera hit</strong> centrerar manuellt i samma
-            skala.
+            visar positionsnoggrannhet; vid sämre mottagning (över ca 20 m) visas{" "}
+            <strong>Osäker</strong> i rött och GPS-markeringen blir röd.{" "}
+            <strong>Panorera hit</strong> centrerar manuellt i samma skala.
           </p>
           <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-700">
             GPS kräver georefererad karta och fungerar bäst utomhus med bra mottagning. Om kartan
@@ -716,6 +738,7 @@ export async function HelpPageContent() {
               "Kryssruta «Exportera endast kartförslag»: PDF och GeoTIFF ritar förslagen ovanpå kartan; OCD exporterar enbart markeringarna (inte grundkartan)",
               "GeoTIFF sparas med kartans projicerade koordinatsystem (EPSG) — kräver georefererad karta",
               "OCD med kartförslag: välj symbol för punkt, linje och yta i dialogen — exportfilen innehåller bara förslagens objekt med kartans befintliga symboler (OCAD 12/2018), inte grundkartan",
+              "Exporterad OCD-fil ska öppnas normalt i OCAD; om du får internt fel vid öppning, exportera igen efter senaste uppdateringen",
               "Dra exportramen på kartan till önskat utsnitt innan du exporterar",
             ]}
           />
@@ -861,6 +884,8 @@ export async function HelpPageContent() {
                 Kontot kan vänta på godkännande eller ha avvisats. Skapa konto om du saknar konto
                 och kontakta klubbens administratör. Godkända konton kan logga in direkt. Har du
                 glömt lösenordet, använd <strong>Glömt lösenord?</strong> på inloggningssidan.
+                Efter många misslyckade försök kan inloggning tillfälligt blockeras — vänta en
+                stund och försök igen.
               </p>
             </div>
             <div>
@@ -891,6 +916,15 @@ export async function HelpPageContent() {
                 redigera i OCAD och checka in ändringarna för granskning. Andra ser ditt område som
                 en färgad överlagring på kartan. Efter diff-granskning bekräftar du integrationen,
                 och en administratör slår ihop ändringarna i en ny kartversion.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-slate-900">Jag har en .ocd som aldrig checkades ut här</h3>
+              <p className="mt-1">
+                Använd <strong>Importera delkarta</strong> på områdessidan. Guiden matchar symboler,
+                visar läge och kanter och skapar sedan en utcheckning i efterhand. Objekt som går
+                över kanten raderas inte automatiskt. Därefter granskar du diffen som vid vanlig
+                incheckning, och admin integrerar.
               </p>
             </div>
             <div>

@@ -13,6 +13,7 @@ import {
 } from "@/lib/ocad/svg";
 import { prisma } from "@/lib/prisma";
 import { fileExists, readStoredFile, uploadFile } from "@/lib/storage";
+import { SVG_RESPONSE_SECURITY_HEADERS } from "@/lib/security/svg-sanitize";
 import { NextResponse } from "next/server";
 
 export const maxDuration = 300;
@@ -94,7 +95,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
 
     return new NextResponse(new Uint8Array(svgBuffer), {
       headers: {
-        "Content-Type": "image/svg+xml; charset=utf-8",
+        ...SVG_RESPONSE_SECURITY_HEADERS,
         "Cache-Control": "private, max-age=3600",
         "Content-Length": String(svgBuffer.byteLength),
       },

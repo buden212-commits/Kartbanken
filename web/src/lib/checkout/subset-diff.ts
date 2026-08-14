@@ -1,4 +1,6 @@
 import { parseSelectionJson } from "./types";
+import { bboxFromGeometry } from "./overlap";
+import { objectCrossesBbox, objectIntersectsBbox } from "./import-partial-analysis";
 import { compareOcadObjects } from "@/lib/ocad/diff";
 import type { OcadDiffResult, OcadObjectChange, SymbolDiffSummary } from "@/lib/ocad/diff-types";
 import {
@@ -138,6 +140,7 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
 
   const selection = parseSelectionJson(checkout.selectionJson);
   const selectionObjectIds = new Set(selection.objectIds);
+  const importPartial = selection.importPartial === true;
 
   const readTasks: Promise<Buffer>[] = [
     readStoredFile(headVersion.storagePath),
@@ -184,9 +187,14 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
 
   // Baseline A = exported checkout file when available (exactly what the user edited).
   // Fall back to head objects filtered by scope ids.
-  const baselineObjects = exportSummary
+  let baselineObjects = exportSummary
     ? exportSummary.objects
     : filterObjectsByIds(headSummary.objects, diffScopeIds);
+
+  const importExtent = selection.importExtent ?? (importPartial ? bboxFromGeometry(selection.geometry) : null);
+  if (importPartial && importExtent) {
+    baselineObjects = baselineObjects.filter((object) => objectIntersectsBbox(object, importExtent));
+  }
 
   const emptyDiffInput = {
     headVersionId: headVersion.id,
@@ -203,7 +211,7 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
     return buildEmptyCheckoutSubsetDiff(emptyDiffInput);
   }
 
-  if (exportSummary && objectMultisetsEqual(exportSummary.objects, checkinSummary.objects)) {
+  if (exportSummary && objectMultisetsEqual(baselineObjects, checkinSummary.objects)) {
     return buildEmptyCheckoutSubsetDiff(emptyDiffInput);
   }
 
@@ -222,7 +230,7 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
       fileNameA: emptyDiffInput.fileNameA,
       fileNameB: "checkin-subset.ocd",
     },
-    { toleranceMeters: TOLERANCE, matchByObjectIndex: true },
+    { toleranceMeters: TOLERANCE, matchByObjectIndex: !importPartial },
   );
 
   // Guard against false add/remove from rematching noise when content bags match.
@@ -234,11 +242,32 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
     return buildEmptyCheckoutSubsetDiff(emptyDiffInput);
   }
 
-  const { changes, outOfScopeWarnings } = filterChangesToScope(
+  const { changes: scopedChanges, outOfScopeWarnings } = filterChangesToScope(
     diff.changes,
     diffScopeIds,
     selectionObjectIds,
   );
+
+  let changes = scopedChanges;
+  if (importPartial && importExtent) {
+    const baselineByIndex = new Map(baselineObjects.map((object) => [object.objectIndex, object]));
+    const kept: typeof scopedChanges = [];
+    for (const change of scopedChanges) {
+      if (change.changeType === "added") {
+        kept.push(change);
+        continue;
+      }
+      const baseline = baselineByIndex.get(change.objectIndex);
+      if (baseline && objectCrossesBbox(baseline, importExtent)) {
+        outOfScopeWarnings.push(
+          `Kantobjekt ${change.objectIndex} (${change.symbolName}) hoppades över — det går utanför importerat område.`,
+        );
+        continue;
+      }
+      kept.push(change);
+    }
+    changes = kept;
+  }
 
   let layerPaths: DiffLayerPaths | null = null;
   if (changes.length > 0) {

@@ -2,7 +2,13 @@ import { prisma } from "@/lib/prisma";
 
 export type AuditAction =
   | "LOGIN"
+  | "LOGIN_FAILED"
+  | "USER_CREATED"
   | "USER_UPDATED"
+  | "USER_DELETED"
+  | "USER_NOTIFICATIONS_UPDATED"
+  | "SETTINGS_UPDATED"
+  | "TEST_EMAIL_SENT"
   | "UPLOAD"
   | "DOWNLOAD"
   | "EXPORT_OCD"

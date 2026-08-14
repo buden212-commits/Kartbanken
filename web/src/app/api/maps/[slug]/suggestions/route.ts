@@ -31,6 +31,10 @@ import {
   shouldUseClientUpload,
   uploadFile,
 } from "@/lib/storage";
+import {
+  blobRefToPathname,
+  isSuggestionAttachmentPath,
+} from "@/lib/storage/blob-path-security";
 import { NextResponse } from "next/server";
 
 type RouteParams = { params: Promise<{ slug: string }> };
@@ -198,9 +202,8 @@ export async function POST(request: Request, { params }: RouteParams) {
     geometries = parseSuggestionGeometriesFromRecord(record);
 
     if (typeof record.attachmentPath === "string" && record.attachmentPath.trim()) {
-      const candidate = record.attachmentPath.trim();
-      const prefix = `maps/${map.id}/suggestion-attachments/`;
-      if (!candidate.includes(prefix)) {
+      const candidate = blobRefToPathname(record.attachmentPath.trim());
+      if (!isSuggestionAttachmentPath(candidate, map.id)) {
         return NextResponse.json({ error: "Ogiltig bilagesökväg" }, { status: 400 });
       }
       if (!(await fileExists(candidate))) {

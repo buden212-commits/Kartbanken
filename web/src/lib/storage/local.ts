@@ -4,9 +4,10 @@ import path from "path";
 const STORAGE_ROOT = process.env.STORAGE_ROOT ?? path.join(process.cwd(), "storage");
 
 function resolvePath(storagePath: string): string {
-  const full = path.resolve(STORAGE_ROOT, storagePath);
   const root = path.resolve(STORAGE_ROOT);
-  if (!full.startsWith(root)) {
+  const full = path.resolve(root, storagePath);
+  const relative = path.relative(root, full);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
     throw new Error("Ogiltig lagringssökväg");
   }
   return full;

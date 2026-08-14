@@ -37,6 +37,8 @@ export async function GET(_request: Request, { params }: RouteParams) {
     return new NextResponse(new Uint8Array(data), {
       headers: {
         "Content-Type": contentTypeForAttachmentPath(suggestion.attachmentPath),
+        "X-Content-Type-Options": "nosniff",
+        "Content-Disposition": "inline",
         "Cache-Control": "private, max-age=3600",
       },
     });

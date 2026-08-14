@@ -30,9 +30,17 @@ export function CheckoutAreaCta({
 
   if (headVersionId) {
     return (
-      <Link href={`/maps/${mapSlug}/checkout`} className={buttonClass}>
-        Checka ut område
-      </Link>
+      <div className="flex flex-wrap gap-2">
+        <Link href={`/maps/${mapSlug}/checkout`} className={buttonClass}>
+          Checka ut område
+        </Link>
+        <Link
+          href={`/maps/${mapSlug}/importera-delkarta`}
+          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-ifk-blue hover:text-ifk-blue"
+        >
+          Importera delkarta
+        </Link>
+      </div>
     );
   }
 

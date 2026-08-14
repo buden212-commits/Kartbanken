@@ -7,6 +7,39 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-08-14",
+    title: "Importera delkarta",
+    items: [
+      "Ny guide «Importera delkarta» när du har en .ocd som inte checkades ut här — först symbolmatchning, sedan läge, kanter och ändringar på kartan",
+      "Guiden skapar en utcheckning i efterhand från filens utbredning; objekt som går över kanten raderas inte automatiskt",
+    ],
+  },
+  {
+    date: "2026-08-13",
+    title: "GPS-noggrannhet syns tydligare",
+    items: [
+      "När positionsnoggrannheten är Osäker (över ca 20 m) blir GPS-markeringen och statusraden röda",
+    ],
+  },
+  {
+    date: "2026-08-13",
+    title: "OCD-export av kartförslag",
+    items: [
+      "«Exportera endast kartförslag» skapar åter en giltig OCAD-fil — tidigare kunde filen bli korrupt och OCAD visa internt fel vid öppning",
+    ],
+  },
+  {
+    date: "2026-08-12",
+    title: "Säkerhetsförbättringar",
+    items: [
+      "Striktare behörighetskontroll: roller och «måste byta lösenord» hämtas från databasen, inte från webbläsaren",
+      "Säkrare filuppladdning till molnlagring — sökvägar binds till rätt karta/version",
+      "Begränsning av antal försök vid inloggning, registrering och «glömt lösenord»",
+      "Säkerhetsrubriker i webbläsaren (bl.a. mot clickjacking och MIME-sniffning)",
+      "Kart-SVG saneras innan den visas, och preview-svar får striktare säkerhetsrubriker",
+    ],
+  },
+  {
     date: "2026-08-12",
     title: "Kartförslag — ihopfälld symbolhjälp",
     items: [

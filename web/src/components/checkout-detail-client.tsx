@@ -806,7 +806,12 @@ export function CheckoutDetailClient({
 
         </dl>
 
-
+        {checkout.selection.importPartial ? (
+          <p className="mt-4 rounded-lg border border-ifk-blue/20 bg-ifk-blue-pale px-3 py-2 text-sm text-ifk-blue">
+            Skapad via «Importera delkarta» — filen checkades in utan föregående utcheckning här.
+            Kantöverskridande objekt raderas inte automatiskt.
+          </p>
+        ) : null}
 
         <div className="mt-4 flex flex-wrap gap-2">
 

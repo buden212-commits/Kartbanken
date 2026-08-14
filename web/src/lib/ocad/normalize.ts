@@ -170,6 +170,9 @@ export function summarizeParseResult(input: {
     ocadVersion: input.ocadFile.header.version,
     objectCount: input.objects.length,
     symbolCount: input.ocadFile.symbols.length,
+    symbolNums: input.ocadFile.symbols
+      .map((symbol) => symbol.symNum)
+      .filter((n) => Number.isFinite(n)),
     warnings: input.ocadFile.warnings,
     byType,
     topSymbols,

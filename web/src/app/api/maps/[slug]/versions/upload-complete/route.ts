@@ -14,6 +14,11 @@ import {
   supportsClientUploads,
   validateOcdUpload,
 } from "@/lib/storage";
+import {
+  blobRefToPathname,
+  isMapVersionPath,
+  pathnamesEqual,
+} from "@/lib/storage/blob-path-security";
 import { NextResponse } from "next/server";
 
 export const maxDuration = 300;
@@ -59,11 +64,14 @@ export async function POST(request: Request, { params }: RouteParams) {
 
   let storageRef = version.storagePath;
   if (blobUrl) {
-    await prisma.mapVersion.update({
-      where: { id: versionId },
-      data: { storagePath: blobUrl },
-    });
-    storageRef = blobUrl;
+    const pathname = blobRefToPathname(blobUrl);
+    if (!pathnamesEqual(pathname, version.storagePath)) {
+      return NextResponse.json({ error: "blobUrl matchar inte versionens sökväg" }, { status: 400 });
+    }
+    if (!isMapVersionPath(pathname, map.id, version.versionNumber)) {
+      return NextResponse.json({ error: "Ogiltig blobUrl" }, { status: 400 });
+    }
+    storageRef = version.storagePath;
   }
 
   const forceDespiteCheckouts = body.forceDespiteCheckouts === true;

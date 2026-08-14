@@ -55,12 +55,17 @@ const OBJECT_INDEX_POS_OFFSET = 16;
 const OBJECT_INDEX_LEN_OFFSET = 20;
 const OBJECT_INDEX_SYM_OFFSET = 24;
 const OBJECT_INDEX_OBJTYPE_OFFSET = 28;
+const OBJECT_INDEX_ENCRYPTED_OFFSET = 29;
 const OBJECT_INDEX_STATUS_OFFSET = 30;
+const OBJECT_INDEX_VIEWTYPE_OFFSET = 31;
+const OBJECT_INDEX_COLOR_OFFSET = 32;
 
 export type NewObjectSpec = {
   objectBytes: Buffer;
   sym: number;
   objType: number;
+  /** Object index Color (SmallInt). Must be a valid color number — 0 crashes OCAD redraw on many maps. */
+  color: number;
   len: number;
   rc: { minX: number; minY: number; maxX: number; maxY: number };
 };
@@ -372,19 +377,6 @@ export function appendObjectsFromCheckin(
   return { buffer, appended, failed, indexMap };
 }
 
-function findIndexEntryTemplateOffset(buffer: Buffer): number | null {
-  let templateOffset: number | null = null;
-  iterateAllIndexSlots(buffer, (slot) => {
-    if (templateOffset != null) return;
-    const status = buffer.readUInt8(slot.entryOffset + OBJECT_INDEX_STATUS_OFFSET);
-    const pos = buffer.readInt32LE(slot.entryOffset + OBJECT_INDEX_POS_OFFSET);
-    if (status > 0 && status < 3 && pos > 0) {
-      templateOffset = slot.entryOffset;
-    }
-  });
-  return templateOffset;
-}
-
 function writeObjectIndexRc(
   buffer: Buffer,
   entryOffset: number,
@@ -398,6 +390,14 @@ function writeObjectIndexRc(
   buffer.writeInt32LE(maxYEnc, entryOffset + 12);
 }
 
+function normalizeIndexColor(color: number): number {
+  if (!Number.isFinite(color)) return 1;
+  const rounded = Math.round(color);
+  // SmallInt range; 0 is invalid on typical ISOM palettes (colors start at 1).
+  if (rounded === 0) return 1;
+  return Math.max(-32768, Math.min(32767, rounded));
+}
+
 /** Appends newly serialized object bytes and registers them in the object index. */
 export function appendNewObjects(
   headBuffer: Buffer,
@@ -408,7 +408,6 @@ export function appendNewObjects(
   }
 
   let buffer = Buffer.from(headBuffer);
-  const templateEntryOffset = findIndexEntryTemplateOffset(buffer);
   const objectIndices: number[] = [];
   let appended = 0;
 
@@ -420,23 +419,21 @@ export function appendNewObjects(
     const newPos = buffer.length;
     buffer = Buffer.concat([buffer, spec.objectBytes]);
 
-    if (templateEntryOffset != null) {
-      buffer.copy(
-        buffer,
-        slot.entryOffset,
-        templateEntryOffset,
-        templateEntryOffset + OBJECT_INDEX_ENTRY_SIZE,
-      );
-    } else {
-      buffer.fill(0, slot.entryOffset, slot.entryOffset + OBJECT_INDEX_ENTRY_SIZE);
-    }
-
+    // Skriv hela indexposten explicit — efter soft-delete finns inga aktiva
+    // mallposter, och Color=0 (nollfyllning) gör att OCAD kraschar i redraw.
+    buffer.fill(0, slot.entryOffset, slot.entryOffset + OBJECT_INDEX_ENTRY_SIZE);
     writeObjectIndexRc(buffer, slot.entryOffset, spec.rc);
     buffer.writeInt32LE(newPos, slot.entryOffset + OBJECT_INDEX_POS_OFFSET);
     buffer.writeInt32LE(spec.len, slot.entryOffset + OBJECT_INDEX_LEN_OFFSET);
     buffer.writeInt32LE(spec.sym, slot.entryOffset + OBJECT_INDEX_SYM_OFFSET);
     buffer.writeUInt8(spec.objType, slot.entryOffset + OBJECT_INDEX_OBJTYPE_OFFSET);
+    buffer.writeUInt8(0, slot.entryOffset + OBJECT_INDEX_ENCRYPTED_OFFSET);
     buffer.writeUInt8(1, slot.entryOffset + OBJECT_INDEX_STATUS_OFFSET);
+    buffer.writeUInt8(0, slot.entryOffset + OBJECT_INDEX_VIEWTYPE_OFFSET);
+    buffer.writeInt16LE(
+      normalizeIndexColor(spec.color),
+      slot.entryOffset + OBJECT_INDEX_COLOR_OFFSET,
+    );
 
     objectIndices.push(slot.objectIndex);
     appended++;
