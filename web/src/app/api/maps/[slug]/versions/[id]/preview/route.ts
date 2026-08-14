@@ -30,7 +30,7 @@ async function readPreviewOrNull(storagePath: string): Promise<Buffer | null> {
   }
 }
 
-export async function GET(_request: Request, { params }: RouteParams) {
+export async function GET(request: Request, { params }: RouteParams) {
   const session = await requireSession();
   if (session instanceof NextResponse) return session;
 
@@ -49,10 +49,18 @@ export async function GET(_request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Version hittades inte" }, { status: 404 });
   }
 
+  const cachedOnly = new URL(request.url).searchParams.get("cached") === "1";
+
   let previewSvgPath = version.previewSvgPath;
   let svgBuffer = previewSvgPath ? await readPreviewOrNull(previewSvgPath) : null;
 
   if (!svgBuffer) {
+    if (cachedOnly) {
+      return NextResponse.json(
+        { error: "Kartbilden är inte redo ännu. Öppna området så kartan hinner laddas, och försök igen." },
+        { status: 404 },
+      );
+    }
     previewSvgPath = buildPreviewSvgPath(version.mapFileId, version.versionNumber);
     try {
       const buffer = await readStoredFile(version.storagePath);
@@ -69,6 +77,10 @@ export async function GET(_request: Request, { params }: RouteParams) {
         { status: 500 },
       );
     }
+  }
+
+  if (cachedOnly) {
+    return svgResponse(svgBuffer);
   }
 
   try {
@@ -93,15 +105,19 @@ export async function GET(_request: Request, { params }: RouteParams) {
       }
     }
 
-    return new NextResponse(new Uint8Array(svgBuffer), {
-      headers: {
-        ...SVG_RESPONSE_SECURITY_HEADERS,
-        "Cache-Control": "private, max-age=3600",
-        "Content-Length": String(svgBuffer.byteLength),
-      },
-    });
+    return svgResponse(svgBuffer);
   } catch (err) {
     console.error("Preview read failed:", err);
     return NextResponse.json({ error: "Preview saknas" }, { status: 404 });
   }
+}
+
+function svgResponse(svgBuffer: Buffer): NextResponse {
+  return new NextResponse(new Uint8Array(svgBuffer), {
+    headers: {
+      ...SVG_RESPONSE_SECURITY_HEADERS,
+      "Cache-Control": "private, max-age=3600",
+      "Content-Length": String(svgBuffer.byteLength),
+    },
+  });
 }

@@ -1,11 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ImportPartialMapPreview } from "@/components/import-partial-map-preview";
 import type { ImportPartialAnalysis } from "@/lib/checkout/import-partial-types";
-import { fetchPreviewText } from "@/lib/ocad/preview-fetch";
 import { uploadImportPartial } from "@/lib/upload-client";
 
 type StepId = "upload" | "symbols" | "extent" | "edges" | "diff" | "confirm";
@@ -41,7 +40,8 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
   const [loading, setLoading] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
 
-  const previewUrl = `/api/maps/${mapSlug}/versions/${headVersionId}/preview`;
+  // Endast redan genererad SVG — regenerering av kartbilden kan ta en minut och ge 500.
+  const previewUrl = `/api/maps/${mapSlug}/versions/${headVersionId}/preview?cached=1`;
   const stepIndex = STEPS.findIndex((entry) => entry.id === step);
   const blockers = analysis?.blockers ?? [];
   const symbolBlocked = (analysis?.symbols.onlyInPartial.length ?? 0) > 0;
@@ -49,10 +49,6 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
   const canProceedPastSymbols = !symbolBlocked;
   const canCommit = blockers.length === 0;
   const mapMode = step === "extent" || step === "edges" || step === "diff" ? step : null;
-
-  useEffect(() => {
-    void fetchPreviewText(previewUrl);
-  }, [previewUrl]);
 
   async function onFile(file: File | undefined) {
     if (!file) return;
@@ -227,6 +223,7 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
           previewUrl={previewUrl}
           analysis={analysis}
           mode={mapMode}
+          areaHref={`/maps/${mapSlug}`}
           title={
             mapMode === "extent" ? "Utbredning" : mapMode === "edges" ? "Kantobjekt" : "Ändringar"
           }

@@ -352,7 +352,7 @@ export async function HelpPageContent() {
                   "Öppna området och klicka «Importera delkarta» (bredvid Checka ut område)",
                   "Ladda upp den redigerade .ocd-filen — guiden jämför mot aktuell kartversion",
                   "Steg 2: kontrollera att symbolnumren finns i den stora kartan — saknade symboler stoppar import",
-                  "Steg 3: blå ram på kartan visar delkartans utbredning — kartan börjar laddas redan när du öppnar guiden",
+                  "Steg 3: blå ram på kartan visar delkartans utbredning. Kartbilden hämtas från området (brukar ta några sekunder). Om den inte syns: öppna området så kartan hinner laddas, gå tillbaka och försök igen",
                   "Steg 4: orange/röda objekt skär kanten; röda kan vara klippta och får inte radera originalet utanför ramen",
                   "Steg 5: se tillagda, borttagna och ändrade objekt i området",
                   "Steg 6: bekräfta — systemet skapar en utcheckning i efterhand och checkar in filen",
@@ -925,6 +925,14 @@ export async function HelpPageContent() {
                 visar läge och kanter och skapar sedan en utcheckning i efterhand. Objekt som går
                 över kanten raderas inte automatiskt. Därefter granskar du diffen som vid vanlig
                 incheckning, och admin integrerar.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-slate-900">Kartbilden i Importera delkarta laddas inte</h3>
+              <p className="mt-1">
+                Guiden använder samma kartbild som redan finns på området — den ska visas på några
+                sekunder. Om bilden saknas eller tar för lång tid: öppna området så kartan hinner
+                laddas, gå tillbaka till guiden och klicka «Försök igen».
               </p>
             </div>
             <div>

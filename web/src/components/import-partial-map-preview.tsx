@@ -7,11 +7,15 @@ import { fetchPreviewText } from "@/lib/ocad/preview-fetch";
 
 type Mode = "extent" | "edges" | "diff";
 
+/** Kartor laddas normalt på 5–10 s. Vänta inte på en ~60 s gateway-timeout. */
+const PREVIEW_TIMEOUT_MS = 20_000;
+
 type Props = {
   previewUrl: string;
   analysis: ImportPartialAnalysis;
   mode: Mode;
   title: string;
+  areaHref?: string;
 };
 
 type PctBox = { left: number; top: number; width: number; height: number };
@@ -57,11 +61,12 @@ function svgToImageUrl(svgText: string): string {
   return URL.createObjectURL(new Blob([rewritten], { type: "image/svg+xml;charset=utf-8" }));
 }
 
-export function ImportPartialMapPreview({ previewUrl, analysis, mode, title }: Props) {
+export function ImportPartialMapPreview({ previewUrl, analysis, mode, title, areaHref }: Props) {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [slow, setSlow] = useState(false);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   const bounds = analysis.headBounds;
   const frame = useMemo(
@@ -72,11 +77,16 @@ export function ImportPartialMapPreview({ previewUrl, analysis, mode, title }: P
   useEffect(() => {
     let cancelled = false;
     let createdUrl: string | null = null;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), PREVIEW_TIMEOUT_MS);
     setStatus("loading");
     setError(null);
     setSlow(false);
 
-    fetchPreviewText(previewUrl)
+    fetchPreviewText(previewUrl, {
+      signal: controller.signal,
+      bypassCache: retryKey > 0,
+    })
       .then((text) => {
         const url = svgToImageUrl(text);
         createdUrl = url;
@@ -91,15 +101,26 @@ export function ImportPartialMapPreview({ previewUrl, analysis, mode, title }: P
       })
       .catch((err) => {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : "Kunde inte ladda kartbild");
+        if (controller.signal.aborted) {
+          setError(
+            "Kartbilden tog för lång tid att hämta. Öppna området så kartan hinner laddas, och försök igen.",
+          );
+        } else {
+          setError(err instanceof Error ? err.message : "Kunde inte ladda kartbild");
+        }
         setStatus("error");
+      })
+      .finally(() => {
+        window.clearTimeout(timeoutId);
       });
 
     return () => {
       cancelled = true;
+      controller.abort();
+      window.clearTimeout(timeoutId);
       if (createdUrl) URL.revokeObjectURL(createdUrl);
     };
-  }, [previewUrl]);
+  }, [previewUrl, retryKey]);
 
   useEffect(() => {
     if (status !== "loading") return;
@@ -135,10 +156,29 @@ export function ImportPartialMapPreview({ previewUrl, analysis, mode, title }: P
           </div>
         )}
         {status === "error" && (
-          <p className="px-6 text-center text-sm text-red-600">
-            {error ??
-              "Kunde inte visa kartan. Öppna området och kontrollera att kartbilden laddas där."}
-          </p>
+          <div className="z-10 flex max-w-md flex-col items-center gap-3 px-6 text-center">
+            <p className="text-sm text-red-600">
+              {error ??
+                "Kunde inte visa kartan. Öppna området och kontrollera att kartbilden laddas där."}
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <button
+                type="button"
+                className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                onClick={() => setRetryKey((n) => n + 1)}
+              >
+                Försök igen
+              </button>
+              {areaHref && (
+                <a
+                  href={areaHref}
+                  className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Öppna området
+                </a>
+              )}
+            </div>
+          </div>
         )}
         {imageUrl && (
           <div

@@ -3,6 +3,16 @@ const inflight = new Map<string, Promise<string>>();
 
 const RETRY_DELAYS_MS = [0, 750, 2000];
 
+class PreviewHttpError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "PreviewHttpError";
+    this.status = status;
+  }
+}
+
 function toLoadError(err: unknown): Error {
   if (err instanceof DOMException && err.name === "AbortError") {
     return new Error("Laddning avbröts");
@@ -30,22 +40,36 @@ function abortError(): Error {
   return toLoadError(new DOMException("Aborted", "AbortError"));
 }
 
-async function fetchPreviewFromNetwork(url: string): Promise<string> {
+async function fetchPreviewFromNetwork(
+  url: string,
+  signal?: AbortSignal,
+): Promise<string> {
   let lastError: unknown;
   for (let attempt = 0; attempt < RETRY_DELAYS_MS.length; attempt++) {
+    if (signal?.aborted) throw abortError();
     if (attempt > 0) {
       await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
     }
 
     try {
-      const response = await fetch(url, { credentials: "same-origin" });
+      const response = await fetch(url, {
+        credentials: "same-origin",
+        signal,
+      });
       if (!response.ok) {
-        throw new Error(`Kunde inte ladda kartbild (${response.status})`);
+        const serverMessage = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new PreviewHttpError(
+          serverMessage?.error ?? `Kunde inte ladda kartbild (${response.status})`,
+          response.status,
+        );
       }
       const text = await response.text();
       previewCache.set(url, text);
       return text;
     } catch (err) {
+      if (signal?.aborted) throw abortError();
+      // HTTP-fel (404/500) ska inte retrys:s — det förlänger bara en gateway-timeout.
+      if (err instanceof PreviewHttpError) throw err;
       lastError = err;
     }
   }
@@ -68,7 +92,7 @@ export async function fetchPreviewText(
 
   let pending = inflight.get(url);
   if (!pending) {
-    pending = fetchPreviewFromNetwork(url).finally(() => {
+    pending = fetchPreviewFromNetwork(url, options?.signal).finally(() => {
       inflight.delete(url);
     });
     inflight.set(url, pending);
