@@ -12,6 +12,7 @@ export const releaseNotes: ReleaseNote[] = [
     items: [
       "Ny guide «Importera delkarta» när du har en .ocd som inte checkades ut här — först symbolmatchning, sedan läge, kanter och ändringar på kartan",
       "Guiden skapar en utcheckning i efterhand från filens utbredning; objekt som går över kanten raderas inte automatiskt",
+      "Kartan i steget «Läge» laddas i bakgrunden så den inte fastnar på «Laddar kartbild»",
     ],
   },
   {

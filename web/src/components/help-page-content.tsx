@@ -352,7 +352,7 @@ export async function HelpPageContent() {
                   "Öppna området och klicka «Importera delkarta» (bredvid Checka ut område)",
                   "Ladda upp den redigerade .ocd-filen — guiden jämför mot aktuell kartversion",
                   "Steg 2: kontrollera att symbolnumren finns i den stora kartan — saknade symboler stoppar import",
-                  "Steg 3: blå ram på kartan visar delkartans utbredning — den ska ligga rätt",
+                  "Steg 3: blå ram på kartan visar delkartans utbredning — kartan börjar laddas redan när du öppnar guiden",
                   "Steg 4: orange/röda objekt skär kanten; röda kan vara klippta och får inte radera originalet utanför ramen",
                   "Steg 5: se tillagda, borttagna och ändrade objekt i området",
                   "Steg 6: bekräfta — systemet skapar en utcheckning i efterhand och checkar in filen",

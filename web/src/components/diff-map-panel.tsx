@@ -242,6 +242,21 @@ function zoomAtPoint(
   };
 }
 
+function SvgOverlaySafe({
+  render,
+  rootTransform,
+}: {
+  render?: (rootTransform: SvgRootTransform) => ReactNode;
+  rootTransform: SvgRootTransform;
+}) {
+  if (!render) return null;
+  try {
+    return render(rootTransform);
+  } catch {
+    return null;
+  }
+}
+
 export function DiffMapPanel({
   previewUrl,
   title,
@@ -336,6 +351,7 @@ export function DiffMapPanel({
   const userInteractedRef = useRef(false);
   const initialFitDoneRef = useRef(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [slowLoad, setSlowLoad] = useState(false);
   const [mapLayers, setMapLayers] = useState<OcadMapLayer[]>([]);
   const [layerVisibility, setLayerVisibility] = useState<Record<string, boolean>>({});
 
@@ -405,6 +421,15 @@ export function DiffMapPanel({
       controller.abort();
     };
   }, [previewUrl, reloadKey]);
+
+  useEffect(() => {
+    if (!loading) {
+      setSlowLoad(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setSlowLoad(true), 8000);
+    return () => window.clearTimeout(timer);
+  }, [loading]);
 
   const retryPreviewLoad = useCallback(() => {
     clearPreviewCache(previewUrl);
@@ -697,7 +722,7 @@ export function DiffMapPanel({
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [fitGeoBbox, fullViewBox, loading, rootTransform, maxZoom]);
+  }, [fitGeoBbox, fitGeoBbox?.requestId, fullViewBox, loading, rootTransform, maxZoom]);
 
   const adjustZoom = useCallback((factor: number, focal?: { x: number; y: number }) => {
     const viewport = viewportRef.current;
@@ -1326,8 +1351,11 @@ export function DiffMapPanel({
         {mapToolbarOverlay}
 
         {loading && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/90 text-sm text-slate-600">
-            Laddar kartbild…
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 bg-white/90 px-6 text-center text-sm text-slate-600">
+            <p>Laddar kartbild…</p>
+            {slowLoad && (
+              <p className="text-xs text-slate-500">Kartan är stor — det kan ta en stund.</p>
+            )}
           </div>
         )}
         {error && (
@@ -1395,7 +1423,7 @@ export function DiffMapPanel({
                 />
               )}
               <g dangerouslySetInnerHTML={{ __html: svgInner }} />
-              {renderSvgOverlay?.(rootTransform)}
+              <SvgOverlaySafe render={renderSvgOverlay} rootTransform={rootTransform} />
             </svg>
           </div>
         )}
