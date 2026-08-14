@@ -4,10 +4,19 @@ import * as local from "./storage/local";
 
 export type StorageBackend = "local" | "blob";
 
-type StorageImpl = Pick<
-  typeof local,
-  "readStoredFile" | "deleteFile" | "fileExists" | "supportsClientUploads"
->;
+export type StoredFileStream = {
+  stream: ReadableStream<Uint8Array>;
+  size?: number;
+  contentType?: string;
+};
+
+type StorageImpl = {
+  readStoredFile(storagePath: string): Promise<Buffer>;
+  openStoredFileStream(storagePath: string): Promise<StoredFileStream>;
+  deleteFile(storagePath: string): Promise<void>;
+  fileExists(storagePath: string): Promise<boolean>;
+  supportsClientUploads(): boolean;
+};
 
 function isVercelRuntime(): boolean {
   return process.env.VERCEL === "1";
@@ -94,6 +103,11 @@ export async function uploadFile(
 
 export async function readStoredFile(storagePath: string): Promise<Buffer> {
   return getImpl().readStoredFile(storagePath);
+}
+
+/** Streamar filen utan att buffra hela innehållet (krävs för filer över Vercels 4,5 MB-gräns). */
+export async function openStoredFileStream(storagePath: string): Promise<StoredFileStream> {
+  return getImpl().openStoredFileStream(storagePath);
 }
 
 export async function deleteFile(storagePath: string): Promise<void> {

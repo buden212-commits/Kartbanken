@@ -8,12 +8,20 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-14",
+    title: "Stora kartor går att öppna",
+    items: [
+      "Stora filer som Mora Väst kan öppnas och tittas på — kartbilden skickas i ström så den inte stoppas av serverns storleksgräns",
+      "Nedladdning av stora .ocd-filer fungerar på samma sätt",
+    ],
+  },
+  {
+    date: "2026-08-14",
     title: "Importera delkarta",
     items: [
       "Ny guide «Importera delkarta» när du har en .ocd som inte checkades ut här — först symbolmatchning, sedan läge, kanter och ändringar på kartan",
       "Guiden skapar en utcheckning i efterhand från filens utbredning; objekt som går över kanten raderas inte automatiskt",
       "Kartan i steget «Läge» visas som samma kartbild som på området, inzoomad på delkartan med blå ram — stora filer (t.ex. Mora Väst) ritas som karta, inte som en enda bild",
-      "Kartbilden hämtas från den redan laddade områdeskartan. Om den saknas: öppna området först och försök igen"
+      "Kartbilden hämtas från den redan laddade områdeskartan. Om den saknas: öppna området först och försök igen",
     ],
   },
   {

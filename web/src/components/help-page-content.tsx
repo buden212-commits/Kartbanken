@@ -675,7 +675,8 @@ export async function HelpPageContent() {
           <p>
             <strong>Visa karta</strong> öppnar en interaktiv kartvy med zoom och panorering. Kartan
             autoanpassas till hela kartans utbredning vid öppning (<strong>Hela kartan</strong>).
-            Du kan klicka på objekt i jämförelsevyer för att se detaljer.
+            Du kan klicka på objekt i jämförelsevyer för att se detaljer. Stora filer (t.ex. Mora
+            Väst) kan ta 5–10 sekunder att visa första gången.
           </p>
 
           <h3 className="font-medium text-slate-900">Zoom och navigering</h3>
@@ -933,6 +934,14 @@ export async function HelpPageContent() {
                 Guiden visar samma karta som områdessidan (inte som en nedladdad bild — det fungerar
                 inte för stora filer som Mora Väst). Öppna området så kartan hinner laddas, gå
                 tillbaka till guiden och klicka «Försök igen» om den inte syns.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-slate-900">En stor karta går inte att öppna</h3>
+              <p className="mt-1">
+                Stora .ocd-filer (t.ex. Mora Väst) visas som strömmad kartbild. Öppna området eller
+                «Visa karta» och vänta tills kartan ritas — det kan ta några sekunder. Ladda ner
+                filen via «Ladda ner» om du vill öppna den i OCAD.
               </p>
             </div>
             <div>

@@ -45,6 +45,38 @@ export async function uploadFile(
   });
 }
 
+export async function openStoredFileStream(storageRef: string): Promise<{
+  stream: ReadableStream<Uint8Array>;
+  size?: number;
+  contentType?: string;
+}> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const target = isBlobUrl(storageRef)
+        ? storageRef
+        : await resolvePathnameToUrl(storageRef);
+      const result = await get(target, blobPrivateOptions());
+      if (result?.statusCode === 200 && result.stream) {
+        return {
+          stream: result.stream,
+          size: result.blob.size,
+          contentType: result.blob.contentType,
+        };
+      }
+      lastError = new Error(`Blob get status ${result?.statusCode ?? "null"}`);
+    } catch (err) {
+      lastError = err;
+    }
+
+    if (attempt < 3) await sleep(400 * (attempt + 1));
+  }
+
+  console.error("openStoredFileStream failed:", storageRef, lastError);
+  throw new Error(`Fil saknas i Blob: ${storageRef}`);
+}
+
 export async function readStoredFile(storageRef: string): Promise<Buffer> {
   let lastError: unknown;
 

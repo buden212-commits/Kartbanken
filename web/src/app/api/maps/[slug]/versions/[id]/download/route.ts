@@ -5,7 +5,8 @@ import {
   getMapVersionOr404,
 } from "@/lib/maps/version-lookup";
 import { prisma } from "@/lib/prisma";
-import { readStoredFile } from "@/lib/storage";
+import { fileExists } from "@/lib/storage";
+import { streamStoredFile } from "@/lib/storage/stream-response";
 import { NextResponse } from "next/server";
 
 type RouteParams = { params: Promise<{ slug: string; id: string }> };
@@ -29,20 +30,19 @@ export async function GET(_request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Version hittades inte" }, { status: 404 });
   }
 
-  try {
-    const data = await readStoredFile(version.storagePath);
+  if (!(await fileExists(version.storagePath))) {
+    return NextResponse.json({ error: "Filen kunde inte läsas" }, { status: 500 });
+  }
 
+  try {
     await logAction(session.user.id, "DOWNLOAD", "MapVersion", version.id, {
       mapSlug: slug,
       versionNumber: version.versionNumber,
     });
 
-    return new NextResponse(new Uint8Array(data), {
-      headers: {
-        "Content-Type": "application/octet-stream",
-        "Content-Disposition": `attachment; filename="${encodeURIComponent(version.originalFilename)}"`,
-        "Content-Length": String(data.byteLength),
-      },
+    return await streamStoredFile(version.storagePath, {
+      "Content-Type": "application/octet-stream",
+      "Content-Disposition": `attachment; filename="${encodeURIComponent(version.originalFilename)}"`,
     });
   } catch {
     return NextResponse.json({ error: "Filen kunde inte läsas" }, { status: 500 });

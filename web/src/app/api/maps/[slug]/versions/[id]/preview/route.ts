@@ -5,14 +5,11 @@ import {
 } from "@/lib/maps/version-lookup";
 import {
   buildPreviewSvgPath,
-  ensureSvgMetadata,
   generateAndStorePreviewSvg,
-  generateOcadSvgLayered,
-  svgBufferHasLayers,
-  svgBufferHasMetadata,
 } from "@/lib/ocad/svg";
 import { prisma } from "@/lib/prisma";
-import { fileExists, readStoredFile, uploadFile } from "@/lib/storage";
+import { fileExists, readStoredFile } from "@/lib/storage";
+import { streamStoredFile } from "@/lib/storage/stream-response";
 import { SVG_RESPONSE_SECURITY_HEADERS } from "@/lib/security/svg-sanitize";
 import { NextResponse } from "next/server";
 
@@ -20,14 +17,13 @@ export const maxDuration = 300;
 
 type RouteParams = { params: Promise<{ slug: string; id: string }> };
 
-async function readPreviewOrNull(storagePath: string): Promise<Buffer | null> {
-  try {
-    if (!(await fileExists(storagePath))) return null;
-    return await readStoredFile(storagePath);
-  } catch (err) {
-    console.warn("Preview SVG kunde inte läsas, regenererar:", storagePath, err);
-    return null;
-  }
+const PREVIEW_HEADERS = {
+  ...SVG_RESPONSE_SECURITY_HEADERS,
+  "Cache-Control": "private, max-age=3600",
+};
+
+async function streamPreview(storagePath: string): Promise<NextResponse> {
+  return streamStoredFile(storagePath, PREVIEW_HEADERS);
 }
 
 export async function GET(request: Request, { params }: RouteParams) {
@@ -52,72 +48,35 @@ export async function GET(request: Request, { params }: RouteParams) {
   const cachedOnly = new URL(request.url).searchParams.get("cached") === "1";
 
   let previewSvgPath = version.previewSvgPath;
-  let svgBuffer = previewSvgPath ? await readPreviewOrNull(previewSvgPath) : null;
-
-  if (!svgBuffer) {
-    if (cachedOnly) {
-      return NextResponse.json(
-        { error: "Kartbilden är inte redo ännu. Öppna området så kartan hinner laddas, och försök igen." },
-        { status: 404 },
-      );
-    }
-    previewSvgPath = buildPreviewSvgPath(version.mapFileId, version.versionNumber);
+  if (previewSvgPath && (await fileExists(previewSvgPath))) {
     try {
-      const buffer = await readStoredFile(version.storagePath);
-      await generateAndStorePreviewSvg(buffer, previewSvgPath);
-      svgBuffer = await readStoredFile(previewSvgPath);
-      await prisma.mapVersion.update({
-        where: { id: version.id },
-        data: { previewSvgPath },
-      });
+      return await streamPreview(previewSvgPath);
     } catch (err) {
-      console.error("Preview SVG generation failed:", err);
-      return NextResponse.json(
-        { error: "Kunde inte generera kartpreview" },
-        { status: 500 },
-      );
+      console.warn("Preview SVG kunde inte strömmas:", previewSvgPath, err);
     }
   }
 
   if (cachedOnly) {
-    return svgResponse(svgBuffer);
+    return NextResponse.json(
+      { error: "Kartbilden är inte redo ännu. Öppna området så kartan hinner laddas, och försök igen." },
+      { status: 404 },
+    );
   }
 
+  previewSvgPath = buildPreviewSvgPath(version.mapFileId, version.versionNumber);
   try {
-    let ocdBuffer: Buffer | null = null;
-
-    const needsLayerUpgrade = !svgBufferHasLayers(svgBuffer);
-    const needsMetadata = !svgBufferHasMetadata(svgBuffer);
-
-    if (needsLayerUpgrade || needsMetadata) {
-      ocdBuffer = await readStoredFile(version.storagePath);
-
-      if (needsLayerUpgrade) {
-        const { svg } = await generateOcadSvgLayered(ocdBuffer);
-        svgBuffer = Buffer.from(svg, "utf-8");
-        await uploadFile(previewSvgPath!, svgBuffer);
-      } else if (needsMetadata) {
-        const { buffer, changed } = await ensureSvgMetadata(svgBuffer, ocdBuffer);
-        if (changed) {
-          await uploadFile(previewSvgPath!, buffer);
-        }
-        svgBuffer = buffer;
-      }
-    }
-
-    return svgResponse(svgBuffer);
+    const buffer = await readStoredFile(version.storagePath);
+    await generateAndStorePreviewSvg(buffer, previewSvgPath);
+    await prisma.mapVersion.update({
+      where: { id: version.id },
+      data: { previewSvgPath },
+    });
+    return await streamPreview(previewSvgPath);
   } catch (err) {
-    console.error("Preview read failed:", err);
-    return NextResponse.json({ error: "Preview saknas" }, { status: 404 });
+    console.error("Preview SVG generation failed:", err);
+    return NextResponse.json(
+      { error: "Kunde inte generera kartpreview" },
+      { status: 500 },
+    );
   }
-}
-
-function svgResponse(svgBuffer: Buffer): NextResponse {
-  return new NextResponse(new Uint8Array(svgBuffer), {
-    headers: {
-      ...SVG_RESPONSE_SECURITY_HEADERS,
-      "Cache-Control": "private, max-age=3600",
-      "Content-Length": String(svgBuffer.byteLength),
-    },
-  });
 }
