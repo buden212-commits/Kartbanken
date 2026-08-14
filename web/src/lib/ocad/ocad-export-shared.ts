@@ -17,6 +17,8 @@ export type CropBbox = {
 export type CropOcadOptions = {
   bbox: CropBbox;
   targetVersion: OcadExportVersion;
+  /** Tillåt tom crop (alla objekt soft-delete). Används vid import av delkarta i tomt område. */
+  allowEmpty?: boolean;
 };
 
 export type CropOcadResult = {

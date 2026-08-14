@@ -47,6 +47,10 @@ export function isSuggestionAttachmentPath(pathname: string, mapFileId: string):
   return re.test(pathname);
 }
 
+export function isImportPartialPath(pathname: string, jobId: string): boolean {
+  return pathnamesEqual(pathname, `temp-import/${jobId}/partial.ocd`);
+}
+
 export function isVerifyComparePath(pathname: string, jobId: string, slot: "A" | "B"): boolean {
   // temp-compare paths — keep permissive of known builder format
   const lower = pathname.toLowerCase();

@@ -7,6 +7,14 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-08-14",
+    title: "Importera delkarta",
+    items: [
+      "Ny guide «Importera delkarta» när du har en .ocd som inte checkades ut här — först symbolmatchning, sedan läge, kanter och ändringar på kartan",
+      "Guiden skapar en utcheckning i efterhand från filens utbredning; objekt som går över kanten raderas inte automatiskt",
+    ],
+  },
+  {
     date: "2026-08-13",
     title: "GPS-noggrannhet syns tydligare",
     items: [

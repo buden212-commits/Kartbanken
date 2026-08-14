@@ -30,7 +30,7 @@ export async function exportCheckoutSubset(
   sourceBuffer: Buffer,
   fileName: string,
   selectionGeometry: CheckoutSelectionGeometry,
-  options?: { targetVersion?: OcadExportVersion },
+  options?: { targetVersion?: OcadExportVersion; allowEmpty?: boolean },
 ): Promise<CheckoutSubsetExport> {
   const summary = await parseOcadBuffer(sourceBuffer, fileName);
   const objectIds = objectIdsFromSelection(summary.objects, selectionGeometry);
@@ -41,7 +41,11 @@ export async function exportCheckoutSubset(
   const targetVersion =
     options?.targetVersion ?? defaultOcadExportVersion(summary.ocadVersion);
 
-  const cropResult = cropOcadBuffer(sourceBuffer, { bbox, targetVersion });
+  const cropResult = cropOcadBuffer(sourceBuffer, {
+    bbox,
+    targetVersion,
+    allowEmpty: options?.allowEmpty,
+  });
 
   const warnings = [...summary.warnings];
   if (selectionGeometry.type === CheckoutSelectionType.POLYGON) {

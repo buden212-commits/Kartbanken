@@ -157,7 +157,7 @@ export function cropOcadBuffer(buffer: Buffer, options: CropOcadOptions): CropOc
     objectIndexOffset = block.nextObjectIndexBlock;
   }
 
-  if (keptObjects === 0) {
+  if (keptObjects === 0 && !options.allowEmpty) {
     throw new Error("Inga objekt i exportområdet. Flytta ramen och försök igen.");
   }
 

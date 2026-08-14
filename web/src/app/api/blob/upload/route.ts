@@ -1,10 +1,12 @@
 import { getCheckoutById } from "@/lib/checkout/repository";
 import { prisma } from "@/lib/prisma";
 import { readTempCompareJob } from "@/lib/ocad/temp-compare";
+import { readImportPartialJob } from "@/lib/checkout/import-partial";
 import { MAX_UPLOAD_BYTES } from "@/lib/storage";
 import {
   blobRefToPathname,
   isCheckoutCheckinPath,
+  isImportPartialPath,
   isMapVersionPath,
   isSuggestionAttachmentPath,
   pathnamesEqual,
@@ -20,7 +22,8 @@ type ClientPayload =
   | { kind: "mapVersion"; versionId: string; slug: string }
   | { kind: "verifyCompare"; jobId: string; slot: "A" | "B" }
   | { kind: "checkoutCheckin"; checkoutId: string; slug: string }
-  | { kind: "suggestionAttachment"; slug: string };
+  | { kind: "suggestionAttachment"; slug: string }
+  | { kind: "importPartial"; jobId: string; slug: string };
 
 export async function POST(request: Request): Promise<NextResponse> {
   const body = (await request.json()) as HandleUploadBody;
@@ -109,6 +112,22 @@ export async function POST(request: Request): Promise<NextResponse> {
               : `temp-compare/${payload.jobId}/b.ocd`;
           if (!pathnamesEqual(normalizedPath, expected)) {
             throw new Error("Sökväg matchar inte jämförelsejobbet");
+          }
+        } else if (payload.kind === "importPartial") {
+          if (!canCheckout(session.user.role)) {
+            throw new Error("Saknar behörighet att importera delkarta");
+          }
+          const map = await prisma.mapFile.findUnique({
+            where: { slug: payload.slug },
+            select: { id: true },
+          });
+          if (!map) throw new Error("Kartfil hittades inte");
+          const job = await readImportPartialJob(payload.jobId);
+          if (!job || job.userId !== session.user.id || job.mapFileId !== map.id) {
+            throw new Error("Importjobb hittades inte");
+          }
+          if (!isImportPartialPath(normalizedPath, payload.jobId)) {
+            throw new Error("Sökväg matchar inte importjobbet");
           }
         } else {
           throw new Error("Okänd uppladdningstyp");
