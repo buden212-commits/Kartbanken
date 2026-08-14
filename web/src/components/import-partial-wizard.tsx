@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DiffMapPanel } from "@/components/diff-map-panel";
-import type { ImportPartialAnalysis } from "@/lib/checkout/import-partial-analysis";
-import { geoBboxToSvgUser, geoToSvgUserPoint, type SvgRootTransform } from "@/lib/ocad/svg-coords";
+import { ImportPartialMapPreview } from "@/components/import-partial-map-preview";
+import type { ImportPartialAnalysis } from "@/lib/checkout/import-partial-types";
+import { fetchPreviewText } from "@/lib/ocad/preview-fetch";
 import { uploadImportPartial } from "@/lib/upload-client";
 
 type StepId = "upload" | "symbols" | "extent" | "edges" | "diff" | "confirm";
@@ -48,17 +48,11 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
   const otherBlockers = blockers.filter((item) => !item.includes("symboler som saknas"));
   const canProceedPastSymbols = !symbolBlocked;
   const canCommit = blockers.length === 0;
-  const showMap = step === "extent" || step === "edges" || step === "diff";
+  const mapMode = step === "extent" || step === "edges" || step === "diff" ? step : null;
 
-  const fitBbox = useMemo(() => {
-    if (!analysis || !showMap) return null;
-    const { minX, minY, maxX, maxY } = analysis.extent;
-    if (![minX, minY, maxX, maxY].every(Number.isFinite)) return null;
-    return {
-      bbox: [minX, minY, maxX, maxY] as [number, number, number, number],
-      requestId: step === "extent" ? 1 : step === "edges" ? 2 : 3,
-    };
-  }, [analysis, showMap, step]);
+  useEffect(() => {
+    void fetchPreviewText(previewUrl);
+  }, [previewUrl]);
 
   async function onFile(file: File | undefined) {
     if (!file) return;
@@ -115,103 +109,6 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
     const prev = STEPS[stepIndex - 1];
     if (prev) setStep(prev.id);
   }
-
-  const renderExtentOverlay = useCallback(
-    (rootTransform: SvgRootTransform) => {
-      if (!analysis) return null;
-      const { minX, minY, maxX, maxY } = analysis.extent;
-      if (![minX, minY, maxX, maxY].every(Number.isFinite)) return null;
-      const [x1, y1, x2, y2] = geoBboxToSvgUser([minX, minY, maxX, maxY], rootTransform);
-      if (![x1, y1, x2, y2].every(Number.isFinite)) return null;
-      const x = Math.min(x1, x2);
-      const y = Math.min(y1, y2);
-      const w = Math.abs(x2 - x1);
-      const h = Math.abs(y2 - y1);
-      if (!(w > 0) || !(h > 0)) return null;
-      return (
-        <rect
-          x={x}
-          y={y}
-          width={w}
-          height={h}
-          fill="rgba(37, 99, 235, 0.18)"
-          stroke="#1d4ed8"
-          strokeWidth={2}
-          vectorEffect="non-scaling-stroke"
-          pointerEvents="none"
-        />
-      );
-    },
-    [analysis],
-  );
-
-  const renderEdgeOverlay = useCallback(
-    (rootTransform: SvgRootTransform) => {
-      if (!analysis) return null;
-      return (
-        <>
-          {renderExtentOverlay(rootTransform)}
-          {analysis.edgeObjects.map((object) => {
-            const [x1, y1, x2, y2] = geoBboxToSvgUser(object.bbox, rootTransform);
-            const [cx, cy] = geoToSvgUserPoint(object.centroid, rootTransform);
-            if (![x1, y1, x2, y2, cx, cy].every(Number.isFinite)) return null;
-            const color = object.likelyClipped ? "#dc2626" : "#ea580c";
-            return (
-              <g key={`${object.objectIndex}-${object.symbolNumber}`}>
-                <rect
-                  x={Math.min(x1, x2)}
-                  y={Math.min(y1, y2)}
-                  width={Math.abs(x2 - x1) || 20}
-                  height={Math.abs(y2 - y1) || 20}
-                  fill={`${color}22`}
-                  stroke={color}
-                  strokeWidth={2}
-                  vectorEffect="non-scaling-stroke"
-                  pointerEvents="none"
-                />
-                <circle cx={cx} cy={cy} r={18} fill={color} pointerEvents="none" />
-              </g>
-            );
-          })}
-        </>
-      );
-    },
-    [analysis, renderExtentOverlay],
-  );
-
-  const renderDiffOverlay = useCallback(
-    (rootTransform: SvgRootTransform) => {
-      if (!analysis) return null;
-      return (
-        <>
-          {renderExtentOverlay(rootTransform)}
-          {analysis.diff.samples.map((change, index) => {
-            const [cx, cy] = geoToSvgUserPoint(change.centroid, rootTransform);
-            if (![cx, cy].every(Number.isFinite)) return null;
-            const color =
-              change.changeType === "added"
-                ? "#16a34a"
-                : change.changeType === "removed"
-                  ? "#dc2626"
-                  : "#d97706";
-            return (
-              <circle
-                key={`${change.changeType}-${change.objectIndex}-${index}`}
-                cx={cx}
-                cy={cy}
-                r={22}
-                fill={color}
-                stroke="white"
-                strokeWidth={6}
-                pointerEvents="none"
-              />
-            );
-          })}
-        </>
-      );
-    },
-    [analysis, renderExtentOverlay],
-  );
 
   return (
     <div className="space-y-6">
@@ -325,35 +222,16 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
           </ul>
         )}
 
-      <div
-        className={
-          showMap
-            ? "overflow-hidden rounded-xl border border-slate-200"
-            : "pointer-events-none fixed left-[-10000px] top-0 h-[560px] w-[800px] opacity-0"
-        }
-        aria-hidden={!showMap}
-      >
-        <DiffMapPanel
+      {analysis && mapMode && (
+        <ImportPartialMapPreview
           previewUrl={previewUrl}
+          analysis={analysis}
+          mode={mapMode}
           title={
-            step === "extent" ? "Utbredning" : step === "edges" ? "Kantobjekt" : step === "diff" ? "Ändringar" : "Karta"
-          }
-          mapSlug={mapSlug}
-          versionId={headVersionId}
-          exportEnabled={false}
-          showLayerPanel={false}
-          fitGeoBbox={fitBbox}
-          renderSvgOverlay={
-            step === "extent"
-              ? renderExtentOverlay
-              : step === "edges"
-                ? renderEdgeOverlay
-                : step === "diff"
-                  ? renderDiffOverlay
-                  : undefined
+            mapMode === "extent" ? "Utbredning" : mapMode === "edges" ? "Kantobjekt" : "Ändringar"
           }
         />
-      </div>
+      )}
 
       {analysis && step === "extent" && (
         <p className="text-sm text-slate-600">

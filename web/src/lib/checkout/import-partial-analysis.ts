@@ -1,63 +1,25 @@
 import { bboxFromGeometry } from "./overlap";
 import { CheckoutSelectionType, type Bbox } from "./types";
 import { compareOcadObjects } from "@/lib/ocad/diff";
-import type { OcadObjectChange } from "@/lib/ocad/diff-types";
 import type { NormalizedOcadObject, OcadParseSummary } from "@/lib/ocad/types";
+import type {
+  ImportDiffSample,
+  ImportEdgeObject,
+  ImportPartialAnalysis,
+  ImportSymbolRow,
+} from "./import-partial-types";
+
+export type {
+  ImportDiffSample,
+  ImportEdgeObject,
+  ImportPartialAnalysis,
+  ImportSymbolRow,
+} from "./import-partial-types";
 
 const DIFF_TOLERANCE_M = Number(process.env.DIFF_SPATIAL_TOLERANCE_M ?? 2);
 const MAX_EDGE_SAMPLES = 80;
 const MAX_DIFF_SAMPLES = 40;
 const MAX_SYMBOL_ROWS = 80;
-
-export type ImportSymbolRow = {
-  number: number;
-  nameHead: string;
-  namePartial: string;
-  countPartial: number;
-};
-
-export type ImportEdgeObject = {
-  objectIndex: number;
-  symbolNumber: number;
-  symbolName: string;
-  type: NormalizedOcadObject["type"];
-  centroid: [number, number];
-  bbox: [number, number, number, number];
-  likelyClipped: boolean;
-};
-
-export type ImportDiffSample = {
-  changeType: OcadObjectChange["changeType"];
-  objectIndex: number;
-  symbolNumber: number;
-  symbolName: string;
-  type: OcadObjectChange["type"];
-  centroid: [number, number];
-};
-
-export type ImportPartialAnalysis = {
-  extent: Bbox;
-  extentInsideHead: boolean;
-  headBounds: Bbox | null;
-  symbols: {
-    matched: ImportSymbolRow[];
-    onlyInPartial: ImportSymbolRow[];
-    onlyInHeadUsedByPartialArea: ImportSymbolRow[];
-  };
-  interiorCount: number;
-  edgeCount: number;
-  likelyClippedCount: number;
-  edgeObjects: ImportEdgeObject[];
-  diff: {
-    added: number;
-    removed: number;
-    modified: number;
-    unchanged: number;
-    samples: ImportDiffSample[];
-  };
-  blockers: string[];
-  warnings: string[];
-};
 
 function bboxFromTuple(bounds: number[] | null): Bbox | null {
   if (!bounds || bounds.length < 4) return null;
