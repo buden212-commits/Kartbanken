@@ -37,7 +37,7 @@
     "mermaid": "^11.16.1",
     "next": "16.2.12",
     "next-auth": "^5.0.0-beta.32",
-    "nodemailer": "^8.0.11",
+    "nodemailer": "^9.0.5",
     "ocad2geojson": "^2.1.23",
     "proj4": "^2.21.0",
     "react": "19.2.4",
