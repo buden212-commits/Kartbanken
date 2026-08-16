@@ -2,8 +2,9 @@ import { logAction } from "@/lib/audit";
 import { requireSession } from "@/lib/auth/api";
 import { canAdminConfirmIntegration } from "@/lib/auth/permissions";
 import { integrateCheckout } from "@/lib/checkout/integrate";
+import { IntegrationError } from "@/lib/checkout/integration-error";
 import {
-  integrationErrorMessage,
+  integrationErrorPayload,
   logIntegrationError,
 } from "@/lib/checkout/integration-log";
 import {
@@ -137,17 +138,14 @@ export async function POST(_request: Request, { params }: RouteParams) {
       warningMessages: result.warningMessages,
     });
   } catch (err) {
+    const step = err instanceof IntegrationError ? err.step : "persist";
     logIntegrationError(
-      "persist",
+      step,
       { checkoutId: checkout.id, mapFileId: map.id },
       err,
       { mapSlug: slug, adminUserId: session.user.id },
     );
-    return NextResponse.json(
-      {
-        error: integrationErrorMessage(err, "Integration misslyckades"),
-      },
-      { status: 500 },
-    );
+    const payload = integrationErrorPayload(err, "Integration misslyckades");
+    return NextResponse.json(payload, { status: 500 });
   }
 }

@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-16",
+    title: "Tydligare fel vid admin-integration",
+    items: [
+      "Om «Bekräfta och integrera» misslyckas visas vilket steg som gick fel, tips och mer detaljer i stället för bara «Integration misslyckades»",
+      "Integrering av stora kartor (t.ex. Mora Väst) valideras lättare så den inte lika lätt kraschar mitt i processen",
+    ],
+  },
+  {
+    date: "2026-08-16",
     title: "Importera delkarta: tydligare kartvy i Kanter",
     items: [
       "I steget «Kanter» (och «Ändringar») kan du växla mellan hela kartan och bara berörda objekt",

@@ -9,6 +9,10 @@ import {
   type IntegrationWarning,
 } from "./integration-warnings";
 import {
+  IntegrationError,
+  toIntegrationError,
+} from "./integration-error";
+import {
   logIntegrationChanges,
   logIntegrationError,
   logIntegrationStep,
@@ -18,13 +22,13 @@ import { parseStoredCheckoutDiffJson } from "./diff-status";
 import {
   appendObjectsFromCheckin,
   readActiveObjectIndices,
+  validateOcadBufferStructure,
 } from "@/lib/ocad/ocad-integrate";
 import {
   copyMatchingObjectData,
   copySkipReasonText,
   markObjectsDeletedByIndices,
 } from "@/lib/ocad/ocad-export-server";
-import { parseOcadBuffer } from "@/lib/ocad/read";
 import { processVersionAfterUpload } from "@/lib/ocad/process-version";
 import { buildMapVersionPath, readStoredFile, uploadFile } from "@/lib/storage";
 import { sha256 } from "@/lib/hash";
@@ -47,31 +51,37 @@ async function resolveIntegrationDiff(
   headVersionId: string,
   logCtx: IntegrationLogContext,
 ): Promise<CheckoutSubsetDiffResult> {
-  const stored = parseStoredCheckoutDiffJson(storedDiffJson);
-  const headChanged = stored != null && stored.headVersionId !== headVersionId;
+  try {
+    const stored = parseStoredCheckoutDiffJson(storedDiffJson);
+    const headChanged = stored != null && stored.headVersionId !== headVersionId;
 
-  if (stored && !headChanged) {
+    if (stored && !headChanged) {
+      logIntegrationStep("resolve_diff", logCtx, {
+        source: "stored",
+        changeCount: stored.changes.length,
+        headChangedSinceCheckout: stored.headChangedSinceCheckout ?? false,
+      });
+      return stored;
+    }
+
     logIntegrationStep("resolve_diff", logCtx, {
-      source: "stored",
-      changeCount: stored.changes.length,
-      headChangedSinceCheckout: stored.headChangedSinceCheckout ?? false,
+      source: "recompute",
+      reason: stored ? "head_version_changed" : "missing_or_invalid_stored_diff",
+      storedHeadVersionId: stored?.headVersionId ?? null,
+      currentHeadVersionId: headVersionId,
     });
-    return stored;
+
+    const recomputed = await computeCheckoutSubsetDiff(checkoutId);
+    logIntegrationChanges(logCtx, recomputed.changes, {
+      headChangedSinceCheckout: recomputed.headChangedSinceCheckout,
+      outOfScopeCount: recomputed.outOfScopeWarnings?.length ?? 0,
+    });
+    return recomputed;
+  } catch (err) {
+    throw toIntegrationError(err, "resolve_diff", "Kunde inte läsa eller beräkna diff", {
+      hint: "Öppna utcheckningen, vänta tills diff är klar, eller beräkna om diff och försök igen.",
+    });
   }
-
-  logIntegrationStep("resolve_diff", logCtx, {
-    source: "recompute",
-    reason: stored ? "head_version_changed" : "missing_or_invalid_stored_diff",
-    storedHeadVersionId: stored?.headVersionId ?? null,
-    currentHeadVersionId: headVersionId,
-  });
-
-  const recomputed = await computeCheckoutSubsetDiff(checkoutId);
-  logIntegrationChanges(logCtx, recomputed.changes, {
-    headChangedSinceCheckout: recomputed.headChangedSinceCheckout,
-    outOfScopeCount: recomputed.outOfScopeWarnings?.length ?? 0,
-  });
-  return recomputed;
 }
 
 /**
@@ -97,18 +107,21 @@ export async function integrateCheckout(
     });
 
     if (!checkout) {
-      throw new Error("Utcheckning hittades inte");
+      throw new IntegrationError("Utcheckning hittades inte", { step: "start" });
     }
 
     logCtx.mapFileId = checkout.mapFileId;
     logIntegrationStep("start", logCtx, { status: checkout.status });
 
     if (checkout.status !== CheckoutStatus.PENDING_ADMIN_CONFIRM) {
-      throw new Error("Utcheckningen väntar inte på admin-bekräftelse");
+      throw new IntegrationError("Utcheckningen väntar inte på admin-bekräftelse", {
+        step: "start",
+        details: { status: checkout.status },
+      });
     }
 
     if (!checkout.checkinStoragePath) {
-      throw new Error("Utcheckningen saknar incheckad fil");
+      throw new IntegrationError("Utcheckningen saknar incheckad fil", { step: "start" });
     }
 
     logCtx.checkinPath = checkout.checkinStoragePath;
@@ -119,7 +132,7 @@ export async function integrateCheckout(
     });
 
     if (!headVersion) {
-      throw new Error("Aktuell version saknas");
+      throw new IntegrationError("Aktuell version saknas", { step: "start" });
     }
 
     logCtx.headVersionId = headVersion.id;
@@ -133,7 +146,10 @@ export async function integrateCheckout(
     );
 
     if (!Array.isArray(diff.changes)) {
-      throw new Error("Diff saknar ändringslista — beräkna om diff och försök igen");
+      throw new IntegrationError(
+        "Diff saknar ändringslista — beräkna om diff och försök igen",
+        { step: "resolve_diff" },
+      );
     }
 
     const removedIndices = new Set(
@@ -156,18 +172,52 @@ export async function integrateCheckout(
       removedCount: removedIndices.size,
       modifiedCount: modifiedIndices.size,
       addedCount: addedIndices.length,
+      headBytes: headVersion.fileSizeBytes,
     });
 
-    const [headBuffer, checkinBuffer] = await Promise.all([
-      readStoredFile(headVersion.storagePath),
-      readStoredFile(checkout.checkinStoragePath),
-    ]);
+    let headBuffer: Buffer;
+    let checkinBuffer: Buffer;
+    try {
+      [headBuffer, checkinBuffer] = await Promise.all([
+        readStoredFile(headVersion.storagePath),
+        readStoredFile(checkout.checkinStoragePath),
+      ]);
+    } catch (err) {
+      throw toIntegrationError(err, "load_files", "Kunde inte ladda kartfiler från lagring", {
+        hint: "Kontrollera att aktuell version och incheckningen finns kvar i lagringen.",
+        details: {
+          headPath: headVersion.storagePath,
+          checkinPath: checkout.checkinStoragePath,
+        },
+      });
+    }
 
-    let working = Buffer.from(headBuffer);
-    const deleteResult = markObjectsDeletedByIndices(working, removedIndices);
-    const copyResult = copyMatchingObjectData(working, checkinBuffer, modifiedIndices);
-    const appendResult = appendObjectsFromCheckin(working, checkinBuffer, addedIndices);
-    working = Buffer.from(appendResult.buffer);
+    let working: Buffer;
+    let deleteResult: ReturnType<typeof markObjectsDeletedByIndices>;
+    let copyResult: ReturnType<typeof copyMatchingObjectData>;
+    let appendResult: ReturnType<typeof appendObjectsFromCheckin>;
+    try {
+      working = Buffer.from(headBuffer);
+      deleteResult = markObjectsDeletedByIndices(working, removedIndices);
+      copyResult = copyMatchingObjectData(working, checkinBuffer, modifiedIndices);
+      appendResult = appendObjectsFromCheckin(working, checkinBuffer, addedIndices);
+      working = Buffer.from(appendResult.buffer);
+    } catch (err) {
+      throw toIntegrationError(
+        err,
+        "apply_changes",
+        "Kunde inte applicera borttagningar/ändringar/tillägg i OCAD-filen",
+        {
+          hint:
+            "Stora diffar eller trasiga objekt kan stoppa sammanslagningen. Granska diffen och försök igen, eller integrera manuellt i OCAD.",
+          details: {
+            removedCount: removedIndices.size,
+            modifiedCount: modifiedIndices.size,
+            addedCount: addedIndices.length,
+          },
+        },
+      );
+    }
 
     logIntegrationStep("apply_changes", logCtx, {
       deletedObjects: deleteResult.deleted,
@@ -228,29 +278,34 @@ export async function integrateCheckout(
       }
     }
 
-    logIntegrationStep("validate_output", logCtx, {
-      outputBytes: working.byteLength,
-      warningCount: warnings.length,
-    });
-
     try {
-      const parsed = await parseOcadBuffer(working, "integration-preview.ocd");
+      const structure = validateOcadBufferStructure(working);
       logIntegrationStep("validate_output", logCtx, {
-        objectCount: parsed.objectCount,
+        outputBytes: structure.bytes,
+        activeObjects: structure.activeObjects,
+        ocadVersion: structure.version,
+        warningCount: warnings.length,
         parseOk: true,
+        validation: "structure",
       });
     } catch (parseErr) {
-      logIntegrationError("validate_output", logCtx, parseErr, {
-        outputBytes: working.byteLength,
-        addedCount: addedIndices.length,
-        modifiedCount: modifiedIndices.size,
-        removedCount: removedIndices.size,
-      });
-      throw new Error(
-        "Integrerad OCAD-fil kunde inte valideras efter sammanslagning. " +
-          "Kontrollera diff (särskilt ändrade linjer/höjdkurvor) och försök igen, " +
-          "eller integrera manuellt i OCAD.",
+      const wrapped = toIntegrationError(
+        parseErr,
+        "validate_output",
+        "Integrerad OCAD-fil kunde inte valideras efter sammanslagning",
+        {
+          hint:
+            "Kontrollera diff (särskilt ändrade linjer/höjdkurvor) och försök igen, eller integrera manuellt i OCAD.",
+          details: {
+            outputBytes: working.byteLength,
+            addedCount: addedIndices.length,
+            modifiedCount: modifiedIndices.size,
+            removedCount: removedIndices.size,
+          },
+        },
       );
+      logIntegrationError("validate_output", logCtx, wrapped);
+      throw wrapped;
     }
 
     const versionNumber =
@@ -270,8 +325,17 @@ export async function integrateCheckout(
       storagePath,
     });
 
-    const storedRef = await uploadFile(storagePath, working);
-    const contentHash = sha256(working);
+    let storedRef: string;
+    let contentHash: string;
+    try {
+      storedRef = await uploadFile(storagePath, working);
+      contentHash = sha256(working);
+    } catch (err) {
+      throw toIntegrationError(err, "upload", "Kunde inte ladda upp den integrerade filen", {
+        hint: "Kontrollera Blob-lagring / diskutrymme och försök igen.",
+        details: { storagePath, bytes: working.byteLength },
+      });
+    }
 
     logIntegrationStep("persist", logCtx, {
       nextVersionNumber,
@@ -279,54 +343,62 @@ export async function integrateCheckout(
       contentHash,
     });
 
-    const version = await prisma.mapVersion.create({
-      data: {
-        mapFileId: checkout.mapFileId,
-        versionNumber: nextVersionNumber,
-        storagePath: storedRef,
-        originalFilename: `integrerad-utcheckning-${checkout.id.slice(0, 8)}.ocd`,
-        fileSizeBytes: working.byteLength,
-        contentHash,
-        uploadedById: integratedById,
-        comment:
-          checkout.integrationComment?.trim() ||
-          `Integrerad utcheckning ${checkout.id.slice(0, 8)}`,
-        parseStatus: "PENDING",
-      },
-    });
+    let version: { id: string; versionNumber: number };
+    try {
+      version = await prisma.mapVersion.create({
+        data: {
+          mapFileId: checkout.mapFileId,
+          versionNumber: nextVersionNumber,
+          storagePath: storedRef,
+          originalFilename: `integrerad-utcheckning-${checkout.id.slice(0, 8)}.ocd`,
+          fileSizeBytes: working.byteLength,
+          contentHash,
+          uploadedById: integratedById,
+          comment:
+            checkout.integrationComment?.trim() ||
+            `Integrerad utcheckning ${checkout.id.slice(0, 8)}`,
+          parseStatus: "PENDING",
+        },
+      });
 
-    let existingDiffSummary: Record<string, unknown> = {};
-    if (checkout.diffSummaryJson) {
-      try {
-        existingDiffSummary = JSON.parse(checkout.diffSummaryJson) as Record<string, unknown>;
-      } catch {
-        existingDiffSummary = {};
+      let existingDiffSummary: Record<string, unknown> = {};
+      if (checkout.diffSummaryJson) {
+        try {
+          existingDiffSummary = JSON.parse(checkout.diffSummaryJson) as Record<string, unknown>;
+        } catch {
+          existingDiffSummary = {};
+        }
       }
-    }
 
-    await prisma.mapCheckout.update({
-      where: { id: checkoutId },
-      data: {
-        status: CheckoutStatus.INTEGRATED,
-        integratedAt: new Date(),
-        integratedVersionId: version.id,
-        adminConfirmedAt: new Date(),
-        diffSummaryJson: JSON.stringify({
-          ...existingDiffSummary,
-          added: diff.added,
-          removed: diff.removed,
-          modified: diff.modified,
-          headVersionId: diff.headVersionId,
-          headChangedSinceCheckout: diff.headChangedSinceCheckout,
-          scopedObjectIds: diff.scopedObjectIds,
-          outOfScopeWarnings: diff.outOfScopeWarnings,
-          bySymbol: diff.bySymbol,
-          changes: diff.changes,
-          integrationWarnings: warnings,
-          integratedVersionNumber: version.versionNumber,
-        }),
-      },
-    });
+      await prisma.mapCheckout.update({
+        where: { id: checkoutId },
+        data: {
+          status: CheckoutStatus.INTEGRATED,
+          integratedAt: new Date(),
+          integratedVersionId: version.id,
+          adminConfirmedAt: new Date(),
+          diffSummaryJson: JSON.stringify({
+            ...existingDiffSummary,
+            added: diff.added,
+            removed: diff.removed,
+            modified: diff.modified,
+            headVersionId: diff.headVersionId,
+            headChangedSinceCheckout: diff.headChangedSinceCheckout,
+            scopedObjectIds: diff.scopedObjectIds,
+            outOfScopeWarnings: diff.outOfScopeWarnings,
+            bySymbol: diff.bySymbol,
+            changes: diff.changes,
+            integrationWarnings: warnings,
+            integratedVersionNumber: version.versionNumber,
+          }),
+        },
+      });
+    } catch (err) {
+      throw toIntegrationError(err, "persist", "Kunde inte spara den nya versionen i databasen", {
+        hint: "Filen kan ha laddats upp men statusen sparades inte. Kontrollera versionshistoriken innan du försöker igen.",
+        details: { nextVersionNumber, storedRef },
+      });
+    }
 
     try {
       await processVersionAfterUpload(checkout.mapFileId, version.id, headVersion.id);
@@ -356,7 +428,10 @@ export async function integrateCheckout(
       appendedObjects: appendResult.appended,
     };
   } catch (err) {
-    logIntegrationError("persist", logCtx, err);
-    throw err;
+    const step = err instanceof IntegrationError ? err.step : "persist";
+    logIntegrationError(step, logCtx, err);
+    throw err instanceof IntegrationError
+      ? err
+      : toIntegrationError(err, "persist", "Integration misslyckades");
   }
 }

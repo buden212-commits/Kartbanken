@@ -785,6 +785,12 @@ export async function HelpPageContent() {
               På <Link href="/admin/checkouts" className="link-primary">/admin/checkouts</Link>{" "}
               ser du utcheckningar som väntar på admin-integration efter att redaktören bekräftat diff.
             </p>
+            <p className="mt-2">
+              Om <strong>Bekräfta och integrera</strong> misslyckas visar felrutan vilket steg som
+              stoppade (t.ex. ladda filer, applicera ändringar, validera, ladda upp) plus tips.
+              Kopiera gärna utchecknings-id från felrutan vid felsökning. Stora kartor kan ta längre
+              tid — vänta tills sidan svarar.
+            </p>
 
             <h3 className="font-medium text-slate-900">Användarhantering</h3>
             <p>

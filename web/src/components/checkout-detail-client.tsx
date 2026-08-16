@@ -35,6 +35,7 @@ import {
 
 import { IntegrationWarningsPanel } from "@/components/integration-warnings-panel";
 import { HelpSectionHeading } from "@/components/help-link-icon";
+import { readApiError } from "@/lib/api/read-api-error";
 
 
 
@@ -609,19 +610,27 @@ export function CheckoutDetailClient({
 
     if (!res.ok) {
 
-      const data = await res.json().catch(() => ({}));
+      const { message } = await readApiError(res, "Integration misslyckades");
 
-      setError(data.error ?? "Integration misslyckades");
+      setMessage(null);
+
+      setError(message);
 
       return;
 
     }
 
-    const data = await res.json();
+    const data = (await res.json()) as {
+
+      warnings?: IntegrationWarning[];
+
+      versionNumber?: number;
+
+    };
 
     if (Array.isArray(data.warnings) && data.warnings.length > 0) {
 
-      setIntegrationWarnings(data.warnings as IntegrationWarning[]);
+      setIntegrationWarnings(data.warnings);
 
     }
 
@@ -1221,11 +1230,21 @@ export function CheckoutDetailClient({
 
       {error && (
 
-        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
 
-          {error}
+          <p className="font-medium">Fel</p>
 
-        </p>
+          <pre className="mt-1 whitespace-pre-wrap font-sans text-sm">{error}</pre>
+
+          <p className="mt-2 text-xs text-red-700">
+
+            Utchecknings-id: <span className="font-mono">{checkout.id}</span> — ange gärna id och tidpunkt
+
+            om du behöver hjälp.
+
+          </p>
+
+        </div>
 
       )}
 

@@ -453,3 +453,27 @@ export function readActiveObjectIndices(buffer: Buffer): Set<number> {
   });
   return indices;
 }
+
+/**
+ * Lightweight structural check (header + object index). Avoids full GeoJSON parse,
+ * which OOMs on large maps like Mora Väst during admin integration.
+ */
+export function validateOcadBufferStructure(buffer: Buffer): {
+  version: number;
+  activeObjects: number;
+  bytes: number;
+} {
+  if (!buffer?.byteLength) {
+    throw new Error("Tom OCAD-buffer efter sammanslagning");
+  }
+  const header = readHeader(buffer);
+  if (!header.objectIndexBlock || header.objectIndexBlock <= 0) {
+    throw new Error("OCAD-filen saknar objektindex efter sammanslagning");
+  }
+  const activeObjects = readActiveObjectIndices(buffer).size;
+  return {
+    version: header.version,
+    activeObjects,
+    bytes: buffer.byteLength,
+  };
+}
