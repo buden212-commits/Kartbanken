@@ -40,11 +40,11 @@ export default async function ComparePage({ params, searchParams }: PageProps) {
   const [versionA, versionB] = await Promise.all([
     prisma.mapVersion.findFirst({
       where: { id: v1, mapFileId: map.id },
-      select: { id: true, isPublished: true },
+      select: { id: true, versionNumber: true, isPublished: true },
     }),
     prisma.mapVersion.findFirst({
       where: { id: v2, mapFileId: map.id },
-      select: { id: true, isPublished: true },
+      select: { id: true, versionNumber: true, isPublished: true },
     }),
   ]);
 
@@ -54,5 +54,19 @@ export default async function ComparePage({ params, searchParams }: PageProps) {
     notFound();
   }
 
-  return <ComparePageClient mapSlug={slug} mapTitle={map.title} v1={v1} v2={v2} />;
+  const [older, newer] =
+    versionA.versionNumber < versionB.versionNumber
+      ? [versionA, versionB]
+      : [versionB, versionA];
+
+  return (
+    <ComparePageClient
+      mapSlug={slug}
+      mapTitle={map.title}
+      v1={older.id}
+      v2={newer.id}
+      versionANumber={older.versionNumber}
+      versionBNumber={newer.versionNumber}
+    />
+  );
 }

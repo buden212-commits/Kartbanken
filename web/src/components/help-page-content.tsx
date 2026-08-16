@@ -653,7 +653,8 @@ export async function HelpPageContent() {
             under <strong>Laddar och parsar</strong> (själva filhämtningen ska bara ta sekunder).
             Under tiden visar sidan checklista, delstatus, förfluten tid och senaste
             statusuppdatering. Om hämtningen fastnar startas jobbet om automatiskt. Sidan
-            uppdateras automatiskt. Om statusen ändå slutar uppdateras: använd{" "}
+            uppdateras automatiskt. Statusdialogen med checklista visas direkt när du öppnar
+            jämförelsen. Om statusen ändå slutar uppdateras: använd{" "}
             <strong>Starta om jämförelse</strong>.
           </p>
           <HelpProcessDiagram title="Flöde — jämföra versioner" chart={compareFlow} />

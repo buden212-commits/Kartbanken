@@ -45,6 +45,8 @@ type Props = {
   mapTitle: string;
   v1: string;
   v2: string;
+  versionANumber: number;
+  versionBNumber: number;
 };
 
 const STEP_HINTS: Record<VersionDiffProgressStep, string> = {
@@ -57,6 +59,8 @@ const STEP_HINTS: Record<VersionDiffProgressStep, string> = {
   save: "Sparar resultatet så sidan kan visa diffen.",
   layers: "Skapar kartlager för tillagda/borttagna/ändrade objekt.",
 };
+
+const FETCH_TIMEOUT_MS = 25_000;
 
 function WorkingSpinner({ className = "" }: { className?: string }) {
   return (
@@ -106,19 +110,83 @@ function ProgressChecklist({ progress }: { progress: VersionDiffProgress | null 
   );
 }
 
-export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
+function initialProcessing(
+  v1: string,
+  v2: string,
+  versionANumber: number,
+  versionBNumber: number,
+): CompareResponse {
+  const startedAt = new Date().toISOString();
+  return {
+    status: "processing",
+    versionA: { id: v1, versionNumber: versionANumber },
+    versionB: { id: v2, versionNumber: versionBNumber },
+    progress: {
+      step: "queued",
+      label: versionDiffStepLabel("queued"),
+      detail: "Ansluter till servern och startar jämförelse…",
+      updatedAt: startedAt,
+      startedAt,
+      stepIndex: 1,
+      stepCount: VERSION_DIFF_STEPS.length,
+    },
+    stale: false,
+    canRetry: false,
+    staleAfterMs: VERSION_DIFF_STALE_MS,
+  };
+}
+
+export function ComparePageClient({
+  mapSlug,
+  mapTitle,
+  v1,
+  v2,
+  versionANumber,
+  versionBNumber,
+}: Props) {
   const router = useRouter();
-  const [data, setData] = useState<CompareResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<CompareResponse>(() =>
+    initialProcessing(v1, v2, versionANumber, versionBNumber),
+  );
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [clientStartedMs] = useState(() => Date.now());
   const [retrying, setRetrying] = useState(false);
+  const [fetchWarning, setFetchWarning] = useState<string | null>(null);
 
   const fetchCompare = useCallback(async () => {
-    const res = await fetch(`/api/maps/${mapSlug}/compare?v1=${v1}&v2=${v2}`);
-    const json = (await res.json()) as CompareResponse;
-    setData(json);
-    setLoading(false);
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+    try {
+      const res = await fetch(`/api/maps/${mapSlug}/compare?v1=${v1}&v2=${v2}`, {
+        signal: ctrl.signal,
+        cache: "no-store",
+      });
+      const json = (await res.json()) as CompareResponse & { error?: string };
+      if (!res.ok) {
+        setData({
+          status: "error",
+          error: json.error ?? `Kunde inte hämta jämförelse (${res.status})`,
+          canRetry: true,
+        });
+        setFetchWarning(null);
+        return;
+      }
+      if (!json.status) {
+        setFetchWarning("Oväntat svar från servern — försöker igen…");
+        return;
+      }
+      setData(json);
+      setFetchWarning(null);
+    } catch (err) {
+      const aborted = err instanceof Error && err.name === "AbortError";
+      setFetchWarning(
+        aborted
+          ? "Servern svarade inte i tid — visar senaste status och försöker igen…"
+          : "Kunde inte nå servern — försöker igen…",
+      );
+    } finally {
+      clearTimeout(timer);
+    }
   }, [mapSlug, v1, v2]);
 
   useEffect(() => {
@@ -126,23 +194,23 @@ export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
   }, [fetchCompare]);
 
   useEffect(() => {
-    if (data?.status !== "processing") return;
+    if (data.status !== "processing") return;
     const timer = setInterval(() => {
       void fetchCompare();
     }, 2500);
     return () => clearInterval(timer);
-  }, [data?.status, fetchCompare]);
+  }, [data.status, fetchCompare]);
 
   useEffect(() => {
-    const busy = loading || data?.status === "processing";
-    if (!busy) return;
+    if (data.status !== "processing") return;
     const timer = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, [loading, data?.status]);
+  }, [data.status]);
 
   async function retryCompare() {
     setRetrying(true);
-    setLoading(true);
+    setData(initialProcessing(v1, v2, versionANumber, versionBNumber));
+    setFetchWarning(null);
     try {
       await fetch(`/api/maps/${mapSlug}/compare`, {
         method: "POST",
@@ -155,7 +223,7 @@ export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
     }
   }
 
-  const progress = data && "progress" in data ? data.progress : null;
+  const progress = "progress" in data ? data.progress : null;
   const serverStartedMs = progress?.startedAt ? Date.parse(progress.startedAt) : NaN;
   const elapsedSec = Math.max(
     0,
@@ -168,17 +236,17 @@ export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
     ? Math.max(0, Math.floor((nowMs - updatedAtMs) / 1000))
     : null;
   const staleAfterMs =
-    (data?.status === "processing" && data.staleAfterMs) || VERSION_DIFF_STALE_MS;
+    (data.status === "processing" && data.staleAfterMs) || VERSION_DIFF_STALE_MS;
   const looksStale =
-    data?.status === "processing" &&
+    data.status === "processing" &&
     (data.stale ||
       isVersionDiffProgressStale(progress, "PROCESSING") ||
       (sinceUpdateSec !== null && sinceUpdateSec * 1000 >= staleAfterMs) ||
       elapsedSec * 1000 >= VERSION_DIFF_STALE_MS);
 
   const canRetry =
-    (data?.status === "processing" && (looksStale || data.canRetry)) ||
-    (data?.status === "error" && data.canRetry !== false);
+    (data.status === "processing" && (looksStale || data.canRetry || Boolean(fetchWarning))) ||
+    (data.status === "error" && data.canRetry !== false);
 
   const stepHint = progress?.step ? STEP_HINTS[progress.step] : null;
 
@@ -193,20 +261,7 @@ export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
         Granskar skillnader mellan två uppladdade versioner.
       </p>
 
-      {loading && !data && (
-        <div className="card mt-10 text-center">
-          <WorkingSpinner className="border-slate-300 border-t-ifk-blue" />
-          <p className="mt-4 text-slate-700">Laddar jämförelse…</p>
-          <p className="mt-2 text-sm text-slate-500">
-            Stora kartfiler kan ta flera minuter att parsa.
-          </p>
-          {elapsedSec > 0 && (
-            <p className="mt-2 text-xs text-slate-500">Förfluten tid: {formatElapsed(elapsedSec)}</p>
-          )}
-        </div>
-      )}
-
-      {data?.status === "processing" && (
+      {data.status === "processing" && (
         <div className="mt-10 rounded-xl border border-amber-200 bg-amber-50 p-6 sm:p-8">
           <div className="text-center">
             <WorkingSpinner />
@@ -248,6 +303,7 @@ export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
                     : " — parsning kan vara tyst en stund (CPU)"}
               </p>
             )}
+            {fetchWarning && <p className="text-amber-950">{fetchWarning}</p>}
           </div>
 
           {looksStale && (
@@ -271,7 +327,7 @@ export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
         </div>
       )}
 
-      {data?.status === "error" && (
+      {data.status === "error" && (
         <div className="mt-10 rounded-xl border border-red-200 bg-red-50 p-6 text-red-800">
           <p className="font-medium">Jämförelsen misslyckades</p>
           <p className="mt-2 whitespace-pre-wrap text-sm">{data.error}</p>
@@ -292,7 +348,7 @@ export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
         </div>
       )}
 
-      {data?.status === "ok" && (
+      {data.status === "ok" && (
         <div className="mt-10">
           <div className="mb-4 flex flex-wrap gap-2">
             <a

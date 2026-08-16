@@ -22,7 +22,8 @@ export const releaseNotes: ReleaseNote[] = [
     date: "2026-08-16",
     title: "Jämför versioner",
     items: [
-      "Tydligare status: checklista, delstatus (hämtar/parsar v1 och v2), förfluten tid och senaste uppdatering",
+      "Statusdialogen med checklista visas direkt när du öppnar jämförelsen",
+      "Tydligare status: delstatus (hämtar/parsar v1 och v2), förfluten tid och senaste uppdatering",
       "Hämtning av .ocd ska ta sekunder — om den fastnar startas jobbet om automatiskt; timeout vid långsam lagring",
       "Jämförelsen genererar inte kartbild under jobbet (snabbare och mer stabilt på stora kartor)",
       "Längre tidsgräns och hjärtslag under I/O-steg så jobbet inte lämnas hängande",

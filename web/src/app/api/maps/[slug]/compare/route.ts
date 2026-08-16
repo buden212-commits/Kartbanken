@@ -173,24 +173,30 @@ export async function GET(request: Request, { params }: RouteParams) {
   let summary = JSON.parse(diffRecord.summaryJson!) as Record<string, unknown>;
 
   if (summary.coordSpace !== "ocad-native") {
-    try {
-      await computeVersionDiff(map.id, v1, v2);
-      diffRecord = await prisma.versionDiff.findUnique({
-        where: { versionAId_versionBId: { versionAId: v1, versionBId: v2 } },
+    // Omberäkna i bakgrunden — blockera inte GET (annars ser klienten bara «Laddar…»).
+    const scheduled = await scheduleVersionCompare(map.id, v1, v2, { force: true });
+    if (scheduled.started) {
+      const runId = scheduled.runId;
+      runAfterResponse(async () => {
+        try {
+          await computeVersionDiff(map.id, v1, v2, runId ? { runId } : undefined);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Diff misslyckades";
+          console.error("Compare coord-space migration failed:", err);
+          await markCompareError(v1, v2, message, {
+            runId,
+            startedAt: scheduled.progress?.startedAt,
+          });
+        }
       });
-      if (!diffRecord || diffRecord.status !== "OK") {
-        return NextResponse.json(
-          processingPayload(versionA, versionB, {
-            progress: parseVersionDiffProgress(diffRecord?.summaryJson),
-            stale: false,
-            canRetry: false,
-          }),
-        );
-      }
-      summary = JSON.parse(diffRecord.summaryJson!) as Record<string, unknown>;
-    } catch (recomputeErr) {
-      console.error("Kunde inte migrera diff-koordinater:", recomputeErr);
     }
+    return NextResponse.json(
+      processingPayload(versionA, versionB, {
+        progress: scheduled.progress,
+        stale: false,
+        canRetry: false,
+      }),
+    );
   }
 
   if (!diffRecord || diffRecord.status !== "OK") {
@@ -205,11 +211,15 @@ export async function GET(request: Request, { params }: RouteParams) {
 
   const changes = JSON.parse(diffRecord.changesJson ?? "[]") as OcadObjectChange[];
 
-  let finalSummary = summary;
-  try {
-    finalSummary = await ensureDiffLayers(map.id, v1, v2, changes, summary);
-  } catch (layerErr) {
-    console.error("Kunde inte generera diff-lager:", layerErr);
+  // Generera saknade lager i bakgrunden — GET ska svara snabbt så statusdialogen syns.
+  if (!summary.layerPaths) {
+    runAfterResponse(async () => {
+      try {
+        await ensureDiffLayers(map.id, v1, v2, changes, summary);
+      } catch (layerErr) {
+        console.error("Kunde inte generera diff-lager:", layerErr);
+      }
+    });
   }
 
   await logAction(session.user.id, "COMPARE", "VersionDiff", diffRecord.id, {
@@ -230,9 +240,9 @@ export async function GET(request: Request, { params }: RouteParams) {
       versionNumber: versionB.versionNumber,
       fileName: versionB.originalFilename,
     },
-    summary: finalSummary,
+    summary,
     changes,
-    layerPaths: (finalSummary.layerPaths as CompareResponseLayerPaths) ?? null,
+    layerPaths: (summary.layerPaths as CompareResponseLayerPaths) ?? null,
   });
 }
 
