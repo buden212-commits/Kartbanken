@@ -77,7 +77,6 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
     setError(null);
     setLoading(true);
     setAcknowledged(false);
-    setRiskReviewed(false);
     setForceDeleteObjectIndices([]);
     setSelectedRiskObjectIndex(null);
     try {
@@ -117,7 +116,6 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
       setAnalysis(data.analysis);
       setForceDeleteObjectIndices([]);
       setSelectedRiskObjectIndex(null);
-      setRiskReviewed(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Kunde inte uppdatera gränsen");
     } finally {
