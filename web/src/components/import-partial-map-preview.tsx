@@ -417,6 +417,8 @@ export function ImportPartialMapPreview({
   const [slow, setSlow] = useState(false);
   const [scene, setScene] = useState<Scene | null>(null);
   const [importScene, setImportScene] = useState<Scene | null>(null);
+  const [importStatus, setImportStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [importError, setImportError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const [mapBase, setMapBase] = useState<MapBase>("full");
@@ -492,10 +494,14 @@ export function ImportPartialMapPreview({
   useEffect(() => {
     if (!edgesMode || !importPreviewUrl) {
       setImportScene(null);
+      setImportStatus("idle");
+      setImportError(null);
       return;
     }
     let cancelled = false;
     const controller = new AbortController();
+    setImportStatus("loading");
+    setImportError(null);
     fetchPreviewText(importPreviewUrl, {
       signal: controller.signal,
       bypassCache: retryKey > 0,
@@ -503,16 +509,22 @@ export function ImportPartialMapPreview({
       .then((text) => {
         if (cancelled) return;
         const extracted = extractSvgInner(text);
-        if (!extracted.viewBox || !extracted.inner.trim()) return;
+        if (!extracted.viewBox || !extracted.inner.trim()) {
+          throw new Error("Importkartans bild saknar innehåll.");
+        }
         setImportScene({
           inner: extracted.inner,
           fill: extracted.fill ?? "transparent",
           fullViewBox: extracted.viewBox,
           transform: extracted.rootTransform,
         });
+        setImportStatus("ready");
       })
-      .catch(() => {
-        if (!cancelled) setImportScene(null);
+      .catch((err) => {
+        if (cancelled) return;
+        setImportScene(null);
+        setImportStatus("error");
+        setImportError(err instanceof Error ? err.message : "Kunde inte ladda importkartan");
       });
     return () => {
       cancelled = true;
@@ -531,6 +543,12 @@ export function ImportPartialMapPreview({
     if (!scene) return null;
     return paddedViewBox(viewExtent, scene.transform, scene.fullViewBox);
   }, [viewExtent, scene]);
+
+  /** Same geo framing as head, but in the import SVG's own coordinate system. */
+  const importViewBox = useMemo(() => {
+    if (!importScene) return null;
+    return paddedViewBox(viewExtent, importScene.transform, importScene.fullViewBox);
+  }, [viewExtent, importScene]);
 
   const markerRadius = useMemo(() => {
     if (!viewBox) return 8;
@@ -675,13 +693,24 @@ export function ImportPartialMapPreview({
                   />
                   <span className="w-10 text-right tabular-nums">{swipePercent}%</span>
                 </label>
-                {!importScene && importPreviewUrl && (
-                  <p className="text-xs text-amber-700">Laddar importkartan…</p>
-                )}
                 {!importPreviewUrl && (
                   <p className="text-xs text-amber-700">
                     Importkartans bild saknas — markörer fungerar ändå.
                   </p>
+                )}
+                {importPreviewUrl && importStatus === "loading" && (
+                  <p className="text-xs text-slate-500">Laddar importkartan…</p>
+                )}
+                {importPreviewUrl && importStatus === "error" && (
+                  <p className="text-xs text-amber-700">
+                    {importError ?? "Kunde inte ladda importkartan."}{" "}
+                    <button type="button" className="underline" onClick={retry}>
+                      Försök igen
+                    </button>
+                  </p>
+                )}
+                {importPreviewUrl && importStatus === "ready" && !importScene && (
+                  <p className="text-xs text-amber-700">Importkartan kunde inte visas.</p>
                 )}
                 <div className="flex flex-wrap gap-2">
                   <SegmentButton
@@ -804,64 +833,88 @@ export function ImportPartialMapPreview({
           </div>
         )}
         {scene && viewBox && status === "ready" && (
-          <svg
-            ref={svgRef}
-            viewBox={viewBox}
-            fill={showMapBackground ? scene.fill : "#f1f5f9"}
-            xmlns="http://www.w3.org/2000/svg"
-            preserveAspectRatio="xMidYMid meet"
-            className={`h-full w-full max-h-full max-w-full ${drawPolygon ? "cursor-crosshair" : ""}`}
-            onClick={handleMapClick}
-          >
+          <div className="relative h-full w-full">
+            {/* Grundkarta — eget SVG-koordinatsystem */}
             {showMapBackground && (
-              <g
-                opacity={edgesMode ? baseOpacity / 100 : 1}
-                dangerouslySetInnerHTML={{ __html: scene.inner }}
-              />
+              <svg
+                viewBox={viewBox}
+                fill={scene.fill}
+                xmlns="http://www.w3.org/2000/svg"
+                preserveAspectRatio="xMidYMid meet"
+                className="pointer-events-none absolute inset-0 h-full w-full"
+                aria-hidden
+              >
+                <g
+                  opacity={edgesMode ? baseOpacity / 100 : 1}
+                  dangerouslySetInnerHTML={{ __html: scene.inner }}
+                />
+              </svg>
             )}
-            {edgesMode && showImportLayer && importScene && (
-              <g
+            {/* Importkarta — separat viewBox så samma geo-utsnitt syns rätt */}
+            {edgesMode && showImportLayer && importScene && importViewBox && (
+              <svg
+                viewBox={importViewBox}
+                fill={importScene.fill}
+                xmlns="http://www.w3.org/2000/svg"
+                preserveAspectRatio="xMidYMid meet"
+                className="pointer-events-none absolute inset-0 h-full w-full"
                 style={{ clipPath: importClip }}
-                opacity={1}
-                dangerouslySetInnerHTML={{ __html: importScene.inner }}
-              />
+                aria-hidden
+              >
+                <g dangerouslySetInnerHTML={{ __html: importScene.inner }} />
+              </svg>
             )}
-            <BoundaryOverlay boundary={boundary} transform={scene.transform} draftRing={draftRing} />
-            {showOverlayControls && overlays.edges && (
-              <EdgeMarkers
-                objects={analysis.edgeObjects}
+            {/* Markörer / gräns / klick — alltid i grundkartans koordinater */}
+            <svg
+              ref={svgRef}
+              viewBox={viewBox}
+              fill="transparent"
+              xmlns="http://www.w3.org/2000/svg"
+              preserveAspectRatio="xMidYMid meet"
+              className={`absolute inset-0 h-full w-full ${drawPolygon ? "cursor-crosshair" : ""}`}
+              onClick={handleMapClick}
+            >
+              <BoundaryOverlay
+                boundary={boundary}
                 transform={scene.transform}
-                radius={markerRadius}
-                showBoxes={showBoxes}
+                draftRing={draftRing}
               />
-            )}
-            {edgesMode && overlays.risk && (analysis.riskRemovals?.length ?? 0) > 0 && (
-              <RiskMarkers
-                objects={analysis.riskRemovals}
-                transform={scene.transform}
-                radius={markerRadius}
-                forceDelete={forceDelete}
-                selectedIndex={selectedRiskObjectIndex}
-                onSelect={(objectIndex) => {
-                  onSelectRiskObject?.(objectIndex);
-                }}
-              />
-            )}
-            {showOverlayControls &&
-              (overlays.removed || overlays.added || overlays.modified) && (
-                <DiffMarkers
-                  changes={mapChanges}
+              {showOverlayControls && overlays.edges && (
+                <EdgeMarkers
+                  objects={analysis.edgeObjects}
                   transform={scene.transform}
-                  radius={markerRadius * 0.85}
+                  radius={markerRadius}
                   showBoxes={showBoxes}
-                  kinds={{
-                    removed: overlays.removed,
-                    added: overlays.added,
-                    modified: overlays.modified,
+                />
+              )}
+              {edgesMode && overlays.risk && (analysis.riskRemovals?.length ?? 0) > 0 && (
+                <RiskMarkers
+                  objects={analysis.riskRemovals}
+                  transform={scene.transform}
+                  radius={markerRadius}
+                  forceDelete={forceDelete}
+                  selectedIndex={selectedRiskObjectIndex}
+                  onSelect={(objectIndex) => {
+                    onSelectRiskObject?.(objectIndex);
                   }}
                 />
               )}
-          </svg>
+              {showOverlayControls &&
+                (overlays.removed || overlays.added || overlays.modified) && (
+                  <DiffMarkers
+                    changes={mapChanges}
+                    transform={scene.transform}
+                    radius={markerRadius * 0.85}
+                    showBoxes={showBoxes}
+                    kinds={{
+                      removed: overlays.removed,
+                      added: overlays.added,
+                      modified: overlays.modified,
+                    }}
+                  />
+                )}
+            </svg>
+          </div>
         )}
       </div>
     </div>

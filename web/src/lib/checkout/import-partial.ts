@@ -134,6 +134,25 @@ async function ensurePartialPreview(jobId: string, partialBuffer: Buffer): Promi
   return path;
 }
 
+/** Regenerera/skapa preview SVG för ett befintligt jobb (t.ex. om den saknas vid GET). */
+export async function ensureImportPartialPreviewForJob(jobId: string): Promise<string> {
+  const job = await readImportPartialJob(jobId);
+  if (!job) throw new Error("Importjobbet hittades inte.");
+  const ocdPath = importPartialFilePath(jobId);
+  if (!(await fileExists(ocdPath))) {
+    throw new Error("Delkartan hittades inte i lagringen.");
+  }
+  const partialBuffer = await readStoredFile(ocdPath);
+  const path = await ensurePartialPreview(jobId, partialBuffer);
+  if (!(await fileExists(path))) {
+    throw new Error("Kunde inte skapa kartbild för delkartan.");
+  }
+  if (job.previewSvgPath !== path) {
+    await writeJob({ ...job, previewSvgPath: path });
+  }
+  return path;
+}
+
 export async function createAndAnalyzeImportPartial(input: {
   userId: string;
   mapFileId: string;

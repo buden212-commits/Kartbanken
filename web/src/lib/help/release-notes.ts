@@ -8,6 +8,13 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-16",
+    title: "Importkartan syns under Kanter",
+    items: [
+      "«Bara import» och jämförelseläget visar nu delkartans kartbild i samma utsnitt som grundkartan",
+    ],
+  },
+  {
+    date: "2026-08-16",
     title: "Importera delkarta: riskzon, jämförelselager och egen gräns",
     items: [
       "Under Kanter visas grundkartan nedtonad med importkartan ovanpå — justera opacitet eller svep mellan lagren",

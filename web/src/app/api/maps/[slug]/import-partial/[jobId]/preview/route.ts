@@ -1,6 +1,7 @@
 import { requireSession } from "@/lib/auth/api";
 import { canCheckout } from "@/lib/auth/permissions";
 import {
+  ensureImportPartialPreviewForJob,
   importPartialPreviewPath,
   readImportPartialJob,
 } from "@/lib/checkout/import-partial";
@@ -8,7 +9,7 @@ import { prisma } from "@/lib/prisma";
 import { fileExists, readStoredFile } from "@/lib/storage";
 import { NextResponse } from "next/server";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 type RouteParams = { params: Promise<{ slug: string; jobId: string }> };
 
@@ -30,7 +31,24 @@ export async function GET(_request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Importjobbet hittades inte" }, { status: 404 });
   }
 
-  const path = job.previewSvgPath ?? importPartialPreviewPath(jobId);
+  let path = job.previewSvgPath ?? importPartialPreviewPath(jobId);
+  if (!(await fileExists(path))) {
+    try {
+      path = await ensureImportPartialPreviewForJob(jobId);
+    } catch (err) {
+      console.error("Import partial preview regenerate failed:", err);
+      return NextResponse.json(
+        {
+          error:
+            err instanceof Error
+              ? err.message
+              : "Kunde inte skapa förhandsvisning av delkartan.",
+        },
+        { status: 500 },
+      );
+    }
+  }
+
   if (!(await fileExists(path))) {
     return NextResponse.json(
       { error: "Förhandsvisning av delkartan saknas ännu." },
