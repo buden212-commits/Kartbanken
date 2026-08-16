@@ -1,6 +1,11 @@
-import { parseSelectionJson } from "./types";
+import { parseSelectionJson, type CheckoutSelectionGeometry } from "./types";
 import { bboxFromGeometry } from "./overlap";
-import { objectCrossesBbox, objectIntersectsBbox } from "./import-partial-analysis";
+import {
+  objectCrossesBoundary,
+  objectInRiskZone,
+  objectIntersectsBoundary,
+  boundaryFromBbox,
+} from "./import-partial-boundary";
 import { compareOcadObjects } from "@/lib/ocad/diff";
 import type { OcadDiffResult, OcadObjectChange, SymbolDiffSummary } from "@/lib/ocad/diff-types";
 import {
@@ -192,8 +197,20 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
     : filterObjectsByIds(headSummary.objects, diffScopeIds);
 
   const importExtent = selection.importExtent ?? (importPartial ? bboxFromGeometry(selection.geometry) : null);
-  if (importPartial && importExtent) {
-    baselineObjects = baselineObjects.filter((object) => objectIntersectsBbox(object, importExtent));
+  const importBoundary: CheckoutSelectionGeometry | null = importPartial
+    ? selection.importBoundary ??
+      (importExtent ? boundaryFromBbox(importExtent) : null)
+    : null;
+  const forceDelete = new Set(selection.forceDeleteObjectIndices ?? []);
+
+  if (importPartial && importBoundary) {
+    baselineObjects = baselineObjects.filter((object) =>
+      objectIntersectsBoundary(object, importBoundary),
+    );
+  } else if (importPartial && importExtent) {
+    baselineObjects = baselineObjects.filter((object) =>
+      objectIntersectsBoundary(object, boundaryFromBbox(importExtent)),
+    );
   }
 
   const emptyDiffInput = {
@@ -249,7 +266,7 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
   );
 
   let changes = scopedChanges;
-  if (importPartial && importExtent) {
+  if (importPartial && importBoundary) {
     const baselineByIndex = new Map(baselineObjects.map((object) => [object.objectIndex, object]));
     const kept: typeof scopedChanges = [];
     for (const change of scopedChanges) {
@@ -258,9 +275,23 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
         continue;
       }
       const baseline = baselineByIndex.get(change.objectIndex);
-      if (baseline && objectCrossesBbox(baseline, importExtent)) {
+      if (!baseline) {
+        kept.push(change);
+        continue;
+      }
+      if (objectCrossesBoundary(baseline, importBoundary)) {
         outOfScopeWarnings.push(
           `Kantobjekt ${change.objectIndex} (${change.symbolName}) hoppades över — det går utanför importerat område.`,
+        );
+        continue;
+      }
+      if (
+        change.changeType === "removed" &&
+        objectInRiskZone(baseline, importBoundary) &&
+        !forceDelete.has(change.objectIndex)
+      ) {
+        outOfScopeWarnings.push(
+          `Riskzonsobjekt ${change.objectIndex} (${change.symbolName}) behålls — inte markerat för radering.`,
         );
         continue;
       }

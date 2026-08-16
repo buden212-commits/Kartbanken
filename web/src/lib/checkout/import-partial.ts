@@ -1,12 +1,14 @@
 import { randomUUID } from "crypto";
 import { logAction } from "@/lib/audit";
 import { detectCheckoutConflicts } from "@/lib/checkout/overlap";
+import { bboxFromGeometry } from "@/lib/checkout/overlap";
 import {
   analyzeImportPartial,
   checkoutGeometryFromAnalysis,
   importExtentFromAnalysis,
   type ImportPartialAnalysis,
 } from "@/lib/checkout/import-partial-analysis";
+import { parseImportBoundary } from "@/lib/checkout/import-partial-boundary";
 import { objectIdsFromSelection } from "@/lib/checkout/selection-objects";
 import {
   createCheckout,
@@ -16,10 +18,15 @@ import {
 } from "@/lib/checkout/repository";
 import { generateCheckoutExport } from "@/lib/checkout/create-checkout";
 import { scheduleCheckoutSubsetDiff } from "@/lib/checkout/diff-status";
-import { CheckoutSelectionType, CheckoutStatus } from "@/lib/checkout/types";
+import {
+  CheckoutSelectionType,
+  CheckoutStatus,
+  type CheckoutSelectionGeometry,
+} from "@/lib/checkout/types";
 import { readOcadHeaderVersion } from "@/lib/ocad/ocad-export-server";
 import { normalizeSourceVersion } from "@/lib/ocad/ocad-export-shared";
 import { parseOcadBuffer } from "@/lib/ocad/read";
+import { generateAndStorePreviewSvg } from "@/lib/ocad/svg";
 import { prisma } from "@/lib/prisma";
 import {
   buildCheckoutCheckinPath,
@@ -39,6 +46,8 @@ export type ImportPartialJob = {
   status: "ok" | "error";
   error?: string;
   analysis?: ImportPartialAnalysis;
+  /** Relative blob path for partial SVG preview when generated. */
+  previewSvgPath?: string;
 };
 
 function metaPath(jobId: string): string {
@@ -47,6 +56,10 @@ function metaPath(jobId: string): string {
 
 export function importPartialFilePath(jobId: string): string {
   return `temp-import/${jobId}/partial.ocd`;
+}
+
+export function importPartialPreviewPath(jobId: string): string {
+  return `temp-import/${jobId}/preview.svg`;
 }
 
 async function writeJob(job: ImportPartialJob): Promise<void> {
@@ -67,6 +80,7 @@ async function analyzeAgainstHead(
   headVersionId: string,
   partialBuffer: Buffer,
   fileName: string,
+  boundary?: CheckoutSelectionGeometry,
 ): Promise<ImportPartialAnalysis> {
   const headVersion = await prisma.mapVersion.findUnique({ where: { id: headVersionId } });
   if (!headVersion) {
@@ -82,6 +96,7 @@ async function analyzeAgainstHead(
   const analysis = analyzeImportPartial({
     head: headSummary,
     partial: partialSummary,
+    boundary,
   });
 
   const geometry = checkoutGeometryFromAnalysis(analysis);
@@ -94,6 +109,7 @@ async function analyzeAgainstHead(
     }),
     importPartial: true as const,
     importExtent,
+    importBoundary: analysis.boundary,
   };
   const conflicts = detectCheckoutConflicts(
     selection,
@@ -106,6 +122,16 @@ async function analyzeAgainstHead(
   }
 
   return analysis;
+}
+
+async function ensurePartialPreview(jobId: string, partialBuffer: Buffer): Promise<string> {
+  const path = importPartialPreviewPath(jobId);
+  try {
+    await generateAndStorePreviewSvg(partialBuffer, path);
+  } catch (err) {
+    console.error("Import partial preview SVG failed:", err);
+  }
+  return path;
 }
 
 export async function createAndAnalyzeImportPartial(input: {
@@ -128,6 +154,7 @@ export async function createAndAnalyzeImportPartial(input: {
     input.partialBuffer,
     input.fileName,
   );
+  const previewSvgPath = await ensurePartialPreview(jobId, input.partialBuffer);
 
   const job: ImportPartialJob = {
     id: jobId,
@@ -139,6 +166,7 @@ export async function createAndAnalyzeImportPartial(input: {
     createdAt: new Date().toISOString(),
     status: "ok",
     analysis,
+    previewSvgPath,
   };
   await writeJob(job);
   return job;
@@ -189,6 +217,7 @@ export async function analyzeExistingImportPartialJob(
     partialBuffer,
     job.fileName,
   );
+  const previewSvgPath = await ensurePartialPreview(jobId, partialBuffer);
 
   const merged: ImportPartialJob = {
     ...job,
@@ -196,6 +225,45 @@ export async function analyzeExistingImportPartialJob(
     status: "ok",
     error: undefined,
     analysis,
+    previewSvgPath,
+  };
+  await writeJob(merged);
+  return merged;
+}
+
+export async function reanalyzeImportPartialJobWithBoundary(input: {
+  jobId: string;
+  userId: string;
+  boundary: CheckoutSelectionGeometry;
+}): Promise<ImportPartialJob> {
+  const job = await readImportPartialJob(input.jobId);
+  if (!job) throw new Error("Importjobbet hittades inte.");
+  if (job.userId !== input.userId) throw new Error("Otillåten åtkomst till jobbet.");
+  if (!(await fileExists(importPartialFilePath(input.jobId)))) {
+    throw new Error("Delkartan hittades inte i lagringen.");
+  }
+
+  const headVersionId = await getHeadVersionId(job.mapFileId);
+  if (!headVersionId) {
+    throw new Error("Kartfilen saknar version att jämföra mot.");
+  }
+
+  const partialBuffer = await readStoredFile(importPartialFilePath(input.jobId));
+  const analysis = await analyzeAgainstHead(
+    job.mapFileId,
+    headVersionId,
+    partialBuffer,
+    job.fileName,
+    input.boundary,
+  );
+
+  const merged: ImportPartialJob = {
+    ...job,
+    headVersionId,
+    status: "ok",
+    error: undefined,
+    analysis,
+    previewSvgPath: job.previewSvgPath ?? importPartialPreviewPath(input.jobId),
   };
   await writeJob(merged);
   return merged;
@@ -207,6 +275,8 @@ export async function commitImportPartialJob(input: {
   mapFileId: string;
   mapSlug: string;
   comment?: string | null;
+  boundary?: CheckoutSelectionGeometry;
+  forceDeleteObjectIndices?: number[];
 }): Promise<{ checkoutId: string }> {
   const job = await readImportPartialJob(input.jobId);
   if (!job) throw new Error("Importjobbet hittades inte.");
@@ -215,8 +285,22 @@ export async function commitImportPartialJob(input: {
   if (job.status !== "ok" || !job.analysis) {
     throw new Error(job.error ?? "Analysen är inte klar.");
   }
-  if (job.analysis.blockers.length > 0) {
-    throw new Error(job.analysis.blockers[0]);
+
+  let analysis = job.analysis;
+  if (input.boundary) {
+    const partialBuffer = await readStoredFile(importPartialFilePath(job.id));
+    analysis = await analyzeAgainstHead(
+      job.mapFileId,
+      job.headVersionId,
+      partialBuffer,
+      job.fileName,
+      input.boundary,
+    );
+    await writeJob({ ...job, analysis });
+  }
+
+  if (analysis.blockers.length > 0) {
+    throw new Error(analysis.blockers[0]);
   }
 
   const headVersionId = await getHeadVersionId(input.mapFileId);
@@ -227,8 +311,13 @@ export async function commitImportPartialJob(input: {
   const headVersion = await prisma.mapVersion.findUnique({ where: { id: headVersionId } });
   if (!headVersion) throw new Error("Aktuell kartversion hittades inte.");
 
-  const geometry = checkoutGeometryFromAnalysis(job.analysis);
-  const importExtent = importExtentFromAnalysis(job.analysis);
+  const geometry = checkoutGeometryFromAnalysis(analysis);
+  const importExtent = importExtentFromAnalysis(analysis);
+  const forceDeleteObjectIndices = [
+    ...new Set(
+      (input.forceDeleteObjectIndices ?? []).filter((value) => Number.isFinite(value)),
+    ),
+  ];
   // Skip full head parse here: generateCheckoutExport/crop fills objectIds, and overlap
   // against active checkouts uses geometry (bbox). Double-parsing Mora-sized maps OOMs.
   const selection = {
@@ -236,6 +325,8 @@ export async function commitImportPartialJob(input: {
     objectIds: [] as string[],
     importPartial: true as const,
     importExtent,
+    importBoundary: analysis.boundary,
+    ...(forceDeleteObjectIndices.length > 0 ? { forceDeleteObjectIndices } : {}),
   };
 
   const conflicts = detectCheckoutConflicts(
@@ -292,6 +383,10 @@ export async function commitImportPartialJob(input: {
     mapSlug: input.mapSlug,
     importPartial: true,
     fileName: job.fileName,
+    boundaryType: analysis.boundary.type,
+    forceDeleteCount: forceDeleteObjectIndices.length,
+    riskRemovals: analysis.riskRemovals.length,
+    extent: bboxFromGeometry(analysis.boundary),
   });
   await logAction(input.userId, "CHECKIN_SUBMITTED", "MapCheckout", checkout.id, {
     mapSlug: input.mapSlug,
@@ -301,3 +396,5 @@ export async function commitImportPartialJob(input: {
 
   return { checkoutId: checkout.id };
 }
+
+export { parseImportBoundary };

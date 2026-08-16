@@ -353,9 +353,9 @@ export async function HelpPageContent() {
                   "Ladda upp den redigerade .ocd-filen — guiden jämför mot aktuell kartversion",
                   "Steg 2: kontrollera att symbolnumren finns i den stora kartan — saknade symboler stoppar import",
                   "Steg 3: blå ram på kartan visar delkartans utbredning (inzoomad). Samma kartbild som på området används — även stora filer som Mora Väst. Om den inte syns: öppna området så kartan hinner laddas, gå tillbaka och försök igen",
-                  "Steg 4: orange/röda kantobjekt; växla mellan hela kartan och bara berörda objekt, och visa även vad som raderas i originalet respektive nya/ersatta objekt",
-                  "Steg 5: se tillagda, borttagna och ändrade objekt i området — samma kartväxling och lagerfilter som i steget Kanter",
-                  "Steg 6: bekräfta — systemet skapar en utcheckning i efterhand och checkar in filen",
+                  "Steg 4 (Kanter): jämför grundkarta (nedtonad) och importkarta med opacitet och svep; valfritt rita en polygon om området inte är en rektangel; granska riskzonen (40 m från kanten) — objekt där behålls som standard, markera enskilda för radering vid behov; kryssa i att du granskat innan Nästa",
+                  "Steg 5: se tillagda, borttagna och ändrade objekt i det säkra området — samma kartväxling och lagerfilter som i steget Kanter",
+                  "Steg 6: bekräfta — systemet skapar en utcheckning i efterhand och checkar in filen; riskzonsvalen följer med oförändrade till admin-integrationen",
                   "Därefter granskar du diffen som vid vanlig incheckning; admin integrerar till en ny version",
                 ]}
               />

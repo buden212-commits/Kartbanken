@@ -8,6 +8,16 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-16",
+    title: "Importera delkarta: riskzon, jämförelselager och egen gräns",
+    items: [
+      "Under Kanter visas grundkartan nedtonad med importkartan ovanpå — justera opacitet eller svep mellan lagren",
+      "Objekt inom 40 m från importgränsen raderas inte automatiskt; granska listan och välj per objekt om det ska raderas",
+      "Du kan rita en polygon för att förtydliga importgränsen (eller återställa den blå ramen)",
+      "Valen i riskzonen följer med oförändrade till admin-integrationen",
+    ],
+  },
+  {
+    date: "2026-08-16",
     title: "Kartzoom vid jämförelse",
     items: [
       "Under «Jämför versioner» (och liknande kartvyer) zoomas kartan till objektet bara när du klickar i listan eller på objektet — inte automatiskt tillbaka till skala ~1:500 medan du zooma/panorera",
