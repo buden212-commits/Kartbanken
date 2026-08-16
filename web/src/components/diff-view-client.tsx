@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { OcadObjectChange, SymbolDiffSummary } from "@/lib/ocad/diff-types";
 import type { ChangeType } from "@/lib/ocad/diff-types";
 import { DiffMapPanel } from "@/components/diff-map-panel";
@@ -104,24 +104,29 @@ export function DiffViewClient({
 }: Props) {
   const [activeTab, setActiveTab] = useState<MapTab>("full");
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [focusRequestId, setFocusRequestId] = useState(0);
   const [changeFilter, setChangeFilter] = useState<ChangeFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [detailTab, setDetailTab] = useState<DetailTab>("changes");
+  const focusRequestIdRef = useRef(0);
 
   const hasChanges = diff.added + diff.removed + diff.modified > 0;
 
   const selectedChange = selectedIndex !== null ? changes[selectedIndex] : null;
 
-  const selectedCentroid = selectedChange ? getChangeCentroid(selectedChange) : null;
+  const selectedCentroid = useMemo(
+    () => (selectedChange ? getChangeCentroid(selectedChange) : null),
+    [selectedChange],
+  );
 
-  const focusTarget =
-    selectedChange && selectedCentroid
-      ? {
-          bbox: getChangeBbox(selectedChange),
-          centroid: selectedCentroid,
-          objectType: selectedChange.type,
-        }
-      : null;
+  const focusTarget = useMemo(() => {
+    if (!selectedChange || !selectedCentroid) return null;
+    return {
+      bbox: getChangeBbox(selectedChange),
+      centroid: selectedCentroid,
+      objectType: selectedChange.type,
+    };
+  }, [selectedChange, selectedCentroid]);
 
   const previewUrls = useMemo(() => {
     if (previewUrlsProp) return previewUrlsProp;
@@ -166,6 +171,8 @@ export function DiffViewClient({
   function handleSelectChange(index: number) {
     const change = changes[index];
     if (!change) return;
+    focusRequestIdRef.current += 1;
+    setFocusRequestId(focusRequestIdRef.current);
     setSelectedIndex(index);
     setActiveTab(CHANGE_TAB[change.changeType]);
     setDetailTab("changes");
@@ -264,6 +271,7 @@ export function DiffViewClient({
                 versionId={versionBId ?? ""}
                 exportEnabled={exportEnabled}
                 focusTarget={focusTarget}
+                focusRequestId={focusRequestId}
                 selectedChange={selectedChange}
                 clickableItems={clickableItems}
                 onClearFocus={handleClearSelection}

@@ -626,7 +626,8 @@ export async function HelpPageContent() {
           />
           <p>
             Klicka på kartan eller i ändringslistan för att zooma in på ett objekt och se
-            symbolnummer, typ och position.
+            symbolnummer, typ och position. Därefter kan du zooma och panorera fritt — kartan
+            hoppar inte tillbaka till inzoomningen förrän du väljer ett objekt igen.
           </p>
 
           <h3 className="font-medium text-slate-900">Detaljerade ändringar</h3>

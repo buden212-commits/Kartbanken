@@ -93,6 +93,12 @@ type Props = {
   exportEnabled?: boolean;
   fullscreen?: boolean;
   focusTarget?: FocusTarget | null;
+  /**
+   * Bump when the user explicitly picks an object (list/map click).
+   * Zoom-to-object runs only when this changes — not on every parent re-render
+   * while the same object stays selected.
+   */
+  focusRequestId?: number;
   selectedChange?: OcadObjectChange | null;
   clickableItems?: ClickableItem[];
   onClearFocus?: () => void;
@@ -265,6 +271,7 @@ export function DiffMapPanel({
   exportEnabled = true,
   fullscreen = false,
   focusTarget,
+  focusRequestId,
   selectedChange,
   clickableItems = [],
   onClearFocus,
@@ -350,6 +357,8 @@ export function DiffMapPanel({
   const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userInteractedRef = useRef(false);
   const initialFitDoneRef = useRef(false);
+  /** Last focus apply key — avoids re-zooming to ~1:500 on unrelated re-renders. */
+  const lastFocusApplyKeyRef = useRef<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [slowLoad, setSlowLoad] = useState(false);
   const [mapLayers, setMapLayers] = useState<OcadMapLayer[]>([]);
@@ -663,7 +672,22 @@ export function DiffMapPanel({
   }, [maxZoom]);
 
   useEffect(() => {
-    if (!focusTarget || !fullViewBox || loading) return;
+    if (!focusTarget) {
+      lastFocusApplyKeyRef.current = null;
+      return;
+    }
+    if (!fullViewBox || loading) return;
+
+    const applyKey =
+      focusRequestId != null
+        ? `req:${focusRequestId}`
+        : [
+            focusTarget.objectType,
+            focusTarget.bbox.join(","),
+            focusTarget.centroid.join(","),
+          ].join(":");
+
+    if (lastFocusApplyKeyRef.current === applyKey) return;
 
     const viewport = viewportRef.current;
     if (!viewport) return;
@@ -678,9 +702,10 @@ export function DiffMapPanel({
       maxZoom,
     );
     if (!next) return;
+    lastFocusApplyKeyRef.current = applyKey;
     setPan(next.pan);
     setZoom(next.zoom);
-  }, [focusTarget, fullViewBox, loading, rootTransform, maxZoom]);
+  }, [focusTarget, focusRequestId, fullViewBox, loading, rootTransform, maxZoom]);
 
   useEffect(() => {
     if (!fitGeoBbox || !fullViewBox || loading) return;

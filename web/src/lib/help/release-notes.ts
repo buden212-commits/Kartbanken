@@ -8,6 +8,13 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-16",
+    title: "Kartzoom vid jämförelse",
+    items: [
+      "Under «Jämför versioner» (och liknande kartvyer) zoomas kartan till objektet bara när du klickar i listan eller på objektet — inte automatiskt tillbaka till skala ~1:500 medan du zooma/panorera",
+    ],
+  },
+  {
+    date: "2026-08-16",
     title: "Jämför versioner: stegstatus och omstart",
     items: [
       "Under «Jämför versioner» visas vilket steg som pågår (ladda filer, parsa, beräkna diff)",
