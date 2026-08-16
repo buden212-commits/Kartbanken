@@ -12,7 +12,6 @@ import {
   isVersionDiffProgressStale,
   parseVersionDiffProgress,
   VERSION_DIFF_HEARTBEAT_MS,
-  VERSION_DIFF_STALE_MS,
   VERSION_DIFF_STEPS,
   versionDiffStepIndex,
   versionDiffStepLabel,
