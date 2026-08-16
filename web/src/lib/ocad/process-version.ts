@@ -17,37 +17,47 @@ export async function parseMapVersion(versionId: string): Promise<void> {
   const version = await prisma.mapVersion.findUnique({ where: { id: versionId } });
   if (!version) return;
 
-  if (version.parseStatus === "OK") return;
+  if (version.parseStatus === "OK" && version.previewSvgPath) return;
 
   await prisma.mapVersion.update({
     where: { id: versionId },
-    data: { parseStatus: "PROCESSING" },
+    data: { parseStatus: "PROCESSING", parseError: null },
   });
 
   try {
     const buffer = await readStoredFile(version.storagePath);
     const summary = await parseOcadBuffer(buffer, version.originalFilename);
 
-    let previewSvgPath = version.previewSvgPath;
-    if (!previewSvgPath) {
-      previewSvgPath = buildPreviewSvgPath(version.mapFileId, version.versionNumber);
-      try {
-        await generateAndStorePreviewSvg(buffer, previewSvgPath);
-      } catch (svgErr) {
-        console.error("SVG-generering misslyckades:", svgErr);
-        previewSvgPath = null;
-      }
-    }
-
+    // Markera parsning klar innan SVG — om SVG OOM:ar/timeout:ar ska status inte sitta kvar i PROCESSING.
     await prisma.mapVersion.update({
       where: { id: versionId },
       data: {
         parseStatus: "OK",
         objectCount: summary.objectCount,
         parseError: null,
-        previewSvgPath,
       },
     });
+
+    let previewSvgPath = version.previewSvgPath;
+    if (!previewSvgPath) {
+      previewSvgPath = buildPreviewSvgPath(version.mapFileId, version.versionNumber);
+      try {
+        await generateAndStorePreviewSvg(buffer, previewSvgPath);
+        await prisma.mapVersion.update({
+          where: { id: versionId },
+          data: { previewSvgPath },
+        });
+      } catch (svgErr) {
+        console.error("SVG-generering misslyckades:", svgErr);
+        await prisma.mapVersion.update({
+          where: { id: versionId },
+          data: {
+            parseError:
+              "Kartbilden kunde inte skapas automatiskt. Öppna kartan så den genereras vid visning.",
+          },
+        });
+      }
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : "Parsning misslyckades";
     await prisma.mapVersion.update({

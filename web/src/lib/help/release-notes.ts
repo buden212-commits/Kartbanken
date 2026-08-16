@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-16",
+    title: "Mora Väst går att öppna efter uppladdning",
+    items: [
+      "Uppladdade stora kartor (t.ex. Mora_Väst_med_VenjanKos12.ocd) fastnade tidigare på «Parsar…» utan kartbild — det är åtgärdat",
+      "Kartbilden skapas mer tillförlitligt för stora filer, så området går att öppna och titta på",
+    ],
+  },
+  {
+    date: "2026-08-16",
     title: "Stora kartor som Mora Väst går att öppna",
     items: [
       "Kartbilden för stora filer (ca 30 MB SVG) hämtas direkt från lagringen med tillfällig länk — den stoppas inte längre av serverns storleksgräns",

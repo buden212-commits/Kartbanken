@@ -432,6 +432,18 @@ export async function generateAndStorePreviewSvg(
   buffer: Buffer,
   storagePath: string,
 ): Promise<SvgBounds | null> {
+  // Stora kartor (t.ex. Mora Väst ~20 MB OCD → ~30 MB SVG): använd platt SVG.
+  // Layered-render (per symbol) kan OOM:a i Vercel after()/preview och lämna versionen i PROCESSING.
+  const preferFlat = buffer.length >= 15_000_000;
+
+  if (preferFlat) {
+    const ocadFile = (await readOcad(buffer, { quietWarnings: true })) as OcadFile;
+    const bounds = boundsFromOcad(ocadFile);
+    const svg = await generateOcadSvgFlat(buffer, ocadFile, bounds);
+    await uploadFile(storagePath, Buffer.from(svg, "utf-8"));
+    return bounds;
+  }
+
   try {
     const { svg, bounds } = await generateOcadSvgLayered(buffer);
     await uploadFile(storagePath, Buffer.from(svg, "utf-8"));
