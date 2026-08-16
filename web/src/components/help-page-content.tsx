@@ -1007,8 +1007,8 @@ export async function HelpPageContent() {
             <div>
               <h3 className="font-medium text-slate-900">Jämförelsen tar lång tid</h3>
               <p className="mt-1">
-                Det är normalt för stora kartor. Sidan uppdateras automatiskt när parsning och diff
-                är klar.
+                Det är normalt för stora kartor. En spinner och förfluten tid visar att arbetet
+                pågår — sidan uppdateras automatiskt när parsning och diff är klar.
               </p>
             </div>
             <div>

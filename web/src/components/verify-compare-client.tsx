@@ -114,7 +114,12 @@ export function VerifyCompareClient() {
 
       {loading && !data && (
         <div className="card text-center">
-          <p className="text-slate-700">Laddar jämförelse…</p>
+          <div
+            className="mx-auto h-9 w-9 animate-spin rounded-full border-2 border-slate-300 border-t-ifk-blue"
+            role="status"
+            aria-label="Arbetar"
+          />
+          <p className="mt-4 text-slate-700">Laddar jämförelse…</p>
           <p className="mt-2 text-sm text-slate-500">
             Stora kartfiler kan ta upp till en minut att parsa.
           </p>
@@ -123,7 +128,12 @@ export function VerifyCompareClient() {
 
       {data?.status === "processing" && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-8 text-center">
-          <p className="font-medium text-amber-800">
+          <div
+            className="mx-auto h-9 w-9 animate-spin rounded-full border-2 border-amber-300 border-t-amber-700"
+            role="status"
+            aria-label="Arbetar"
+          />
+          <p className="mt-4 font-medium text-amber-800">
             Jämför {data.fileNameA} → {data.fileNameB}…
           </p>
           <p className="mt-2 text-sm text-slate-600">

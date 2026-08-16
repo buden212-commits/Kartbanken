@@ -8,6 +8,13 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-16",
+    title: "Spinner vid jämförelse av versioner",
+    items: [
+      "När «Jämför versioner» arbetar visas en spinner och förfluten tid, så det syns att sidan inte hängt sig",
+    ],
+  },
+  {
+    date: "2026-08-16",
     title: "Admin-integration av stora utcheckningar",
     items: [
       "«Bekräfta och integrera» ska inte längre ge falskt fel när versionen redan sparats — kartbild skapas i bakgrunden",

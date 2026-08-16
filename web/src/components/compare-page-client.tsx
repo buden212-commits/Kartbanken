@@ -29,10 +29,28 @@ type Props = {
   v2: string;
 };
 
+function WorkingSpinner({ className = "" }: { className?: string }) {
+  return (
+    <div
+      className={`mx-auto h-9 w-9 animate-spin rounded-full border-2 border-amber-300 border-t-amber-700 ${className}`}
+      role="status"
+      aria-label="Arbetar"
+    />
+  );
+}
+
+function formatElapsed(totalSec: number): string {
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  if (m <= 0) return `${s} s`;
+  return `${m} min ${s.toString().padStart(2, "0")} s`;
+}
+
 export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
   const router = useRouter();
   const [data, setData] = useState<CompareResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [elapsedSec, setElapsedSec] = useState(0);
 
   const fetchCompare = useCallback(async () => {
     const res = await fetch(`/api/maps/${mapSlug}/compare?v1=${v1}&v2=${v2}`);
@@ -53,6 +71,20 @@ export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
     return () => clearInterval(timer);
   }, [data?.status, fetchCompare]);
 
+  useEffect(() => {
+    const busy = loading || data?.status === "processing";
+    if (!busy) {
+      setElapsedSec(0);
+      return;
+    }
+    const started = Date.now();
+    setElapsedSec(0);
+    const timer = setInterval(() => {
+      setElapsedSec(Math.floor((Date.now() - started) / 1000));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [loading, data?.status]);
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
       <Link href={`/maps/${mapSlug}`} className="link-muted text-sm">
@@ -66,20 +98,31 @@ export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
 
       {loading && !data && (
         <div className="card mt-10 text-center">
-          <p className="text-slate-700">Laddar jämförelse…</p>
+          <WorkingSpinner className="border-slate-300 border-t-ifk-blue" />
+          <p className="mt-4 text-slate-700">Laddar jämförelse…</p>
           <p className="mt-2 text-sm text-slate-500">
             Stora kartfiler kan ta upp till en minut att parsa.
           </p>
+          {elapsedSec > 0 && (
+            <p className="mt-2 text-xs text-slate-500">Förfluten tid: {formatElapsed(elapsedSec)}</p>
+          )}
         </div>
       )}
 
       {data?.status === "processing" && (
         <div className="mt-10 rounded-xl border border-amber-200 bg-amber-50 p-8 text-center">
-          <p className="font-medium text-amber-800">
+          <WorkingSpinner />
+          <p className="mt-4 font-medium text-amber-800">
             Jämför v{data.versionA.versionNumber} → v{data.versionB.versionNumber}…
           </p>
           <p className="mt-2 text-sm text-slate-600">
             Parsar OCAD-filer, beräknar diff och skapar kartlager. Sidan uppdateras automatiskt.
+          </p>
+          <p className="mt-3 text-xs text-amber-900/80">
+            Förfluten tid: {formatElapsed(elapsedSec)}
+            {elapsedSec >= 60
+              ? " — stora kartor (t.ex. Mora Väst) kan ta flera minuter."
+              : ""}
           </p>
         </div>
       )}
