@@ -26,6 +26,7 @@ export type ImportDiffSample = {
   symbolName: string;
   type: OcadObjectType;
   centroid: [number, number];
+  bbox: [number, number, number, number];
 };
 
 export type ImportPartialAnalysis = {
@@ -47,6 +48,8 @@ export type ImportPartialAnalysis = {
     modified: number;
     unchanged: number;
     samples: ImportDiffSample[];
+    /** Fler punkter för kartöverlagring (kan vara fler än samples). */
+    mapChanges: ImportDiffSample[];
   };
   blockers: string[];
   warnings: string[];

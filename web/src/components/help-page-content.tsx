@@ -353,8 +353,8 @@ export async function HelpPageContent() {
                   "Ladda upp den redigerade .ocd-filen — guiden jämför mot aktuell kartversion",
                   "Steg 2: kontrollera att symbolnumren finns i den stora kartan — saknade symboler stoppar import",
                   "Steg 3: blå ram på kartan visar delkartans utbredning (inzoomad). Samma kartbild som på området används — även stora filer som Mora Väst. Om den inte syns: öppna området så kartan hinner laddas, gå tillbaka och försök igen",
-                  "Steg 4: orange/röda objekt skär kanten; röda kan vara klippta och får inte radera originalet utanför ramen",
-                  "Steg 5: se tillagda, borttagna och ändrade objekt i området",
+                  "Steg 4: orange/röda kantobjekt; växla mellan hela kartan och bara berörda objekt, och visa även vad som raderas i originalet respektive nya/ersatta objekt",
+                  "Steg 5: se tillagda, borttagna och ändrade objekt i området — samma kartväxling och lagerfilter som i steget Kanter",
                   "Steg 6: bekräfta — systemet skapar en utcheckning i efterhand och checkar in filen",
                   "Därefter granskar du diffen som vid vanlig incheckning; admin integrerar till en ny version",
                 ]}

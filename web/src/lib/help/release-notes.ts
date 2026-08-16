@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-16",
+    title: "Importera delkarta: tydligare kartvy i Kanter",
+    items: [
+      "I steget «Kanter» (och «Ändringar») kan du växla mellan hela kartan och bara berörda objekt",
+      "Du kan visa objekt som raderas i originalkartan tillsammans med nya och ändrade/ersatta objekt från delkartan",
+    ],
+  },
+  {
+    date: "2026-08-16",
     title: "Importera delkarta: bekräfta fungerar på stora kartor",
     items: [
       "Steget «Bekräfta» i Importera delkarta slutförs nu även för stora områden (t.ex. Mora Väst) i stället för att stanna med ett tekniskt fel",

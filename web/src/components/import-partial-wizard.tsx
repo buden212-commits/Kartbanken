@@ -248,11 +248,19 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
       )}
 
       {analysis && step === "edges" && (
-        <div className="text-sm text-slate-600">
+        <div className="space-y-2 text-sm text-slate-600">
           <p>
-            Orange/rött = objekt som skär eller slutar vid ramen ({analysis.edgeCount} visade). Rött
-            betyder troligen klippt ({analysis.likelyClippedCount} st). {analysis.interiorCount}{" "}
-            objekt ligger helt inne i området.
+            Orange/rött = kantobjekt som skär eller slutar vid ramen ({analysis.edgeCount} visade).
+            Rött betyder troligen klippt ({analysis.likelyClippedCount} st).{" "}
+            {analysis.interiorCount} objekt ligger helt inne i området.
+          </p>
+          <p>
+            Växla mellan <span className="font-medium">Hela kartan</span> och{" "}
+            <span className="font-medium">Bara berörda objekt</span> för tydligare överblick. Kryssa i{" "}
+            <span className="font-medium">Raderas i original</span>,{" "}
+            <span className="font-medium">Nya i delkartan</span> och{" "}
+            <span className="font-medium">Ändrade / ersatta</span> för att jämföra vad som tas bort
+            mot vad som kommer in (streckad röd = raderas).
           </p>
         </div>
       )}
@@ -267,6 +275,10 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
             <span className="font-medium text-amber-700">{analysis.diff.modified} ändrade</span>
             {" · "}
             {analysis.diff.unchanged} oförändrade i området
+          </p>
+          <p className="text-slate-600">
+            Använd samma kartväxling som i steget Kanter: hela kartan eller bara berörda objekt, och
+            filtrera tillagda / borttagna / ändrade.
           </p>
           {analysis.diff.samples.length > 0 && (
             <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white text-xs">

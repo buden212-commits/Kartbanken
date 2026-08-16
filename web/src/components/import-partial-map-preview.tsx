@@ -1,8 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Bbox } from "@/lib/checkout/types";
-import type { ImportPartialAnalysis } from "@/lib/checkout/import-partial-types";
+import type {
+  ImportDiffSample,
+  ImportEdgeObject,
+  ImportPartialAnalysis,
+} from "@/lib/checkout/import-partial-types";
 import { clearPreviewCache, fetchPreviewText } from "@/lib/ocad/preview-fetch";
 import { extractSvgInner } from "@/lib/ocad/svg-utils";
 import {
@@ -12,6 +16,7 @@ import {
 } from "@/lib/ocad/svg-coords";
 
 type Mode = "extent" | "edges" | "diff";
+type MapBase = "full" | "affected";
 
 type Props = {
   previewUrl: string;
@@ -26,6 +31,13 @@ type Scene = {
   fill: string;
   fullViewBox: string;
   transform: SvgRootTransform;
+};
+
+type OverlayFlags = {
+  edges: boolean;
+  removed: boolean;
+  added: boolean;
+  modified: boolean;
 };
 
 function bboxToTuple(box: Bbox): [number, number, number, number] {
@@ -57,12 +69,209 @@ function parseViewBoxSize(viewBox: string): { w: number; h: number } | null {
   return { w, h };
 }
 
+function objectSvgBox(
+  bbox: [number, number, number, number],
+  transform: SvgRootTransform,
+): { x: number; y: number; width: number; height: number } | null {
+  const [minX, minY, maxX, maxY] = geoBboxToSvgUser(bbox, transform);
+  const width = maxX - minX;
+  const height = maxY - minY;
+  if (!(width > 0) || !(height > 0)) return null;
+  return { x: minX, y: minY, width, height };
+}
+
+function defaultOverlays(mode: Mode): OverlayFlags {
+  if (mode === "edges") {
+    return { edges: true, removed: false, added: false, modified: false };
+  }
+  if (mode === "diff") {
+    return { edges: false, removed: true, added: true, modified: true };
+  }
+  return { edges: false, removed: false, added: false, modified: false };
+}
+
+function SegmentButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${
+        active
+          ? "bg-ifk-blue text-white"
+          : "bg-white text-slate-700 hover:bg-slate-100"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function OverlayCheckbox({
+  checked,
+  onChange,
+  label,
+  swatch,
+  count,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  label: string;
+  swatch: string;
+  count?: number;
+}) {
+  return (
+    <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-slate-700">
+      <input
+        type="checkbox"
+        className="rounded border-slate-300"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      <span
+        className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm"
+        style={{ backgroundColor: swatch }}
+        aria-hidden
+      />
+      <span>
+        {label}
+        {typeof count === "number" ? ` (${count})` : ""}
+      </span>
+    </label>
+  );
+}
+
+function EdgeMarkers({
+  objects,
+  transform,
+  radius,
+  showBoxes,
+}: {
+  objects: ImportEdgeObject[];
+  transform: SvgRootTransform;
+  radius: number;
+  showBoxes: boolean;
+}) {
+  return (
+    <>
+      {objects.map((object) => {
+        const [cx, cy] = geoToSvgUserPoint(object.centroid, transform);
+        const fill = object.likelyClipped ? "#dc2626" : "#f97316";
+        const box = showBoxes ? objectSvgBox(object.bbox, transform) : null;
+        return (
+          <g key={`edge-${object.objectIndex}-${object.symbolNumber}`}>
+            {box && (
+              <rect
+                x={box.x}
+                y={box.y}
+                width={box.width}
+                height={box.height}
+                fill={`${fill}33`}
+                stroke={fill}
+                strokeWidth={1.5}
+                vectorEffect="non-scaling-stroke"
+                pointerEvents="none"
+              />
+            )}
+            <circle
+              cx={cx}
+              cy={cy}
+              r={radius}
+              fill={fill}
+              stroke="#fff"
+              strokeWidth={1}
+              vectorEffect="non-scaling-stroke"
+              pointerEvents="none"
+            />
+          </g>
+        );
+      })}
+    </>
+  );
+}
+
+function DiffMarkers({
+  changes,
+  transform,
+  radius,
+  showBoxes,
+  kinds,
+}: {
+  changes: ImportDiffSample[];
+  transform: SvgRootTransform;
+  radius: number;
+  showBoxes: boolean;
+  kinds: { removed: boolean; added: boolean; modified: boolean };
+}) {
+  return (
+    <>
+      {changes.map((change, index) => {
+        if (change.changeType === "removed" && !kinds.removed) return null;
+        if (change.changeType === "added" && !kinds.added) return null;
+        if (change.changeType === "modified" && !kinds.modified) return null;
+
+        const fill =
+          change.changeType === "added"
+            ? "#059669"
+            : change.changeType === "removed"
+              ? "#dc2626"
+              : "#d97706";
+        const [cx, cy] = geoToSvgUserPoint(change.centroid, transform);
+        const box =
+          showBoxes && change.bbox ? objectSvgBox(change.bbox, transform) : null;
+        return (
+          <g key={`diff-${change.changeType}-${change.objectIndex}-${index}`}>
+            {box && (
+              <rect
+                x={box.x}
+                y={box.y}
+                width={box.width}
+                height={box.height}
+                fill={`${fill}33`}
+                stroke={fill}
+                strokeWidth={change.changeType === "removed" ? 1.5 : 1.25}
+                strokeDasharray={change.changeType === "removed" ? "4 3" : undefined}
+                vectorEffect="non-scaling-stroke"
+                pointerEvents="none"
+              />
+            )}
+            <circle
+              cx={cx}
+              cy={cy}
+              r={radius}
+              fill={fill}
+              stroke="#fff"
+              strokeWidth={1}
+              vectorEffect="non-scaling-stroke"
+              pointerEvents="none"
+            />
+          </g>
+        );
+      })}
+    </>
+  );
+}
+
 export function ImportPartialMapPreview({ previewUrl, analysis, mode, title, areaHref }: Props) {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [slow, setSlow] = useState(false);
   const [scene, setScene] = useState<Scene | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
+  const [mapBase, setMapBase] = useState<MapBase>("full");
+  const [overlays, setOverlays] = useState<OverlayFlags>(() => defaultOverlays(mode));
+
+  useEffect(() => {
+    setOverlays(defaultOverlays(mode));
+    setMapBase("full");
+  }, [mode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,7 +288,9 @@ export function ImportPartialMapPreview({ previewUrl, analysis, mode, title, are
         if (cancelled) return;
         const extracted = extractSvgInner(text);
         if (!extracted.viewBox || !extracted.inner.trim()) {
-          throw new Error("Kartbilden saknar innehåll. Öppna området så kartan hinner laddas, och försök igen.");
+          throw new Error(
+            "Kartbilden saknar innehåll. Öppna området så kartan hinner laddas, och försök igen.",
+          );
         }
         setScene({
           inner: extracted.inner,
@@ -114,7 +325,10 @@ export function ImportPartialMapPreview({ previewUrl, analysis, mode, title, are
 
   const frame = useMemo(() => {
     if (!scene) return null;
-    const [minX, minY, maxX, maxY] = geoBboxToSvgUser(bboxToTuple(analysis.extent), scene.transform);
+    const [minX, minY, maxX, maxY] = geoBboxToSvgUser(
+      bboxToTuple(analysis.extent),
+      scene.transform,
+    );
     const width = maxX - minX;
     const height = maxY - minY;
     if (!(width > 0) || !(height > 0)) return null;
@@ -125,8 +339,17 @@ export function ImportPartialMapPreview({ previewUrl, analysis, mode, title, are
     if (!viewBox) return 8;
     const size = parseViewBoxSize(viewBox);
     if (!size) return 8;
-    return Math.max(size.w, size.h) * 0.01;
+    return Math.max(size.w, size.h) * 0.008;
   }, [viewBox]);
+
+  const mapChanges = analysis.diff.mapChanges ?? analysis.diff.samples;
+  const showOverlayControls = mode === "edges" || mode === "diff";
+  const showBoxes = mapBase === "affected";
+  const showMapBackground = mapBase === "full";
+
+  const removedCount = analysis.diff.removed;
+  const addedCount = analysis.diff.added;
+  const modifiedCount = analysis.diff.modified;
 
   function retry() {
     clearPreviewCache(previewUrl);
@@ -134,12 +357,67 @@ export function ImportPartialMapPreview({ previewUrl, analysis, mode, title, are
     setRetryKey((n) => n + 1);
   }
 
+  function setOverlay(key: keyof OverlayFlags, value: boolean) {
+    setOverlays((prev) => ({ ...prev, [key]: value }));
+  }
+
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-200 bg-slate-50 px-3 py-2 sm:px-4">
+      <div className="space-y-2 border-b border-slate-200 bg-slate-50 px-3 py-2 sm:px-4">
         <h3 className="text-sm font-medium text-slate-800">{title}</h3>
+        {showOverlayControls && (
+          <div className="flex flex-col gap-2">
+            <div className="inline-flex w-fit flex-wrap gap-1 rounded-lg border border-slate-200 bg-slate-100 p-0.5">
+              <SegmentButton active={mapBase === "full"} onClick={() => setMapBase("full")}>
+                Hela kartan
+              </SegmentButton>
+              <SegmentButton
+                active={mapBase === "affected"}
+                onClick={() => setMapBase("affected")}
+              >
+                Bara berörda objekt
+              </SegmentButton>
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+              {mode === "edges" && (
+                <OverlayCheckbox
+                  checked={overlays.edges}
+                  onChange={(next) => setOverlay("edges", next)}
+                  label="Kantobjekt"
+                  swatch="#f97316"
+                  count={analysis.edgeCount}
+                />
+              )}
+              <OverlayCheckbox
+                checked={overlays.removed}
+                onChange={(next) => setOverlay("removed", next)}
+                label="Raderas i original"
+                swatch="#dc2626"
+                count={removedCount}
+              />
+              <OverlayCheckbox
+                checked={overlays.added}
+                onChange={(next) => setOverlay("added", next)}
+                label="Nya i delkartan"
+                swatch="#059669"
+                count={addedCount}
+              />
+              <OverlayCheckbox
+                checked={overlays.modified}
+                onChange={(next) => setOverlay("modified", next)}
+                label="Ändrade / ersatta"
+                swatch="#d97706"
+                count={modifiedCount}
+              />
+            </div>
+          </div>
+        )}
       </div>
-      <div className="relative flex h-[min(70dvh,560px)] min-h-[280px] items-center justify-center overflow-hidden bg-white">
+      <div
+        className={`relative flex h-[min(70dvh,560px)] min-h-[280px] items-center justify-center overflow-hidden ${
+          showMapBackground ? "bg-white" : "bg-slate-100"
+        }`}
+      >
         {status === "loading" && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 bg-white text-sm text-slate-600">
             <p>Laddar kartbild…</p>
@@ -176,65 +454,49 @@ export function ImportPartialMapPreview({ previewUrl, analysis, mode, title, are
         {scene && viewBox && status === "ready" && (
           <svg
             viewBox={viewBox}
-            fill={scene.fill}
+            fill={showMapBackground ? scene.fill : "#f1f5f9"}
             xmlns="http://www.w3.org/2000/svg"
             preserveAspectRatio="xMidYMid meet"
             className="h-full w-full max-h-full max-w-full"
           >
-            <g dangerouslySetInnerHTML={{ __html: scene.inner }} />
+            {showMapBackground && (
+              <g dangerouslySetInnerHTML={{ __html: scene.inner }} />
+            )}
             {frame && (
               <rect
                 x={frame.x}
                 y={frame.y}
                 width={frame.width}
                 height={frame.height}
-                fill="rgba(37, 99, 235, 0.15)"
+                fill="rgba(37, 99, 235, 0.12)"
                 stroke="#1d4ed8"
                 strokeWidth={2}
                 vectorEffect="non-scaling-stroke"
                 pointerEvents="none"
               />
             )}
-            {mode === "edges" &&
-              analysis.edgeObjects.map((object) => {
-                const [cx, cy] = geoToSvgUserPoint(object.centroid, scene.transform);
-                return (
-                  <circle
-                    key={`${object.objectIndex}-${object.symbolNumber}`}
-                    cx={cx}
-                    cy={cy}
-                    r={markerRadius}
-                    fill={object.likelyClipped ? "#dc2626" : "#f97316"}
-                    stroke="#fff"
-                    strokeWidth={1}
-                    vectorEffect="non-scaling-stroke"
-                    pointerEvents="none"
-                  />
-                );
-              })}
-            {mode === "diff" &&
-              analysis.diff.samples.map((change, index) => {
-                const [cx, cy] = geoToSvgUserPoint(change.centroid, scene.transform);
-                const fill =
-                  change.changeType === "added"
-                    ? "#059669"
-                    : change.changeType === "removed"
-                      ? "#dc2626"
-                      : "#f59e0b";
-                return (
-                  <circle
-                    key={`${change.changeType}-${change.objectIndex}-${index}`}
-                    cx={cx}
-                    cy={cy}
-                    r={markerRadius}
-                    fill={fill}
-                    stroke="#fff"
-                    strokeWidth={1}
-                    vectorEffect="non-scaling-stroke"
-                    pointerEvents="none"
-                  />
-                );
-              })}
+            {showOverlayControls && overlays.edges && (
+              <EdgeMarkers
+                objects={analysis.edgeObjects}
+                transform={scene.transform}
+                radius={markerRadius}
+                showBoxes={showBoxes}
+              />
+            )}
+            {showOverlayControls &&
+              (overlays.removed || overlays.added || overlays.modified) && (
+                <DiffMarkers
+                  changes={mapChanges}
+                  transform={scene.transform}
+                  radius={markerRadius * 0.85}
+                  showBoxes={showBoxes}
+                  kinds={{
+                    removed: overlays.removed,
+                    added: overlays.added,
+                    modified: overlays.modified,
+                  }}
+                />
+              )}
           </svg>
         )}
       </div>

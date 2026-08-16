@@ -19,6 +19,7 @@ export type {
 const DIFF_TOLERANCE_M = Number(process.env.DIFF_SPATIAL_TOLERANCE_M ?? 2);
 const MAX_EDGE_SAMPLES = 80;
 const MAX_DIFF_SAMPLES = 40;
+const MAX_DIFF_MAP_SAMPLES = 300;
 const MAX_SYMBOL_ROWS = 80;
 
 function bboxFromTuple(bounds: number[] | null): Bbox | null {
@@ -285,6 +286,16 @@ export function analyzeImportPartial(input: {
   const removed = appliedChanges.filter((c) => c.changeType === "removed").length;
   const modified = appliedChanges.filter((c) => c.changeType === "modified").length;
 
+  const toDiffSample = (change: (typeof appliedChanges)[number]): ImportDiffSample => ({
+    changeType: change.changeType,
+    objectIndex: change.objectIndex,
+    symbolNumber: change.symbolNumber,
+    symbolName: change.symbolName,
+    type: change.type,
+    centroid: change.centroid,
+    bbox: change.bbox,
+  });
+
   matched.sort((a, b) => b.countPartial - a.countPartial);
   onlyInPartial.sort((a, b) => b.countPartial - a.countPartial);
   onlyInHeadUsedByPartialArea.sort((a, b) => a.number - b.number);
@@ -307,14 +318,8 @@ export function analyzeImportPartial(input: {
       removed,
       modified,
       unchanged: diff.unchanged,
-      samples: appliedChanges.slice(0, MAX_DIFF_SAMPLES).map((change) => ({
-        changeType: change.changeType,
-        objectIndex: change.objectIndex,
-        symbolNumber: change.symbolNumber,
-        symbolName: change.symbolName,
-        type: change.type,
-        centroid: change.centroid,
-      })),
+      samples: appliedChanges.slice(0, MAX_DIFF_SAMPLES).map(toDiffSample),
+      mapChanges: appliedChanges.slice(0, MAX_DIFF_MAP_SAMPLES).map(toDiffSample),
     },
     blockers,
     warnings: [...new Set(warnings)].slice(0, 20),
