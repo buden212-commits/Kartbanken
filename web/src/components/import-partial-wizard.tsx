@@ -450,7 +450,12 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
               Riskzon: {keepRiskCount} behålls · {forceDeleteCount} raderas enligt granskning
             </li>
             <li>
-              Gräns: {analysis.boundary?.type === "POLYGON" ? "ritad polygon" : "blå rektangel"}
+              Gräns:{" "}
+              {analysis.boundarySource === "symbol-1104.001"
+                ? "polygon från symbol 1104.001"
+                : analysis.boundary?.type === "POLYGON"
+                  ? "ritad polygon"
+                  : "blå rektangel"}
             </li>
             <li>{analysis.likelyClippedCount} objekt markerade som troligen klippta</li>
           </ul>

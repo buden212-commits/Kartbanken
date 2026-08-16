@@ -649,8 +649,10 @@ export async function HelpPageContent() {
           </p>
 
           <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
-            Stora kartfiler kan ta upp till en minut att parsa och jämföra. Sidan uppdateras
-            automatiskt när beräkningen är klar.
+            Stora kartfiler (t.ex. Mora Väst) kan ta flera minuter — ibland 5–15 minuter — att
+            parsa och jämföra. Under tiden visar sidan en checklista med aktuellt steg, förklaring,
+            förfluten tid och när servern senast uppdaterade status. Sidan uppdateras automatiskt.
+            Om statusen slutar uppdateras: använd <strong>Starta om jämförelse</strong>.
           </p>
           <HelpProcessDiagram title="Flöde — jämföra versioner" chart={compareFlow} />
         </HelpSection>
@@ -1008,9 +1010,10 @@ export async function HelpPageContent() {
             <div>
               <h3 className="font-medium text-slate-900">Jämförelsen tar lång tid</h3>
               <p className="mt-1">
-                Det är normalt för stora kartor. En spinner visar aktuellt steg (ladda filer, parsa,
-                beräkna diff) och förfluten tid. Sidan uppdateras automatiskt. Om det verkar ha
-                fastnat: använd «Starta om jämförelse».
+                Det är normalt för stora kartor. En checklista visar aktuellt steg (förbereda
+                versioner, ladda filer, parsa objekt, beräkna diff, spara) plus förfluten tid och
+                senaste statusuppdatering. Sidan uppdateras automatiskt. Om det verkar ha fastnat:
+                använd «Starta om jämförelse».
               </p>
             </div>
             <div>

@@ -22,9 +22,11 @@ export const releaseNotes: ReleaseNote[] = [
     date: "2026-08-16",
     title: "Jämför versioner",
     items: [
+      "Tydligare status under jämförelse: checklista med steg, förklaring, förfluten tid och senaste uppdatering från servern",
+      "Jämförelsen genererar inte kartbild under jobbet (snabbare och mer stabilt på stora kartor)",
+      "Längre tidsgräns och hjärtslag under långa steg så jobbet inte felaktigt startas om",
       "Kartan zooma till objekt bara när du klickar i listan eller på objektet — inte automatiskt tillbaka till ~1:500 medan du zooma/panorera",
-      "Spinner, förfluten tid och stegstatus (ladda filer, parsa, beräkna diff)",
-      "Jämförelsen startas inte om vid varje uppdatering (kunde få stora kartor att fastna); «Starta om jämförelse» om det ändå hänger",
+      "«Starta om jämförelse» om det ändå hänger — endast ett jobb körs åt gången",
     ],
   },
   {
