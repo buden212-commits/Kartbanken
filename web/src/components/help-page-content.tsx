@@ -353,7 +353,7 @@ export async function HelpPageContent() {
                   "Ladda upp den redigerade .ocd-filen — guiden jämför mot aktuell kartversion",
                   "Steg 2: kontrollera att symbolnumren finns i den stora kartan — saknade symboler stoppar import",
                   "Steg 3: blå ram eller polygon från symbol 1104.001 (om den finns i delkartan) visar importområdet. Samma kartbild som på området används — även stora filer. Om den inte syns: öppna området så kartan hinner laddas, gå tillbaka och försök igen",
-                  "Steg 4 (Kanter): jämför grundkarta och importkarta (opacitet/svep); zooma med +/− eller scroll, panorera genom att dra; växla Navigera/Rita för polygon-gräns (om 1104.001 saknas); granska riskzonen (40 m) — behåll som standard, markera radera vid behov; kryssa i att du granskat innan Nästa",
+                  "Steg 4 (Kanter): jämför grundkarta och importkarta (opacitet/svep); zooma med +/− eller scroll, panorera genom att dra; växla Navigera/Rita för polygon-gräns (om 1104.001 saknas); granska riskzonen (40 m) — behåll som standard, markera radera vid behov",
                   "Steg 5: se tillagda, borttagna och ändrade objekt i det säkra området — samma kartväxling och lagerfilter som i steget Kanter",
                   "Steg 6: bekräfta — systemet skapar en utcheckning i efterhand och checkar in filen; riskzonsvalen följer med oförändrade till admin-integrationen",
                   "Därefter granskar du diffen som vid vanlig incheckning; admin integrerar till en ny version",

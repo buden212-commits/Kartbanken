@@ -49,7 +49,6 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
   const [loading, setLoading] = useState(false);
   const [boundaryBusy, setBoundaryBusy] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
-  const [riskReviewed, setRiskReviewed] = useState(false);
   const [forceDeleteObjectIndices, setForceDeleteObjectIndices] = useState<number[]>([]);
   const [selectedRiskObjectIndex, setSelectedRiskObjectIndex] = useState<number | null>(null);
 
@@ -168,7 +167,6 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
   }
 
   function goNext() {
-    if (step === "edges" && !riskReviewed) return;
     const next = STEPS[stepIndex + 1];
     if (next) setStep(next.id);
   }
@@ -384,15 +382,6 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
                 })}
               </ul>
             )}
-            <label className="mt-3 flex items-start gap-2 text-sm text-amber-950">
-              <input
-                type="checkbox"
-                className="mt-1"
-                checked={riskReviewed}
-                onChange={(event) => setRiskReviewed(event.target.checked)}
-              />
-              <span>Jag har granskat riskzonen och beslutat vad som ska behållas respektive raderas.</span>
-            </label>
           </section>
         </div>
       )}
@@ -500,8 +489,7 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
             disabled={
               loading ||
               boundaryBusy ||
-              (step === "symbols" && !canProceedPastSymbols) ||
-              (step === "edges" && !riskReviewed)
+              (step === "symbols" && !canProceedPastSymbols)
             }
             className="btn-primary"
           >

@@ -13,7 +13,7 @@ export const releaseNotes: ReleaseNote[] = [
       "Om delkartan har områdessymbol 1104.001 används den automatiskt som importgräns (annars blå rektangel); symbolen läggs inte till i grundkartan",
       "Under Kanter: grundkarta och importkarta ovanpå varandra — opacitet, svep, «Bara grund» / «Bara import»",
       "Zooma (+/−, scroll, nyp), panorera genom att dra, och rita polygon i ritläge (eller återställ blå ram) — reglage och zoomknappar ska kännas snabba även på stora kartor",
-      "Objekt inom 40 m från gränsen raderas inte automatiskt — granska listan och välj behåll/radera; valen följer med till admin-integrationen",
+      "Objekt inom 40 m från gränsen raderas inte automatiskt — granska listan och välj behåll/radera; valen följer med till admin-integrationen (ingen obligatorisk kryssruta innan Nästa)",
       "Växla mellan hela kartan och bara berörda objekt; visa raderas / nya / ändrade",
       "Steget «Bekräfta» fungerar även för stora områden (t.ex. Mora Väst)",
     ],
