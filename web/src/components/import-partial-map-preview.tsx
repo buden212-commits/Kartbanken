@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Bbox, CheckoutSelectionGeometry, PolygonRing } from "@/lib/checkout/types";
 import { CheckoutSelectionType } from "@/lib/checkout/types";
 import type {
@@ -22,6 +22,31 @@ import {
 
 type Mode = "extent" | "edges" | "diff";
 type MapBase = "full" | "affected";
+type InteractionMode = "navigate" | "draw";
+
+const MIN_ZOOM = 0.25;
+const MAX_ZOOM = 40;
+const ZOOM_IN_FACTOR = 1.5;
+const ZOOM_OUT_FACTOR = 1 / ZOOM_IN_FACTOR;
+const DRAG_THRESHOLD_PX = 4;
+
+function zoomAtPoint(
+  prevZoom: number,
+  factor: number,
+  prevPan: { x: number; y: number },
+  focalX: number,
+  focalY: number,
+): { zoom: number; pan: { x: number; y: number } } {
+  const nextZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, prevZoom * factor));
+  const ratio = nextZoom / prevZoom;
+  return {
+    zoom: nextZoom,
+    pan: {
+      x: focalX - (focalX - prevPan.x) * ratio,
+      y: focalY - (focalY - prevPan.y) * ratio,
+    },
+  };
+}
 
 type Props = {
   previewUrl: string;
@@ -385,15 +410,33 @@ function BoundaryOverlay({
         />
       )}
       {draftRing && draftRing.length > 0 && (
-        <polyline
-          points={ringToSvgPoints(draftRing, transform)}
-          fill="none"
-          stroke="#1d4ed8"
-          strokeWidth={2}
-          strokeDasharray="4 3"
-          vectorEffect="non-scaling-stroke"
-          pointerEvents="none"
-        />
+        <>
+          <polyline
+            points={ringToSvgPoints(draftRing, transform)}
+            fill={draftRing.length >= 3 ? "rgba(37, 99, 235, 0.12)" : "none"}
+            stroke="#1d4ed8"
+            strokeWidth={2}
+            strokeDasharray="4 3"
+            vectorEffect="non-scaling-stroke"
+            pointerEvents="none"
+          />
+          {draftRing.map(([x, y], index) => {
+            const [sx, sy] = geoToSvgUserPoint([x, y], transform);
+            return (
+              <circle
+                key={`draft-${index}`}
+                cx={sx}
+                cy={sy}
+                r={4}
+                fill="#1d4ed8"
+                stroke="#fff"
+                strokeWidth={1}
+                vectorEffect="non-scaling-stroke"
+                pointerEvents="none"
+              />
+            );
+          })}
+        </>
       )}
     </>
   );
@@ -426,9 +469,26 @@ export function ImportPartialMapPreview({
   const [baseOpacity, setBaseOpacity] = useState(40);
   const [showImportLayer, setShowImportLayer] = useState(true);
   const [swipePercent, setSwipePercent] = useState(100);
-  const [drawPolygon, setDrawPolygon] = useState(false);
+  const [interactionMode, setInteractionMode] = useState<InteractionMode>("navigate");
   const [draftRing, setDraftRing] = useState<PolygonRing>([]);
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
   const svgRef = useRef<SVGSVGElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const viewStateRef = useRef({ pan: { x: 0, y: 0 }, zoom: 1 });
+  viewStateRef.current = { pan, zoom };
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    panX: number;
+    panY: number;
+    moved: boolean;
+  } | null>(null);
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchRef = useRef<{ distance: number; zoom: number; pan: { x: number; y: number } } | null>(
+    null,
+  );
 
   const forceDelete = useMemo(
     () => new Set(forceDeleteObjectIndices),
@@ -443,8 +503,10 @@ export function ImportPartialMapPreview({
   useEffect(() => {
     setOverlays(defaultOverlays(mode));
     setMapBase("full");
-    setDrawPolygon(false);
+    setInteractionMode("navigate");
     setDraftRing([]);
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
     if (mode === "edges") {
       setBaseOpacity(40);
       setShowImportLayer(true);
@@ -574,6 +636,39 @@ export function ImportPartialMapPreview({
     setOverlays((prev) => ({ ...prev, [key]: value }));
   }
 
+  const adjustZoom = useCallback((factor: number, focal?: { x: number; y: number }) => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const rect = viewport.getBoundingClientRect();
+    const focalX = focal?.x ?? rect.width / 2;
+    const focalY = focal?.y ?? rect.height / 2;
+    const { pan: prevPan, zoom: prevZoom } = viewStateRef.current;
+    const next = zoomAtPoint(prevZoom, factor, prevPan, focalX, focalY);
+    setZoom(next.zoom);
+    setPan(next.pan);
+  }, []);
+
+  const fitView = useCallback(() => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  }, []);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const rect = viewport.getBoundingClientRect();
+      const delta = event.deltaY > 0 ? ZOOM_OUT_FACTOR : ZOOM_IN_FACTOR;
+      adjustZoom(delta, {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+      });
+    };
+    viewport.addEventListener("wheel", onWheel, { passive: false });
+    return () => viewport.removeEventListener("wheel", onWheel);
+  }, [adjustZoom, status]);
+
   function clientToSvgUser(clientX: number, clientY: number): [number, number] | null {
     const svg = svgRef.current;
     if (!svg || !viewBox) return null;
@@ -586,19 +681,94 @@ export function ImportPartialMapPreview({
     return [local.x, local.y];
   }
 
-  function handleMapClick(event: React.MouseEvent<SVGSVGElement>) {
-    if (!drawPolygon || !scene) return;
-    const svgUser = clientToSvgUser(event.clientX, event.clientY);
-    if (!svgUser) return;
-    const geo = svgUserToGeoPoint(svgUser, scene.transform);
-    setDraftRing((prev) => [...prev, geo]);
+  function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    if (pointersRef.current.size === 2) {
+      const pts = [...pointersRef.current.values()];
+      const dx = pts[0]!.x - pts[1]!.x;
+      const dy = pts[0]!.y - pts[1]!.y;
+      pinchRef.current = {
+        distance: Math.hypot(dx, dy) || 1,
+        zoom: viewStateRef.current.zoom,
+        pan: { ...viewStateRef.current.pan },
+      };
+      dragRef.current = null;
+      return;
+    }
+
+    if (interactionMode === "draw") {
+      if (!scene) return;
+      const svgUser = clientToSvgUser(event.clientX, event.clientY);
+      if (!svgUser) return;
+      const geo = svgUserToGeoPoint(svgUser, scene.transform);
+      setDraftRing((prev) => [...prev, geo]);
+      return;
+    }
+
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      panX: viewStateRef.current.pan.x,
+      panY: viewStateRef.current.pan.y,
+      moved: false,
+    };
+    viewport.setPointerCapture(event.pointerId);
+  }
+
+  function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    if (pointersRef.current.has(event.pointerId)) {
+      pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    }
+
+    if (pointersRef.current.size === 2 && pinchRef.current) {
+      const pts = [...pointersRef.current.values()];
+      const dx = pts[0]!.x - pts[1]!.x;
+      const dy = pts[0]!.y - pts[1]!.y;
+      const distance = Math.hypot(dx, dy) || 1;
+      const factor = distance / pinchRef.current.distance;
+      const viewport = viewportRef.current;
+      if (!viewport) return;
+      const rect = viewport.getBoundingClientRect();
+      const focalX = (pts[0]!.x + pts[1]!.x) / 2 - rect.left;
+      const focalY = (pts[0]!.y + pts[1]!.y) / 2 - rect.top;
+      const next = zoomAtPoint(
+        pinchRef.current.zoom,
+        factor,
+        pinchRef.current.pan,
+        focalX,
+        focalY,
+      );
+      setZoom(next.zoom);
+      setPan(next.pan);
+      return;
+    }
+
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId || interactionMode !== "navigate") return;
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    if (!drag.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
+    drag.moved = true;
+    setPan({ x: drag.panX + dx, y: drag.panY + dy });
+  }
+
+  function handlePointerUp(event: React.PointerEvent<HTMLDivElement>) {
+    pointersRef.current.delete(event.pointerId);
+    if (pointersRef.current.size < 2) pinchRef.current = null;
+    if (dragRef.current?.pointerId === event.pointerId) {
+      dragRef.current = null;
+    }
   }
 
   async function finishPolygon() {
     if (draftRing.length < 3 || !onBoundaryCommit) return;
     await onBoundaryCommit({ type: CheckoutSelectionType.POLYGON, ring: draftRing });
     setDraftRing([]);
-    setDrawPolygon(false);
+    setInteractionMode("navigate");
   }
 
   async function resetBoundaryToExtent() {
@@ -608,10 +778,15 @@ export function ImportPartialMapPreview({
       bbox: analysis.extent,
     });
     setDraftRing([]);
-    setDrawPolygon(false);
+    setInteractionMode("navigate");
   }
 
   const importClip = edgesMode ? `inset(0 ${100 - swipePercent}% 0 0)` : undefined;
+  const drawing = interactionMode === "draw";
+  const toolbarBtn =
+    "min-h-9 min-w-9 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-700 shadow-sm transition hover:border-ifk-blue hover:text-ifk-blue disabled:opacity-40";
+  const toolbarBtnActive =
+    "min-h-9 rounded-md border border-ifk-blue bg-ifk-blue px-2.5 py-1.5 text-sm text-white shadow-sm";
 
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -712,16 +887,30 @@ export function ImportPartialMapPreview({
                 {importPreviewUrl && importStatus === "ready" && !importScene && (
                   <p className="text-xs text-amber-700">Importkartan kunde inte visas.</p>
                 )}
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <SegmentButton
-                    active={drawPolygon}
+                    active={interactionMode === "navigate"}
+                    onClick={() => setInteractionMode("navigate")}
+                  >
+                    Navigera
+                  </SegmentButton>
+                  <SegmentButton
+                    active={drawing}
                     onClick={() => {
-                      setDrawPolygon((value) => !value);
+                      setInteractionMode("draw");
                       setDraftRing([]);
                     }}
                   >
                     Rita polygon
                   </SegmentButton>
+                  <button
+                    type="button"
+                    className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-700 disabled:opacity-50"
+                    disabled={draftRing.length === 0}
+                    onClick={() => setDraftRing((prev) => prev.slice(0, -1))}
+                  >
+                    Ångra punkt
+                  </button>
                   <button
                     type="button"
                     className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-700 disabled:opacity-50"
@@ -739,10 +928,16 @@ export function ImportPartialMapPreview({
                     Återställ blå ram
                   </button>
                 </div>
-                {drawPolygon && (
+                {drawing && (
                   <p className="text-xs text-slate-500">
-                    Klicka i kartan för hörnpunkter ({draftRing.length} st). Minst tre punkter, sedan
-                    «Använd polygon».
+                    Ritläge: klicka i kartan för hörnpunkter ({draftRing.length} st). Minst tre
+                    punkter, sedan «Använd polygon». Växla till Navigera för att zooma/panorera.
+                  </p>
+                )}
+                {!drawing && (
+                  <p className="text-xs text-slate-500">
+                    Navigera: dra för att panorera, scrolla eller +/− för att zooma. Nyp med två
+                    fingrar på pekskärm.
                   </p>
                 )}
                 {boundaryBusy && (
@@ -795,9 +990,14 @@ export function ImportPartialMapPreview({
         )}
       </div>
       <div
-        className={`relative flex h-[min(70dvh,560px)] min-h-[280px] items-center justify-center overflow-hidden ${
+        ref={viewportRef}
+        className={`relative h-[min(70dvh,560px)] min-h-[280px] touch-none overflow-hidden ${
           showMapBackground ? "bg-white" : "bg-slate-100"
-        }`}
+        } ${drawing ? "cursor-crosshair" : "cursor-grab active:cursor-grabbing"}`}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
       >
         {status === "loading" && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 bg-white text-sm text-slate-600">
@@ -808,7 +1008,7 @@ export function ImportPartialMapPreview({
           </div>
         )}
         {status === "error" && (
-          <div className="z-10 flex max-w-md flex-col items-center gap-3 px-6 text-center">
+          <div className="z-10 flex h-full max-w-md flex-col items-center justify-center gap-3 px-6 text-center">
             <p className="text-sm text-red-600">
               {error ??
                 "Kunde inte visa kartan. Öppna området och kontrollera att kartbilden laddas där."}
@@ -833,88 +1033,134 @@ export function ImportPartialMapPreview({
           </div>
         )}
         {scene && viewBox && status === "ready" && (
-          <div className="relative h-full w-full">
-            {/* Grundkarta — eget SVG-koordinatsystem */}
-            {showMapBackground && (
-              <svg
-                viewBox={viewBox}
-                fill={scene.fill}
-                xmlns="http://www.w3.org/2000/svg"
-                preserveAspectRatio="xMidYMid meet"
-                className="pointer-events-none absolute inset-0 h-full w-full"
-                aria-hidden
-              >
-                <g
-                  opacity={edgesMode ? baseOpacity / 100 : 1}
-                  dangerouslySetInnerHTML={{ __html: scene.inner }}
-                />
-              </svg>
-            )}
-            {/* Importkarta — separat viewBox så samma geo-utsnitt syns rätt */}
-            {edgesMode && showImportLayer && importScene && importViewBox && (
-              <svg
-                viewBox={importViewBox}
-                fill={importScene.fill}
-                xmlns="http://www.w3.org/2000/svg"
-                preserveAspectRatio="xMidYMid meet"
-                className="pointer-events-none absolute inset-0 h-full w-full"
-                style={{ clipPath: importClip }}
-                aria-hidden
-              >
-                <g dangerouslySetInnerHTML={{ __html: importScene.inner }} />
-              </svg>
-            )}
-            {/* Markörer / gräns / klick — alltid i grundkartans koordinater */}
-            <svg
-              ref={svgRef}
-              viewBox={viewBox}
-              fill="transparent"
-              xmlns="http://www.w3.org/2000/svg"
-              preserveAspectRatio="xMidYMid meet"
-              className={`absolute inset-0 h-full w-full ${drawPolygon ? "cursor-crosshair" : ""}`}
-              onClick={handleMapClick}
+          <>
+            <div
+              className="absolute left-0 top-0 h-full w-full"
+              style={{
+                transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                transformOrigin: "0 0",
+              }}
             >
-              <BoundaryOverlay
-                boundary={boundary}
-                transform={scene.transform}
-                draftRing={draftRing}
-              />
-              {showOverlayControls && overlays.edges && (
-                <EdgeMarkers
-                  objects={analysis.edgeObjects}
-                  transform={scene.transform}
-                  radius={markerRadius}
-                  showBoxes={showBoxes}
-                />
+              {showMapBackground && (
+                <svg
+                  viewBox={viewBox}
+                  fill={scene.fill}
+                  xmlns="http://www.w3.org/2000/svg"
+                  preserveAspectRatio="xMidYMid meet"
+                  className="pointer-events-none absolute inset-0 h-full w-full"
+                  aria-hidden
+                >
+                  <g
+                    opacity={edgesMode ? baseOpacity / 100 : 1}
+                    dangerouslySetInnerHTML={{ __html: scene.inner }}
+                  />
+                </svg>
               )}
-              {edgesMode && overlays.risk && (analysis.riskRemovals?.length ?? 0) > 0 && (
-                <RiskMarkers
-                  objects={analysis.riskRemovals}
-                  transform={scene.transform}
-                  radius={markerRadius}
-                  forceDelete={forceDelete}
-                  selectedIndex={selectedRiskObjectIndex}
-                  onSelect={(objectIndex) => {
-                    onSelectRiskObject?.(objectIndex);
-                  }}
-                />
+              {edgesMode && showImportLayer && importScene && importViewBox && (
+                <svg
+                  viewBox={importViewBox}
+                  fill={importScene.fill}
+                  xmlns="http://www.w3.org/2000/svg"
+                  preserveAspectRatio="xMidYMid meet"
+                  className="pointer-events-none absolute inset-0 h-full w-full"
+                  style={{ clipPath: importClip }}
+                  aria-hidden
+                >
+                  <g dangerouslySetInnerHTML={{ __html: importScene.inner }} />
+                </svg>
               )}
-              {showOverlayControls &&
-                (overlays.removed || overlays.added || overlays.modified) && (
-                  <DiffMarkers
-                    changes={mapChanges}
+              <svg
+                ref={svgRef}
+                viewBox={viewBox}
+                fill="transparent"
+                xmlns="http://www.w3.org/2000/svg"
+                preserveAspectRatio="xMidYMid meet"
+                className="pointer-events-none absolute inset-0 h-full w-full"
+              >
+                <BoundaryOverlay
+                  boundary={boundary}
+                  transform={scene.transform}
+                  draftRing={draftRing}
+                />
+                {showOverlayControls && overlays.edges && (
+                  <EdgeMarkers
+                    objects={analysis.edgeObjects}
                     transform={scene.transform}
-                    radius={markerRadius * 0.85}
+                    radius={markerRadius}
                     showBoxes={showBoxes}
-                    kinds={{
-                      removed: overlays.removed,
-                      added: overlays.added,
-                      modified: overlays.modified,
+                  />
+                )}
+                {edgesMode && overlays.risk && (analysis.riskRemovals?.length ?? 0) > 0 && (
+                  <RiskMarkers
+                    objects={analysis.riskRemovals}
+                    transform={scene.transform}
+                    radius={markerRadius}
+                    forceDelete={forceDelete}
+                    selectedIndex={selectedRiskObjectIndex}
+                    onSelect={(objectIndex) => {
+                      onSelectRiskObject?.(objectIndex);
                     }}
                   />
                 )}
-            </svg>
-          </div>
+                {showOverlayControls &&
+                  (overlays.removed || overlays.added || overlays.modified) && (
+                    <DiffMarkers
+                      changes={mapChanges}
+                      transform={scene.transform}
+                      radius={markerRadius * 0.85}
+                      showBoxes={showBoxes}
+                      kinds={{
+                        removed: overlays.removed,
+                        added: overlays.added,
+                        modified: overlays.modified,
+                      }}
+                    />
+                  )}
+              </svg>
+            </div>
+            <div className="absolute bottom-3 right-3 z-20 flex flex-col gap-1">
+              <button
+                type="button"
+                className={toolbarBtn}
+                aria-label="Zooma in"
+                onClick={() => adjustZoom(ZOOM_IN_FACTOR)}
+              >
+                +
+              </button>
+              <button
+                type="button"
+                className={toolbarBtn}
+                aria-label="Zooma ut"
+                onClick={() => adjustZoom(ZOOM_OUT_FACTOR)}
+              >
+                −
+              </button>
+              <button type="button" className={toolbarBtn} onClick={fitView}>
+                Passa
+              </button>
+            </div>
+            {edgesMode && (
+              <div className="absolute bottom-3 left-3 z-20 flex flex-wrap gap-1">
+                <button
+                  type="button"
+                  className={interactionMode === "navigate" ? toolbarBtnActive : toolbarBtn}
+                  onClick={() => setInteractionMode("navigate")}
+                >
+                  Navigera
+                </button>
+                <button
+                  type="button"
+                  className={drawing ? toolbarBtnActive : toolbarBtn}
+                  onClick={() => {
+                    setInteractionMode("draw");
+                    setDraftRing([]);
+                  }}
+                >
+                  Rita
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

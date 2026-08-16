@@ -8,6 +8,13 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-16",
+    title: "Zoom, panorering och polygonritning under Kanter",
+    items: [
+      "Under «Importera delkarta» → Kanter kan du zooma (+/−, scroll, nyp), panorera genom att dra, och rita importgränsen i ritläge",
+    ],
+  },
+  {
+    date: "2026-08-16",
     title: "Importkartan syns under Kanter",
     items: [
       "«Bara import» och jämförelseläget visar nu delkartans kartbild i samma utsnitt som grundkartan",
