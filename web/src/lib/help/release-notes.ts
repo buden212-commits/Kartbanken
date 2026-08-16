@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-16",
+    title: "Importgräns från symbol 1104.001",
+    items: [
+      "Om delkartan innehåller områdessymbol 1104.001 används den automatiskt som importgräns (i stället för bara den blå rektangeln)",
+      "Symbolen räknas inte som kartobjekt som ska läggas till i grundkartan",
+    ],
+  },
+  {
+    date: "2026-08-16",
     title: "Zoom, panorering och polygonritning under Kanter",
     items: [
       "Under «Importera delkarta» → Kanter kan du zooma (+/−, scroll, nyp), panorera genom att dra, och rita importgränsen i ritläge",

@@ -12,6 +12,9 @@ import type {
 import {
   IMPORT_RISK_ZONE_M,
   boundaryFromBbox,
+  boundaryFromImportAreaSymbol,
+  formatImportBoundarySymbolLabel,
+  isImportBoundarySymbolObject,
   objectCrossesBoundary,
   objectFullyInsideBoundary,
   objectInRiskZone,
@@ -29,8 +32,12 @@ export type {
 
 export {
   IMPORT_RISK_ZONE_M,
+  IMPORT_BOUNDARY_SYMBOL_NUM,
   boundaryFromBbox,
+  boundaryFromImportAreaSymbol,
   bboxToRing,
+  formatImportBoundarySymbolLabel,
+  isImportBoundarySymbolObject,
   objectCrossesBoundary,
   objectFullyInsideBoundary,
   objectInRiskZone,
@@ -178,11 +185,41 @@ export function analyzeImportPartial(input: {
   const headSymbolNums = new Set(input.head.symbolNums);
   const extent = bboxFromObjects(input.partial.objects);
   const headBounds = bboxFromTuple(input.head.bounds) ?? bboxFromObjects(input.head.objects);
-  const boundary = input.boundary ?? (extent ? boundaryFromBbox(extent) : boundaryFromBbox({ minX: 0, minY: 0, maxX: 0, maxY: 0 }));
+
+  const symbolBoundary = boundaryFromImportAreaSymbol(input.partial.objects);
+  let boundarySource: ImportPartialAnalysis["boundarySource"] = "extent";
+  let boundary: CheckoutSelectionGeometry;
+  if (input.boundary) {
+    boundary = input.boundary;
+    boundarySource = "manual";
+  } else if (symbolBoundary) {
+    boundary = symbolBoundary;
+    boundarySource = "symbol-1104.001";
+  } else {
+    boundary = extent
+      ? boundaryFromBbox(extent)
+      : boundaryFromBbox({ minX: 0, minY: 0, maxX: 0, maxY: 0 });
+    boundarySource = "extent";
+  }
   const boundaryBbox = bboxFromGeometry(boundary);
+
+  // Områdessymbolen är gräns, inte kartinnehåll som ska läggas till/ersättas.
+  const partialMapObjects = input.partial.objects.filter(
+    (object) => !isImportBoundarySymbolObject(object),
+  );
+
+  if (symbolBoundary) {
+    warnings.push(
+      `Importgräns från symbol ${formatImportBoundarySymbolLabel()} (områdespolygon i delkartan).`,
+    );
+  }
 
   if (!extent || input.partial.objects.length === 0) {
     blockers.push("Delkartan innehåller inga kartobjekt att importera.");
+  } else if (partialMapObjects.length === 0) {
+    blockers.push(
+      `Delkartan innehåller bara områdessymbol ${formatImportBoundarySymbolLabel()} — inga kartobjekt att importera.`,
+    );
   }
 
   const extentInsideHead =
@@ -197,7 +234,7 @@ export function analyzeImportPartial(input: {
   }
 
   const headUsed = usedSymbols(input.head.objects);
-  const partialUsed = usedSymbols(input.partial.objects);
+  const partialUsed = usedSymbols(partialMapObjects);
 
   const matched: ImportSymbolRow[] = [];
   const onlyInPartial: ImportSymbolRow[] = [];
@@ -248,7 +285,7 @@ export function analyzeImportPartial(input: {
     });
   }
 
-  const edgeSource = input.partial.objects;
+  const edgeSource = partialMapObjects;
   const edgeObjects: ImportEdgeObject[] = [];
   let interiorCount = 0;
   let likelyClippedCount = 0;
@@ -288,7 +325,7 @@ export function analyzeImportPartial(input: {
     : [];
   const diff = compareOcadObjects(
     baseline,
-    input.partial.objects,
+    partialMapObjects,
     { fileNameA: input.head.fileName, fileNameB: input.partial.fileName },
     { toleranceMeters: DIFF_TOLERANCE_M, matchByObjectIndex: false },
   );
@@ -360,6 +397,7 @@ export function analyzeImportPartial(input: {
   return {
     extent: extent ?? { minX: 0, minY: 0, maxX: 0, maxY: 0 },
     boundary,
+    boundarySource,
     riskZoneMeters: IMPORT_RISK_ZONE_M,
     extentInsideHead,
     headBounds,

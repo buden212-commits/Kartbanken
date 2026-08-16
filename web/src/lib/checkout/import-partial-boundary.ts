@@ -10,6 +10,16 @@ import type { NormalizedOcadObject } from "@/lib/ocad/types";
 /** Kantbuffert där auto-radering skyddas (meter). */
 export const IMPORT_RISK_ZONE_M = 40;
 
+/**
+ * OCAD-symbol 1104.001 — om den finns som yta i delkartan används den som importgräns.
+ * Lagras internt som 1104 * 1000 + 1.
+ */
+export const IMPORT_BOUNDARY_SYMBOL_NUM = 1104 * 1000 + 1;
+
+export function formatImportBoundarySymbolLabel(): string {
+  return "1104.001";
+}
+
 function objectIntersectsBbox(object: NormalizedOcadObject, bbox: Bbox): boolean {
   return (
     object.bbox[0] <= bbox.maxX &&
@@ -195,4 +205,54 @@ export function parseImportBoundary(value: unknown): CheckoutSelectionGeometry |
     return { type: CheckoutSelectionType.POLYGON, ring: normalized };
   }
   return null;
+}
+
+function ringSignedArea(ring: PolygonRing): number {
+  let sum = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const [x1, y1] = ring[i]!;
+    const [x2, y2] = ring[(i + 1) % ring.length]!;
+    sum += x1 * y2 - x2 * y1;
+  }
+  return sum / 2;
+}
+
+function closeRing(ring: PolygonRing): PolygonRing {
+  if (ring.length < 3) return ring;
+  const first = ring[0]!;
+  const last = ring[ring.length - 1]!;
+  if (first[0] === last[0] && first[1] === last[1]) return ring;
+  return [...ring, first];
+}
+
+/**
+ * Hitta områdesobjekt med symbol 1104.001 och returnera den största ytan som polygon.
+ */
+export function boundaryFromImportAreaSymbol(
+  objects: NormalizedOcadObject[],
+  symbolNum = IMPORT_BOUNDARY_SYMBOL_NUM,
+): CheckoutSelectionGeometry | null {
+  let best: { ring: PolygonRing; area: number } | null = null;
+
+  for (const object of objects) {
+    if (object.symbolNumber !== symbolNum) continue;
+    if (object.type !== "area" && object.type !== "line") continue;
+    const verts = object.vertices;
+    if (!verts || verts.length < 3) continue;
+    const ring = closeRing(verts.map(([x, y]) => [x, y] as [number, number]));
+    const area = Math.abs(ringSignedArea(ring));
+    if (!best || area > best.area) {
+      best = { ring, area };
+    }
+  }
+
+  if (!best || best.area <= 0) return null;
+  return { type: CheckoutSelectionType.POLYGON, ring: best.ring };
+}
+
+export function isImportBoundarySymbolObject(
+  object: NormalizedOcadObject,
+  symbolNum = IMPORT_BOUNDARY_SYMBOL_NUM,
+): boolean {
+  return object.symbolNumber === symbolNum;
 }

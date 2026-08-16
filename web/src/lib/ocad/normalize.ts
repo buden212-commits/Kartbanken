@@ -110,14 +110,51 @@ export function normalizeFromGeoJson(
       centroid: computeCentroid(coords),
       bbox: computeBbox(coords),
       geometryHash: hashGeometry(feature.geometry, symbolNumber, text),
-      ...(type === "line" && coords.length >= 2
-        ? { vertices: coords.map(([x, y]) => [x, y] as [number, number]) }
+      ...((type === "line" || type === "area") && coords.length >= 2
+        ? {
+            vertices: exteriorRingCoords(feature.geometry, coords).map(
+              ([x, y]) => [x, y] as [number, number],
+            ),
+          }
         : {}),
       text,
     });
   }
 
   return objects;
+}
+
+/** Yttre ring för polygon; annars alla tillplattade koordinater. */
+function exteriorRingCoords(geometry: Geometry, fallback: number[][]): number[][] {
+  if (geometry.type === "Polygon") {
+    const ring = geometry.coordinates[0];
+    return ring && ring.length >= 3 ? ring : fallback;
+  }
+  if (geometry.type === "MultiPolygon") {
+    let best: number[][] | null = null;
+    let bestArea = -1;
+    for (const polygon of geometry.coordinates) {
+      const ring = polygon[0];
+      if (!ring || ring.length < 3) continue;
+      const area = Math.abs(ringArea(ring));
+      if (area > bestArea) {
+        bestArea = area;
+        best = ring;
+      }
+    }
+    return best ?? fallback;
+  }
+  return fallback;
+}
+
+function ringArea(ring: number[][]): number {
+  let sum = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const [x1, y1] = ring[i]!;
+    const [x2, y2] = ring[(i + 1) % ring.length]!;
+    sum += x1 * y2 - x2 * y1;
+  }
+  return sum / 2;
 }
 
 export function summarizeParseResult(input: {

@@ -5,6 +5,7 @@ import {
   objectInRiskZone,
   objectIntersectsBoundary,
   boundaryFromBbox,
+  isImportBoundarySymbolObject,
 } from "./import-partial-boundary";
 import { compareOcadObjects } from "@/lib/ocad/diff";
 import type { OcadDiffResult, OcadObjectChange, SymbolDiffSummary } from "@/lib/ocad/diff-types";
@@ -213,6 +214,12 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
     );
   }
 
+  let checkinObjects = checkinSummary.objects;
+  if (importPartial) {
+    // Områdessymbol 1104.001 är importgräns, inte kartinnehåll.
+    checkinObjects = checkinObjects.filter((object) => !isImportBoundarySymbolObject(object));
+  }
+
   const emptyDiffInput = {
     headVersionId: headVersion.id,
     baseVersionId: checkout.baseVersionId,
@@ -221,28 +228,28 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
     fileNameA: exportSummary ? "checkout-export.ocd" : headVersion.originalFilename,
     fileNameB: "checkin-subset.ocd",
     objectCountA: baselineObjects.length,
-    objectCountB: checkinSummary.objects.length,
+    objectCountB: checkinObjects.length,
   };
 
   if (exportBuffer && buffersContentEqual(checkinBuffer, exportBuffer)) {
     return buildEmptyCheckoutSubsetDiff(emptyDiffInput);
   }
 
-  if (exportSummary && objectMultisetsEqual(baselineObjects, checkinSummary.objects)) {
+  if (exportSummary && objectMultisetsEqual(baselineObjects, checkinObjects)) {
     return buildEmptyCheckoutSubsetDiff(emptyDiffInput);
   }
 
   if (
     !exportSummary &&
     !headChangedSinceCheckoutDetailed &&
-    objectMultisetsEqual(baselineObjects, checkinSummary.objects)
+    objectMultisetsEqual(baselineObjects, checkinObjects)
   ) {
     return buildEmptyCheckoutSubsetDiff(emptyDiffInput);
   }
 
   const diff = compareOcadObjects(
     baselineObjects,
-    checkinSummary.objects,
+    checkinObjects,
     {
       fileNameA: emptyDiffInput.fileNameA,
       fileNameB: "checkin-subset.ocd",
@@ -254,7 +261,7 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
   if (
     diff.modified === 0 &&
     diff.added + diff.removed > 0 &&
-    objectMultisetsEqual(baselineObjects, checkinSummary.objects)
+    objectMultisetsEqual(baselineObjects, checkinObjects)
   ) {
     return buildEmptyCheckoutSubsetDiff(emptyDiffInput);
   }

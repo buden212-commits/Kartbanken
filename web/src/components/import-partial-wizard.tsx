@@ -311,9 +311,19 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
 
       {analysis && step === "extent" && (
         <p className="text-sm text-slate-600">
-          Blå ram är delkartans utbredning. Zooma och kontrollera att den ligger rätt. Fil:{" "}
-          <span className="font-medium">{fileName}</span>. I nästa steg kan du rita en egen polygon om
-          området inte är en rektangel.
+          {analysis.boundarySource === "symbol-1104.001" ? (
+            <>
+              Importgränsen kommer från områdessymbol <span className="font-medium">1104.001</span> i
+              delkartan (polygon). Kontrollera att den ligger rätt. Fil:{" "}
+              <span className="font-medium">{fileName}</span>.
+            </>
+          ) : (
+            <>
+              Blå ram är delkartans utbredning. Zooma och kontrollera att den ligger rätt. Fil:{" "}
+              <span className="font-medium">{fileName}</span>. I nästa steg kan du rita en egen
+              polygon om området inte är en rektangel — eller lägga till symbol 1104.001 i OCAD.
+            </>
+          )}
         </p>
       )}
 

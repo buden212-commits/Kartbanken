@@ -42,8 +42,10 @@ export type ImportRiskRemoval = {
 export type ImportPartialAnalysis = {
   /** Automatisk AABB från delkartans objekt (blå start-ram). */
   extent: Bbox;
-  /** Aktiv importgräns (AABB eller ritad polygon). */
+  /** Aktiv importgräns (AABB eller ritad/auto polygon). */
   boundary: CheckoutSelectionGeometry;
+  /** Hur gränsen valdes. */
+  boundarySource: "symbol-1104.001" | "extent" | "manual";
   riskZoneMeters: number;
   extentInsideHead: boolean;
   headBounds: Bbox | null;

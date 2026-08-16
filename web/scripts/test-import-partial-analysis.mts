@@ -9,6 +9,7 @@ import {
   objectCrossesBbox,
   padBbox,
 } from "../src/lib/checkout/import-partial-analysis";
+import { IMPORT_BOUNDARY_SYMBOL_NUM } from "../src/lib/checkout/import-partial-boundary";
 import type { NormalizedOcadObject, OcadParseSummary } from "../src/lib/ocad/types";
 
 function assert(condition: boolean, message: string): void {
@@ -202,6 +203,48 @@ const head = makeSummary("head.ocd", headObjects, [101, 102, 103], [0, 0, 1000, 
       (change) => change.changeType === "removed" && change.objectIndex === 3,
     ),
     "Korsande linje ska inte auto-raderas",
+  );
+}
+
+{
+  const head = makeSummary(
+    "head-b.ocd",
+    [makeObject(1, 101, [150, 150, 150, 150]), makeObject(2, 101, [50, 50, 50, 50])],
+    [101],
+    [0, 0, 1000, 1000],
+  );
+  const partialWithFrame = makeSummary(
+    "partial-frame.ocd",
+    [
+      makeObject(1, 101, [150, 150, 150, 150]),
+      makeObject(99, IMPORT_BOUNDARY_SYMBOL_NUM, [100, 100, 200, 200], {
+        type: "area",
+        vertices: [
+          [100, 100],
+          [200, 100],
+          [200, 200],
+          [100, 200],
+          [100, 100],
+        ],
+      }),
+    ],
+    [101, IMPORT_BOUNDARY_SYMBOL_NUM],
+  );
+  const analysis = analyzeImportPartial({ head, partial: partialWithFrame });
+  assert(analysis.boundarySource === "symbol-1104.001", "Gräns från 1104.001");
+  assert(analysis.boundary.type === "POLYGON", "Gräns är polygon");
+  assert(
+    !analysis.diff.mapChanges.some(
+      (change) => change.changeType === "added" && change.objectIndex === 99,
+    ),
+    "Områdessymbolen ska inte räknas som tillagt kartobjekt",
+  );
+  // Punkt 2 ligger utanför polygon 100–200 → ska inte raderas
+  assert(
+    !analysis.diff.mapChanges.some(
+      (change) => change.changeType === "removed" && change.objectIndex === 2,
+    ),
+    "Objekt utanför 1104.001-polygonen ska inte auto-raderas",
   );
 }
 
