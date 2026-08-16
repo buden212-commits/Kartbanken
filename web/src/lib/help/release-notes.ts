@@ -8,106 +8,41 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-16",
-    title: "Importgräns från symbol 1104.001",
+    title: "Importera delkarta — riskzon, lagerjämförelse och gräns",
     items: [
-      "Om delkartan innehåller områdessymbol 1104.001 används den automatiskt som importgräns (i stället för bara den blå rektangeln)",
-      "Symbolen räknas inte som kartobjekt som ska läggas till i grundkartan",
+      "Om delkartan har områdessymbol 1104.001 används den automatiskt som importgräns (annars blå rektangel); symbolen läggs inte till i grundkartan",
+      "Under Kanter: grundkarta och importkarta ovanpå varandra — opacitet, svep, «Bara grund» / «Bara import»",
+      "Zooma (+/−, scroll, nyp), panorera genom att dra, och rita polygon i ritläge (eller återställ blå ram)",
+      "Objekt inom 40 m från gränsen raderas inte automatiskt — granska listan och välj behåll/radera; valen följer med till admin-integrationen",
+      "Växla mellan hela kartan och bara berörda objekt; visa raderas / nya / ändrade",
+      "Steget «Bekräfta» fungerar även för stora områden (t.ex. Mora Väst)",
     ],
   },
   {
     date: "2026-08-16",
-    title: "Zoom, panorering och polygonritning under Kanter",
+    title: "Jämför versioner",
     items: [
-      "Under «Importera delkarta» → Kanter kan du zooma (+/−, scroll, nyp), panorera genom att dra, och rita importgränsen i ritläge",
+      "Kartan zooma till objekt bara när du klickar i listan eller på objektet — inte automatiskt tillbaka till ~1:500 medan du zooma/panorera",
+      "Spinner, förfluten tid och stegstatus (ladda filer, parsa, beräkna diff)",
+      "Jämförelsen startas inte om vid varje uppdatering (kunde få stora kartor att fastna); «Starta om jämförelse» om det ändå hänger",
     ],
   },
   {
     date: "2026-08-16",
-    title: "Importkartan syns under Kanter",
+    title: "Admin-integration",
     items: [
-      "«Bara import» och jämförelseläget visar nu delkartans kartbild i samma utsnitt som grundkartan",
+      "Tydligare fel: vilket steg som gick fel, tips och mer detaljer",
+      "«Bekräfta och integrera» ger inte längre falskt fel när versionen redan sparats — kartbild skapas i bakgrunden",
+      "Stora utcheckningar (t.ex. många tillagda objekt) använder mindre minne och valideras lättare",
+      "Om ett fel visas: ladda om och kontrollera om utcheckningen redan är integrerad",
     ],
   },
   {
     date: "2026-08-16",
-    title: "Importera delkarta: riskzon, jämförelselager och egen gräns",
+    title: "Stora kartor (t.ex. Mora Väst)",
     items: [
-      "Under Kanter visas grundkartan nedtonad med importkartan ovanpå — justera opacitet eller svep mellan lagren",
-      "Objekt inom 40 m från importgränsen raderas inte automatiskt; granska listan och välj per objekt om det ska raderas",
-      "Du kan rita en polygon för att förtydliga importgränsen (eller återställa den blå ramen)",
-      "Valen i riskzonen följer med oförändrade till admin-integrationen",
-    ],
-  },
-  {
-    date: "2026-08-16",
-    title: "Kartzoom vid jämförelse",
-    items: [
-      "Under «Jämför versioner» (och liknande kartvyer) zoomas kartan till objektet bara när du klickar i listan eller på objektet — inte automatiskt tillbaka till skala ~1:500 medan du zooma/panorera",
-    ],
-  },
-  {
-    date: "2026-08-16",
-    title: "Jämför versioner: stegstatus och omstart",
-    items: [
-      "Under «Jämför versioner» visas vilket steg som pågår (ladda filer, parsa, beräkna diff)",
-      "Jämförelsen startas inte om vid varje uppdatering — det kunde få stora kartor att fastna",
-      "Om det ändå hänger: «Starta om jämförelse»",
-    ],
-  },
-  {
-    date: "2026-08-16",
-    title: "Spinner vid jämförelse av versioner",
-    items: [
-      "När «Jämför versioner» arbetar visas en spinner och förfluten tid, så det syns att sidan inte hängt sig",
-    ],
-  },
-  {
-    date: "2026-08-16",
-    title: "Admin-integration av stora utcheckningar",
-    items: [
-      "«Bekräfta och integrera» ska inte längre ge falskt fel när versionen redan sparats — kartbild skapas i bakgrunden",
-      "Sammanslagning av många tillagda objekt (t.ex. importerad delkarta) använder mindre minne",
-      "Om ett fel visas: ladda om sidan och kontrollera om utcheckningen redan är integrerad",
-    ],
-  },
-  {
-    date: "2026-08-16",
-    title: "Tydligare fel vid admin-integration",
-    items: [
-      "Om «Bekräfta och integrera» misslyckas visas vilket steg som gick fel, tips och mer detaljer i stället för bara «Integration misslyckades»",
-      "Integrering av stora kartor (t.ex. Mora Väst) valideras lättare så den inte lika lätt kraschar mitt i processen",
-    ],
-  },
-  {
-    date: "2026-08-16",
-    title: "Importera delkarta: tydligare kartvy i Kanter",
-    items: [
-      "I steget «Kanter» (och «Ändringar») kan du växla mellan hela kartan och bara berörda objekt",
-      "Du kan visa objekt som raderas i originalkartan tillsammans med nya och ändrade/ersatta objekt från delkartan",
-    ],
-  },
-  {
-    date: "2026-08-16",
-    title: "Importera delkarta: bekräfta fungerar på stora kartor",
-    items: [
-      "Steget «Bekräfta» i Importera delkarta slutförs nu även för stora områden (t.ex. Mora Väst) i stället för att stanna med ett tekniskt fel",
-      "Det kan fortfarande ta en stund — vänta tills utcheckningen öppnas",
-    ],
-  },
-  {
-    date: "2026-08-16",
-    title: "Mora Väst går att öppna efter uppladdning",
-    items: [
-      "Uppladdade stora kartor (t.ex. Mora_Väst_med_VenjanKos12.ocd) fastnade tidigare på «Parsar…» utan kartbild — det är åtgärdat",
-      "Kartbilden skapas mer tillförlitligt för stora filer, så området går att öppna och titta på",
-    ],
-  },
-  {
-    date: "2026-08-16",
-    title: "Stora kartor som Mora Väst går att öppna",
-    items: [
-      "Kartbilden för stora filer (ca 30 MB SVG) hämtas direkt från lagringen med tillfällig länk — den stoppas inte längre av serverns storleksgräns",
-      "Öppna området eller «Visa karta» och vänta tills kartan ritas (kan ta en stund första gången)",
+      "Uppladdade stora kartor ska inte längre fastna på «Parsar…» utan kartbild",
+      "Kartbilden hämtas tillförlitligare (bl.a. direktlänk från lagringen) så området går att öppna",
     ],
   },
   {
