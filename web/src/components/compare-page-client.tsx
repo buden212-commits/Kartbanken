@@ -8,6 +8,7 @@ import type { OcadObjectChange } from "@/lib/ocad/diff-types";
 import {
   VERSION_DIFF_STEPS,
   VERSION_DIFF_STALE_MS,
+  isVersionDiffProgressStale,
   versionDiffStepIndex,
   versionDiffStepLabel,
   type VersionDiffProgress,
@@ -49,8 +50,9 @@ type Props = {
 const STEP_HINTS: Record<VersionDiffProgressStep, string> = {
   queued: "Jobbet väntar på att starta på servern.",
   parse_versions: "Kontrollerar att båda versionerna är parsade (utan att rita kartbild).",
-  load_files: "Hämtar .ocd-filerna från lagringen.",
-  parse_objects: "Läser alla kartobjekt ur filerna — ofta det längsta steget.",
+  load_files: "Hämtar .ocd-filerna från lagringen (ska normalt ta sekunder).",
+  parse_objects:
+    "Hämtar filerna (sekunder) och parsar kartobjekt (ofta det längsta steget på stora kartor).",
   compute_diff: "Matchar objekt och räknar tillagda, borttagna och ändrade.",
   save: "Sparar resultatet så sidan kan visa diffen.",
   layers: "Skapar kartlager för tillagda/borttagna/ändrade objekt.",
@@ -170,8 +172,9 @@ export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
   const looksStale =
     data?.status === "processing" &&
     (data.stale ||
+      isVersionDiffProgressStale(progress, "PROCESSING") ||
       (sinceUpdateSec !== null && sinceUpdateSec * 1000 >= staleAfterMs) ||
-      elapsedSec * 1000 >= staleAfterMs);
+      elapsedSec * 1000 >= VERSION_DIFF_STALE_MS);
 
   const canRetry =
     (data?.status === "processing" && (looksStale || data.canRetry)) ||
@@ -240,9 +243,9 @@ export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
                 {sinceUpdateSec < 5 ? "nyss" : `för ${formatElapsed(sinceUpdateSec)} sedan`}
                 {sinceUpdateSec < 45
                   ? " (servern arbetar fortfarande)"
-                  : sinceUpdateSec < 120
-                    ? " — fortfarande normalt under parsning"
-                    : ""}
+                  : sinceUpdateSec < 90
+                    ? " — om hämtning fastnat startas jobbet om automatiskt"
+                    : " — parsning kan vara tyst en stund (CPU)"}
               </p>
             )}
           </div>

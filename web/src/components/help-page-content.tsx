@@ -649,10 +649,12 @@ export async function HelpPageContent() {
           </p>
 
           <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
-            Stora kartfiler (t.ex. Mora Väst) kan ta flera minuter — ibland 5–15 minuter — att
-            parsa och jämföra. Under tiden visar sidan en checklista med aktuellt steg, förklaring,
-            förfluten tid och när servern senast uppdaterade status. Sidan uppdateras automatiskt.
-            Om statusen slutar uppdateras: använd <strong>Starta om jämförelse</strong>.
+            Stora kartfiler (t.ex. Mora Väst) kan ta flera minuter — ibland 5–15 minuter — mest
+            under <strong>Laddar och parsar</strong> (själva filhämtningen ska bara ta sekunder).
+            Under tiden visar sidan checklista, delstatus, förfluten tid och senaste
+            statusuppdatering. Om hämtningen fastnar startas jobbet om automatiskt. Sidan
+            uppdateras automatiskt. Om statusen ändå slutar uppdateras: använd{" "}
+            <strong>Starta om jämförelse</strong>.
           </p>
           <HelpProcessDiagram title="Flöde — jämföra versioner" chart={compareFlow} />
         </HelpSection>
@@ -1010,10 +1012,10 @@ export async function HelpPageContent() {
             <div>
               <h3 className="font-medium text-slate-900">Jämförelsen tar lång tid</h3>
               <p className="mt-1">
-                Det är normalt för stora kartor. En checklista visar aktuellt steg (förbereda
-                versioner, ladda filer, parsa objekt, beräkna diff, spara) plus förfluten tid och
-                senaste statusuppdatering. Sidan uppdateras automatiskt. Om det verkar ha fastnat:
-                använd «Starta om jämförelse».
+                Det är normalt för stora kartor under «Laddar och parsar» och «Beräknar
+                skillnader». Filhämtning ska bara ta sekunder; själva parsningen kan ta flera
+                minuter. Checklistan visar delstatus (hämtar/parsar v1 och v2). Om hämtningen
+                fastnar startas jobbet om automatiskt. Annars: «Starta om jämförelse».
               </p>
             </div>
             <div>

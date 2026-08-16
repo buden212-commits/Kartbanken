@@ -9,6 +9,7 @@ import {
 import { parseOcadBuffer } from "./read";
 import { buildPreviewSvgPath, generateAndStorePreviewSvg } from "./svg";
 import {
+  isVersionDiffProgressStale,
   parseVersionDiffProgress,
   VERSION_DIFF_HEARTBEAT_MS,
   VERSION_DIFF_STALE_MS,
@@ -22,7 +23,9 @@ import { prisma } from "@/lib/prisma";
 import { randomUUID } from "crypto";
 
 export {
+  isVersionDiffProgressStale,
   parseVersionDiffProgress,
+  VERSION_DIFF_SOFT_STALE_MS,
   VERSION_DIFF_STALE_MS,
   VERSION_DIFF_STEPS,
   versionDiffStepIndex,
@@ -32,6 +35,35 @@ export {
 } from "./version-diff-progress";
 
 const TOLERANCE = Number(process.env.DIFF_SPATIAL_TOLERANCE_M ?? 2);
+/** En 21 MB-fil från Blob ska normalt ta sekunder — inte minuter. */
+const FILE_READ_TIMEOUT_MS = 90_000;
+
+async function readStoredFileWithTimeout(
+  storagePath: string,
+  label: string,
+): Promise<Buffer> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      readStoredFile(storagePath),
+      new Promise<Buffer>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(
+            new Error(
+              `Timeout vid hämtning av ${label} (${Math.round(FILE_READ_TIMEOUT_MS / 1000)} s). Försök igen.`,
+            ),
+          );
+        }, FILE_READ_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function yieldEventLoop(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
 
 async function writeVersionDiffProgress(
   mapFileId: string,
@@ -106,7 +138,8 @@ function startProgressHeartbeat(
 
 /**
  * Startar jämförelse i bakgrunden högst en gång. Undviker att varje poll
- * startar om tung parsning (OOM-dödsspiral på stora kartor).
+ * startar om tung parsning (OOM-dödsspiral på stora kartor). Startar om om
+ * I/O-steg slutat hjärtklappa (after() dog) eller vid lång hard-stale.
  */
 export async function scheduleVersionCompare(
   mapFileId: string,
@@ -128,13 +161,13 @@ export async function scheduleVersionCompare(
   }
 
   const progress = parseVersionDiffProgress(existing?.summaryJson);
-  const anchor = progress?.updatedAt
-    ? new Date(progress.updatedAt).getTime()
-    : (existing?.createdAt.getTime() ?? 0);
-  const ageMs = anchor > 0 ? Date.now() - anchor : Number.POSITIVE_INFINITY;
-  const stale = existing?.status === "PROCESSING" && ageMs >= VERSION_DIFF_STALE_MS;
+  const stale = isVersionDiffProgressStale(progress, existing?.status);
 
-  if (existing?.status === "PROCESSING" && !stale && !options?.force) {
+  if (
+    (existing?.status === "PROCESSING" || existing?.status === "PENDING") &&
+    !stale &&
+    !options?.force
+  ) {
     return { started: false, progress, stale: false };
   }
 
@@ -144,7 +177,7 @@ export async function scheduleVersionCompare(
     step: "queued",
     label: versionDiffStepLabel("queued"),
     detail: stale
-      ? "Föregående försök verkade ha fastnat — startar om med nytt jobb-id."
+      ? "Föregående försök verkade ha fastnat (ingen statusuppdatering) — startar om."
       : "Startar jämförelse…",
     updatedAt: startedAt,
     startedAt,
@@ -357,26 +390,10 @@ export async function computeVersionDiff(
       );
     }
 
-    currentStep = "load_files";
-    currentDetail = `${Math.round(versionA.fileSizeBytes / 1_000_000)} MB + ${Math.round(versionB.fileSizeBytes / 1_000_000)} MB`;
-    await writeVersionDiffProgress(
-      mapFileId,
-      versionAId,
-      versionBId,
-      { step: "load_files", detail: currentDetail, startedAt, runId },
-      { requireRunId: runId },
-    );
-
-    const [bufferA, bufferB] = await Promise.all([
-      readStoredFile(versionA.storagePath),
-      readStoredFile(versionB.storagePath),
-    ]);
-
     currentStep = "parse_objects";
-    currentDetail =
-      freshA?.objectCount && freshB?.objectCount
-        ? `Ca ${freshA.objectCount.toLocaleString("sv-SE")} + ${freshB.objectCount.toLocaleString("sv-SE")} objekt — kan ta flera minuter.`
-        : "Detta kan ta flera minuter på stora kartor.";
+    const sizeA = Math.round(versionA.fileSizeBytes / 1_000_000);
+    const sizeB = Math.round(versionB.fileSizeBytes / 1_000_000);
+    currentDetail = `Hämtar v${versionA.versionNumber} (${sizeA} MB)…`;
     await writeVersionDiffProgress(
       mapFileId,
       versionAId,
@@ -385,10 +402,57 @@ export async function computeVersionDiff(
       { requireRunId: runId },
     );
 
-    const [summaryA, summaryB] = await Promise.all([
-      parseOcadBuffer(bufferA, versionA.originalFilename),
-      parseOcadBuffer(bufferB, versionB.originalFilename),
-    ]);
+    const bufferA = await readStoredFileWithTimeout(
+      versionA.storagePath,
+      `v${versionA.versionNumber}`,
+    );
+    await yieldEventLoop();
+
+    currentDetail = `Hämtar v${versionB.versionNumber} (${sizeB} MB)…`;
+    await writeVersionDiffProgress(
+      mapFileId,
+      versionAId,
+      versionBId,
+      { step: "parse_objects", detail: currentDetail, startedAt, runId },
+      { requireRunId: runId },
+    );
+
+    const bufferB = await readStoredFileWithTimeout(
+      versionB.storagePath,
+      `v${versionB.versionNumber}`,
+    );
+    await yieldEventLoop();
+
+    const objectHint =
+      freshA?.objectCount && freshB?.objectCount
+        ? `Ca ${freshA.objectCount.toLocaleString("sv-SE")} + ${freshB.objectCount.toLocaleString("sv-SE")} objekt`
+        : "Kartobjekten";
+
+    currentDetail = `${objectHint} — parsar v${versionA.versionNumber} (kan ta flera minuter)…`;
+    await writeVersionDiffProgress(
+      mapFileId,
+      versionAId,
+      versionBId,
+      { step: "parse_objects", detail: currentDetail, startedAt, runId },
+      { requireRunId: runId },
+    );
+    await yieldEventLoop();
+
+    const summaryA = await parseOcadBuffer(bufferA, versionA.originalFilename);
+    await yieldEventLoop();
+
+    currentDetail = `${objectHint} — parsar v${versionB.versionNumber} (kan ta flera minuter)…`;
+    await writeVersionDiffProgress(
+      mapFileId,
+      versionAId,
+      versionBId,
+      { step: "parse_objects", detail: currentDetail, startedAt, runId },
+      { requireRunId: runId },
+    );
+    await yieldEventLoop();
+
+    const summaryB = await parseOcadBuffer(bufferB, versionB.originalFilename);
+    await yieldEventLoop();
 
     currentStep = "compute_diff";
     currentDetail = `${summaryA.objectCount.toLocaleString("sv-SE")} → ${summaryB.objectCount.toLocaleString("sv-SE")} objekt`;
