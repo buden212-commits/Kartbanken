@@ -5,14 +5,23 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { DiffViewClient, type DiffSummary, type LayerPaths } from "@/components/diff-view-client";
 import type { OcadObjectChange } from "@/lib/ocad/diff-types";
+import type { VersionDiffProgress } from "@/lib/ocad/version-diff-progress";
 
 type CompareResponse =
   | {
       status: "processing";
       versionA: { id: string; versionNumber: number };
       versionB: { id: string; versionNumber: number };
+      progress?: VersionDiffProgress | null;
+      stale?: boolean;
+      canRetry?: boolean;
     }
-  | { status: "error"; error: string }
+  | {
+      status: "error";
+      error: string;
+      progress?: VersionDiffProgress | null;
+      canRetry?: boolean;
+    }
   | {
       status: "ok";
       versionA: { id: string; versionNumber: number; fileName: string };
@@ -51,6 +60,7 @@ export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
   const [data, setData] = useState<CompareResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [elapsedSec, setElapsedSec] = useState(0);
+  const [retrying, setRetrying] = useState(false);
 
   const fetchCompare = useCallback(async () => {
     const res = await fetch(`/api/maps/${mapSlug}/compare?v1=${v1}&v2=${v2}`);
@@ -85,6 +95,26 @@ export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
     return () => clearInterval(timer);
   }, [loading, data?.status]);
 
+  async function retryCompare() {
+    setRetrying(true);
+    setLoading(true);
+    try {
+      await fetch(`/api/maps/${mapSlug}/compare`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ v1, v2, force: true }),
+      });
+      await fetchCompare();
+    } finally {
+      setRetrying(false);
+    }
+  }
+
+  const progress = data && "progress" in data ? data.progress : null;
+  const canRetry =
+    (data?.status === "processing" && (data.stale || data.canRetry || elapsedSec >= 8 * 60)) ||
+    (data?.status === "error" && data.canRetry !== false);
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
       <Link href={`/maps/${mapSlug}`} className="link-muted text-sm">
@@ -115,30 +145,56 @@ export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
           <p className="mt-4 font-medium text-amber-800">
             Jämför v{data.versionA.versionNumber} → v{data.versionB.versionNumber}…
           </p>
-          <p className="mt-2 text-sm text-slate-600">
-            Parsar OCAD-filer, beräknar diff och skapar kartlager. Sidan uppdateras automatiskt.
-          </p>
+          {progress ? (
+            <div className="mx-auto mt-3 max-w-md rounded-lg border border-amber-200/80 bg-white/70 px-3 py-2 text-left text-sm text-slate-700">
+              <p>
+                <span className="font-medium text-amber-900">Steg:</span> {progress.label}
+              </p>
+              {progress.detail && <p className="mt-1 text-slate-600">{progress.detail}</p>}
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-slate-600">
+              Parsar OCAD-filer, beräknar diff och skapar kartlager. Sidan uppdateras automatiskt.
+            </p>
+          )}
           <p className="mt-3 text-xs text-amber-900/80">
             Förfluten tid: {formatElapsed(elapsedSec)}
             {elapsedSec >= 60
               ? " — stora kartor (t.ex. Mora Väst) kan ta flera minuter."
               : ""}
           </p>
+          {(data.stale || elapsedSec >= 8 * 60) && (
+            <p className="mt-3 text-sm text-amber-950">
+              Det verkar ha fastnat. Starta om jämförelsen — endast ett jobb körs åt gången.
+            </p>
+          )}
+          {canRetry && (
+            <button
+              type="button"
+              disabled={retrying}
+              onClick={() => void retryCompare()}
+              className="mt-4 rounded-lg border border-amber-400 bg-white px-4 py-2 text-sm font-medium text-amber-950 hover:bg-amber-100 disabled:opacity-50"
+            >
+              {retrying ? "Startar om…" : "Starta om jämförelse"}
+            </button>
+          )}
         </div>
       )}
 
       {data?.status === "error" && (
         <div className="mt-10 rounded-xl border border-red-200 bg-red-50 p-6 text-red-800">
-          <p>{data.error}</p>
+          <p className="font-medium">Jämförelsen misslyckades</p>
+          <p className="mt-2 whitespace-pre-wrap text-sm">{data.error}</p>
+          {progress?.label && (
+            <p className="mt-2 text-sm text-red-700">Senaste steg: {progress.label}</p>
+          )}
           <button
             type="button"
-            onClick={() => {
-              setLoading(true);
-              void fetchCompare();
-            }}
-            className="mt-4 rounded-lg border border-red-300 px-4 py-2 text-sm transition hover:bg-red-100"
+            disabled={retrying}
+            onClick={() => void retryCompare()}
+            className="mt-4 rounded-lg border border-red-300 px-4 py-2 text-sm transition hover:bg-red-100 disabled:opacity-50"
           >
-            Försök igen
+            {retrying ? "Startar om…" : "Försök igen"}
           </button>
         </div>
       )}

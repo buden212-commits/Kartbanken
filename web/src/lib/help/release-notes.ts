@@ -8,6 +8,15 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-16",
+    title: "Jämför versioner: stegstatus och omstart",
+    items: [
+      "Under «Jämför versioner» visas vilket steg som pågår (ladda filer, parsa, beräkna diff)",
+      "Jämförelsen startas inte om vid varje uppdatering — det kunde få stora kartor att fastna",
+      "Om det ändå hänger: «Starta om jämförelse»",
+    ],
+  },
+  {
+    date: "2026-08-16",
     title: "Spinner vid jämförelse av versioner",
     items: [
       "När «Jämför versioner» arbetar visas en spinner och förfluten tid, så det syns att sidan inte hängt sig",

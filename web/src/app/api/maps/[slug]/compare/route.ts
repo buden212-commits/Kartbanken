@@ -5,7 +5,9 @@ import { assertVersionViewAccess } from "@/lib/maps/version-lookup";
 import {
   computeVersionDiff,
   ensureDiffLayers,
-  processVersionAfterUpload,
+  parseVersionDiffProgress,
+  scheduleVersionCompare,
+  VERSION_DIFF_STALE_MS,
 } from "@/lib/ocad/process-version";
 import type { OcadObjectChange } from "@/lib/ocad/diff-types";
 import { prisma } from "@/lib/prisma";
@@ -21,6 +23,26 @@ type CompareResponseLayerPaths = {
   modified: string;
   bounds: { minX: number; minY: number; maxX: number; maxY: number };
 };
+
+function processingPayload(
+  versionA: { id: string; versionNumber: number },
+  versionB: { id: string; versionNumber: number },
+  opts: {
+    progress: ReturnType<typeof parseVersionDiffProgress>;
+    stale: boolean;
+    canRetry: boolean;
+  },
+) {
+  return {
+    status: "processing" as const,
+    versionA: { id: versionA.id, versionNumber: versionA.versionNumber },
+    versionB: { id: versionB.id, versionNumber: versionB.versionNumber },
+    progress: opts.progress,
+    stale: opts.stale,
+    canRetry: opts.canRetry,
+    staleAfterMs: VERSION_DIFF_STALE_MS,
+  };
+}
 
 export async function GET(request: Request, { params }: RouteParams) {
   const session = await requireSession();
@@ -72,12 +94,45 @@ export async function GET(request: Request, { params }: RouteParams) {
   });
 
   if (!diffRecord || diffRecord.status === "PENDING" || diffRecord.status === "PROCESSING") {
-    runAfterResponse(() => processVersionAfterUpload(map.id, v2, v1));
-    return NextResponse.json({
-      status: "processing",
-      versionA: { id: versionA.id, versionNumber: versionA.versionNumber },
-      versionB: { id: versionB.id, versionNumber: versionB.versionNumber },
+    const scheduled = await scheduleVersionCompare(map.id, v1, v2);
+    if (scheduled.started) {
+      runAfterResponse(async () => {
+        try {
+          await computeVersionDiff(map.id, v1, v2);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Diff misslyckades";
+          console.error("Compare background job failed:", err);
+          await prisma.versionDiff.update({
+            where: { versionAId_versionBId: { versionAId: v1, versionBId: v2 } },
+            data: {
+              status: "ERROR",
+              summaryJson: JSON.stringify({
+                error: message,
+                progress: {
+                  step: "compute_diff",
+                  label: "Misslyckades",
+                  detail: message,
+                  updatedAt: new Date().toISOString(),
+                },
+              }),
+            },
+          });
+        }
+      });
+    }
+
+    diffRecord = await prisma.versionDiff.findUnique({
+      where: { versionAId_versionBId: { versionAId: v1, versionBId: v2 } },
     });
+
+    const progress = parseVersionDiffProgress(diffRecord?.summaryJson) ?? scheduled.progress;
+    return NextResponse.json(
+      processingPayload(versionA, versionB, {
+        progress,
+        stale: scheduled.stale,
+        canRetry: scheduled.stale || diffRecord?.status === "ERROR",
+      }),
+    );
   }
 
   if (diffRecord.status === "ERROR") {
@@ -85,6 +140,8 @@ export async function GET(request: Request, { params }: RouteParams) {
     return NextResponse.json({
       status: "error",
       error: errorInfo.error ?? "Diff misslyckades",
+      progress: parseVersionDiffProgress(diffRecord.summaryJson),
+      canRetry: true,
     });
   }
 
@@ -97,11 +154,13 @@ export async function GET(request: Request, { params }: RouteParams) {
         where: { versionAId_versionBId: { versionAId: v1, versionBId: v2 } },
       });
       if (!diffRecord || diffRecord.status !== "OK") {
-        return NextResponse.json({
-          status: "processing",
-          versionA: { id: versionA.id, versionNumber: versionA.versionNumber },
-          versionB: { id: versionB.id, versionNumber: versionB.versionNumber },
-        });
+        return NextResponse.json(
+          processingPayload(versionA, versionB, {
+            progress: parseVersionDiffProgress(diffRecord?.summaryJson),
+            stale: false,
+            canRetry: false,
+          }),
+        );
       }
       summary = JSON.parse(diffRecord.summaryJson!) as Record<string, unknown>;
     } catch (recomputeErr) {
@@ -110,11 +169,13 @@ export async function GET(request: Request, { params }: RouteParams) {
   }
 
   if (!diffRecord || diffRecord.status !== "OK") {
-    return NextResponse.json({
-      status: "processing",
-      versionA: { id: versionA.id, versionNumber: versionA.versionNumber },
-      versionB: { id: versionB.id, versionNumber: versionB.versionNumber },
-    });
+    return NextResponse.json(
+      processingPayload(versionA, versionB, {
+        progress: parseVersionDiffProgress(diffRecord?.summaryJson),
+        stale: false,
+        canRetry: true,
+      }),
+    );
   }
 
   const changes = JSON.parse(diffRecord.changesJson ?? "[]") as OcadObjectChange[];
@@ -158,6 +219,7 @@ export async function POST(request: Request, { params }: RouteParams) {
   const body = await request.json().catch(() => ({}));
   const v1 = body.v1 as string | undefined;
   const v2 = body.v2 as string | undefined;
+  const force = body.force === true;
 
   if (!v1 || !v2) {
     return NextResponse.json({ error: "Ange v1 och v2" }, { status: 400 });
@@ -169,8 +231,36 @@ export async function POST(request: Request, { params }: RouteParams) {
   }
 
   try {
-    await computeVersionDiff(map.id, v1, v2);
-    return NextResponse.json({ status: "ok" });
+    const scheduled = await scheduleVersionCompare(map.id, v1, v2, { force: force || true });
+    if (scheduled.started) {
+      runAfterResponse(async () => {
+        try {
+          await computeVersionDiff(map.id, v1, v2);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Diff misslyckades";
+          await prisma.versionDiff.update({
+            where: { versionAId_versionBId: { versionAId: v1, versionBId: v2 } },
+            data: {
+              status: "ERROR",
+              summaryJson: JSON.stringify({
+                error: message,
+                progress: {
+                  step: "compute_diff",
+                  label: "Misslyckades",
+                  detail: message,
+                  updatedAt: new Date().toISOString(),
+                },
+              }),
+            },
+          });
+        }
+      });
+    }
+    return NextResponse.json({
+      status: "processing",
+      started: scheduled.started,
+      progress: scheduled.progress,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Diff misslyckades";
     return NextResponse.json({ error: message }, { status: 500 });
