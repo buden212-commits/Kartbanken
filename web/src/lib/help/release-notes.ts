@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-16",
+    title: "Importera delkarta: bekräfta fungerar på stora kartor",
+    items: [
+      "Steget «Bekräfta» i Importera delkarta slutförs nu även för stora områden (t.ex. Mora Väst) i stället för att stanna med ett tekniskt fel",
+      "Det kan fortfarande ta en stund — vänta tills utcheckningen öppnas",
+    ],
+  },
+  {
+    date: "2026-08-16",
     title: "Mora Väst går att öppna efter uppladdning",
     items: [
       "Uppladdade stora kartor (t.ex. Mora_Väst_med_VenjanKos12.ocd) fastnade tidigare på «Parsar…» utan kartbild — det är åtgärdat",

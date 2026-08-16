@@ -17,8 +17,9 @@ import {
 import { generateCheckoutExport } from "@/lib/checkout/create-checkout";
 import { scheduleCheckoutSubsetDiff } from "@/lib/checkout/diff-status";
 import { CheckoutSelectionType, CheckoutStatus } from "@/lib/checkout/types";
-import { parseOcadBuffer } from "@/lib/ocad/read";
+import { readOcadHeaderVersion } from "@/lib/ocad/ocad-export-server";
 import { normalizeSourceVersion } from "@/lib/ocad/ocad-export-shared";
+import { parseOcadBuffer } from "@/lib/ocad/read";
 import { prisma } from "@/lib/prisma";
 import {
   buildCheckoutCheckinPath,
@@ -228,14 +229,11 @@ export async function commitImportPartialJob(input: {
 
   const geometry = checkoutGeometryFromAnalysis(job.analysis);
   const importExtent = importExtentFromAnalysis(job.analysis);
-  const headBuffer = await readStoredFile(headVersion.storagePath);
-  const headSummary = await parseOcadBuffer(headBuffer, headVersion.originalFilename);
+  // Skip full head parse here: generateCheckoutExport/crop fills objectIds, and overlap
+  // against active checkouts uses geometry (bbox). Double-parsing Mora-sized maps OOMs.
   const selection = {
     geometry,
-    objectIds: objectIdsFromSelection(headSummary.objects, {
-      type: CheckoutSelectionType.BBOX,
-      bbox: importExtent,
-    }),
+    objectIds: [] as string[],
     importPartial: true as const,
     importExtent,
   };
@@ -250,7 +248,8 @@ export async function commitImportPartialJob(input: {
     );
   }
 
-  const sourceVersion = normalizeSourceVersion(headSummary.ocadVersion);
+  const headBuffer = await readStoredFile(headVersion.storagePath);
+  const sourceVersion = normalizeSourceVersion(readOcadHeaderVersion(headBuffer));
   const exportOcadVersion =
     sourceVersion === 10 || sourceVersion === 11 || sourceVersion === 18 ? sourceVersion : 12;
 
@@ -270,6 +269,7 @@ export async function commitImportPartialJob(input: {
       headVersionId,
       selection,
       exportOcadVersion,
+      { sourceBuffer: headBuffer },
     );
 
     const partialBuffer = await readStoredFile(importPartialFilePath(job.id));

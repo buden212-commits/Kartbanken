@@ -86,7 +86,17 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       });
-      const data = (await res.json()) as { error?: string; checkoutId?: string };
+      const raw = await res.text();
+      let data: { error?: string; checkoutId?: string } = {};
+      try {
+        data = raw ? (JSON.parse(raw) as { error?: string; checkoutId?: string }) : {};
+      } catch {
+        throw new Error(
+          res.ok
+            ? "Servern svarade felaktigt. Försök igen."
+            : `Kunde inte skapa utcheckning (HTTP ${res.status}). Försök igen — stora kartor kan ta en stund.`,
+        );
+      }
       if (!res.ok) throw new Error(data.error ?? "Kunde inte skapa utcheckning");
       if (!data.checkoutId) throw new Error("Utcheckning saknas i svaret");
       router.push(`/maps/${mapSlug}/checkout/${data.checkoutId}`);

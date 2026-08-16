@@ -27,6 +27,8 @@ export type CropOcadResult = {
   targetVersion: number;
   keptObjects: number;
   removedObjects: number;
+  /** Object index values kept by the binary crop (same numbering as GeoJSON objectIndex). */
+  keptObjectIndices: number[];
   versionWarning?: string;
 };
 

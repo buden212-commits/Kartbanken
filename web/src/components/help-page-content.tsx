@@ -937,6 +937,14 @@ export async function HelpPageContent() {
               </p>
             </div>
             <div>
+              <h3 className="font-medium text-slate-900">Bekräfta i Importera delkarta fastnar eller ger fel</h3>
+              <p className="mt-1">
+                På stora områden kan «Skapa utcheckning och checka in» ta längre tid. Vänta tills
+                sidan öppnar utcheckningen. Om något går fel: försök igen från steget «Bekräfta»
+                (eller kör om guiden om kartan fått en ny version under tiden).
+              </p>
+            </div>
+            <div>
               <h3 className="font-medium text-slate-900">En stor karta går inte att öppna</h3>
               <p className="mt-1">
                 Efter uppladdning av stora .ocd-filer (t.ex. Mora Väst) kan det stå «Parsar…» en

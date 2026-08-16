@@ -1,14 +1,6 @@
 import { logAction } from "@/lib/audit";
 import { runAfterResponse } from "@/lib/background";
-import { objectIdsFromSelection } from "@/lib/checkout/selection-objects";
-import { detectCheckoutConflicts } from "@/lib/checkout/overlap";
-import {
-  createCheckout,
-  findActiveOverlapCandidates,
-  getHeadVersionId,
-  serializeCheckoutResponse,
-  updateCheckoutExportPath,
-} from "@/lib/checkout/repository";
+import { createCheckout, updateCheckoutExportPath } from "@/lib/checkout/repository";
 import {
   CheckoutSelectionType,
   serializeSelection,
@@ -24,8 +16,6 @@ import {
   readStoredFile,
   uploadFile,
 } from "@/lib/storage";
-import { parseOcadBuffer } from "@/lib/ocad/read";
-import { NextResponse } from "next/server";
 
 export async function generateCheckoutExport(
   mapFileId: string,
@@ -33,22 +23,19 @@ export async function generateCheckoutExport(
   baseVersionId: string,
   selection: CheckoutSelection,
   targetVersion: OcadExportVersion,
+  options?: { sourceBuffer?: Buffer },
 ): Promise<string> {
   const version = await prisma.mapVersion.findUnique({ where: { id: baseVersionId } });
   if (!version) {
     throw new Error("Basversion hittades inte");
   }
 
-  const sourceBuffer = await readStoredFile(version.storagePath);
-  const summary = await parseOcadBuffer(sourceBuffer, version.originalFilename);
+  const sourceBuffer =
+    options?.sourceBuffer ?? (await readStoredFile(version.storagePath));
   const cropGeometry =
     selection.importPartial && selection.importExtent
       ? { type: CheckoutSelectionType.BBOX, bbox: selection.importExtent }
       : selection.geometry;
-  const enrichedSelection: CheckoutSelection = {
-    ...selection,
-    objectIds: objectIdsFromSelection(summary.objects, cropGeometry),
-  };
 
   const subset = await exportCheckoutSubset(
     sourceBuffer,
@@ -56,6 +43,11 @@ export async function generateCheckoutExport(
     cropGeometry,
     { targetVersion, allowEmpty: selection.importPartial === true },
   );
+
+  const enrichedSelection: CheckoutSelection = {
+    ...selection,
+    objectIds: subset.objectIds,
+  };
 
   const exportPath = buildCheckoutExportPath(mapFileId, checkoutId);
   const manifestPath = buildCheckoutManifestPath(mapFileId, checkoutId);
