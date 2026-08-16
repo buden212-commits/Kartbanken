@@ -939,8 +939,8 @@ export async function HelpPageContent() {
             <div>
               <h3 className="font-medium text-slate-900">En stor karta går inte att öppna</h3>
               <p className="mt-1">
-                Stora .ocd-filer (t.ex. Mora Väst) visas som strömmad kartbild. Öppna området eller
-                «Visa karta» och vänta tills kartan ritas — det kan ta några sekunder. Ladda ner
+                Stora .ocd-filer (t.ex. Mora Väst) har en stor kartbild. Öppna området eller «Visa
+                karta» och vänta tills den ritas — det kan ta en stund första gången. Ladda ner
                 filen via «Ladda ner» om du vill öppna den i OCAD.
               </p>
             </div>

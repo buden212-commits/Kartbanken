@@ -6,7 +6,7 @@ import {
 } from "@/lib/maps/version-lookup";
 import { prisma } from "@/lib/prisma";
 import { fileExists } from "@/lib/storage";
-import { streamStoredFile } from "@/lib/storage/stream-response";
+import { serveStoredFile } from "@/lib/storage/stream-response";
 import { NextResponse } from "next/server";
 
 type RouteParams = { params: Promise<{ slug: string; id: string }> };
@@ -40,10 +40,14 @@ export async function GET(_request: Request, { params }: RouteParams) {
       versionNumber: version.versionNumber,
     });
 
-    return await streamStoredFile(version.storagePath, {
-      "Content-Type": "application/octet-stream",
-      "Content-Disposition": `attachment; filename="${encodeURIComponent(version.originalFilename)}"`,
-    });
+    return await serveStoredFile(
+      version.storagePath,
+      {
+        "Content-Type": "application/octet-stream",
+        "Content-Disposition": `attachment; filename="${encodeURIComponent(version.originalFilename)}"`,
+      },
+      { preferRedirect: true },
+    );
   } catch {
     return NextResponse.json({ error: "Filen kunde inte läsas" }, { status: 500 });
   }

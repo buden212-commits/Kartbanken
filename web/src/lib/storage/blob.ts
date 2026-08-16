@@ -1,4 +1,5 @@
-import { del, get, head, put, type PutBlobResult } from "@vercel/blob";
+import { del, get, head, issueSignedToken, presignUrl, put, type PutBlobResult } from "@vercel/blob";
+import { blobRefToPathname } from "./blob-path-security";
 
 function getToken(): string | undefined {
   return process.env.BLOB_READ_WRITE_TOKEN;
@@ -131,6 +132,27 @@ export async function fileExists(storageRef: string): Promise<boolean> {
       return false;
     }
   }
+}
+
+export async function createPresignedGetUrl(
+  storageRef: string,
+  options?: { expiresInMs?: number },
+): Promise<string> {
+  const pathname = blobRefToPathname(storageRef);
+  const validUntil = Date.now() + (options?.expiresInMs ?? 15 * 60 * 1000);
+  const signedToken = await issueSignedToken({
+    ...blobHeadOptions(),
+    pathname,
+    operations: ["get"],
+    validUntil,
+  });
+  const { presignedUrl } = await presignUrl(signedToken, {
+    operation: "get",
+    pathname,
+    access: "private",
+    validUntil,
+  });
+  return presignedUrl;
 }
 
 export function supportsClientUploads(): boolean {

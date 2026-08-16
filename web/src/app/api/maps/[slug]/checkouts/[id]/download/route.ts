@@ -9,7 +9,7 @@ import { ocadExportVersionLabel, parseOcadExportVersion } from "@/lib/ocad/ocad-
 import type { OcadExportVersion } from "@/lib/ocad/ocad-export-shared";
 import { prisma } from "@/lib/prisma";
 import { fileExists } from "@/lib/storage";
-import { streamStoredFile } from "@/lib/storage/stream-response";
+import { serveStoredFile } from "@/lib/storage/stream-response";
 import { NextResponse } from "next/server";
 
 type RouteParams = { params: Promise<{ slug: string; id: string }> };
@@ -56,10 +56,14 @@ export async function GET(_request: Request, { params }: RouteParams) {
       ocadVersionLabel: ocadExportVersionLabel(version),
     });
 
-    return await streamStoredFile(checkout.exportStoragePath, {
-      "Content-Type": "application/octet-stream",
-      "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"`,
-    });
+    return await serveStoredFile(
+      checkout.exportStoragePath,
+      {
+        "Content-Type": "application/octet-stream",
+        "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"`,
+      },
+      { preferRedirect: true },
+    );
   } catch (err) {
     console.error("Checkout download failed:", err);
     return NextResponse.json({ error: "Nedladdning misslyckades" }, { status: 500 });

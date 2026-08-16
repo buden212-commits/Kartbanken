@@ -110,6 +110,18 @@ export async function openStoredFileStream(storagePath: string): Promise<StoredF
   return getImpl().openStoredFileStream(storagePath);
 }
 
+/**
+ * Skapar en tillfällig URL för direktnedladdning från Blob (undviker Vercels 4,5 MB-gräns).
+ * Returnerar null för lokal lagring.
+ */
+export async function createStoredFileAccessUrl(
+  storagePath: string,
+  options?: { expiresInMs?: number },
+): Promise<string | null> {
+  if (getStorageBackend() !== "blob") return null;
+  return blob.createPresignedGetUrl(storagePath, options);
+}
+
 export async function deleteFile(storagePath: string): Promise<void> {
   return getImpl().deleteFile(storagePath);
 }

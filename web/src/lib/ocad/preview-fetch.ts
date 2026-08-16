@@ -40,11 +40,41 @@ function abortError(): Error {
   return toLoadError(new DOMException("Aborted", "AbortError"));
 }
 
+function withDirectParam(url: string): string {
+  const parsed = new URL(
+    url,
+    typeof window !== "undefined" ? window.location.origin : "http://localhost",
+  );
+  parsed.searchParams.set("direct", "1");
+  return `${parsed.pathname}${parsed.search}`;
+}
+
+async function readSvgBody(response: Response, signal?: AbortSignal): Promise<string> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    const payload = (await response.json()) as { url?: string; error?: string };
+    if (!payload.url) {
+      throw new PreviewHttpError(
+        payload.error ?? "Kartbilden saknar nedladdningsadress",
+        response.status,
+      );
+    }
+    const direct = await fetch(payload.url, { signal });
+    if (!direct.ok) {
+      throw new PreviewHttpError(`Kunde inte ladda kartbild (${direct.status})`, direct.status);
+    }
+    return direct.text();
+  }
+  return response.text();
+}
+
 async function fetchPreviewFromNetwork(
   url: string,
   signal?: AbortSignal,
 ): Promise<string> {
   let lastError: unknown;
+  const requestUrl = withDirectParam(url);
+
   for (let attempt = 0; attempt < RETRY_DELAYS_MS.length; attempt++) {
     if (signal?.aborted) throw abortError();
     if (attempt > 0) {
@@ -52,18 +82,23 @@ async function fetchPreviewFromNetwork(
     }
 
     try {
-      const response = await fetch(url, {
+      const response = await fetch(requestUrl, {
         credentials: "same-origin",
         signal,
+        headers: {
+          Accept: "application/json, image/svg+xml, text/plain;q=0.9,*/*;q=0.8",
+        },
       });
       if (!response.ok) {
-        const serverMessage = (await response.json().catch(() => null)) as { error?: string } | null;
+        const serverMessage = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
         throw new PreviewHttpError(
           serverMessage?.error ?? `Kunde inte ladda kartbild (${response.status})`,
           response.status,
         );
       }
-      const text = await response.text();
+      const text = await readSvgBody(response, signal);
       previewCache.set(url, text);
       return text;
     } catch (err) {

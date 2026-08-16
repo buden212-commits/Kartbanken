@@ -7,6 +7,14 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-08-16",
+    title: "Stora kartor som Mora Väst går att öppna",
+    items: [
+      "Kartbilden för stora filer (ca 30 MB SVG) hämtas direkt från lagringen med tillfällig länk — den stoppas inte längre av serverns storleksgräns",
+      "Öppna området eller «Visa karta» och vänta tills kartan ritas (kan ta en stund första gången)",
+    ],
+  },
+  {
     date: "2026-08-14",
     title: "Stora kartor går att öppna",
     items: [

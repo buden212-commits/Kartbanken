@@ -9,7 +9,10 @@ import {
 } from "@/lib/ocad/svg";
 import { prisma } from "@/lib/prisma";
 import { fileExists, readStoredFile } from "@/lib/storage";
-import { streamStoredFile } from "@/lib/storage/stream-response";
+import {
+  serveStoredFile,
+  serveStoredFileAsDirectUrl,
+} from "@/lib/storage/stream-response";
 import { SVG_RESPONSE_SECURITY_HEADERS } from "@/lib/security/svg-sanitize";
 import { NextResponse } from "next/server";
 
@@ -22,8 +25,20 @@ const PREVIEW_HEADERS = {
   "Cache-Control": "private, max-age=3600",
 };
 
-async function streamPreview(storagePath: string): Promise<NextResponse> {
-  return streamStoredFile(storagePath, PREVIEW_HEADERS);
+async function servePreview(request: Request, storagePath: string): Promise<NextResponse> {
+  const url = new URL(request.url);
+  const wantsDirect =
+    url.searchParams.get("direct") === "1" ||
+    (request.headers.get("accept") ?? "").includes("application/json");
+
+  if (wantsDirect) {
+    const direct = await serveStoredFileAsDirectUrl(storagePath);
+    if (direct) return direct;
+    // Fallback: strömma utan Content-Length (redirect kan strula med CORS i fetch).
+    return serveStoredFile(storagePath, PREVIEW_HEADERS, { preferRedirect: false });
+  }
+
+  return serveStoredFile(storagePath, PREVIEW_HEADERS, { preferRedirect: true });
 }
 
 export async function GET(request: Request, { params }: RouteParams) {
@@ -50,9 +65,9 @@ export async function GET(request: Request, { params }: RouteParams) {
   let previewSvgPath = version.previewSvgPath;
   if (previewSvgPath && (await fileExists(previewSvgPath))) {
     try {
-      return await streamPreview(previewSvgPath);
+      return await servePreview(request, previewSvgPath);
     } catch (err) {
-      console.warn("Preview SVG kunde inte strömmas:", previewSvgPath, err);
+      console.warn("Preview SVG kunde inte levereras:", previewSvgPath, err);
     }
   }
 
@@ -71,7 +86,7 @@ export async function GET(request: Request, { params }: RouteParams) {
       where: { id: version.id },
       data: { previewSvgPath },
     });
-    return await streamPreview(previewSvgPath);
+    return await servePreview(request, previewSvgPath);
   } catch (err) {
     console.error("Preview SVG generation failed:", err);
     return NextResponse.json(
