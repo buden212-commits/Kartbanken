@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import type { Bbox, CheckoutSelectionGeometry, PolygonRing } from "@/lib/checkout/types";
 import { CheckoutSelectionType } from "@/lib/checkout/types";
 import type {
@@ -138,6 +146,32 @@ function defaultOverlays(mode: Mode): OverlayFlags {
   return { edges: false, removed: false, added: false, modified: false, risk: false };
 }
 
+/** Heavy OCAD SVG — must not re-parse on zoom/opacity ticks. */
+const StaticSvgLayer = memo(function StaticSvgLayer({
+  viewBox,
+  fill,
+  inner,
+  className,
+}: {
+  viewBox: string;
+  fill: string;
+  inner: string;
+  className?: string;
+}) {
+  return (
+    <svg
+      viewBox={viewBox}
+      fill={fill}
+      xmlns="http://www.w3.org/2000/svg"
+      preserveAspectRatio="xMidYMid meet"
+      className={className ?? "pointer-events-none absolute inset-0 h-full w-full"}
+      aria-hidden
+    >
+      <g dangerouslySetInnerHTML={{ __html: inner }} />
+    </svg>
+  );
+});
+
 function SegmentButton({
   active,
   onClick,
@@ -194,7 +228,7 @@ function OverlayCheckbox({
   );
 }
 
-function EdgeMarkers({
+const EdgeMarkers = memo(function EdgeMarkers({
   objects,
   transform,
   radius,
@@ -241,9 +275,9 @@ function EdgeMarkers({
       })}
     </>
   );
-}
+});
 
-function RiskMarkers({
+const RiskMarkers = memo(function RiskMarkers({
   objects,
   transform,
   radius,
@@ -275,7 +309,7 @@ function RiskMarkers({
             stroke={selected ? "#1e3a8a" : "#fff"}
             strokeWidth={selected ? 2 : 1}
             vectorEffect="non-scaling-stroke"
-            className={onSelect ? "cursor-pointer" : undefined}
+            style={onSelect ? { cursor: "pointer", pointerEvents: "auto" } : undefined}
             onClick={(event) => {
               event.stopPropagation();
               onSelect?.(object.objectIndex);
@@ -285,9 +319,9 @@ function RiskMarkers({
       })}
     </>
   );
-}
+});
 
-function DiffMarkers({
+const DiffMarkers = memo(function DiffMarkers({
   changes,
   transform,
   radius,
@@ -346,9 +380,9 @@ function DiffMarkers({
       })}
     </>
   );
-}
+});
 
-function BoundaryOverlay({
+const BoundaryOverlay = memo(function BoundaryOverlay({
   boundary,
   transform,
   draftRing,
@@ -364,6 +398,7 @@ function BoundaryOverlay({
   const [minX, minY, maxX, maxY] = geoBboxToSvgUser(bboxToTuple(outer), transform);
   const width = maxX - minX;
   const height = maxY - minY;
+  const safeBox = safe ? geoBboxToSvgUser(bboxToTuple(safe), transform) : null;
 
   return (
     <>
@@ -389,18 +424,12 @@ function BoundaryOverlay({
           pointerEvents="none"
         />
       ) : null}
-      {safe && (
+      {safeBox && (
         <rect
-          x={geoBboxToSvgUser(bboxToTuple(safe), transform)[0]}
-          y={geoBboxToSvgUser(bboxToTuple(safe), transform)[1]}
-          width={
-            geoBboxToSvgUser(bboxToTuple(safe), transform)[2] -
-            geoBboxToSvgUser(bboxToTuple(safe), transform)[0]
-          }
-          height={
-            geoBboxToSvgUser(bboxToTuple(safe), transform)[3] -
-            geoBboxToSvgUser(bboxToTuple(safe), transform)[1]
-          }
+          x={safeBox[0]}
+          y={safeBox[1]}
+          width={safeBox[2] - safeBox[0]}
+          height={safeBox[3] - safeBox[1]}
           fill="none"
           stroke="#ea580c"
           strokeWidth={1.5}
@@ -440,7 +469,7 @@ function BoundaryOverlay({
       )}
     </>
   );
-}
+});
 
 export function ImportPartialMapPreview({
   previewUrl,
@@ -469,14 +498,19 @@ export function ImportPartialMapPreview({
   const [baseOpacity, setBaseOpacity] = useState(40);
   const [showImportLayer, setShowImportLayer] = useState(true);
   const [swipePercent, setSwipePercent] = useState(100);
+  const [sliderEpoch, setSliderEpoch] = useState(0);
   const [interactionMode, setInteractionMode] = useState<InteractionMode>("navigate");
   const [draftRing, setDraftRing] = useState<PolygonRing>([]);
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
   const svgRef = useRef<SVGSVGElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const transformLayerRef = useRef<HTMLDivElement>(null);
+  const baseOpacityLayerRef = useRef<HTMLDivElement>(null);
+  const importClipLayerRef = useRef<HTMLDivElement>(null);
+  const baseOpacityLabelRef = useRef<HTMLSpanElement>(null);
+  const swipeLabelRef = useRef<HTMLSpanElement>(null);
   const viewStateRef = useRef({ pan: { x: 0, y: 0 }, zoom: 1 });
-  viewStateRef.current = { pan, zoom };
+  const baseOpacityRef = useRef(40);
+  const swipePercentRef = useRef(100);
   const dragRef = useRef<{
     pointerId: number;
     startX: number;
@@ -489,6 +523,34 @@ export function ImportPartialMapPreview({
   const pinchRef = useRef<{ distance: number; zoom: number; pan: { x: number; y: number } } | null>(
     null,
   );
+
+  const applyViewTransform = useCallback((nextPan: { x: number; y: number }, nextZoom: number) => {
+    viewStateRef.current = { pan: nextPan, zoom: nextZoom };
+    const el = transformLayerRef.current;
+    if (el) {
+      el.style.transform = `translate(${nextPan.x}px, ${nextPan.y}px) scale(${nextZoom})`;
+    }
+  }, []);
+
+  const applyBaseOpacityVisual = useCallback((value: number) => {
+    baseOpacityRef.current = value;
+    if (baseOpacityLayerRef.current) {
+      baseOpacityLayerRef.current.style.opacity = String(value / 100);
+    }
+    if (baseOpacityLabelRef.current) {
+      baseOpacityLabelRef.current.textContent = `${value}%`;
+    }
+  }, []);
+
+  const applySwipeVisual = useCallback((value: number) => {
+    swipePercentRef.current = value;
+    if (importClipLayerRef.current) {
+      importClipLayerRef.current.style.clipPath = `inset(0 ${100 - value}% 0 0)`;
+    }
+    if (swipeLabelRef.current) {
+      swipeLabelRef.current.textContent = `${value}%`;
+    }
+  }, []);
 
   const forceDelete = useMemo(
     () => new Set(forceDeleteObjectIndices),
@@ -505,14 +567,16 @@ export function ImportPartialMapPreview({
     setMapBase("full");
     setInteractionMode("navigate");
     setDraftRing([]);
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
+    applyViewTransform({ x: 0, y: 0 }, 1);
     if (mode === "edges") {
       setBaseOpacity(40);
       setShowImportLayer(true);
       setSwipePercent(100);
+      applyBaseOpacityVisual(40);
+      applySwipeVisual(100);
+      setSliderEpoch((n) => n + 1);
     }
-  }, [mode]);
+  }, [mode, applyViewTransform, applyBaseOpacityVisual, applySwipeVisual]);
 
   useEffect(() => {
     let cancelled = false;
@@ -636,22 +700,50 @@ export function ImportPartialMapPreview({
     setOverlays((prev) => ({ ...prev, [key]: value }));
   }
 
-  const adjustZoom = useCallback((factor: number, focal?: { x: number; y: number }) => {
-    const viewport = viewportRef.current;
-    if (!viewport) return;
-    const rect = viewport.getBoundingClientRect();
-    const focalX = focal?.x ?? rect.width / 2;
-    const focalY = focal?.y ?? rect.height / 2;
-    const { pan: prevPan, zoom: prevZoom } = viewStateRef.current;
-    const next = zoomAtPoint(prevZoom, factor, prevPan, focalX, focalY);
-    setZoom(next.zoom);
-    setPan(next.pan);
-  }, []);
+  const adjustZoom = useCallback(
+    (factor: number, focal?: { x: number; y: number }) => {
+      const viewport = viewportRef.current;
+      if (!viewport) return;
+      const rect = viewport.getBoundingClientRect();
+      const focalX = focal?.x ?? rect.width / 2;
+      const focalY = focal?.y ?? rect.height / 2;
+      const { pan: prevPan, zoom: prevZoom } = viewStateRef.current;
+      const next = zoomAtPoint(prevZoom, factor, prevPan, focalX, focalY);
+      applyViewTransform(next.pan, next.zoom);
+    },
+    [applyViewTransform],
+  );
 
   const fitView = useCallback(() => {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
-  }, []);
+    applyViewTransform({ x: 0, y: 0 }, 1);
+  }, [applyViewTransform]);
+
+  const setComparePreset = useCallback(() => {
+    setBaseOpacity(40);
+    setShowImportLayer(true);
+    setSwipePercent(100);
+    applyBaseOpacityVisual(40);
+    applySwipeVisual(100);
+    setSliderEpoch((n) => n + 1);
+  }, [applyBaseOpacityVisual, applySwipeVisual]);
+
+  const setBaseOnlyPreset = useCallback(() => {
+    setBaseOpacity(100);
+    setShowImportLayer(false);
+    setSwipePercent(0);
+    applyBaseOpacityVisual(100);
+    applySwipeVisual(0);
+    setSliderEpoch((n) => n + 1);
+  }, [applyBaseOpacityVisual, applySwipeVisual]);
+
+  const setImportOnlyPreset = useCallback(() => {
+    setBaseOpacity(0);
+    setShowImportLayer(true);
+    setSwipePercent(100);
+    applyBaseOpacityVisual(0);
+    applySwipeVisual(100);
+    setSliderEpoch((n) => n + 1);
+  }, [applyBaseOpacityVisual, applySwipeVisual]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -742,8 +834,7 @@ export function ImportPartialMapPreview({
         focalX,
         focalY,
       );
-      setZoom(next.zoom);
-      setPan(next.pan);
+      applyViewTransform(next.pan, next.zoom);
       return;
     }
 
@@ -753,7 +844,7 @@ export function ImportPartialMapPreview({
     const dy = event.clientY - drag.startY;
     if (!drag.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
     drag.moved = true;
-    setPan({ x: drag.panX + dx, y: drag.panY + dy });
+    applyViewTransform({ x: drag.panX + dx, y: drag.panY + dy }, viewStateRef.current.zoom);
   }
 
   function handlePointerUp(event: React.PointerEvent<HTMLDivElement>) {
@@ -781,12 +872,27 @@ export function ImportPartialMapPreview({
     setInteractionMode("navigate");
   }
 
-  const importClip = edgesMode ? `inset(0 ${100 - swipePercent}% 0 0)` : undefined;
   const drawing = interactionMode === "draw";
   const toolbarBtn =
     "min-h-9 min-w-9 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-700 shadow-sm transition hover:border-ifk-blue hover:text-ifk-blue disabled:opacity-40";
   const toolbarBtnActive =
     "min-h-9 rounded-md border border-ifk-blue bg-ifk-blue px-2.5 py-1.5 text-sm text-white shadow-sm";
+
+  const diffKinds = useMemo(
+    () => ({
+      removed: overlays.removed,
+      added: overlays.added,
+      modified: overlays.modified,
+    }),
+    [overlays.removed, overlays.added, overlays.modified],
+  );
+
+  const selectRisk = useCallback(
+    (objectIndex: number) => {
+      onSelectRiskObject?.(objectIndex);
+    },
+    [onSelectRiskObject],
+  );
 
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -810,31 +916,19 @@ export function ImportPartialMapPreview({
                 <div className="flex flex-wrap gap-2">
                   <SegmentButton
                     active={baseOpacity === 40 && showImportLayer && swipePercent === 100}
-                    onClick={() => {
-                      setBaseOpacity(40);
-                      setShowImportLayer(true);
-                      setSwipePercent(100);
-                    }}
+                    onClick={setComparePreset}
                   >
                     Jämför
                   </SegmentButton>
                   <SegmentButton
                     active={!showImportLayer || swipePercent === 0}
-                    onClick={() => {
-                      setShowImportLayer(false);
-                      setSwipePercent(0);
-                      setBaseOpacity(100);
-                    }}
+                    onClick={setBaseOnlyPreset}
                   >
                     Bara grund
                   </SegmentButton>
                   <SegmentButton
                     active={showImportLayer && swipePercent === 100 && baseOpacity === 0}
-                    onClick={() => {
-                      setShowImportLayer(true);
-                      setSwipePercent(100);
-                      setBaseOpacity(0);
-                    }}
+                    onClick={setImportOnlyPreset}
                   >
                     Bara import
                   </SegmentButton>
@@ -845,11 +939,26 @@ export function ImportPartialMapPreview({
                     type="range"
                     min={0}
                     max={100}
-                    value={baseOpacity}
-                    onChange={(event) => setBaseOpacity(Number(event.target.value))}
+                    defaultValue={baseOpacity}
+                    key={`base-opacity-${sliderEpoch}`}
+                    onInput={(event) => {
+                      applyBaseOpacityVisual(Number(event.currentTarget.value));
+                    }}
+                    onPointerUp={(event) => {
+                      const value = Number(event.currentTarget.value);
+                      applyBaseOpacityVisual(value);
+                      setBaseOpacity(value);
+                    }}
+                    onBlur={(event) => {
+                      const value = Number(event.currentTarget.value);
+                      applyBaseOpacityVisual(value);
+                      setBaseOpacity(value);
+                    }}
                     className="min-w-[8rem] flex-1"
                   />
-                  <span className="w-10 text-right tabular-nums">{baseOpacity}%</span>
+                  <span ref={baseOpacityLabelRef} className="w-10 text-right tabular-nums">
+                    {baseOpacity}%
+                  </span>
                 </label>
                 <label className="flex flex-wrap items-center gap-2 text-xs text-slate-700">
                   <span className="w-24 shrink-0">Svep import</span>
@@ -857,16 +966,31 @@ export function ImportPartialMapPreview({
                     type="range"
                     min={0}
                     max={100}
-                    value={swipePercent}
-                    onChange={(event) => {
-                      const value = Number(event.target.value);
+                    defaultValue={swipePercent}
+                    key={`swipe-${sliderEpoch}`}
+                    onInput={(event) => {
+                      const value = Number(event.currentTarget.value);
+                      applySwipeVisual(value);
+                      if (value > 0 && !showImportLayer) setShowImportLayer(true);
+                    }}
+                    onPointerUp={(event) => {
+                      const value = Number(event.currentTarget.value);
+                      applySwipeVisual(value);
+                      setSwipePercent(value);
+                      setShowImportLayer(value > 0);
+                    }}
+                    onBlur={(event) => {
+                      const value = Number(event.currentTarget.value);
+                      applySwipeVisual(value);
                       setSwipePercent(value);
                       setShowImportLayer(value > 0);
                     }}
                     className="min-w-[8rem] flex-1"
                     disabled={!importScene}
                   />
-                  <span className="w-10 text-right tabular-nums">{swipePercent}%</span>
+                  <span ref={swipeLabelRef} className="w-10 text-right tabular-nums">
+                    {swipePercent}%
+                  </span>
                 </label>
                 {!importPreviewUrl && (
                   <p className="text-xs text-amber-700">
@@ -1035,39 +1159,40 @@ export function ImportPartialMapPreview({
         {scene && viewBox && status === "ready" && (
           <>
             <div
-              className="absolute left-0 top-0 h-full w-full"
+              ref={transformLayerRef}
+              className="absolute left-0 top-0 h-full w-full will-change-transform"
               style={{
-                transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                transform: `translate(${viewStateRef.current.pan.x}px, ${viewStateRef.current.pan.y}px) scale(${viewStateRef.current.zoom})`,
                 transformOrigin: "0 0",
               }}
             >
               {showMapBackground && (
-                <svg
-                  viewBox={viewBox}
-                  fill={scene.fill}
-                  xmlns="http://www.w3.org/2000/svg"
-                  preserveAspectRatio="xMidYMid meet"
-                  className="pointer-events-none absolute inset-0 h-full w-full"
-                  aria-hidden
+                <div
+                  ref={baseOpacityLayerRef}
+                  className="pointer-events-none absolute inset-0"
+                  style={{ opacity: edgesMode ? baseOpacityRef.current / 100 : 1 }}
                 >
-                  <g
-                    opacity={edgesMode ? baseOpacity / 100 : 1}
-                    dangerouslySetInnerHTML={{ __html: scene.inner }}
+                  <StaticSvgLayer
+                    viewBox={viewBox}
+                    fill={scene.fill}
+                    inner={scene.inner}
                   />
-                </svg>
+                </div>
               )}
               {edgesMode && showImportLayer && importScene && importViewBox && (
-                <svg
-                  viewBox={importViewBox}
-                  fill={importScene.fill}
-                  xmlns="http://www.w3.org/2000/svg"
-                  preserveAspectRatio="xMidYMid meet"
-                  className="pointer-events-none absolute inset-0 h-full w-full"
-                  style={{ clipPath: importClip }}
-                  aria-hidden
+                <div
+                  ref={importClipLayerRef}
+                  className="pointer-events-none absolute inset-0"
+                  style={{
+                    clipPath: `inset(0 ${100 - swipePercentRef.current}% 0 0)`,
+                  }}
                 >
-                  <g dangerouslySetInnerHTML={{ __html: importScene.inner }} />
-                </svg>
+                  <StaticSvgLayer
+                    viewBox={importViewBox}
+                    fill={importScene.fill}
+                    inner={importScene.inner}
+                  />
+                </div>
               )}
               <svg
                 ref={svgRef}
@@ -1092,14 +1217,12 @@ export function ImportPartialMapPreview({
                 )}
                 {edgesMode && overlays.risk && (analysis.riskRemovals?.length ?? 0) > 0 && (
                   <RiskMarkers
-                    objects={analysis.riskRemovals}
+                    objects={analysis.riskRemovals ?? []}
                     transform={scene.transform}
                     radius={markerRadius}
                     forceDelete={forceDelete}
                     selectedIndex={selectedRiskObjectIndex}
-                    onSelect={(objectIndex) => {
-                      onSelectRiskObject?.(objectIndex);
-                    }}
+                    onSelect={onSelectRiskObject ? selectRisk : undefined}
                   />
                 )}
                 {showOverlayControls &&
@@ -1109,11 +1232,7 @@ export function ImportPartialMapPreview({
                       transform={scene.transform}
                       radius={markerRadius * 0.85}
                       showBoxes={showBoxes}
-                      kinds={{
-                        removed: overlays.removed,
-                        added: overlays.added,
-                        modified: overlays.modified,
-                      }}
+                      kinds={diffKinds}
                     />
                   )}
               </svg>
