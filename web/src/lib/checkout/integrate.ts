@@ -30,6 +30,7 @@ import {
   markObjectsDeletedByIndices,
 } from "@/lib/ocad/ocad-export-server";
 import { processVersionAfterUpload } from "@/lib/ocad/process-version";
+import { runAfterResponse } from "@/lib/background";
 import { buildMapVersionPath, readStoredFile, uploadFile } from "@/lib/storage";
 import { sha256 } from "@/lib/hash";
 import { prisma } from "@/lib/prisma";
@@ -201,7 +202,7 @@ export async function integrateCheckout(
       deleteResult = markObjectsDeletedByIndices(working, removedIndices);
       copyResult = copyMatchingObjectData(working, checkinBuffer, modifiedIndices);
       appendResult = appendObjectsFromCheckin(working, checkinBuffer, addedIndices);
-      working = Buffer.from(appendResult.buffer);
+      working = appendResult.buffer;
     } catch (err) {
       throw toIntegrationError(
         err,
@@ -400,26 +401,42 @@ export async function integrateCheckout(
       });
     }
 
-    try {
-      await processVersionAfterUpload(checkout.mapFileId, version.id, headVersion.id);
-    } catch (postErr) {
-      // Integration succeeded — preview/diff generation must not fail the admin action.
-      logIntegrationError("post_process", logCtx, postErr, {
-        versionId: version.id,
-        versionNumber: version.versionNumber,
-      });
-    }
+    const versionId = version.id;
+    const createdVersionNumber = version.versionNumber;
+    const mapFileId = checkout.mapFileId;
+    const previousVersionId = headVersion.id;
+    const warningCount = warnings.length;
 
-    logIntegrationStep("post_process", logCtx, {
-      versionId: version.id,
-      versionNumber: version.versionNumber,
-      warningCount: warnings.length,
+    // Kartbild/diff för stora filer (Mora) kan OOM:a — kör efter HTTP-svar så admin
+    // inte får HTML 500 trots att versionen redan sparats.
+    runAfterResponse(async () => {
+      try {
+        await processVersionAfterUpload(mapFileId, versionId, previousVersionId);
+        logIntegrationStep("post_process", logCtx, {
+          versionId,
+          versionNumber: createdVersionNumber,
+          warningCount,
+          complete: true,
+        });
+      } catch (postErr) {
+        logIntegrationError("post_process", logCtx, postErr, {
+          versionId,
+          versionNumber: createdVersionNumber,
+        });
+      }
+    });
+
+    logIntegrationStep("persist", logCtx, {
+      versionId,
+      versionNumber: createdVersionNumber,
+      warningCount,
+      deferredPostProcess: true,
       complete: true,
     });
 
     return {
-      versionId: version.id,
-      versionNumber: version.versionNumber,
+      versionId,
+      versionNumber: createdVersionNumber,
       warnings,
       warningMessages,
       deletedObjects: deleteResult.deleted,

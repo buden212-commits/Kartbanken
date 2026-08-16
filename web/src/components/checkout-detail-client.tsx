@@ -610,11 +610,47 @@ export function CheckoutDetailClient({
 
     if (!res.ok) {
 
+      // Integration can finish in DB even when the HTTP response crashes (post-process OOM).
+
+      try {
+
+        const statusRes = await fetch(`/api/maps/${mapSlug}/checkouts/${checkout.id}`);
+
+        if (statusRes.ok) {
+
+          const statusData = (await statusRes.json()) as { status?: string };
+
+          if (statusData.status === CheckoutStatus.INTEGRATED) {
+
+            setError(null);
+
+            setMessage(
+              "Integrationen är klar (serverns svar avbröts efter sparning). Laddar om…",
+            );
+
+            router.refresh();
+
+            return;
+
+          }
+
+        }
+
+      } catch {
+
+        // Fall through to normal error handling.
+
+      }
+
       const { message } = await readApiError(res, "Integration misslyckades");
 
       setMessage(null);
 
-      setError(message);
+      setError(
+
+        `${message}\n\nTips: ladda om sidan. Om status redan är «Integrerad» lyckades det trots felmeddelandet.`,
+
+      );
 
       return;
 

@@ -8,6 +8,15 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-16",
+    title: "Admin-integration av stora utcheckningar",
+    items: [
+      "«Bekräfta och integrera» ska inte längre ge falskt fel när versionen redan sparats — kartbild skapas i bakgrunden",
+      "Sammanslagning av många tillagda objekt (t.ex. importerad delkarta) använder mindre minne",
+      "Om ett fel visas: ladda om sidan och kontrollera om utcheckningen redan är integrerad",
+    ],
+  },
+  {
+    date: "2026-08-16",
     title: "Tydligare fel vid admin-integration",
     items: [
       "Om «Bekräfta och integrera» misslyckas visas vilket steg som gick fel, tips och mer detaljer i stället för bara «Integration misslyckades»",

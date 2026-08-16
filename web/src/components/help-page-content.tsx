@@ -789,7 +789,8 @@ export async function HelpPageContent() {
               Om <strong>Bekräfta och integrera</strong> misslyckas visar felrutan vilket steg som
               stoppade (t.ex. ladda filer, applicera ändringar, validera, ladda upp) plus tips.
               Kopiera gärna utchecknings-id från felrutan vid felsökning. Stora kartor kan ta längre
-              tid — vänta tills sidan svarar.
+              tid — vänta tills sidan svarar. Om fel visas: ladda om sidan; ibland är integrationen
+              redan klar trots felmeddelandet.
             </p>
 
             <h3 className="font-medium text-slate-900">Användarhantering</h3>

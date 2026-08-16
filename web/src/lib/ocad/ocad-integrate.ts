@@ -259,6 +259,138 @@ function findLastIndexBlockStart(buffer: Buffer): number {
   return last;
 }
 
+const INDEX_BLOCK_BYTES =
+  OBJECT_INDEX_BLOCK_HEADER_SIZE + OBJECT_INDEX_ENTRY_SIZE * OBJECT_INDEX_ENTRIES_PER_BLOCK;
+
+function collectFreeIndexSlots(buffer: Buffer, limit: number): IndexSlot[] {
+  const slots: IndexSlot[] = [];
+  if (limit <= 0) return slots;
+  iterateAllIndexSlots(buffer, (slot) => {
+    if (slots.length >= limit) return;
+    if (isFreeIndexSlot(buffer, slot.entryOffset)) {
+      slots.push(slot);
+    }
+  });
+  return slots;
+}
+
+function copyObjectBytes(source: Buffer, entry: ObjectIndexEntryInfo): Buffer | null {
+  const size = measureObjectByteSize(source, entry);
+  if (size <= 0 || entry.pos <= 0 || entry.pos + size > source.length) {
+    return null;
+  }
+  return Buffer.from(source.subarray(entry.pos, entry.pos + size));
+}
+
+/**
+ * Appends objects from checkin into head by copying raw object bytes and
+ * registering them in head's object index (reusing deleted slots or new blocks).
+ *
+ * Uses a single buffer allocation instead of copying the whole file per object
+ * (critical for large maps with hundreds of additions).
+ */
+export function appendObjectsFromCheckin(
+  headBuffer: Buffer,
+  checkinBuffer: Buffer,
+  checkinObjectIndices: number[],
+): AppendObjectsResult {
+  type Prepared = {
+    checkinIndex: number;
+    objectBytes: Buffer;
+    checkinEntry: ObjectIndexEntryInfo;
+  };
+
+  const prepared: Prepared[] = [];
+  const failed: AppendObjectFailure[] = [];
+  const indexMap: Record<number, number> = {};
+
+  for (const checkinIndex of checkinObjectIndices) {
+    const checkinEntry = readObjectIndexEntry(checkinBuffer, checkinIndex);
+    if (!checkinEntry) {
+      failed.push({
+        checkinObjectIndex: checkinIndex,
+        reason: "Objektet saknas i checkin-filens index.",
+      });
+      continue;
+    }
+
+    if (checkinEntry.status <= 0 || checkinEntry.status >= 3) {
+      failed.push({
+        checkinObjectIndex: checkinIndex,
+        reason: "Objektet är markerat som borttaget i checkin-filen.",
+      });
+      continue;
+    }
+
+    const objectBytes = copyObjectBytes(checkinBuffer, checkinEntry);
+    if (!objectBytes) {
+      failed.push({
+        checkinObjectIndex: checkinIndex,
+        reason: "Kunde inte läsa objektets rådata från checkin-filen.",
+      });
+      continue;
+    }
+
+    prepared.push({ checkinIndex, objectBytes, checkinEntry });
+  }
+
+  if (prepared.length === 0) {
+    return { buffer: headBuffer, appended: 0, failed, indexMap };
+  }
+
+  const freeInHead = collectFreeIndexSlots(headBuffer, prepared.length);
+  const extraSlotsNeeded = Math.max(0, prepared.length - freeInHead.length);
+  const newBlocks = Math.ceil(extraSlotsNeeded / OBJECT_INDEX_ENTRIES_PER_BLOCK);
+  const objectsBytes = prepared.reduce((sum, item) => sum + item.objectBytes.length, 0);
+  const indexExtra = newBlocks * INDEX_BLOCK_BYTES;
+  const headLen = headBuffer.length;
+
+  const buffer = Buffer.alloc(headLen + indexExtra + objectsBytes);
+  headBuffer.copy(buffer, 0, 0, headLen);
+
+  if (newBlocks > 0) {
+    let lastBlockStart = findLastIndexBlockStart(buffer);
+    for (let i = 0; i < newBlocks; i++) {
+      const newBlockStart = headLen + i * INDEX_BLOCK_BYTES;
+      buffer.writeInt32LE(newBlockStart, lastBlockStart);
+      // New block body is already zero-filled (free slots).
+      lastBlockStart = newBlockStart;
+    }
+  }
+
+  const slots = collectFreeIndexSlots(buffer, prepared.length);
+  if (slots.length < prepared.length) {
+    throw new Error(
+      `Kunde inte allokera indexplatser för tillagda objekt (behöver ${prepared.length}, fick ${slots.length}).`,
+    );
+  }
+
+  let writePos = headLen + indexExtra;
+  let appended = 0;
+
+  for (let i = 0; i < prepared.length; i++) {
+    const item = prepared[i]!;
+    const slot = slots[i]!;
+    const newPos = writePos;
+    item.objectBytes.copy(buffer, writePos);
+    writePos += item.objectBytes.length;
+
+    checkinBuffer.copy(
+      buffer,
+      slot.entryOffset,
+      item.checkinEntry.entryOffset,
+      item.checkinEntry.entryOffset + OBJECT_INDEX_ENTRY_SIZE,
+    );
+    buffer.writeInt32LE(newPos, slot.entryOffset + OBJECT_INDEX_POS_OFFSET);
+    buffer.writeUInt8(1, slot.entryOffset + OBJECT_INDEX_STATUS_OFFSET);
+
+    indexMap[item.checkinIndex] = slot.objectIndex;
+    appended++;
+  }
+
+  return { buffer, appended, failed, indexMap };
+}
+
 function appendObjectIndexBlock(buffer: Buffer): { buffer: Buffer; slot: IndexSlot } {
   const lastBlockStart = findLastIndexBlockStart(buffer);
   const newBlockStart = buffer.length;
@@ -266,9 +398,7 @@ function appendObjectIndexBlock(buffer: Buffer): { buffer: Buffer; slot: IndexSl
   const linked = Buffer.from(buffer);
   linked.writeInt32LE(newBlockStart, lastBlockStart);
 
-  const emptyBlock = Buffer.alloc(
-    OBJECT_INDEX_BLOCK_HEADER_SIZE + OBJECT_INDEX_ENTRY_SIZE * OBJECT_INDEX_ENTRIES_PER_BLOCK,
-  );
+  const emptyBlock = Buffer.alloc(INDEX_BLOCK_BYTES);
   const extended = Buffer.concat([linked, emptyBlock]);
 
   const reader = new BufferReader(extended);
@@ -303,78 +433,7 @@ function allocateIndexSlot(buffer: Buffer): { buffer: Buffer; slot: IndexSlot } 
     return { buffer, slot: free };
   }
   const appended = appendObjectIndexBlock(buffer);
-  return { buffer: Buffer.from(appended.buffer), slot: appended.slot };
-}
-
-function copyObjectBytes(source: Buffer, entry: ObjectIndexEntryInfo): Buffer | null {
-  const size = measureObjectByteSize(source, entry);
-  if (size <= 0 || entry.pos <= 0 || entry.pos + size > source.length) {
-    return null;
-  }
-  return Buffer.from(source.subarray(entry.pos, entry.pos + size));
-}
-
-/**
- * Appends objects from checkin into head by copying raw object bytes and
- * registering them in head's object index (reusing deleted slots or new blocks).
- */
-export function appendObjectsFromCheckin(
-  headBuffer: Buffer,
-  checkinBuffer: Buffer,
-  checkinObjectIndices: number[],
-): AppendObjectsResult {
-  let buffer = Buffer.from(headBuffer);
-  const failed: AppendObjectFailure[] = [];
-  const indexMap: Record<number, number> = {};
-  let appended = 0;
-
-  for (const checkinIndex of checkinObjectIndices) {
-    const checkinEntry = readObjectIndexEntry(checkinBuffer, checkinIndex);
-    if (!checkinEntry) {
-      failed.push({
-        checkinObjectIndex: checkinIndex,
-        reason: "Objektet saknas i checkin-filens index.",
-      });
-      continue;
-    }
-
-    if (checkinEntry.status <= 0 || checkinEntry.status >= 3) {
-      failed.push({
-        checkinObjectIndex: checkinIndex,
-        reason: "Objektet är markerat som borttaget i checkin-filen.",
-      });
-      continue;
-    }
-
-    const objectBytes = copyObjectBytes(checkinBuffer, checkinEntry);
-    if (!objectBytes) {
-      failed.push({
-        checkinObjectIndex: checkinIndex,
-        reason: "Kunde inte läsa objektets rådata från checkin-filen.",
-      });
-      continue;
-    }
-
-    const allocated = allocateIndexSlot(buffer);
-    buffer = Buffer.from(allocated.buffer);
-    const slot = allocated.slot;
-
-    const newPos = buffer.length;
-    buffer = Buffer.concat([buffer, objectBytes]);
-
-    const sourceEntryBytes = checkinBuffer.subarray(
-      checkinEntry.entryOffset,
-      checkinEntry.entryOffset + OBJECT_INDEX_ENTRY_SIZE,
-    );
-    sourceEntryBytes.copy(buffer, slot.entryOffset);
-    buffer.writeInt32LE(newPos, slot.entryOffset + OBJECT_INDEX_POS_OFFSET);
-    buffer.writeUInt8(1, slot.entryOffset + OBJECT_INDEX_STATUS_OFFSET);
-
-    indexMap[checkinIndex] = slot.objectIndex;
-    appended++;
-  }
-
-  return { buffer, appended, failed, indexMap };
+  return { buffer: appended.buffer, slot: appended.slot };
 }
 
 function writeObjectIndexRc(
