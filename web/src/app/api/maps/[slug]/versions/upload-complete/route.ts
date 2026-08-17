@@ -5,6 +5,7 @@ import { runAfterResponse } from "@/lib/background";
 import { sha256 } from "@/lib/hash";
 import { assertMapAllowsUpload, checkVersionUploadGuards } from "@/lib/maps/upload-guards";
 import { processVersionAfterUpload } from "@/lib/ocad/process-version";
+import { appendOcadMapNotesIfComment, displayMapNotesUserName } from "@/lib/ocad/ocad-map-notes";
 import { prisma } from "@/lib/prisma";
 import type { Role as RoleType } from "@/lib/roles";
 import {
@@ -12,6 +13,7 @@ import {
   fileExists,
   readStoredFile,
   supportsClientUploads,
+  uploadFile,
   validateOcdUpload,
 } from "@/lib/storage";
 import {
@@ -104,15 +106,30 @@ export async function POST(request: Request, { params }: RouteParams) {
   }
 
   let contentHash: string;
+  let storedSize = version.fileSizeBytes;
   try {
-    const buffer = await readStoredFile(storageRef);
+    let buffer = await readStoredFile(storageRef);
     if (buffer.length !== version.fileSizeBytes) {
       return NextResponse.json(
         { error: "Filstorlek matchar inte. Försök ladda upp igen." },
         { status: 400 },
       );
     }
-    contentHash = sha256(buffer);
+    const notes = appendOcadMapNotesIfComment(buffer, {
+      comment: version.comment,
+      userName: displayMapNotesUserName({
+        name: session.user.name,
+        email: session.user.email,
+      }),
+    });
+    if (notes.changed) {
+      const updated = Buffer.from(notes.buffer);
+      storageRef = await uploadFile(storageRef, updated);
+      storedSize = updated.byteLength;
+      contentHash = sha256(updated);
+    } else {
+      contentHash = sha256(buffer);
+    }
   } catch (err) {
     console.error("Complete upload read failed:", err);
     return NextResponse.json({ error: "Kunde inte läsa uppladdad fil" }, { status: 500 });
@@ -146,7 +163,7 @@ export async function POST(request: Request, { params }: RouteParams) {
 
   await prisma.mapVersion.update({
     where: { id: versionId },
-    data: { contentHash },
+    data: { contentHash, fileSizeBytes: storedSize, storagePath: storageRef },
   });
 
   await logAction(session.user.id, "UPLOAD", "MapVersion", version.id, {

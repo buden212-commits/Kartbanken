@@ -24,6 +24,7 @@ import {
   readActiveObjectIndices,
   validateOcadBufferStructure,
 } from "@/lib/ocad/ocad-integrate";
+import { appendOcadMapNotesIfComment, displayMapNotesUserName } from "@/lib/ocad/ocad-map-notes";
 import {
   copyMatchingObjectData,
   copySkipReasonText,
@@ -104,6 +105,7 @@ export async function integrateCheckout(
       include: {
         mapFile: true,
         baseVersion: true,
+        user: { select: { name: true, email: true } },
       },
     });
 
@@ -307,6 +309,14 @@ export async function integrateCheckout(
       );
       logIntegrationError("validate_output", logCtx, wrapped);
       throw wrapped;
+    }
+
+    const notes = appendOcadMapNotesIfComment(working, {
+      comment: checkout.integrationComment,
+      userName: displayMapNotesUserName(checkout.user),
+    });
+    if (notes.changed) {
+      working = Buffer.from(notes.buffer);
     }
 
     const versionNumber =

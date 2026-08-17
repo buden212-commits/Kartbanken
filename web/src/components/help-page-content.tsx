@@ -284,7 +284,7 @@ export async function HelpPageContent() {
               <HelpList
                 items={[
                   "Öppna området och välj OCAD-fil (.ocd) i uppladdningsformuläret",
-                  "Lägg till en valfri kommentar, t.ex. vad som ändrats",
+                  "Lägg till en valfri kommentar, t.ex. vad som ändrats — den läggs även in i OCAD under Karta > Kartinformation (datum, användare och kommentar). Utan kommentar lämnas kartinformationen oförändrad",
                   "Efter uppladdning jämförs automatiskt mot föregående version",
                   "Nya versioner är opublicerade tills du markerar dem som publicerade",
                   "Prenumeranter får e-post om ny version (om SMTP och notiser är aktiverade)",
@@ -364,7 +364,7 @@ export async function HelpPageContent() {
               <h3 className="font-medium text-slate-900">Checka in och integrera</h3>
               <HelpList
                 items={[
-                  "Ladda upp den redigerade .ocd-filen via Checka in på utcheckningssidan",
+                  "Ladda upp den redigerade .ocd-filen via Checka in på utcheckningssidan — kommentaren följer med till den nya versionen och till OCAD Kartinformation",
                   "Granska utcheckningsdiff mot aktuell version (tillagda, borttagna, ändrade)",
                   "Bekräfta integration — utcheckningen går till admin-bekräftelse",
                   "Administratör bekräftar och integrerar — en ny opublicerad kartversion skapas (publicera i versionshistoriken)",

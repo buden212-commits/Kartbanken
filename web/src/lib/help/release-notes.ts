@@ -7,6 +7,14 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-08-17",
+    title: "Kartinformation i OCAD",
+    items: [
+      "När du anger en kommentar vid ny version (uppladdning eller incheckning) läggs en rad med datum, användare och kommentaren till i OCAD under Karta > Kartinformation",
+      "Utan kommentar lämnas kartinformationen som den är",
+    ],
+  },
+  {
     date: "2026-08-16",
     title: "Importera delkarta — riskzon, lagerjämförelse och gräns",
     items: [
