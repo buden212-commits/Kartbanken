@@ -7,6 +7,7 @@ import {
   generateDiffLayerSvgsFromIndices,
 } from "./diff-layers";
 import { parseOcadBuffer } from "./read";
+import { extractOcadMapNotes } from "./ocad-map-notes";
 import { buildPreviewSvgPath, generateAndStorePreviewSvg } from "./svg";
 import {
   isVersionDiffProgressStale,
@@ -213,14 +214,31 @@ export async function parseMapVersion(
   if (!version) return;
 
   if (version.parseStatus === "OK") {
-    if (options?.skipPreview || version.previewSvgPath) return;
+    if (options?.skipPreview || version.previewSvgPath) {
+      if (version.mapNotes === null) {
+        try {
+          const buffer = await readStoredFile(version.storagePath);
+          await prisma.mapVersion.update({
+            where: { id: versionId },
+            data: { mapNotes: extractOcadMapNotes(buffer) },
+          });
+        } catch (err) {
+          console.error("Kunde inte läsa kartinformation:", err);
+        }
+      }
+      return;
+    }
     try {
       const buffer = await readStoredFile(version.storagePath);
       const previewSvgPath = buildPreviewSvgPath(version.mapFileId, version.versionNumber);
       await generateAndStorePreviewSvg(buffer, previewSvgPath);
       await prisma.mapVersion.update({
         where: { id: versionId },
-        data: { previewSvgPath, parseError: null },
+        data: {
+          previewSvgPath,
+          parseError: null,
+          ...(version.mapNotes === null ? { mapNotes: extractOcadMapNotes(buffer) } : {}),
+        },
       });
     } catch (svgErr) {
       console.error("SVG-generering misslyckades:", svgErr);
@@ -250,6 +268,7 @@ export async function parseMapVersion(
         parseStatus: "OK",
         objectCount: summary.objectCount,
         parseError: null,
+        mapNotes: extractOcadMapNotes(buffer),
       },
     });
 

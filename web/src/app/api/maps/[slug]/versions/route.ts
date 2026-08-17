@@ -5,7 +5,7 @@ import { runAfterResponse } from "@/lib/background";
 import { sha256 } from "@/lib/hash";
 import { assertMapAllowsUpload, checkVersionUploadGuards } from "@/lib/maps/upload-guards";
 import { processVersionAfterUpload } from "@/lib/ocad/process-version";
-import { appendOcadMapNotesIfComment, displayMapNotesUserName } from "@/lib/ocad/ocad-map-notes";
+import { appendOcadMapNotesIfComment, displayMapNotesUserName, extractOcadMapNotes } from "@/lib/ocad/ocad-map-notes";
 import { prisma } from "@/lib/prisma";
 import type { Role as RoleType } from "@/lib/roles";
 import {
@@ -134,6 +134,7 @@ export async function POST(request: Request, { params }: RouteParams) {
         contentHash,
         uploadedById: session.user.id,
         comment,
+        mapNotes: extractOcadMapNotes(buffer),
         parseStatus: "PENDING",
       },
     });

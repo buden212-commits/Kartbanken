@@ -102,6 +102,8 @@ model MapVersion {
   objectCount      Int?
   parseStatus      String   @default("PENDING")
   parseError       String?
+  /// OCAD Karta > Kartinformation. null = inte inläst ännu.
+  mapNotes         String?
   mapFile               MapFile       @relation(fields: [mapFileId], references: [id], onDelete: Cascade)
   checkoutsAsBase       MapCheckout[] @relation("CheckoutBaseVersion")
   checkoutsAsIntegrated MapCheckout[] @relation("CheckoutIntegratedVersion")

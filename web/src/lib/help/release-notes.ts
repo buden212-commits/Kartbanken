@@ -12,6 +12,7 @@ export const releaseNotes: ReleaseNote[] = [
     items: [
       "När du anger en kommentar vid ny version (uppladdning eller incheckning) läggs en rad med datum, användare och kommentaren till i OCAD under Karta > Kartinformation",
       "Utan kommentar lämnas kartinformationen som den är",
+      "I versionshistoriken finns en dokumentikon efter kommentaren — klicka för att läsa hela kartinformationen för den versionen (samma text som i OCAD)",
     ],
   },
   {

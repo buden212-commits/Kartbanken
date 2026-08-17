@@ -301,11 +301,13 @@ export async function HelpPageContent() {
           <p>
             I versionshistoriken finns ikonknappar med tooltips för ladda ner, jämföra, publicera
             och radera. Klicka på raden (version, datum, storlek, uppladdare, kommentar eller status) för att öppna kartan.
+            Dokumentikonen efter kommentaren öppnar kartinformationen för versionen.
           </p>
           <HelpList
             items={[
               "Ladda ner — hämta originalfilen (.ocd)",
               "Jämför — diff mot föregående version",
+              "Kartinformation — dokumentikonen efter kommentaren visar hela texten från OCAD (Karta → Kartinformation), inklusive äldre rader",
               "Visa karta — klicka på raden i tabellen eller öppna via ikonmenyn",
               "Öppna i nytt fönster — helskärmsvy utan sidhuvud",
               "Publicera — kryssa i Publicerad (redaktör/admin)",
@@ -313,8 +315,8 @@ export async function HelpPageContent() {
           />
           <h3 className="font-medium text-slate-900">Versionshistorik</h3>
           <p>
-            Tabellen visar version och datum i samma kolumn. Hela raden (utom Pub. och
-            Åtgärder) öppnar kartan vid klick; klockslag i tooltip. Endast den
+            Tabellen visar version och datum i samma kolumn. Hela raden (utom Pub.,
+            Åtgärder och kartinformationsikonen) öppnar kartan vid klick; klockslag i tooltip. Endast den
             senaste versionen kan vara ihopfälld som standard beroende på vy — expandera för att se
             alla versioner.
           </p>
@@ -921,6 +923,14 @@ export async function HelpPageContent() {
                   Release notes
                 </Link>{" "}
                 — där listas nya funktioner med datum.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-slate-900">Var ser jag kartinformationen från OCAD?</h3>
+              <p className="mt-1">
+                I versionshistoriken, klicka på dokumentikonen efter kommentaren. Där visas samma
+                text som i OCAD under <strong>Karta → Kartinformation</strong> för den versionen,
+                inklusive rader som lagts till vid tidigare kommentarer.
               </p>
             </div>
             <div>

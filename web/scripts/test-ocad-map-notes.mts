@@ -4,6 +4,7 @@
  */
 import {
   appendOcadMapNotesIfComment,
+  extractOcadMapNotes,
   formatOcadMapNotesLine,
   readOcadMapNotesText,
 } from "../src/lib/ocad/ocad-map-notes";
@@ -62,5 +63,9 @@ const long = appendOcadMapNotesIfComment(empty, {
   at: new Date("2026-08-17T12:00:00+02:00"),
 });
 assert((readOcadMapNotesText(long.buffer) ?? "").includes(longComment), "Lång kommentar ska rymmas");
+
+assert(extractOcadMapNotes(empty) === "", "Tom fil ska ge tom kartinformation");
+assert(extractOcadMapNotes(first.buffer) === firstText, "extractOcadMapNotes ska läsa befintlig text");
+assert(extractOcadMapNotes(second.buffer) === secondText, "extractOcadMapNotes ska läsa alla rader");
 
 console.log("ocad-map-notes: ok");

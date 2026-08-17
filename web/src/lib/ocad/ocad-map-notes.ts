@@ -87,6 +87,15 @@ export function readOcadMapNotesText(buffer: Buffer): string | null {
   return parsed?.first ?? null;
 }
 
+/** Tom sträng om filen saknar kartinformation. */
+export function extractOcadMapNotes(buffer: Buffer): string {
+  try {
+    return (readOcadMapNotesText(buffer) ?? "").trim();
+  } catch {
+    return "";
+  }
+}
+
 function sanitizeMapNotesText(value: string): string {
   return value.replace(/\0/g, "").replace(/[\t]+/g, " ").replace(/\r\n/g, "\n").trim();
 }

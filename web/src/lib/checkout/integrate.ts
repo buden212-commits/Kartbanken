@@ -24,7 +24,11 @@ import {
   readActiveObjectIndices,
   validateOcadBufferStructure,
 } from "@/lib/ocad/ocad-integrate";
-import { appendOcadMapNotesIfComment, displayMapNotesUserName } from "@/lib/ocad/ocad-map-notes";
+import {
+  appendOcadMapNotesIfComment,
+  displayMapNotesUserName,
+  extractOcadMapNotes,
+} from "@/lib/ocad/ocad-map-notes";
 import {
   copyMatchingObjectData,
   copySkipReasonText,
@@ -368,6 +372,7 @@ export async function integrateCheckout(
           comment:
             checkout.integrationComment?.trim() ||
             `Integrerad utcheckning ${checkout.id.slice(0, 8)}`,
+          mapNotes: extractOcadMapNotes(working),
           parseStatus: "PENDING",
         },
       });

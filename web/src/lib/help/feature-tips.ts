@@ -103,7 +103,7 @@ export const featureTips: FeatureTip[] = [
   {
     id: "versionsrad-klick",
     title: "Klicka raden i versionshistoriken",
-    body: "Hela raden öppnar kartan — version, datum, storlek, uppladdare, kommentar och status.",
+    body: "Hela raden öppnar kartan — version, datum, storlek, uppladdare, kommentar och status. Dokumentikonen efter kommentaren visar kartinformationen från OCAD.",
     helpSectionId: "versioner",
     roles: [Role.READER, Role.EDITOR, Role.ADMIN],
     weight: 4,
