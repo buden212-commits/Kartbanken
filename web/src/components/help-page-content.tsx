@@ -181,6 +181,7 @@ export async function HelpPageContent() {
               "Behörighet — visar din roll (läsare, redaktör eller administratör) och vad den innebär",
               "Notiser — kryssa i e-postnotiser vid nya versioner, utcheckning och incheckning; valfritt bifoga .ocd",
               "Lösenord — byt lösenord med nuvarande lösenord som bekräftelse",
+              "På mobil: installera appen (fråga vid uppstart) så kartförslag tål dålig mottagning i fält",
             ]}
           />
 
@@ -550,6 +551,8 @@ export async function HelpPageContent() {
               "Öppna «Infoga symbol för markering» under beskrivningen (ihopfälld som standard) — välj aktiv markering och symbolnamn; raden behålls (t.ex. «1. Punkt — Sten»); sökfältet ligger överst, listan är vertikal, sorterad efter hur ofta symbolen används på kartan, filtreras efter punkt/linje/yta (vid «Punkt (radera)» visas alla typer) och grupperas under kartlager («Visa alla» vid många symboler)",
               "«Tala» vid beskrivningen (i webbläsare som stödjer det) låter dig säga ett symbolnamn — det matchas mot kartans symboler och infogas på aktiv markering; «Rensa» tömmer beskrivningsrutan",
               "I dialogen: «Ta foto» öppnar kameran på mobil (direktfoto), «Välj bild» plockar från albumet",
+              "Utkast (markeringar, text och foto) sparas på telefonen om nätet dippar — skickas automatiskt när du är online igen; samma sak när du redigerar egna öppna förslag",
+              "På mobil får du en fråga om att installera appen vid uppstart (om den inte redan är installerad) — då fungerar fältläge bättre",
               "Skicka-sektionen ovanför kartan visar antal tillagda ändringar innan du skickar",
               "Öppna och pågående förslag från alla versioner visas på områdessidans karta (underlag: senaste publicerade version) — klicka markeringen eller ett förslag i listan",
               "På detaljsidan zoomas kartan automatiskt till markeringen; «Zooma till markering» finns kvar om du vill fokusera om",
@@ -1004,6 +1007,23 @@ export async function HelpPageContent() {
                 Kartan måste vara georefererad och enheten måste tillåta platsåtkomst i
                 webbläsaren. Prova utomhus med bra mottagning. Knappen Min position visas bara när
                 GPS är tillgängligt.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-slate-900">Kartförslaget försvann när nätet dog</h3>
+              <p className="mt-1">
+                Utkast (markeringar, text och foto) sparas på enheten. Öppna samma karta igen — utkastet
+                återställs och skickas när du är online. Installera appen på telefonen (fråga vid
+                uppstart i mobilläge) för mer tillförlitligt fältläge. Kartbilden måste ha hunnit
+                laddas innan du tappar nätet.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-slate-900">Hur installerar jag appen på telefonen?</h3>
+              <p className="mt-1">
+                I mobilläge visas en fråga vid uppstart om appen inte redan är installerad. På
+                Android: «Installera». På iPhone: Dela → Lägg till på hemskärmen. «Inte nu» döljer
+                frågan tills du öppnar sajten nästa gång.
               </p>
             </div>
             <div>

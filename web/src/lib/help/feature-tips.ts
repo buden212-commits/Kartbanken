@@ -19,6 +19,14 @@ export type FeatureTip = {
 
 export const featureTips: FeatureTip[] = [
   {
+    id: "kartforslag-faltlage",
+    title: "Kartförslag i fält",
+    body: "Installera appen på telefonen. Utkast och foto sparas om mottagningen dippar och skickas när du är online igen.",
+    helpSectionId: "kartforslag",
+    roles: [Role.READER, Role.EDITOR, Role.ADMIN],
+    weight: 10,
+  },
+  {
     id: "kartforslag-gps",
     title: "GPS-spår i kartförslag",
     body: "Markera en stig eller spår med telefonens GPS — linjen filtreras och förenklas automatiskt innan den sparas.",

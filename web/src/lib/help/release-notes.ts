@@ -7,6 +7,15 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-08-18",
+    title: "Fältläge för kartförslag",
+    items: [
+      "Kartförslag (skapa och redigera egna öppna) sparas som utkast på enheten — markeringar, text och foto följer med om nätet dippar",
+      "Utkast skickas automatiskt när du är online igen, eller när du trycker Skicka / Spara",
+      "På mobil visas en fråga om att installera appen vid uppstart om den inte redan finns på hemskärmen",
+    ],
+  },
+  {
     date: "2026-08-17",
     title: "Kartinformation i OCAD",
     items: [

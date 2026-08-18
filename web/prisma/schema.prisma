@@ -230,6 +230,8 @@ model MapSuggestion {
   checkoutId          String?
   integratedVersionId String?
   attachmentPath      String?
+  /// Klientens utkast-id för idempotent inskick (fältläge / dubbel synk).
+  clientDraftId       String?  @unique
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 

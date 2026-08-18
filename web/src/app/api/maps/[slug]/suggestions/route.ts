@@ -15,13 +15,15 @@ import {
   countOpenSuggestionsForUser,
   createSuggestion,
   getLatestPublishedVersionNumber,
+  getSuggestionById,
   listSuggestionOverlaysForVersion,
   listPendingSuggestionOverlaysForMap,
   listSuggestionsForMap,
   serializeSuggestionDetail,
   serializeSuggestionSummary,
+  updateSuggestion,
 } from "@/lib/suggestion/repository";
-import { SUGGESTION_CATEGORY_LABELS, SUGGESTION_LOCATION_CONFIDENCE_LABELS } from "@/lib/suggestion/types";
+import { SUGGESTION_CATEGORY_LABELS, SUGGESTION_LOCATION_CONFIDENCE_LABELS, SuggestionStatus } from "@/lib/suggestion/types";
 import { queueNotifyNewMapSuggestion } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
 import {
@@ -38,6 +40,14 @@ import {
 import { NextResponse } from "next/server";
 
 type RouteParams = { params: Promise<{ slug: string }> };
+
+function parseClientDraftId(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (trimmed.length < 8 || trimmed.length > 80) return null;
+  if (!/^[\w.-]+$/.test(trimmed)) return null;
+  return trimmed;
+}
 
 export async function GET(request: Request, { params }: RouteParams) {
   const session = await requireSession();
@@ -127,6 +137,7 @@ export async function POST(request: Request, { params }: RouteParams) {
   let title: ReturnType<typeof validateSuggestionTitle> = null;
   let geometries: ReturnType<typeof validateSuggestionGeometries> = null;
   let attachmentPath: string | null = null;
+  let clientDraftId: string | null = null;
 
   if (contentType.includes("multipart/form-data")) {
     let formData: FormData;
@@ -143,6 +154,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     );
     comment = validateSuggestionComment(formData.get("comment"));
     title = validateSuggestionTitle(formData.get("title"));
+    clientDraftId = parseClientDraftId(formData.get("clientDraftId")?.toString());
     try {
       const geometriesRaw = formData.get("geometries")?.toString();
       if (geometriesRaw) {
@@ -211,6 +223,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       }
       attachmentPath = candidate;
     }
+    clientDraftId = parseClientDraftId(record.clientDraftId);
   }
 
   if (!mapVersionId) {
@@ -246,6 +259,49 @@ export async function POST(request: Request, { params }: RouteParams) {
     );
   }
 
+  const existingDraft =
+    clientDraftId != null
+      ? await prisma.mapSuggestion.findUnique({
+          where: { clientDraftId },
+          select: { id: true, createdById: true, mapFileId: true, status: true },
+        })
+      : null;
+
+  if (existingDraft) {
+    if (existingDraft.createdById !== session.user.id || existingDraft.mapFileId !== map.id) {
+      return NextResponse.json({ error: "Utkastet tillhör en annan användare" }, { status: 409 });
+    }
+
+    const latestPublishedVersionNumber = await getLatestPublishedVersionNumber(map.id);
+    if (existingDraft.status !== SuggestionStatus.OPEN) {
+      const full = await getSuggestionById(existingDraft.id);
+      if (!full) {
+        return NextResponse.json({ error: "Förslaget hittades inte" }, { status: 404 });
+      }
+      return NextResponse.json(serializeSuggestionDetail(full, latestPublishedVersionNumber), {
+        status: 200,
+      });
+    }
+
+    const updated = await updateSuggestion(existingDraft.id, {
+      category,
+      locationConfidence,
+      title,
+      comment,
+      geometries,
+      ...(attachmentPath ? { attachmentPath } : {}),
+    });
+
+    await logAction(session.user.id, "SUGGESTION_UPDATED", "MapSuggestion", updated.id, {
+      mapSlug: slug,
+      clientDraftId,
+    });
+
+    return NextResponse.json(serializeSuggestionDetail(updated, latestPublishedVersionNumber), {
+      status: 200,
+    });
+  }
+
   const quotaDenied = await assertOpenSuggestionQuota(
     map.id,
     session.user.id,
@@ -265,6 +321,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       comment,
       geometries,
       attachmentPath,
+      clientDraftId,
     });
   } catch (err) {
     if (attachmentPath) {

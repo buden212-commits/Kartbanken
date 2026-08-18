@@ -42,6 +42,16 @@ import {
   type SuggestionStatusValue,
 } from "@/lib/suggestion/types";
 import { formatDate, formatDateOnly } from "@/lib/format";
+import { OfflineDraftStatus } from "@/components/offline-draft-status";
+import {
+  deleteSuggestionDraft,
+  draftHasContent,
+  editSuggestionDraftId,
+  emptyEditDraft,
+  getSuggestionDraft,
+  mergeSuggestionDraft,
+} from "@/lib/suggestion/offline-drafts";
+import { syncSuggestionDraft } from "@/lib/suggestion/offline-sync";
 
 type DrawTool = SuggestionDrawTool;
 
@@ -121,6 +131,11 @@ export function SuggestionDetailClient({
   const [draftBbox, setDraftBbox] = useState<SuggestionGeometry | null>(null);
   const [polygonPoints, setPolygonPoints] = useState<[number, number][]>([]);
   const [linePoints, setLinePoints] = useState<[number, number][]>([]);
+  const [online, setOnline] = useState(true);
+  const [draftReady, setDraftReady] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
+  const [draftQueued, setDraftQueued] = useState(false);
+  const draftId = editSuggestionDraftId(initial.id);
 
   const allMarkings = suggestion.objects;
   const canEdit = isOwner && suggestion.status === SuggestionStatus.OPEN;
@@ -148,6 +163,85 @@ export function SuggestionDetailClient({
     setLinePoints([]);
     dragRef.current = null;
   }, []);
+
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    update();
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      if (!(isOwner && initial.status === SuggestionStatus.OPEN)) {
+        setDraftReady(true);
+        return;
+      }
+      const draft = await getSuggestionDraft(draftId);
+      if (cancelled) {
+        setDraftReady(true);
+        return;
+      }
+      if (draft && draftHasContent(draft)) {
+        setEditCategory(draft.category);
+        setEditLocationConfidence(draft.locationConfidence);
+        setEditTitle(draft.title);
+        setEditComment(draft.comment);
+        const geometry = draft.markings[0] ?? draft.currentGeometry;
+        if (geometry) setEditGeometry(geometry);
+        setEditMode(true);
+        setDraftRestored(true);
+        if (draft.wantsSync) setDraftQueued(true);
+      }
+      setDraftReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [draftId, initial.id, initial.status, isOwner]);
+
+  useEffect(() => {
+    if (!draftReady || !editMode) return;
+    const timer = window.setTimeout(() => {
+      void mergeSuggestionDraft(
+        draftId,
+        {
+          category: editCategory,
+          locationConfidence: editLocationConfidence,
+          title: editTitle,
+          comment: editComment,
+          markings: editGeometry ? [editGeometry] : [],
+          currentGeometry: editGeometry,
+          wantsSync: draftQueued,
+        },
+        () =>
+          emptyEditDraft({
+            mapSlug,
+            versionId: suggestion.mapVersionId,
+            suggestionId: suggestion.id,
+          }),
+      );
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [
+    draftId,
+    draftQueued,
+    draftReady,
+    editCategory,
+    editComment,
+    editGeometry,
+    editLocationConfidence,
+    editMode,
+    editTitle,
+    mapSlug,
+    suggestion.id,
+    suggestion.mapVersionId,
+  ]);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent, svg: SVGSVGElement) => {
@@ -345,23 +439,58 @@ export function SuggestionDetailClient({
     setRedrawMarking(false);
     resetDrawDraft();
     setError(null);
+    setDraftQueued(false);
+    setDraftRestored(false);
+    void deleteSuggestionDraft(draftId);
   }
 
   async function saveEdit() {
-    const body: Record<string, unknown> = {
-      category: editCategory,
-      locationConfidence: editLocationConfidence,
-      title: editTitle.trim() || null,
-      comment: editComment,
-    };
-    if (editGeometry) {
-      body.geometry = editGeometry;
-    }
-    const updated = await patchSuggestion(body);
-    if (updated) {
-      setEditMode(false);
-      setRedrawMarking(false);
-      resetDrawDraft();
+    setLoading(true);
+    setError(null);
+    try {
+      const draft = await mergeSuggestionDraft(
+        draftId,
+        {
+          category: editCategory,
+          locationConfidence: editLocationConfidence,
+          title: editTitle,
+          comment: editComment,
+          markings: editGeometry ? [editGeometry] : [],
+          currentGeometry: editGeometry,
+          wantsSync: true,
+          lastError: null,
+        },
+        () =>
+          emptyEditDraft({
+            mapSlug,
+            versionId: suggestion.mapVersionId,
+            suggestionId: suggestion.id,
+          }),
+      );
+      const result = await syncSuggestionDraft(draft);
+      if (result.ok) {
+        const res = await fetch(`/api/maps/${mapSlug}/suggestions/${suggestion.id}`);
+        const data = (await res.json()) as SuggestionDetail & { error?: string };
+        if (res.ok) {
+          setSuggestion(data);
+          router.refresh();
+        }
+        setEditMode(false);
+        setRedrawMarking(false);
+        resetDrawDraft();
+        setDraftQueued(false);
+        setDraftRestored(false);
+        return;
+      }
+      if (result.queued) {
+        setDraftQueued(true);
+        return;
+      }
+      setError(result.error);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Kunde inte uppdatera förslaget");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -410,6 +539,12 @@ export function SuggestionDetailClient({
       {statusAttribution && (
         <p className="mt-2 text-sm text-slate-600">{statusAttribution}</p>
       )}
+
+      <OfflineDraftStatus
+        online={online}
+        restored={draftRestored}
+        queued={draftQueued}
+      />
 
       {editMode ? (
         <div className="card mt-6 space-y-4">

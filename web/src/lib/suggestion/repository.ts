@@ -331,6 +331,7 @@ export async function createSuggestion(params: {
   comment: string;
   geometries: SuggestionGeometry[];
   attachmentPath?: string | null;
+  clientDraftId?: string | null;
 }) {
   return prisma.mapSuggestion.create({
     data: {
@@ -342,6 +343,7 @@ export async function createSuggestion(params: {
       title: params.title,
       comment: params.comment,
       attachmentPath: params.attachmentPath ?? null,
+      clientDraftId: params.clientDraftId ?? null,
       objects: {
         create: params.geometries.map((geometry, sortOrder) => ({
           objectType: suggestionObjectTypeForGeometry(geometry),
@@ -375,23 +377,25 @@ export async function updateSuggestion(
     checkoutId?: string | null;
     integratedVersionId?: string | null;
     geometry?: SuggestionGeometry;
+    geometries?: SuggestionGeometry[];
+    attachmentPath?: string | null;
   },
 ) {
   return prisma.$transaction(async (tx) => {
-    if (data.geometry) {
-      const objectType = suggestionObjectTypeForGeometry(data.geometry);
+    const geometries = data.geometries ?? (data.geometry ? [data.geometry] : null);
+    if (geometries) {
       await tx.mapSuggestionObject.deleteMany({ where: { suggestionId } });
-      await tx.mapSuggestionObject.create({
-        data: {
+      await tx.mapSuggestionObject.createMany({
+        data: geometries.map((geometry, sortOrder) => ({
           suggestionId,
-          objectType,
-          geometryJson: JSON.stringify(data.geometry),
-          sortOrder: 0,
-        },
+          objectType: suggestionObjectTypeForGeometry(geometry),
+          geometryJson: JSON.stringify(geometry),
+          sortOrder,
+        })),
       });
     }
 
-    const { geometry: _g, ...updateData } = data;
+    const { geometry: _g, geometries: _gs, ...updateData } = data;
 
     return tx.mapSuggestion.update({
       where: { id: suggestionId },

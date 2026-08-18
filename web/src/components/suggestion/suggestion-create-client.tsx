@@ -37,11 +37,20 @@ import {
   type GpsTrackSample,
 } from "@/lib/suggestion/gps-track";
 import { SuggestionSubmitDialog } from "@/components/suggestion/suggestion-submit-dialog";
+import { OfflineDraftStatus } from "@/components/offline-draft-status";
 import type { OcadMapLayer } from "@/lib/ocad/layers";
 import {
   MAX_SUGGESTION_GEOMETRIES,
   type SuggestionGeometry,
 } from "@/lib/suggestion/types";
+import {
+  createSuggestionDraftId,
+  deleteSuggestionDraft,
+  draftHasContent,
+  emptyCreateDraft,
+  getSuggestionDraft,
+  mergeSuggestionDraft,
+} from "@/lib/suggestion/offline-drafts";
 import {
   SuggestionMapActionToolbar,
   SuggestionMapRightToolbars,
@@ -212,6 +221,11 @@ export function SuggestionCreateClient({
   const [linePoints, setLinePoints] = useState<[number, number][]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
+  const [draftReady, setDraftReady] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
+  const [draftQueued, setDraftQueued] = useState(false);
+  const [online, setOnline] = useState(true);
+  const draftId = createSuggestionDraftId(mapSlug, versionId);
 
   const resetDraft = useCallback(() => {
     setDraftBbox(null);
@@ -266,6 +280,73 @@ export function SuggestionCreateClient({
       stopGpsWatch();
     };
   }, [stopGpsWatch]);
+
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    update();
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const draft = await getSuggestionDraft(draftId);
+      if (cancelled) {
+        setDraftReady(true);
+        return;
+      }
+      if (draft) {
+        if (draft.markings.length > 0) setMarkings(draft.markings);
+        if (draft.currentGeometry) setGeometry(draft.currentGeometry);
+        if (draft.polygonPoints.length > 0) setPolygonPoints(draft.polygonPoints);
+        if (draft.linePoints.length > 0) setLinePoints(draft.linePoints);
+        if (draftHasContent(draft)) setDraftRestored(true);
+        if (draft.wantsSync) setDraftQueued(true);
+      }
+      setDraftReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [draftId]);
+
+  useEffect(() => {
+    if (!draftReady) return;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        const patch = {
+          markings,
+          currentGeometry: geometry,
+          polygonPoints,
+          linePoints,
+        };
+        const existing = await getSuggestionDraft(draftId);
+        if (
+          markings.length === 0 &&
+          !geometry &&
+          polygonPoints.length === 0 &&
+          linePoints.length === 0 &&
+          existing &&
+          !existing.wantsSync &&
+          !existing.comment.trim() &&
+          !existing.title.trim() &&
+          !existing.photoBlob
+        ) {
+          await deleteSuggestionDraft(draftId);
+          return;
+        }
+        await mergeSuggestionDraft(draftId, patch, () =>
+          emptyCreateDraft({ mapSlug, versionId }),
+        );
+      })();
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [draftId, draftReady, geometry, linePoints, mapSlug, markings, polygonPoints, versionId]);
 
   const handleOcadCrsReady = useCallback((crs: OcadCrsInfo | null) => {
     setOcadCrs(crs);
@@ -680,6 +761,20 @@ export function SuggestionCreateClient({
     setSubmitDialogOpen(false);
   }, []);
 
+  const handleSubmitted = useCallback(() => {
+    setMarkings([]);
+    setGeometry(null);
+    resetDraft();
+    setSubmitDialogOpen(false);
+    setDraftQueued(false);
+    setDraftRestored(false);
+  }, [resetDraft]);
+
+  const handleQueued = useCallback(() => {
+    setSubmitDialogOpen(false);
+    setDraftQueued(true);
+  }, []);
+
   const mapToolbarOverlay = useMemo(
     () => (
       <>
@@ -734,6 +829,12 @@ export function SuggestionCreateClient({
         <HelpLinkIcon section="kartforslag" className="mt-1 shrink-0" />
       </div>
 
+      <OfflineDraftStatus
+        online={online}
+        restored={draftRestored}
+        queued={draftQueued}
+      />
+
       <div className="mt-6">
         <SuggestionCreateMapPanel
           mapSlug={mapSlug}
@@ -771,6 +872,8 @@ export function SuggestionCreateClient({
           ocadLayers={ocadLayers}
           onClose={handleCloseSubmitDialog}
           onRemoveMarking={handleRemoveMarking}
+          onSubmitted={handleSubmitted}
+          onQueued={handleQueued}
         />
       )}
     </div>
