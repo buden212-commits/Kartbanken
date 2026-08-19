@@ -11,7 +11,7 @@ Redaktör ska kunna gå från valda kartförslag till något som går att redige
 - Resultat: ny utcheckning, direkt ny kartversion, eller båda (välj i dialogen)?
 - Urval: valda förslag, alla öppna på versionen, eller alla tilldelade dig?
 - Ska införda förslag automatiskt bli Införd, eller först när admin publicerat/integrerat?
-- Raderingsmarkeringar («Punkt radera»): hoppa över (som vid OCD-export idag), eller skapa markering i OCD?
+- Raderingsmarkeringar («Punkt radera»): hoppa över (som vid OCD-export idag), eller skapa markering i OCAD?
 
 ## 2. Fältläge / offline-ish för kartförslag — gjort 2026-08-18
 
@@ -35,12 +35,13 @@ Göra granskningskön mer operativ: någon tar/äger ett förslag, filter på ti
 - En ägare per förslag, eller flera?
 - Påminnelsemail (t.ex. öppet > 7 dagar), eller räcker filter «Mina» / «Otilldelade»?
 
-## 4. Översikt öppna förslag på områdessidan
+## 4. Översikt öppna förslag på områdessidan — gjort 2026-08-19
 
 Visa var underhåll behövs mest: karta och/eller lista sorterad efter ålder/täthet.
 
-**Öppna frågor**
+**Beslut**
 
-- Visa punkter på kartan (befintlig overlay), lista sorterad efter ålder/täthet, eller båda?
-- Synlig för läsare, eller bara redaktör/admin?
-- Filter: bara Öppen, eller även Pågår?
+- Karta + lista (befintlig overlay), förbättrad med täthets-sortering i listan
+- Synlig för alla inloggade med kartförslag (läsare inkl.)
+- Öppen + Pågår (som idag)
+- Listan sorteras efter kluster/täthet (förslag inom ca 200 m räknas som samma område); badge «X förslag inom samma område»

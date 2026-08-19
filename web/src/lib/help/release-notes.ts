@@ -7,6 +7,15 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-08-19",
+    title: "Underhållsöversikt för kartförslag",
+    items: [
+      "På områdessidan: karta och lista som tidigare, men listan sorteras efter täthet — områden med flest öppna eller pågående förslag nära varandra visas först",
+      "«X förslag inom samma område» visas när flera förslag ligger nära varandra på kartan",
+      "Klicka i listan för att zooma kartan till markeringen",
+    ],
+  },
+  {
     date: "2026-08-18",
     title: "Fältläge för kartförslag",
     items: [

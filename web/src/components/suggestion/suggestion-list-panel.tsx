@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import type { SuggestionSummary } from "@/lib/suggestion/types";
+import { useMemo, useState } from "react";
+import type { SuggestionOverlayItem, SuggestionSummary } from "@/lib/suggestion/types";
 import {
   SUGGESTION_CATEGORY_LABELS,
   SUGGESTION_STATUS_LABELS,
@@ -12,6 +12,7 @@ import {
 } from "@/lib/suggestion/types";
 import { SuggestionLocationConfidenceBadge } from "@/components/suggestion/suggestion-location-confidence-field";
 import { formatDateOnly } from "@/lib/format";
+import { sortSuggestionsByClusterDensity } from "@/lib/suggestion/density-sort";
 
 type Props = {
   mapSlug: string;
@@ -23,6 +24,8 @@ type Props = {
   onZoomToSuggestion?: (id: string) => void;
   highlightedSuggestionId?: string | null;
   publishedVersionNumber?: number | null;
+  /** Markeringar för täthets-sortering (områdessidan). */
+  densityOverlays?: SuggestionOverlayItem[];
 };
 
 function statusBadgeClass(status: SuggestionSummary["status"]): string {
@@ -47,6 +50,7 @@ export function SuggestionListPanel({
   onZoomToSuggestion,
   highlightedSuggestionId = null,
   publishedVersionNumber = null,
+  densityOverlays,
 }: Props) {
   const router = useRouter();
   const [filter, setFilter] = useState<string>("ALL");
@@ -55,6 +59,16 @@ export function SuggestionListPanel({
   const [exportingPdf, setExportingPdf] = useState(false);
 
   const filtered = suggestions.filter((s) => (filter === "ALL" ? true : s.status === filter));
+  const { sortedSuggestions, clusterById } = useMemo(() => {
+    if (!densityOverlays?.length) {
+      return { sortedSuggestions: filtered, clusterById: new Map() };
+    }
+    const { items, clusterById: clusters } = sortSuggestionsByClusterDensity(
+      filtered,
+      densityOverlays,
+    );
+    return { sortedSuggestions: items, clusterById: clusters };
+  }, [densityOverlays, filtered]);
   const openCount = suggestions.filter((s) => s.status === SuggestionStatus.OPEN).length;
   const inProgressCount = suggestions.filter(
     (s) => s.status === SuggestionStatus.IN_PROGRESS,
@@ -140,7 +154,8 @@ export function SuggestionListPanel({
       </div>
       <p className="mt-1 text-sm text-slate-600">
         Öppna och pågående förslag från alla versioner. Kartan ovan visar senaste publicerade
-        version.
+        version. Listan sorteras efter täthet — områden med flest förslag nära varandra visas
+        först.
         {publishedVersionNumber != null && (
           <> Publicerad version: <strong>v{publishedVersionNumber}</strong>.</>
         )}
@@ -152,11 +167,12 @@ export function SuggestionListPanel({
         </p>
       )}
 
-      {filtered.length === 0 ? (
+      {sortedSuggestions.length === 0 ? (
         <p className="mt-4 text-sm text-slate-500">Inga kartförslag i denna vy.</p>
       ) : (
         <ul className="mt-4 divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white">
-          {filtered.map((s) => {
+          {sortedSuggestions.map((s) => {
+            const cluster = clusterById.get(s.id);
             const statusAttribution = formatSuggestionStatusAttribution(
               s.status,
               s.reviewedBy,
@@ -197,6 +213,11 @@ export function SuggestionListPanel({
                   {s.hasAttachment ? " 📷" : ""}
                 </Link>
                 <p className="mt-1 line-clamp-2 text-sm text-slate-600">{s.comment}</p>
+                {cluster && cluster.clusterSize > 1 && (
+                  <p className="mt-1 text-xs font-medium text-orange-800">
+                    {cluster.clusterSize} förslag inom samma område
+                  </p>
+                )}
                 <div className="mt-1.5">
                   <SuggestionLocationConfidenceBadge value={s.locationConfidence} />
                 </div>

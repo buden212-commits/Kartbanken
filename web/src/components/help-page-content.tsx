@@ -555,6 +555,7 @@ export async function HelpPageContent() {
               "På mobil får du en fråga om att installera appen vid uppstart (om den inte redan är installerad) — då fungerar fältläge bättre",
               "Skicka-sektionen ovanför kartan visar antal tillagda ändringar innan du skickar",
               "Öppna och pågående förslag från alla versioner visas på områdessidans karta (underlag: senaste publicerade version) — klicka markeringen eller ett förslag i listan",
+              "Listan sorteras efter täthet: områden med flest öppna/pågående förslag nära varandra visas först (inom ca 200 m); «X förslag inom samma område» visas vid kluster",
               "På detaljsidan zoomas kartan automatiskt till markeringen; «Zooma till markering» finns kvar om du vill fokusera om",
               "Växla «Visa kartförslag» i kartvyn för att dölja lagret",
               "Redaktörer markerar som Pågår, Införd eller Avvisad och kan koppla utcheckning",
