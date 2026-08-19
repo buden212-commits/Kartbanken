@@ -56,6 +56,7 @@ import {
   SuggestionMapRightToolbars,
   type SuggestionDrawTool,
 } from "@/components/suggestion/suggestion-draw-toolbar";
+import { useSmoothedCompass } from "@/hooks/use-smoothed-compass";
 
 type DrawTool = SuggestionDrawTool;
 
@@ -88,6 +89,8 @@ type CreateMapPanelProps = {
     mapCoordRef: MutableRefObject<[number, number] | null>;
     recenterToken: number;
   };
+  mapBearing: number;
+  compassStatus: string | null;
   mapToolbarOverlay: React.ReactNode;
 };
 
@@ -109,6 +112,8 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
   onOcadLayersReady,
   gpsTrackingStatus,
   gpsTrackFollow,
+  mapBearing,
+  compassStatus,
   mapToolbarOverlay,
 }: CreateMapPanelProps) {
   const renderSvgOverlay = useCallback(
@@ -154,6 +159,7 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
       onOcadMapScale={onOcadMapScale}
       onOcadLayersReady={onOcadLayersReady}
       gpsTrackFollow={gpsTrackFollow}
+      mapBearing={mapBearing}
       mapToolbarOverlay={mapToolbarOverlay}
       secondaryHeaderContent={
         <div className="space-y-2 border-b border-slate-200 bg-slate-50 px-3 py-2 sm:px-4">
@@ -162,9 +168,14 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
               {gpsTrackingStatus}
             </p>
           )}
+          {compassStatus && (
+            <p className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              {compassStatus}
+            </p>
+          )}
           <p className={`text-xs ${mapMode === "draw" ? "text-amber-700" : "text-slate-600"}`}>
             {mapMode === "navigate"
-              ? "Navigeringsläge — dra för att panorera och nyp med två fingrar för att zooma. Växla till Rita när du ska markera."
+              ? "Navigeringsläge — dra för att panorera och nyp med två fingrar för att zooma. På mobil kan du slå på kompass (passa efter norr) i verktygsraden. Växla till Rita när du ska markera."
               : drawHint}
             {markingCount > 0
               ? ` ${markingCount} markering${markingCount === 1 ? "" : "ar"}.`
@@ -199,6 +210,7 @@ export function SuggestionCreateClient({
 
   const [tool, setTool] = useState<DrawTool>("pin");
   const [mapMode, setMapMode] = useState<"draw" | "navigate">("navigate");
+  const [compassMode, setCompassMode] = useState(false);
   const [ocadCrs, setOcadCrs] = useState<OcadCrsInfo | null>(null);
   const [ocadLayers, setOcadLayers] = useState<OcadMapLayer[]>([]);
   const [ocadMapScale, setOcadMapScale] = useState(15000);
@@ -676,6 +688,43 @@ export function SuggestionCreateClient({
 
   const canUseGpsTracking = isGeoreferencedCrs(ocadCrs);
 
+  const compassActive = compassMode && mapMode === "navigate" && !gpsTracking;
+  const {
+    bearing: compassBearing,
+    error: compassError,
+    pending: compassPending,
+    supported: compassSupported,
+  } = useSmoothedCompass({
+    active: compassActive,
+    grivationRad: ocadCrs?.grivation ?? 0,
+  });
+  const mapBearing = compassActive ? compassBearing : 0;
+
+  const compassStatus = useMemo(() => {
+    if (compassError) return compassError;
+    if (compassPending) return "Startar kompass…";
+    if (compassActive) {
+      return "Kompass aktiv — kartan roterar mjukt efter telefonens riktning. Stoppa kompassen för att återgå till norr uppåt.";
+    }
+    return null;
+  }, [compassActive, compassError, compassPending]);
+
+  useEffect(() => {
+    if (mapMode === "draw" && compassMode) {
+      setCompassMode(false);
+    }
+  }, [compassMode, mapMode]);
+
+  useEffect(() => {
+    if (gpsTracking && compassMode) {
+      setCompassMode(false);
+    }
+  }, [compassMode, gpsTracking]);
+
+  const handleCompassToggle = useCallback(() => {
+    setCompassMode((prev) => !prev);
+  }, []);
+
   const handleGpsTrackingToggle = useCallback(() => {
     if (gpsTracking) {
       stopGpsTracking();
@@ -794,15 +843,22 @@ export function SuggestionCreateClient({
           gpsTracking={gpsTracking}
           canUseGpsTracking={canUseGpsTracking}
           onGpsTrackingToggle={handleGpsTrackingToggle}
+          compassActive={compassMode}
+          onCompassToggle={handleCompassToggle}
+          compassSupported={compassSupported}
+          compassDisabled={gpsTracking}
         />
       </>
     ),
     [
       canAddMarking,
       canUseGpsTracking,
+      compassMode,
+      compassSupported,
       gpsTracking,
       handleAddMarking,
       handleClearAll,
+      handleCompassToggle,
       handleGpsTrackingToggle,
       handleOpenSubmitDialog,
       handleToolChange,
@@ -854,6 +910,8 @@ export function SuggestionCreateClient({
           onOcadLayersReady={handleOcadLayersReady}
           gpsTrackingStatus={gpsTrackingStatus}
           gpsTrackFollow={gpsTrackFollow}
+          mapBearing={mapBearing}
+          compassStatus={compassStatus}
           mapToolbarOverlay={mapToolbarOverlay}
         />
       </div>

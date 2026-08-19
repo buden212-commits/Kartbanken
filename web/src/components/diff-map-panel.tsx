@@ -11,6 +11,11 @@ import {
 } from "@/lib/ocad/crs";
 import { findChangeAtPoint, parseViewBoxString, screenToSvgPoint } from "@/lib/ocad/map-hit-test";
 import {
+  buildMapLayerTransform,
+  mapContentToScreen,
+  panForCenteredMapPoint,
+} from "@/lib/ocad/map-view-transform";
+import {
   geoBboxToSvgUser,
   geoToSvgUserPoint,
   IDENTITY_SVG_TRANSFORM,
@@ -143,6 +148,8 @@ type Props = {
     /** Ökas när spårning startar eller första GPS-fix kommer. */
     recenterToken: number;
   } | null;
+  /** Clockwise rotation in degrees (0 = north up). Used for compass mode. */
+  mapBearing?: number;
 };
 
 const MIN_ZOOM = 0.2;
@@ -291,6 +298,7 @@ export function DiffMapPanel({
   onOcadLayersReady,
   fitGeoBbox = null,
   gpsTrackFollow = null,
+  mapBearing = 0,
 }: Props) {
   const [svgInner, setSvgInner] = useState<string | null>(null);
   const [svgFill, setSvgFill] = useState("transparent");
@@ -643,8 +651,8 @@ export function DiffMapPanel({
     await performExport();
   }, [exportFrame, exportSettings.outputFormat, exportSettings.includeSuggestions, performExport]);
 
-  const viewStateRef = useRef({ pan: { x: 0, y: 0 }, zoom: FIT_WHOLE_ZOOM });
-  viewStateRef.current = { pan, zoom };
+  const viewStateRef = useRef({ pan: { x: 0, y: 0 }, zoom: FIT_WHOLE_ZOOM, bearing: 0 });
+  viewStateRef.current = { pan, zoom, bearing: mapBearing };
 
   const markUserInteracted = useCallback(() => {
     userInteractedRef.current = true;
@@ -1056,12 +1064,18 @@ export function DiffMapPanel({
         rect.height,
       );
       setZoom(nextZoom);
-      setPan({
-        x: rect.width / 2 - screenX * nextZoom,
-        y: rect.height / 2 - screenY * nextZoom,
-      });
+      setPan(
+        panForCenteredMapPoint(
+          screenX,
+          screenY,
+          rect.width,
+          rect.height,
+          nextZoom,
+          mapBearing,
+        ),
+      );
     },
-    [fullViewBox, markUserInteracted, rootTransform],
+    [fullViewBox, mapBearing, markUserInteracted, rootTransform],
   );
 
   const panToMapCoordAtDisplayScale = useCallback(
@@ -1226,15 +1240,18 @@ export function DiffMapPanel({
       rect.width,
       rect.height,
     );
-    const x = pan.x + baseX * zoom;
-    const y = pan.y + baseY * zoom;
+    const [x, y] = mapContentToScreen(baseX, baseY, rect.width, rect.height, {
+      pan,
+      zoom,
+      bearing: mapBearing,
+    });
 
     return {
       x,
       y,
       uncertain: gpsFix.accuracyMeters > GPS_UNCERTAIN_ACCURACY_M,
     };
-  }, [fullViewBox, gpsFix, pan.x, pan.y, rootTransform, zoom]);
+  }, [fullViewBox, gpsFix, mapBearing, pan, rootTransform, zoom]);
 
   const gpsAccuracyUncertain = Boolean(
     gpsFix && gpsFix.accuracyMeters > GPS_UNCERTAIN_ACCURACY_M,
@@ -1399,7 +1416,7 @@ export function DiffMapPanel({
           <div
             className="absolute inset-0"
             style={{
-              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+              transform: buildMapLayerTransform({ pan, zoom, bearing: mapBearing }),
               transformOrigin: "0 0",
             }}
           >
@@ -1524,6 +1541,16 @@ export function DiffMapPanel({
                 strokeLinecap="round"
               />
             </svg>
+          </div>
+        )}
+
+        {Math.abs(mapBearing) > 0.5 && (
+          <div
+            className="pointer-events-none absolute left-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-xs font-semibold text-slate-700 shadow-sm"
+            style={{ transform: `rotate(${-mapBearing}deg)` }}
+            aria-hidden
+          >
+            N
           </div>
         )}
 

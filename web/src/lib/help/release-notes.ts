@@ -8,6 +8,15 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-19",
+    title: "Kompassläge i kartförslag",
+    items: [
+      "På mobil i «Föreslå ändring»: slå på «Passa efter norr» i navigationsläge — kartan roterar mjukt efter telefonens kompass",
+      "Liten «N»-markering visar var norr är när kompassen är aktiv",
+      "Kompassen stängs automatiskt om du byter till Rita eller startar GPS-spår",
+    ],
+  },
+  {
+    date: "2026-08-19",
     title: "Underhållsöversikt för kartförslag",
     items: [
       "På områdessidan: karta och lista som tidigare, men listan sorteras efter täthet — områden med flest öppna eller pågående förslag nära varandra visas först",

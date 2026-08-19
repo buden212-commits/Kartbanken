@@ -204,6 +204,16 @@ function NavigateModeIcon() {
   );
 }
 
+function CompassModeIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+      <circle cx="10" cy="10" r="7" stroke="currentColor" strokeWidth="1.75" />
+      <path d="M10 4.5 11.75 11.75 10 10 8.25 11.75 10 4.5Z" fill="currentColor" />
+      <path d="M10 15.5v1.25M10 3.25V2M4.5 10H3.25M16.75 10H15.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function ToolIcon({ tool }: { tool: SuggestionDrawTool }) {
   switch (tool) {
     case "pin":
@@ -287,9 +297,26 @@ function DrawToolsPanel({
 type ModeToolbarProps = {
   mapMode: "draw" | "navigate";
   onMapModeChange: (mode: "draw" | "navigate") => void;
+  compassActive?: boolean;
+  onCompassToggle?: () => void;
+  compassSupported?: boolean;
+  compassDisabled?: boolean;
 };
 
-function ModeToolsPanel({ mapMode, onMapModeChange }: ModeToolbarProps) {
+function ModeToolsPanel({
+  mapMode,
+  onMapModeChange,
+  compassActive = false,
+  onCompassToggle,
+  compassSupported = false,
+  compassDisabled = false,
+}: ModeToolbarProps) {
+  const showCompass = Boolean(onCompassToggle) && mapMode === "navigate";
+  const compassLabel = compassActive ? "Stoppa kompass" : "Passa efter norr";
+  const compassTitle = compassSupported
+    ? compassLabel
+    : "Kompass kräver en mobil enhet med stöd för riktning";
+
   return (
     <MapToolbarPanel label="Kartläge">
       <IconToolbarButton
@@ -306,6 +333,20 @@ function ModeToolsPanel({ mapMode, onMapModeChange }: ModeToolbarProps) {
       >
         <NavigateModeIcon />
       </IconToolbarButton>
+      {showCompass && (
+        <div className="sm:hidden">
+          <IconToolbarButton
+            label={compassTitle}
+            active={compassActive}
+            activeClass={iconBtnTracking}
+            inactiveClass={iconBtnGpsInactive}
+            disabled={(!compassSupported && !compassActive) || compassDisabled}
+            onClick={onCompassToggle!}
+          >
+            <CompassModeIcon />
+          </IconToolbarButton>
+        </div>
+      )}
     </MapToolbarPanel>
   );
 }
@@ -319,6 +360,10 @@ export function SuggestionMapRightToolbars({
   gpsTracking,
   canUseGpsTracking,
   onGpsTrackingToggle,
+  compassActive,
+  onCompassToggle,
+  compassSupported,
+  compassDisabled,
 }: Pick<DrawToolbarProps, "tool" | "onToolChange"> &
   ModeToolbarProps & {
     drawDisabled?: boolean;
@@ -342,7 +387,14 @@ export function SuggestionMapRightToolbars({
         canUseGpsTracking={canUseGpsTracking}
         onGpsTrackingToggle={onGpsTrackingToggle}
       />
-      <ModeToolsPanel mapMode={mapMode} onMapModeChange={onMapModeChange} />
+      <ModeToolsPanel
+        mapMode={mapMode}
+        onMapModeChange={onMapModeChange}
+        compassActive={compassActive}
+        onCompassToggle={onCompassToggle}
+        compassSupported={compassSupported}
+        compassDisabled={compassDisabled}
+      />
     </div>
   );
 }
