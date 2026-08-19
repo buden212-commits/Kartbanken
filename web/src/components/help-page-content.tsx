@@ -544,7 +544,7 @@ export async function HelpPageContent() {
               "Orimliga GPS-hopp filtreras bort och accepterade punkter utjämnas vid sämre mottagning — antal filtrerade hopp visas efter «Sluta spåra»",
               "Kartan startar i «Navigera» — välj ett ritverktyg till höger för att aktivera «Rita» och börja markera",
               "Växla «Rita» / «Navigera» via ikonerna till höger — i Navigera kan du dra och nypa utan att rita; i Rita zoomar två fingrar utan att skapa markering",
-              "På mobil i Navigera: «Passa efter norr» (kompassikon) roterar kartan mjukt efter telefonens riktning — stoppa kompassen för norr uppåt igen; fungerar inte samtidigt som GPS-spår",
+              "På mobil i Navigera: «Passa efter norr» (kompassikon) roterar kartan efter telefonens riktning — stoppa kompassen för norr uppåt igen; kompassen stängs automatiskt under GPS-spår och tills spåret lagts till",
               "Klicka «Lägg till ändring» på kartan när markeringen är klar — längst ned på mobil, uppe till höger på större skärm; punkt, radera och rektangel aktiveras direkt efter klick/drag",
               "Varje markering numreras (1, 2, 3 …) på kartan — inte kategorinamn",
               "Lägg till flera markeringar innan du skickar in",

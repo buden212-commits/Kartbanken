@@ -466,6 +466,7 @@ export function SuggestionCreateClient({
     setGpsLineRenderTick(0);
     setGpsTrackSummary(null);
     setGpsLiveAccuracyM(null);
+    setCompassMode(false);
     setTool("line");
     setMapMode("navigate");
     setGeometry(null);
@@ -706,7 +707,11 @@ export function SuggestionCreateClient({
 
   const canUseGpsTracking = isGeoreferencedCrs(ocadCrs);
 
-  const compassActive = compassMode && mapMode === "navigate" && !gpsTracking;
+  const compassActive =
+    compassMode &&
+    mapMode === "navigate" &&
+    !gpsTracking &&
+    !gpsTrackSummary;
   const {
     bearing: compassBearing,
     error: compassError,
@@ -882,7 +887,7 @@ export function SuggestionCreateClient({
           compassActive={compassMode}
           onCompassToggle={handleCompassToggle}
           compassSupported={compassSupported}
-          compassDisabled={gpsTracking}
+          compassDisabled={gpsTracking || Boolean(gpsTrackSummary)}
         />
       </>
     ),

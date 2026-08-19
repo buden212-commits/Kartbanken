@@ -1,10 +1,10 @@
 /** Utilities for reading and smoothing device compass heading for map rotation. */
 
-export const COMPASS_DEAD_ZONE_DEG = 4;
+export const COMPASS_DEAD_ZONE_DEG = 2;
 /** EMA blend per animation frame (~60 fps) — lower = smoother rotation. */
-export const COMPASS_SMOOTH_ALPHA = 0.08;
+export const COMPASS_SMOOTH_ALPHA = 0.22;
 /** Max map rotation per animation frame (degrees). */
-export const COMPASS_MAX_STEP_DEG = 1.5;
+export const COMPASS_MAX_STEP_DEG = 4;
 
 export function normalizeDegrees(deg: number): number {
   let value = deg % 360;

@@ -15,7 +15,7 @@ assert(normalizeDegrees(450) === 90, "normalize overflow");
 assert(shortestAngleDelta(350, 10) === 20, "shortest delta across 0");
 assert(shortestAngleDelta(10, 350) === -20, "shortest delta negative");
 
-const still = smoothCompassAngle(0, 2, 0.2, 5);
+const still = smoothCompassAngle(0, 1, 0.2, 5);
 assert(still === 0, "dead zone ignores tiny changes");
 
 const moved = smoothCompassAngle(0, 90, 0.5, 10);
