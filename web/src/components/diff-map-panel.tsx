@@ -545,6 +545,11 @@ export function DiffMapPanel({
     });
   }, [exportSettings, exportMode, ocadMapScale]);
 
+  const exportDialogGeometries = useMemo(
+    () => suggestionOverlays?.map((item) => item.geometry) ?? [],
+    [suggestionOverlays],
+  );
+
   const performExport = useCallback(
     async (ocdSuggestionSymbols?: OcdSuggestionSymbolMapping) => {
       if (!exportFrame) return;
@@ -1367,6 +1372,7 @@ export function DiffMapPanel({
 
       <OcdSuggestionSymbolDialog
         layers={mapLayers}
+        geometries={exportDialogGeometries}
         open={ocdSymbolDialogOpen}
         onCancel={() => setOcdSymbolDialogOpen(false)}
         onConfirm={(mapping) => {

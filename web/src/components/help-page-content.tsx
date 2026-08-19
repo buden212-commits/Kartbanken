@@ -538,6 +538,7 @@ export async function HelpPageContent() {
               "Välj ritverktyg som ikoner till höger på kartan: punkt, rektangel, polygon, linje eller «Radera objektet» (rött X — pekar ut var något ska tas bort; beskriv vad i kommentaren)",
               "«Min position» zooma till skala 1:50 och panorera till dig var 10:e sekund tills du stoppar GPS",
               "«GPS-spår» finns som ikon i ritverktygsraden till höger (mellan linje och radera) — spelar in en linje med telefonens GPS (kräver georefererad karta)",
+              "Efter «Sluta spåra» väljer du linjelager från kartans lagerlista — lagret sparas på markeringen och används vid export till OCD",
               "Under spårning zoomas kartan till skala 1:50 och följer din position var 10:e sekund",
               "GPS-spår filtreras (minst ca 4 m mellan punkter) och förenklas automatiskt innan linjen sparas",
               "Orimliga GPS-hopp filtreras bort och accepterade punkter utjämnas vid sämre mottagning — antal filtrerade hopp visas efter «Sluta spåra»",

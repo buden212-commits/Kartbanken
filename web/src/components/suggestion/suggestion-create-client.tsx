@@ -37,6 +37,7 @@ import {
   type GpsTrackSample,
 } from "@/lib/suggestion/gps-track";
 import { SuggestionSubmitDialog } from "@/components/suggestion/suggestion-submit-dialog";
+import { SuggestionLineSymbolPicker } from "@/components/suggestion/suggestion-line-symbol-picker";
 import { OfflineDraftStatus } from "@/components/offline-draft-status";
 import type { OcadMapLayer } from "@/lib/ocad/layers";
 import {
@@ -91,6 +92,10 @@ type CreateMapPanelProps = {
   };
   mapBearing: number;
   compassStatus: string | null;
+  gpsLineSymbolNum: number | null;
+  onGpsLineSymbolChange: (symNum: number) => void;
+  pendingGpsLineSymbolPick: boolean;
+  ocadLayers: OcadMapLayer[];
   mapToolbarOverlay: React.ReactNode;
 };
 
@@ -114,6 +119,10 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
   gpsTrackFollow,
   mapBearing,
   compassStatus,
+  gpsLineSymbolNum,
+  onGpsLineSymbolChange,
+  pendingGpsLineSymbolPick,
+  ocadLayers,
   mapToolbarOverlay,
 }: CreateMapPanelProps) {
   const renderSvgOverlay = useCallback(
@@ -173,6 +182,13 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
               {compassStatus}
             </p>
           )}
+          {pendingGpsLineSymbolPick && (
+            <SuggestionLineSymbolPicker
+              layers={ocadLayers}
+              value={gpsLineSymbolNum}
+              onChange={onGpsLineSymbolChange}
+            />
+          )}
           <p className={`text-xs ${mapMode === "draw" ? "text-amber-700" : "text-slate-600"}`}>
             {mapMode === "navigate"
               ? "Navigeringsläge — dra för att panorera och nyp med två fingrar för att zooma. På mobil kan du slå på kompass (passa efter norr) i verktygsraden. Växla till Rita när du ska markera."
@@ -211,6 +227,7 @@ export function SuggestionCreateClient({
   const [tool, setTool] = useState<DrawTool>("pin");
   const [mapMode, setMapMode] = useState<"draw" | "navigate">("navigate");
   const [compassMode, setCompassMode] = useState(false);
+  const [gpsLineSymbolNum, setGpsLineSymbolNum] = useState<number | null>(null);
   const [ocadCrs, setOcadCrs] = useState<OcadCrsInfo | null>(null);
   const [ocadLayers, setOcadLayers] = useState<OcadMapLayer[]>([]);
   const [ocadMapScale, setOcadMapScale] = useState(15000);
@@ -505,6 +522,7 @@ export function SuggestionCreateClient({
 
     setLinePoints(result.coordinates);
     setGeometry({ type: "LineString", coordinates: result.coordinates });
+    setGpsLineSymbolNum(null);
     setGpsTrackSummary({
       averageAccuracyMeters: result.averageAccuracyMeters,
       rawPointCount: result.rawPointCount,
@@ -672,7 +690,7 @@ export function SuggestionCreateClient({
         gpsTrackSummary.rejectedJumpCount > 0
           ? ` ${gpsTrackSummary.rejectedJumpCount} GPS-hopp filtrerades bort under spårningen.`
           : "";
-      return `Spår avslutat. Medelnoggrannhet ±${Math.round(gpsTrackSummary.averageAccuracyMeters)} m. ${gpsTrackSummary.rawPointCount} GPS-punkter förenklades till ${gpsTrackSummary.simplifiedPointCount} brytpunkter.${jumpText} Klicka «Lägg till ändring» om linjen ser bra ut.`;
+      return `Spår avslutat. Medelnoggrannhet ±${Math.round(gpsTrackSummary.averageAccuracyMeters)} m. ${gpsTrackSummary.rawPointCount} GPS-punkter förenklades till ${gpsTrackSummary.simplifiedPointCount} brytpunkter.${jumpText} Välj linjelager nedan och klicka «Lägg till ändring» om spåret ser bra ut.`;
     }
     return null;
   }, [gpsTracking, gpsSampleCount, gpsLiveAccuracyM, gpsRejectedJumpCount, gpsTrackSummary]);
@@ -746,7 +764,10 @@ export function SuggestionCreateClient({
     return null;
   }, [geometry, linePoints, polygonPoints, tool]);
 
-  const canAddMarking = finalizableGeometry !== null;
+  const pendingGpsLine = Boolean(gpsTrackSummary && geometry?.type === "LineString");
+
+  const canAddMarking =
+    finalizableGeometry !== null && (!pendingGpsLine || gpsLineSymbolNum != null);
   const totalMarkingCount = markings.length + (finalizableGeometry ? 1 : 0);
 
   const handleToolChange = useCallback(
@@ -759,24 +780,38 @@ export function SuggestionCreateClient({
       setGeometry(null);
       resetDraft();
       setGpsTrackSummary(null);
+      setGpsLineSymbolNum(null);
       setError(null);
     },
     [cancelGpsTracking, gpsTracking, resetDraft],
   );
 
+  const handleGpsLineSymbolChange = useCallback((symNum: number) => {
+    setGpsLineSymbolNum(symNum);
+  }, []);
+
   const handleAddMarking = useCallback(() => {
     const toAdd = finalizableGeometry;
     if (!toAdd) return;
+    if (pendingGpsLine && gpsLineSymbolNum == null) {
+      setError("Välj linjelager innan du lägger till GPS-spåret.");
+      return;
+    }
     if (markings.length >= MAX_SUGGESTION_GEOMETRIES) {
       setError(`Max ${MAX_SUGGESTION_GEOMETRIES} markeringar per förslag`);
       return;
     }
-    setMarkings((prev) => [...prev, toAdd]);
+    const withSymbol =
+      pendingGpsLine && toAdd.type === "LineString" && gpsLineSymbolNum != null
+        ? { ...toAdd, symbolNum: gpsLineSymbolNum }
+        : toAdd;
+    setMarkings((prev) => [...prev, withSymbol]);
     setGeometry(null);
     resetDraft();
     setGpsTrackSummary(null);
+    setGpsLineSymbolNum(null);
     setError(null);
-  }, [finalizableGeometry, markings.length, resetDraft]);
+  }, [finalizableGeometry, gpsLineSymbolNum, markings.length, pendingGpsLine, resetDraft]);
 
   const handleRemoveMarking = useCallback((index: number) => {
     setMarkings((prev) => prev.filter((_, i) => i !== index));
@@ -789,6 +824,7 @@ export function SuggestionCreateClient({
     setMarkings([]);
     setGeometry(null);
     setGpsTrackSummary(null);
+    setGpsLineSymbolNum(null);
     resetDraft();
     setError(null);
   }, [cancelGpsTracking, gpsTracking, resetDraft]);
@@ -912,6 +948,10 @@ export function SuggestionCreateClient({
           gpsTrackFollow={gpsTrackFollow}
           mapBearing={mapBearing}
           compassStatus={compassStatus}
+          gpsLineSymbolNum={gpsLineSymbolNum}
+          onGpsLineSymbolChange={handleGpsLineSymbolChange}
+          pendingGpsLineSymbolPick={pendingGpsLine}
+          ocadLayers={ocadLayers}
           mapToolbarOverlay={mapToolbarOverlay}
         />
       </div>

@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-19",
+    title: "Linjelager för GPS-spår",
+    items: [
+      "Efter GPS-spårning i «Föreslå ändring»: välj linjelager från kartans lager innan du lägger till spåret",
+      "Valt lager sparas på markeringen och används automatiskt vid export till OCD",
+    ],
+  },
+  {
+    date: "2026-08-19",
     title: "Kompassläge i kartförslag",
     items: [
       "På mobil i «Föreslå ändring»: slå på «Passa efter norr» i navigationsläge — kartan roterar mjukt efter telefonens kompass",
