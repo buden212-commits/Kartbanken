@@ -1,11 +1,11 @@
 ---
-description: Uppdatera hjälp och release notes vid commit av app-ändringar
+description: Uppdatera hjälp och release notes vid commit och deploy av app-ändringar
 alwaysApply: true
 ---
 
-# Uppdatera hjälp vid commit
+# Uppdatera hjälp vid commit och deploy
 
-När du committar ändringar i webbappen (`web/src/` eller `web/prisma/migrations/`) ska hjälpen **alltid** uppdateras i samma commit.
+När du committar eller deployar ändringar i webbappen (`web/src/` eller `web/prisma/migrations/`) ska hjälpen **alltid** uppdateras.
 
 ## Obligatoriska filer
 
@@ -15,8 +15,15 @@ När du committar ändringar i webbappen (`web/src/` eller `web/prisma/migration
 ## Innan commit
 
 - Kontrollera att minst en hjälpfil ingår i commiten.
-- Repot har pre-commit-hook som blockerar commit utan hjälpuppdatering (`npm run hooks:install` aktiverar den).
+- Pre-commit-hooken blockerar commit utan hjälpuppdatering (`npm run hooks:install` i `web/`).
 - Vid ren dokumentations-/konfigurationscommit utan app-kod behövs ingen hjälpuppdatering.
+
+## Innan deploy
+
+- Använd **`npm run deploy`** (produktion) eller **`npm run deploy:preview`** — kör `check-help-deploy.mts` automatiskt före Vercel.
+- Kör **inte** `npx vercel deploy` direkt; då hoppar du över hjälpkontrollen.
+- Vercel git-deploy kör samma check i `buildCommand` (`vercel.json`).
+- Nödfall: `SKIP_HELP_CHECK=1 npm run deploy`.
 
 ## Release notes
 

@@ -4,11 +4,16 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
-## Hjälp vid commit
+## Hjälp vid commit och deploy
 
-Vid commit av app-ändringar under `web/src/` eller `web/prisma/migrations/` ska du alltid uppdatera hjälpen i samma commit:
+Vid commit eller deploy av app-ändringar under `web/src/` eller `web/prisma/migrations/` ska du alltid uppdatera hjälpen:
 
 - `web/src/lib/help/release-notes.ts`
 - `web/src/components/help-page-content.tsx` (vid beteende- eller UI-ändringar)
 
-Pre-commit-hooken `check-help-updated.mts` blockerar annars commiten. Aktivera med `npm run hooks:install` i `web/`.
+Kontroller:
+
+- **Commit** — pre-commit-hooken `check-help-updated.mts` (aktivera med `npm run hooks:install`)
+- **Deploy** — `npm run deploy` kör `check-help-deploy.mts` före Vercel; Vercel-build kör samma check via `buildCommand`
+
+Använd alltid `npm run deploy` i stället för `npx vercel deploy` direkt.

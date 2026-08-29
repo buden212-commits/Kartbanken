@@ -321,7 +321,7 @@ export async function HelpPageContent() {
           <p>
             Utcheckning låter redaktörer reservera ett delområde på kartan, ladda ner en utcheckning
             .ocd-fil för redigering i OCAD, och sedan checka in ändringarna för granskning och
-            integration. Alla inloggade användare ser aktiva utcheckningsområden som färgade
+            integration. Redaktörer och administratörer ser aktiva utcheckningsområden som färgade
             överlagringar med vem som checkat ut och när.
           </p>
 
@@ -354,17 +354,21 @@ export async function HelpPageContent() {
             </>
           ) : (
             <p>
-              Som läsare kan du se aktiva utcheckningsområden på kartfilens sida, men du kan inte
-              skapa egna utcheckningar. Kontakta en redaktör om du behöver redigera kartor.
+              Som läsare ser du inte utcheckningsområden, aktiva utcheckningar eller
+              utcheckningshistorik. Kontakta en redaktör om du behöver redigera kartor i OCAD.
             </p>
           )}
 
-          <h3 className="font-medium text-slate-900">Synliga överlagringar</h3>
-          <p>
-            På områdessidan visas färgade ytor för alla aktiva utcheckningar. Varje färg motsvarar
-            en användare och visar vem som arbetar i området och när utcheckningen skapades. Det hjälper
-            teamet undvika parallella ändringar i samma del av kartan.
-          </p>
+          {showEditor && (
+            <>
+              <h3 className="font-medium text-slate-900">Synliga överlagringar</h3>
+              <p>
+                På områdessidan visas färgade ytor för alla aktiva utcheckningar. Varje färg
+                motsvarar en användare och visar vem som arbetar i området och när utcheckningen
+                skapades. Det hjälper teamet undvika parallella ändringar i samma del av kartan.
+              </p>
+            </>
+          )}
 
           {showAdmin && (
             <>

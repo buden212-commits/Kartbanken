@@ -18,6 +18,10 @@
     "db:seed": "prisma db seed",
     "env:sync-local": "tsx scripts/sync-local-env.mts",
     "check:help": "tsx scripts/check-help-updated.mts",
+    "check:help:deploy": "tsx scripts/check-help-deploy.mts",
+    "deploy:check": "tsx scripts/pre-deploy.mts",
+    "deploy": "npm run deploy:check && npx vercel deploy --prod --yes",
+    "deploy:preview": "npm run deploy:check && npx vercel deploy --yes",
     "licenses:notices": "tsx scripts/generate-third-party-notices.mts",
     "hooks:install": "tsx ../scripts/setup-git-hooks.mts",
     "postinstall": "prisma generate"
