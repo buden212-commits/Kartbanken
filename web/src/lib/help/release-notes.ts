@@ -7,6 +7,48 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-08-29",
+    title: "Kartförslag — verktyg och inskickning",
+    items: [
+      "Kartan öppnas i «Navigera»; när du väljer ritverktyg aktiveras «Rita» automatiskt",
+      "Ritverktyg som ikoner till höger (punkt, rektangel, polygon, linje, radera, GPS-spår); valt verktyg markeras med röd ram",
+      "Åtgärdsknappar (lägg till, rensa, skicka in) uppe till höger på större skärm och full bredd längst ned på mobil",
+      "Fix: verktygsknappar fångar klick utan att samtidigt rita i kartan",
+      "Markeringar numreras (1, 2, 3 …) på kartan; punktmarkeringar som enkel magenta prick",
+      "Inskickningsdialogen förfyller en rad per markering — hoppa mellan rader via nummerknappar",
+      "Infoga symbol visar OCAD-beskrivningar (t.ex. «Sten»), grupperade under kartlager, filtrerade efter punkt/linje/yta och sorterade efter användning på kartan",
+      "Sökfält överst i symbolistan; «Visa alla» vid många symboler",
+      "Vid inskickning anger du platsnoggrannhet (Mycket säker till Behöver fältverifiering)",
+      "Knappen «Tala» låter dig säga ett symbolnamn som matchas mot kartans symboler; «Rensa» tömmer beskrivningen",
+      "«Tillbaka» finns både överst och nederst i inskickningsdialogen",
+      "Fix: öppna och pågående kartförslag från äldre versioner går att öppna från listan och kartan",
+    ],
+  },
+  {
+    date: "2026-08-29",
+    title: "Diff, utcheckning och banor",
+    items: [
+      "Förbättrad diff-matchning — linjer jämförs med tolerans (2 m) och korsvis bytta objekt upptäcks",
+      "Changelistan i diff-vyn pagineras (200 per sida) och visar varning om listan kapats",
+      "Vid utcheckning väljer du OCAD-format (10, 11, 12 eller 2018) innan filen skapas",
+      "Banläggning och PDF-export av banor använder alltid den publicerade kartversionen",
+    ],
+  },
+  {
+    date: "2026-08-29",
+    title: "Behörigheter, admin och hjälp",
+    items: [
+      "Läsare ser inte utcheckningsområden, aktiva utcheckningar eller utcheckningshistorik",
+      "Områdeslistan visar bara områden med minst en publicerad kartversion",
+      "Knappen «Föreslå ändring» finns direkt på områdessidan när kartan är publicerad",
+      "Läsare kan inte välja .ocd-bilaga i e-postnotiser",
+      "Admin → Loggning visar de senaste 50 händelserna först — «Visa alla» fäller ut resten",
+      "Admin → Inställningar: konfigurera utcheckningspåminnelser och flera admin-notisadresser",
+      "PDF-export från guiden inkluderar flödesscheman som bilder med korrekt svensk text",
+      "Fix: «Exportera PDF» på hjälpsidan fungerar igen",
+    ],
+  },
+  {
     date: "2026-08-16",
     title: "Jämför versioner: stegstatus och omstart",
     items: [

@@ -111,11 +111,21 @@ AUTH_URL=https://web-ebon-eight-72.vercel.app
 
 ### Deploy med Vercel CLI
 
+Använd alltid `npm run deploy` — då körs hjälpkontroll (release notes + hjälptext) automatiskt före deploy.
+
 ```bash
 cd web
 npx vercel link          # första gången — koppla till Vercel-projekt
-npx vercel deploy --prod --yes
+npm run deploy           # produktion (kör check:help:deploy först)
+npm run deploy:preview   # förhandsmiljö
 ```
+
+Vid app-ändringar under `web/src/` måste minst en hjälpfil uppdateras:
+
+- `web/src/lib/help/release-notes.ts`
+- `web/src/components/help-page-content.tsx`
+
+Samma kontroll körs vid commit (pre-commit-hook) och vid Vercel-build (git-deploy). Hoppa över i nödfall: `SKIP_HELP_CHECK=1 npm run deploy`.
 
 Vid build appliceras Prisma-migrationer automatiskt. Projektet har tre migrationer (init PostgreSQL, version published, app_settings).
 
