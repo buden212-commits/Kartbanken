@@ -150,6 +150,8 @@ type Props = {
   } | null;
   /** Clockwise rotation in degrees (0 = north up). Used for compass mode. */
   mapBearing?: number;
+  /** Live bearing updated every frame — applied via DOM to avoid React re-renders. */
+  mapBearingRef?: MutableRefObject<number>;
   /** Start «Min position» automatically when the map CRS is ready (e.g. Föreslå ändring). */
   autoStartGps?: boolean;
 };
@@ -301,6 +303,7 @@ export function DiffMapPanel({
   fitGeoBbox = null,
   gpsTrackFollow = null,
   mapBearing = 0,
+  mapBearingRef,
   autoStartGps = false,
 }: Props) {
   const [svgInner, setSvgInner] = useState<string | null>(null);
@@ -343,6 +346,10 @@ export function DiffMapPanel({
   const gpsCenteredOnceRef = useRef(false);
   const gpsFixRef = useRef<GpsFix | null>(null);
   const autoStartedGpsRef = useRef(false);
+  const mapLayerElRef = useRef<HTMLDivElement | null>(null);
+  const northRoseElRef = useRef<HTMLDivElement | null>(null);
+  const gpsMarkerElRef = useRef<HTMLDivElement | null>(null);
+  const gpsBaseRef = useRef<{ x: number; y: number } | null>(null);
   gpsFixRef.current = gpsFix;
   const dragRef = useRef<{
     startX: number;
@@ -661,7 +668,8 @@ export function DiffMapPanel({
   }, [exportFrame, exportSettings.outputFormat, exportSettings.includeSuggestions, performExport]);
 
   const viewStateRef = useRef({ pan: { x: 0, y: 0 }, zoom: FIT_WHOLE_ZOOM, bearing: 0 });
-  viewStateRef.current = { pan, zoom, bearing: mapBearing };
+  const liveBearing = () => mapBearingRef?.current ?? mapBearing;
+  viewStateRef.current = { pan, zoom, bearing: liveBearing() };
 
   const markUserInteracted = useCallback(() => {
     userInteractedRef.current = true;
@@ -1080,11 +1088,11 @@ export function DiffMapPanel({
           rect.width,
           rect.height,
           nextZoom,
-          mapBearing,
+          liveBearing(),
         ),
       );
     },
-    [fullViewBox, mapBearing, markUserInteracted, rootTransform],
+    [fullViewBox, mapBearing, mapBearingRef, markUserInteracted, rootTransform],
   );
 
   const panToMapCoordAtDisplayScale = useCallback(
@@ -1256,10 +1264,11 @@ export function DiffMapPanel({
       rect.width,
       rect.height,
     );
+    gpsBaseRef.current = { x: baseX, y: baseY };
     const [x, y] = mapContentToScreen(baseX, baseY, rect.width, rect.height, {
       pan,
       zoom,
-      bearing: mapBearing,
+      bearing: liveBearing(),
     });
 
     return {
@@ -1267,7 +1276,47 @@ export function DiffMapPanel({
       y,
       uncertain: gpsFix.accuracyMeters > GPS_UNCERTAIN_ACCURACY_M,
     };
-  }, [fullViewBox, gpsFix, mapBearing, pan, rootTransform, zoom]);
+  }, [fullViewBox, gpsFix, mapBearing, mapBearingRef, pan, rootTransform, zoom]);
+
+  useEffect(() => {
+    if (!gpsFix) gpsBaseRef.current = null;
+  }, [gpsFix]);
+
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      const bearing = liveBearing();
+      const layer = mapLayerElRef.current;
+      if (layer) {
+        layer.style.transform = buildMapLayerTransform({
+          pan: viewStateRef.current.pan,
+          zoom: viewStateRef.current.zoom,
+          bearing,
+        });
+      }
+      const rose = northRoseElRef.current;
+      if (rose) {
+        rose.style.transform = `rotate(${bearing}deg)`;
+        rose.style.opacity = Math.abs(bearing) > 0.5 && Math.abs(bearing - 360) > 0.5 ? "1" : "0";
+      }
+      const marker = gpsMarkerElRef.current;
+      const gpsBase = gpsBaseRef.current;
+      const viewport = viewportRef.current;
+      if (marker && gpsBase && viewport) {
+        const rect = viewport.getBoundingClientRect();
+        const [x, y] = mapContentToScreen(gpsBase.x, gpsBase.y, rect.width, rect.height, {
+          pan: viewStateRef.current.pan,
+          zoom: viewStateRef.current.zoom,
+          bearing,
+        });
+        marker.style.left = `${x}px`;
+        marker.style.top = `${y}px`;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [mapBearing, mapBearingRef]);
 
   const gpsAccuracyUncertain = Boolean(
     gpsFix && gpsFix.accuracyMeters > GPS_UNCERTAIN_ACCURACY_M,
@@ -1431,9 +1480,10 @@ export function DiffMapPanel({
         )}
         {svgInner && fullViewBox && (
           <div
+            ref={mapLayerElRef}
             className="absolute inset-0"
             style={{
-              transform: buildMapLayerTransform({ pan, zoom, bearing: mapBearing }),
+              transform: buildMapLayerTransform({ pan, zoom, bearing: liveBearing() }),
               transformOrigin: "0 0",
             }}
           >
@@ -1489,6 +1539,7 @@ export function DiffMapPanel({
 
         {gpsMarker && (
           <div
+            ref={gpsMarkerElRef}
             className="pointer-events-none absolute z-20 drop-shadow-sm"
             style={{
               left: gpsMarker.x,
@@ -1561,15 +1612,17 @@ export function DiffMapPanel({
           </div>
         )}
 
-        {Math.abs(mapBearing) > 0.5 && (
-          <div
-            className="pointer-events-none absolute left-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-xs font-semibold text-slate-700 shadow-sm"
-            style={{ transform: `rotate(${-mapBearing}deg)` }}
-            aria-hidden
-          >
-            N
-          </div>
-        )}
+        <div
+          ref={northRoseElRef}
+          className="pointer-events-none absolute left-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-xs font-semibold text-slate-700 shadow-sm"
+          style={{
+            transform: `rotate(${liveBearing()}deg)`,
+            opacity: Math.abs(mapBearing) > 0.5 && Math.abs(mapBearing - 360) > 0.5 ? 1 : 0,
+          }}
+          aria-hidden
+        >
+          N
+        </div>
 
         {infoChange && (
           <div className="pointer-events-none absolute bottom-3 left-3 right-3 z-20 max-w-xs rounded-lg border border-slate-200 bg-white/95 p-3 text-sm shadow-lg backdrop-blur sm:right-auto">

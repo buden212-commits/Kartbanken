@@ -58,6 +58,7 @@ import {
   type SuggestionDrawTool,
 } from "@/components/suggestion/suggestion-draw-toolbar";
 import { useSmoothedCompass } from "@/hooks/use-smoothed-compass";
+import { requestCompassPermission } from "@/lib/ocad/device-compass";
 
 type DrawTool = SuggestionDrawTool;
 
@@ -91,6 +92,7 @@ type CreateMapPanelProps = {
     recenterToken: number;
   };
   mapBearing: number;
+  mapBearingRef: MutableRefObject<number>;
   compassStatus: string | null;
   gpsLineSymbolNum: number | null;
   onGpsLineSymbolChange: (symNum: number) => void;
@@ -118,6 +120,7 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
   gpsTrackingStatus,
   gpsTrackFollow,
   mapBearing,
+  mapBearingRef,
   compassStatus,
   gpsLineSymbolNum,
   onGpsLineSymbolChange,
@@ -169,6 +172,7 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
       onOcadLayersReady={onOcadLayersReady}
       gpsTrackFollow={gpsTrackFollow}
       mapBearing={mapBearing}
+      mapBearingRef={mapBearingRef}
       autoStartGps
       mapToolbarOverlay={mapToolbarOverlay}
       secondaryHeaderContent={
@@ -192,7 +196,7 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
           )}
           <p className={`text-xs ${mapMode === "draw" ? "text-amber-700" : "text-slate-600"}`}>
             {mapMode === "navigate"
-              ? "Navigeringsläge — dra för att panorera och nyp med två fingrar för att zooma. På mobil kan du slå på kompass (passa efter norr) i verktygsraden. Växla till Rita när du ska markera."
+              ? "Navigeringsläge — dra för att panorera och nyp med två fingrar för att zooma. «Riktning uppåt» roterar kartan efter telefonen. Växla till Rita när du ska markera."
               : drawHint}
             {markingCount > 0
               ? ` ${markingCount} markering${markingCount === 1 ? "" : "ar"}.`
@@ -467,7 +471,6 @@ export function SuggestionCreateClient({
     setGpsLineRenderTick(0);
     setGpsTrackSummary(null);
     setGpsLiveAccuracyM(null);
-    setCompassMode(false);
     setTool("line");
     setMapMode("navigate");
     setGeometry(null);
@@ -708,15 +711,12 @@ export function SuggestionCreateClient({
 
   const canUseGpsTracking = isGeoreferencedCrs(ocadCrs);
 
-  const compassActive =
-    compassMode &&
-    mapMode === "navigate" &&
-    !gpsTracking &&
-    !gpsTrackSummary;
+  const compassActive = compassMode && mapMode !== "draw";
   const {
-    bearing: compassBearing,
+    bearingRef: mapBearingRef,
+    displayBearing: compassBearing,
     error: compassError,
-    pending: compassPending,
+    hasHeading,
     supported: compassSupported,
   } = useSmoothedCompass({
     active: compassActive,
@@ -726,28 +726,26 @@ export function SuggestionCreateClient({
 
   const compassStatus = useMemo(() => {
     if (compassError) return compassError;
-    if (compassPending) return "Startar kompass…";
+    if (compassActive && !hasHeading) return "Startar riktning uppåt… håll telefonen plant.";
     if (compassActive) {
-      return "Kompass aktiv — kartan roterar mjukt efter telefonens riktning. Stoppa kompassen för att återgå till norr uppåt.";
+      return "Riktning uppåt — det som är framåt på telefonen är uppåt på kartan. Tryck «Norr uppåt» för att sluta rotera.";
     }
     return null;
-  }, [compassActive, compassError, compassPending]);
+  }, [compassActive, compassError, hasHeading]);
 
-  useEffect(() => {
-    if (mapMode === "draw" && compassMode) {
+  const handleCompassToggle = useCallback(async () => {
+    if (compassMode) {
       setCompassMode(false);
+      return;
     }
-  }, [compassMode, mapMode]);
-
-  useEffect(() => {
-    if (gpsTracking && compassMode) {
-      setCompassMode(false);
+    const granted = await requestCompassPermission();
+    if (!granted) {
+      setError("Kompass nekad — tillåt rörelse/riktning i webbläsaren.");
+      return;
     }
-  }, [compassMode, gpsTracking]);
-
-  const handleCompassToggle = useCallback(() => {
-    setCompassMode((prev) => !prev);
-  }, []);
+    setError(null);
+    setCompassMode(true);
+  }, [compassMode]);
 
   const handleGpsTrackingToggle = useCallback(() => {
     if (gpsTracking) {
@@ -888,7 +886,6 @@ export function SuggestionCreateClient({
           compassActive={compassMode}
           onCompassToggle={handleCompassToggle}
           compassSupported={compassSupported}
-          compassDisabled={gpsTracking || Boolean(gpsTrackSummary)}
         />
       </>
     ),
@@ -953,6 +950,7 @@ export function SuggestionCreateClient({
           gpsTrackingStatus={gpsTrackingStatus}
           gpsTrackFollow={gpsTrackFollow}
           mapBearing={mapBearing}
+          mapBearingRef={mapBearingRef}
           compassStatus={compassStatus}
           gpsLineSymbolNum={gpsLineSymbolNum}
           onGpsLineSymbolChange={handleGpsLineSymbolChange}

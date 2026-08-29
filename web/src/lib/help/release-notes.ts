@@ -8,6 +8,15 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-29",
+    title: "Riktning uppåt (kompass)",
+    items: [
+      "«Riktning uppåt» vrider kartan så att telefonens framåt blir uppåt på kartan — som i en GPS-app",
+      "«Norr uppåt» återgår mjukt till norr i toppen",
+      "Kompassen fungerar tillsammans med Min position och GPS-spår, och pausas när du ritar",
+    ],
+  },
+  {
+    date: "2026-08-29",
     title: "GPS startar automatiskt i Föreslå ändring",
     items: [
       "När du öppnar «Föreslå ändring» aktiveras Min position automatiskt (georefererad karta) — kartan zoomar till dig när GPS-fixen kommer",

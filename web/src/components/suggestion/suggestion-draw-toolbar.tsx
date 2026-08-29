@@ -312,7 +312,7 @@ function ModeToolsPanel({
   compassDisabled = false,
 }: ModeToolbarProps) {
   const showCompass = Boolean(onCompassToggle) && mapMode === "navigate";
-  const compassLabel = compassActive ? "Stoppa kompass" : "Passa efter norr";
+  const compassLabel = compassActive ? "Norr uppåt" : "Riktning uppåt";
   const compassTitle = compassSupported
     ? compassLabel
     : "Kompass kräver en mobil enhet med stöd för riktning";
@@ -334,18 +334,16 @@ function ModeToolsPanel({
         <NavigateModeIcon />
       </IconToolbarButton>
       {showCompass && (
-        <div className="sm:hidden">
-          <IconToolbarButton
-            label={compassTitle}
-            active={compassActive}
-            activeClass={iconBtnTracking}
-            inactiveClass={iconBtnGpsInactive}
-            disabled={(!compassSupported && !compassActive) || compassDisabled}
-            onClick={onCompassToggle!}
-          >
-            <CompassModeIcon />
-          </IconToolbarButton>
-        </div>
+        <IconToolbarButton
+          label={compassTitle}
+          active={compassActive}
+          activeClass={iconBtnTracking}
+          inactiveClass={iconBtnGpsInactive}
+          disabled={(!compassSupported && !compassActive) || compassDisabled}
+          onClick={onCompassToggle!}
+        >
+          <CompassModeIcon />
+        </IconToolbarButton>
       )}
     </MapToolbarPanel>
   );
