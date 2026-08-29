@@ -536,7 +536,7 @@ export async function HelpPageContent() {
             items={[
               "Öppna en publicerad version via Visa karta och klicka Föreslå ändring",
               "Välj ritverktyg som ikoner till höger på kartan: punkt, rektangel, polygon, linje eller «Radera objektet» (rött X — pekar ut var något ska tas bort; beskriv vad i kommentaren)",
-              "«Min position» zooma till skala 1:50 och panorera till dig var 10:e sekund tills du stoppar GPS",
+              "«Min position» startar automatiskt när du öppnar Föreslå ändring (georefererad karta) — zooma till skala 1:50 och panorera till dig var 10:e sekund tills du stoppar GPS",
               "«GPS-spår» finns som ikon i ritverktygsraden till höger (mellan linje och radera) — spelar in en linje med telefonens GPS (kräver georefererad karta)",
               "Efter «Sluta spåra» väljer du linjelager från kartans lagerlista — lagret sparas på markeringen och används vid export till OCD",
               "Under spårning zoomas kartan till skala 1:50 och följer din position var 10:e sekund",
@@ -725,7 +725,9 @@ export async function HelpPageContent() {
             din position var 10:e sekund tills du trycker <strong>Stoppa GPS</strong>. Statusraden
             visar positionsnoggrannhet; vid sämre mottagning (över ca 20 m) visas{" "}
             <strong>Osäker</strong> i rött och GPS-markeringen blir röd.{" "}
-            <strong>Panorera hit</strong> centrerar manuellt i samma skala.
+            <strong>Panorera hit</strong> centrerar manuellt i samma skala. I{" "}
+            <strong>Föreslå ändring</strong> startas Min position automatiskt när kartan är laddad
+            (du kan fortfarande stoppa den).
           </p>
           <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-700">
             GPS kräver georefererad karta och fungerar bäst utomhus med bra mottagning. Om kartan

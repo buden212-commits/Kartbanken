@@ -169,6 +169,7 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
       onOcadLayersReady={onOcadLayersReady}
       gpsTrackFollow={gpsTrackFollow}
       mapBearing={mapBearing}
+      autoStartGps
       mapToolbarOverlay={mapToolbarOverlay}
       secondaryHeaderContent={
         <div className="space-y-2 border-b border-slate-200 bg-slate-50 px-3 py-2 sm:px-4">

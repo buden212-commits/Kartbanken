@@ -150,6 +150,8 @@ type Props = {
   } | null;
   /** Clockwise rotation in degrees (0 = north up). Used for compass mode. */
   mapBearing?: number;
+  /** Start «Min position» automatically when the map CRS is ready (e.g. Föreslå ändring). */
+  autoStartGps?: boolean;
 };
 
 const MIN_ZOOM = 0.2;
@@ -299,6 +301,7 @@ export function DiffMapPanel({
   fitGeoBbox = null,
   gpsTrackFollow = null,
   mapBearing = 0,
+  autoStartGps = false,
 }: Props) {
   const [svgInner, setSvgInner] = useState<string | null>(null);
   const [svgFill, setSvgFill] = useState("transparent");
@@ -339,6 +342,7 @@ export function DiffMapPanel({
   const gpsWatchIdRef = useRef<number | null>(null);
   const gpsCenteredOnceRef = useRef(false);
   const gpsFixRef = useRef<GpsFix | null>(null);
+  const autoStartedGpsRef = useRef(false);
   gpsFixRef.current = gpsFix;
   const dragRef = useRef<{
     startX: number;
@@ -1220,6 +1224,13 @@ export function DiffMapPanel({
       },
     );
   }, [applyGpsPosition, canUseGps]);
+
+  useEffect(() => {
+    if (!autoStartGps || autoStartedGpsRef.current) return;
+    if (!canUseGps || loading || !fullViewBox || gpsEnabled) return;
+    autoStartedGpsRef.current = true;
+    startGps();
+  }, [autoStartGps, canUseGps, fullViewBox, gpsEnabled, loading, startGps]);
 
   useEffect(() => {
     return () => {
