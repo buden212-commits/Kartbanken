@@ -7,6 +7,14 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-08-29",
+    title: "GPS startar automatiskt i Föreslå ändring",
+    items: [
+      "När du öppnar «Föreslå ändring» aktiveras Min position automatiskt (georefererad karta) — kartan zoomar till dig när GPS-fixen kommer",
+      "Du kan fortfarande trycka «Stoppa GPS» om du inte vill att kartan ska följa dig",
+    ],
+  },
+  {
     date: "2026-08-19",
     title: "Kompass och GPS-spår",
     items: [
