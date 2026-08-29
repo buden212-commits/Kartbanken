@@ -1,6 +1,12 @@
-import { parseSelectionJson } from "./types";
+import { parseSelectionJson, type CheckoutSelectionGeometry } from "./types";
 import { bboxFromGeometry } from "./overlap";
-import { objectCrossesBbox, objectIntersectsBbox } from "./import-partial-analysis";
+import {
+  objectCrossesBoundary,
+  objectInRiskZone,
+  objectIntersectsBoundary,
+  boundaryFromBbox,
+  isImportBoundarySymbolObject,
+} from "./import-partial-boundary";
 import { compareOcadObjects } from "@/lib/ocad/diff";
 import type { OcadDiffResult, OcadObjectChange, SymbolDiffSummary } from "@/lib/ocad/diff-types";
 import {
@@ -192,8 +198,26 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
     : filterObjectsByIds(headSummary.objects, diffScopeIds);
 
   const importExtent = selection.importExtent ?? (importPartial ? bboxFromGeometry(selection.geometry) : null);
-  if (importPartial && importExtent) {
-    baselineObjects = baselineObjects.filter((object) => objectIntersectsBbox(object, importExtent));
+  const importBoundary: CheckoutSelectionGeometry | null = importPartial
+    ? selection.importBoundary ??
+      (importExtent ? boundaryFromBbox(importExtent) : null)
+    : null;
+  const forceDelete = new Set(selection.forceDeleteObjectIndices ?? []);
+
+  if (importPartial && importBoundary) {
+    baselineObjects = baselineObjects.filter((object) =>
+      objectIntersectsBoundary(object, importBoundary),
+    );
+  } else if (importPartial && importExtent) {
+    baselineObjects = baselineObjects.filter((object) =>
+      objectIntersectsBoundary(object, boundaryFromBbox(importExtent)),
+    );
+  }
+
+  let checkinObjects = checkinSummary.objects;
+  if (importPartial) {
+    // Områdessymbol 1104.001 är importgräns, inte kartinnehåll.
+    checkinObjects = checkinObjects.filter((object) => !isImportBoundarySymbolObject(object));
   }
 
   const emptyDiffInput = {
@@ -204,28 +228,28 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
     fileNameA: exportSummary ? "checkout-export.ocd" : headVersion.originalFilename,
     fileNameB: "checkin-subset.ocd",
     objectCountA: baselineObjects.length,
-    objectCountB: checkinSummary.objects.length,
+    objectCountB: checkinObjects.length,
   };
 
   if (exportBuffer && buffersContentEqual(checkinBuffer, exportBuffer)) {
     return buildEmptyCheckoutSubsetDiff(emptyDiffInput);
   }
 
-  if (exportSummary && objectMultisetsEqual(baselineObjects, checkinSummary.objects)) {
+  if (exportSummary && objectMultisetsEqual(baselineObjects, checkinObjects)) {
     return buildEmptyCheckoutSubsetDiff(emptyDiffInput);
   }
 
   if (
     !exportSummary &&
     !headChangedSinceCheckoutDetailed &&
-    objectMultisetsEqual(baselineObjects, checkinSummary.objects)
+    objectMultisetsEqual(baselineObjects, checkinObjects)
   ) {
     return buildEmptyCheckoutSubsetDiff(emptyDiffInput);
   }
 
   const diff = compareOcadObjects(
     baselineObjects,
-    checkinSummary.objects,
+    checkinObjects,
     {
       fileNameA: emptyDiffInput.fileNameA,
       fileNameB: "checkin-subset.ocd",
@@ -237,7 +261,7 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
   if (
     diff.modified === 0 &&
     diff.added + diff.removed > 0 &&
-    objectMultisetsEqual(baselineObjects, checkinSummary.objects)
+    objectMultisetsEqual(baselineObjects, checkinObjects)
   ) {
     return buildEmptyCheckoutSubsetDiff(emptyDiffInput);
   }
@@ -249,7 +273,7 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
   );
 
   let changes = scopedChanges;
-  if (importPartial && importExtent) {
+  if (importPartial && importBoundary) {
     const baselineByIndex = new Map(baselineObjects.map((object) => [object.objectIndex, object]));
     const kept: typeof scopedChanges = [];
     for (const change of scopedChanges) {
@@ -258,9 +282,23 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
         continue;
       }
       const baseline = baselineByIndex.get(change.objectIndex);
-      if (baseline && objectCrossesBbox(baseline, importExtent)) {
+      if (!baseline) {
+        kept.push(change);
+        continue;
+      }
+      if (objectCrossesBoundary(baseline, importBoundary)) {
         outOfScopeWarnings.push(
           `Kantobjekt ${change.objectIndex} (${change.symbolName}) hoppades över — det går utanför importerat område.`,
+        );
+        continue;
+      }
+      if (
+        change.changeType === "removed" &&
+        objectInRiskZone(baseline, importBoundary) &&
+        !forceDelete.has(change.objectIndex)
+      ) {
+        outOfScopeWarnings.push(
+          `Riskzonsobjekt ${change.objectIndex} (${change.symbolName}) behålls — inte markerat för radering.`,
         );
         continue;
       }

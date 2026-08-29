@@ -13,7 +13,8 @@ import type { OcadObjectChange } from "@/lib/ocad/diff-types";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
-export const maxDuration = 300;
+/** Stora kartor (t.ex. Mora Väst) kan behöva 10+ minuter för parsa + diff. */
+export const maxDuration = 800;
 
 type RouteParams = { params: Promise<{ slug: string }> };
 
@@ -23,6 +24,40 @@ type CompareResponseLayerPaths = {
   modified: string;
   bounds: { minX: number; minY: number; maxX: number; maxY: number };
 };
+
+async function markCompareError(
+  v1: string,
+  v2: string,
+  message: string,
+  opts?: { runId?: string; startedAt?: string },
+) {
+  const current = await prisma.versionDiff.findUnique({
+    where: { versionAId_versionBId: { versionAId: v1, versionBId: v2 } },
+    select: { summaryJson: true, status: true },
+  });
+  if (current?.status === "OK") return;
+  const currentProgress = parseVersionDiffProgress(current?.summaryJson);
+  if (opts?.runId && currentProgress?.runId && currentProgress.runId !== opts.runId) {
+    return;
+  }
+  await prisma.versionDiff.update({
+    where: { versionAId_versionBId: { versionAId: v1, versionBId: v2 } },
+    data: {
+      status: "ERROR",
+      summaryJson: JSON.stringify({
+        error: message,
+        progress: {
+          step: "compute_diff",
+          label: "Misslyckades",
+          detail: message,
+          updatedAt: new Date().toISOString(),
+          runId: opts?.runId,
+          startedAt: opts?.startedAt,
+        },
+      }),
+    },
+  });
+}
 
 function processingPayload(
   versionA: { id: string; versionNumber: number },
@@ -96,26 +131,16 @@ export async function GET(request: Request, { params }: RouteParams) {
   if (!diffRecord || diffRecord.status === "PENDING" || diffRecord.status === "PROCESSING") {
     const scheduled = await scheduleVersionCompare(map.id, v1, v2);
     if (scheduled.started) {
+      const runId = scheduled.runId;
       runAfterResponse(async () => {
         try {
-          await computeVersionDiff(map.id, v1, v2);
+          await computeVersionDiff(map.id, v1, v2, runId ? { runId } : undefined);
         } catch (err) {
           const message = err instanceof Error ? err.message : "Diff misslyckades";
           console.error("Compare background job failed:", err);
-          await prisma.versionDiff.update({
-            where: { versionAId_versionBId: { versionAId: v1, versionBId: v2 } },
-            data: {
-              status: "ERROR",
-              summaryJson: JSON.stringify({
-                error: message,
-                progress: {
-                  step: "compute_diff",
-                  label: "Misslyckades",
-                  detail: message,
-                  updatedAt: new Date().toISOString(),
-                },
-              }),
-            },
+          await markCompareError(v1, v2, message, {
+            runId,
+            startedAt: scheduled.progress?.startedAt,
           });
         }
       });
@@ -148,24 +173,30 @@ export async function GET(request: Request, { params }: RouteParams) {
   let summary = JSON.parse(diffRecord.summaryJson!) as Record<string, unknown>;
 
   if (summary.coordSpace !== "ocad-native") {
-    try {
-      await computeVersionDiff(map.id, v1, v2);
-      diffRecord = await prisma.versionDiff.findUnique({
-        where: { versionAId_versionBId: { versionAId: v1, versionBId: v2 } },
+    // Omberäkna i bakgrunden — blockera inte GET (annars ser klienten bara «Laddar…»).
+    const scheduled = await scheduleVersionCompare(map.id, v1, v2, { force: true });
+    if (scheduled.started) {
+      const runId = scheduled.runId;
+      runAfterResponse(async () => {
+        try {
+          await computeVersionDiff(map.id, v1, v2, runId ? { runId } : undefined);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "Diff misslyckades";
+          console.error("Compare coord-space migration failed:", err);
+          await markCompareError(v1, v2, message, {
+            runId,
+            startedAt: scheduled.progress?.startedAt,
+          });
+        }
       });
-      if (!diffRecord || diffRecord.status !== "OK") {
-        return NextResponse.json(
-          processingPayload(versionA, versionB, {
-            progress: parseVersionDiffProgress(diffRecord?.summaryJson),
-            stale: false,
-            canRetry: false,
-          }),
-        );
-      }
-      summary = JSON.parse(diffRecord.summaryJson!) as Record<string, unknown>;
-    } catch (recomputeErr) {
-      console.error("Kunde inte migrera diff-koordinater:", recomputeErr);
     }
+    return NextResponse.json(
+      processingPayload(versionA, versionB, {
+        progress: scheduled.progress,
+        stale: false,
+        canRetry: false,
+      }),
+    );
   }
 
   if (!diffRecord || diffRecord.status !== "OK") {
@@ -180,11 +211,15 @@ export async function GET(request: Request, { params }: RouteParams) {
 
   const changes = JSON.parse(diffRecord.changesJson ?? "[]") as OcadObjectChange[];
 
-  let finalSummary = summary;
-  try {
-    finalSummary = await ensureDiffLayers(map.id, v1, v2, changes, summary);
-  } catch (layerErr) {
-    console.error("Kunde inte generera diff-lager:", layerErr);
+  // Generera saknade lager i bakgrunden — GET ska svara snabbt så statusdialogen syns.
+  if (!summary.layerPaths) {
+    runAfterResponse(async () => {
+      try {
+        await ensureDiffLayers(map.id, v1, v2, changes, summary);
+      } catch (layerErr) {
+        console.error("Kunde inte generera diff-lager:", layerErr);
+      }
+    });
   }
 
   await logAction(session.user.id, "COMPARE", "VersionDiff", diffRecord.id, {
@@ -205,9 +240,9 @@ export async function GET(request: Request, { params }: RouteParams) {
       versionNumber: versionB.versionNumber,
       fileName: versionB.originalFilename,
     },
-    summary: finalSummary,
+    summary,
     changes,
-    layerPaths: (finalSummary.layerPaths as CompareResponseLayerPaths) ?? null,
+    layerPaths: (summary.layerPaths as CompareResponseLayerPaths) ?? null,
   });
 }
 
@@ -233,25 +268,15 @@ export async function POST(request: Request, { params }: RouteParams) {
   try {
     const scheduled = await scheduleVersionCompare(map.id, v1, v2, { force: force || true });
     if (scheduled.started) {
+      const runId = scheduled.runId;
       runAfterResponse(async () => {
         try {
-          await computeVersionDiff(map.id, v1, v2);
+          await computeVersionDiff(map.id, v1, v2, runId ? { runId } : undefined);
         } catch (err) {
           const message = err instanceof Error ? err.message : "Diff misslyckades";
-          await prisma.versionDiff.update({
-            where: { versionAId_versionBId: { versionAId: v1, versionBId: v2 } },
-            data: {
-              status: "ERROR",
-              summaryJson: JSON.stringify({
-                error: message,
-                progress: {
-                  step: "compute_diff",
-                  label: "Misslyckades",
-                  detail: message,
-                  updatedAt: new Date().toISOString(),
-                },
-              }),
-            },
+          await markCompareError(v1, v2, message, {
+            runId,
+            startedAt: scheduled.progress?.startedAt,
           });
         }
       });

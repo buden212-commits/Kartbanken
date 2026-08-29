@@ -17,7 +17,14 @@ import {
   type SuggestionGeometry,
   type SuggestionLocationConfidenceValue,
 } from "@/lib/suggestion/types";
-import { uploadSuggestionAttachment } from "@/lib/upload-client";
+import {
+  createSuggestionDraftId,
+  emptyCreateDraft,
+  fileFromDraftPhoto,
+  getSuggestionDraft,
+  mergeSuggestionDraft,
+} from "@/lib/suggestion/offline-drafts";
+import { syncSuggestionDraft } from "@/lib/suggestion/offline-sync";
 
 type Props = {
   mapSlug: string;
@@ -26,6 +33,8 @@ type Props = {
   ocadLayers: OcadMapLayer[];
   onClose: () => void;
   onRemoveMarking: (index: number) => void;
+  onSubmitted: (suggestionId: string) => void;
+  onQueued: () => void;
 };
 
 export function SuggestionSubmitDialog({
@@ -35,10 +44,14 @@ export function SuggestionSubmitDialog({
   ocadLayers,
   onClose,
   onRemoveMarking,
+  onSubmitted,
+  onQueued,
 }: Props) {
   const router = useRouter();
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const draftId = createSuggestionDraftId(mapSlug, versionId);
+  const formReadyRef = useRef(false);
 
   const [category, setCategory] = useState<SuggestionCategoryValue>("FEL_I_TERRANG");
   const [locationConfidence, setLocationConfidence] = useState<SuggestionLocationConfidenceValue>(
@@ -51,6 +64,28 @@ export function SuggestionSubmitDialog({
   const attachmentPreviewRef = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const draft = await getSuggestionDraft(draftId);
+      if (cancelled) return;
+      if (draft) {
+        setCategory(draft.category);
+        setLocationConfidence(draft.locationConfidence);
+        setTitle(draft.title);
+        if (draft.comment.trim()) setComment(draft.comment);
+        const file = fileFromDraftPhoto(draft);
+        if (file) applyAttachmentFile(file);
+      }
+      formReadyRef.current = true;
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // applyAttachmentFile is stable enough via ref usage below
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftId]);
 
   useEffect(() => {
     return () => {
@@ -71,6 +106,26 @@ export function SuggestionSubmitDialog({
     attachmentPreviewRef.current = preview;
     setAttachmentPreview(preview);
   }, []);
+
+  useEffect(() => {
+    if (!formReadyRef.current) return;
+    const timer = window.setTimeout(() => {
+      void mergeSuggestionDraft(
+        draftId,
+        {
+          category,
+          locationConfidence,
+          title,
+          comment,
+          photoBlob: attachmentFile,
+          photoName: attachmentFile?.name ?? null,
+          photoType: attachmentFile?.type ?? null,
+        },
+        () => emptyCreateDraft({ mapSlug, versionId }),
+      );
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [attachmentFile, category, comment, draftId, locationConfidence, mapSlug, title, versionId]);
 
   const handleAttachmentChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -99,35 +154,34 @@ export function SuggestionSubmitDialog({
     setLoading(true);
     setError(null);
     try {
-      let attachmentPath: string | undefined;
-      if (attachmentFile) {
-        const uploadRes = await uploadSuggestionAttachment(mapSlug, attachmentFile);
-        const uploadData = (await uploadRes.json()) as { error?: string; attachmentPath?: string };
-        if (!uploadRes.ok) {
-          throw new Error(uploadData.error ?? "Kunde inte ladda upp bilden");
-        }
-        attachmentPath = uploadData.attachmentPath;
-      }
-
-      const res = await fetch(`/api/maps/${mapSlug}/suggestions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mapVersionId: versionId,
+      const draft = await mergeSuggestionDraft(
+        draftId,
+        {
+          markings,
           category,
           locationConfidence,
-          title: title.trim() || undefined,
+          title,
           comment: submissionComment,
-          geometries: markings,
-          attachmentPath,
-        }),
-      });
-      const data = (await res.json()) as { error?: string; id?: string };
-      if (!res.ok) {
-        throw new Error(data.error ?? "Kunde inte spara kartförslaget");
+          photoBlob: attachmentFile,
+          photoName: attachmentFile?.name ?? null,
+          photoType: attachmentFile?.type ?? null,
+          wantsSync: true,
+          lastError: null,
+        },
+        () => emptyCreateDraft({ mapSlug, versionId }),
+      );
+      const result = await syncSuggestionDraft(draft);
+      if (result.ok) {
+        router.push(`/maps/${mapSlug}/suggestions/${result.suggestionId}`);
+        router.refresh();
+        onSubmitted(result.suggestionId);
+        return;
       }
-      router.push(`/maps/${mapSlug}/suggestions/${data.id}`);
-      router.refresh();
+      if (result.queued) {
+        onQueued();
+        return;
+      }
+      setError(result.error);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Kunde inte spara kartförslaget");
     } finally {

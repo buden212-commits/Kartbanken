@@ -139,6 +139,8 @@ export function CourseEditorClient({
     centroid: [number, number];
     objectType: "point" | "line" | "area" | "text";
   } | null>(null);
+  const [focusRequestId, setFocusRequestId] = useState(0);
+  const focusRequestIdRef = useRef(0);
   const [fitGeoBbox, setFitGeoBbox] = useState<{
     bbox: [number, number, number, number];
     requestId: number;
@@ -641,6 +643,8 @@ export function CourseEditorClient({
           : obj.objectType === CourseObjectType.AREA
             ? "area"
             : "text";
+    focusRequestIdRef.current += 1;
+    setFocusRequestId(focusRequestIdRef.current);
     setFocusTarget({
       centroid,
       bbox: [centroid[0] - 20, centroid[1] - 20, centroid[0] + 20, centroid[1] + 20],
@@ -870,6 +874,7 @@ export function CourseEditorClient({
             renderSvgOverlay={renderSvgOverlay}
             headerContent={toolbar}
             focusTarget={focusTarget}
+            focusRequestId={focusRequestId}
             onClearFocus={() => setFocusTarget(null)}
             onOcadMapScale={setMapScale}
             fitGeoBbox={fitGeoBbox}

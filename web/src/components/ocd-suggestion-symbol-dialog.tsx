@@ -1,12 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import {
-  flattenOcadLayers,
-  formatOcadSymbolNumber,
-  type OcadMapLayer,
-} from "@/lib/ocad/layers";
+import { useEffect, useMemo, useState } from "react";
+import type { OcadMapLayer } from "@/lib/ocad/layers";
+import { ocadSymbolChoices } from "@/lib/ocad/ocad-symbol-choices";
 import type { OcdSuggestionSymbolMapping } from "@/lib/ocad/ocad-suggestion-export";
+import type { SuggestionGeometry } from "@/lib/suggestion/types";
 import {
   OCAD_AREA_SYMBOL,
   OCAD_LINE_SYMBOL,
@@ -18,36 +16,23 @@ import { HelpSectionHeading } from "@/components/help-link-icon";
 
 type Props = {
   layers: OcadMapLayer[];
+  geometries?: SuggestionGeometry[];
   open: boolean;
   onCancel: () => void;
   onConfirm: (mapping: OcdSuggestionSymbolMapping) => void;
 };
 
-type SymbolChoice = {
-  symNum: number;
-  label: string;
-};
-
-function symbolChoices(layers: OcadMapLayer[], allowedTypes: number[]): SymbolChoice[] {
-  const seen = new Set<number>();
-  const choices: SymbolChoice[] = [];
-
-  for (const layer of flattenOcadLayers(layers)) {
-    if (layer.kind !== "symbol" || layer.symbolNum == null) continue;
-    if (layer.symbolType != null && !allowedTypes.includes(layer.symbolType)) continue;
-    if (seen.has(layer.symbolNum)) continue;
-    seen.add(layer.symbolNum);
-
-    const formatted = formatOcadSymbolNumber(layer.symbolNum);
-    const desc = layer.name.replace(/^\d+(?:\.\d+)?\s*/, "").trim();
-    choices.push({
-      symNum: layer.symbolNum,
-      label: desc ? `${formatted} ${desc}` : formatted,
-    });
-  }
-
-  choices.sort((a, b) => a.label.localeCompare(b.label, "sv"));
-  return choices;
+function defaultLineSymbolFromGeometries(
+  geometries: SuggestionGeometry[] | undefined,
+): number | "" {
+  if (!geometries?.length) return "";
+  const lineSymbols = geometries
+    .filter((g): g is Extract<SuggestionGeometry, { type: "LineString" }> => g.type === "LineString")
+    .map((g) => g.symbolNum)
+    .filter((sym): sym is number => typeof sym === "number" && sym > 0);
+  if (lineSymbols.length === 0) return "";
+  const unique = new Set(lineSymbols);
+  return unique.size === 1 ? lineSymbols[0]! : "";
 }
 
 function SymbolSelect({
@@ -56,12 +41,14 @@ function SymbolSelect({
   value,
   choices,
   onChange,
+  optional = false,
 }: {
   label: string;
   hint: string;
   value: number | "";
-  choices: SymbolChoice[];
+  choices: ReturnType<typeof ocadSymbolChoices>;
   onChange: (symNum: number) => void;
+  optional?: boolean;
 }) {
   return (
     <label className="block">
@@ -72,8 +59,8 @@ function SymbolSelect({
         onChange={(e) => onChange(Number(e.target.value))}
         className="form-select w-full"
       >
-        <option value="" disabled>
-          Välj symbol…
+        <option value="" disabled={!optional}>
+          {optional ? "Använd symbol från markering…" : "Välj symbol…"}
         </option>
         {choices.map((choice) => (
           <option key={choice.symNum} value={choice.symNum}>
@@ -90,28 +77,62 @@ function SymbolSelect({
   );
 }
 
-export function OcdSuggestionSymbolDialog({ layers, open, onCancel, onConfirm }: Props) {
+export function OcdSuggestionSymbolDialog({
+  layers,
+  geometries,
+  open,
+  onCancel,
+  onConfirm,
+}: Props) {
   const pointChoices = useMemo(
-    () => symbolChoices(layers, [OCAD_POINT_SYMBOL]),
+    () => ocadSymbolChoices(layers, [OCAD_POINT_SYMBOL]),
     [layers],
   );
   const lineChoices = useMemo(
-    () => symbolChoices(layers, [OCAD_LINE_SYMBOL, OCAD_LINE_TEXT_SYMBOL]),
+    () => ocadSymbolChoices(layers, [OCAD_LINE_SYMBOL, OCAD_LINE_TEXT_SYMBOL]),
     [layers],
   );
   const areaChoices = useMemo(
-    () => symbolChoices(layers, [OCAD_AREA_SYMBOL, OCAD_RECTANGLE_SYMBOL]),
+    () => ocadSymbolChoices(layers, [OCAD_AREA_SYMBOL, OCAD_RECTANGLE_SYMBOL]),
     [layers],
   );
+
+  const presetLine = useMemo(
+    () => defaultLineSymbolFromGeometries(geometries),
+    [geometries],
+  );
+  const lineSymbolNumsFromGeometries = useMemo(() => {
+    if (!geometries?.length) return [];
+    return geometries
+      .filter((g): g is Extract<SuggestionGeometry, { type: "LineString" }> => g.type === "LineString")
+      .map((g) => g.symbolNum)
+      .filter((sym): sym is number => typeof sym === "number" && sym > 0);
+  }, [geometries]);
+
+  const allLinesHaveSymbol = useMemo(() => {
+    if (!geometries?.length) return false;
+    const lines = geometries.filter((g) => g.type === "LineString");
+    return lines.length > 0 && lines.every((g) => g.type === "LineString" && g.symbolNum != null && g.symbolNum > 0);
+  }, [geometries]);
 
   const [point, setPoint] = useState<number | "">("");
   const [line, setLine] = useState<number | "">("");
   const [area, setArea] = useState<number | "">("");
 
+  useEffect(() => {
+    if (!open) return;
+    setPoint("");
+    setArea("");
+    setLine(presetLine);
+  }, [open, presetLine]);
+
   if (!open) return null;
 
+  const effectiveLine = typeof line === "number" ? line : presetLine;
   const canConfirm =
-    typeof point === "number" && typeof line === "number" && typeof area === "number";
+    typeof point === "number" &&
+    typeof area === "number" &&
+    (typeof effectiveLine === "number" || allLinesHaveSymbol);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -140,10 +161,15 @@ export function OcdSuggestionSymbolDialog({ layers, open, onCancel, onConfirm }:
           />
           <SymbolSelect
             label="Linje"
-            hint="För kartförslag ritade som linje."
+            hint={
+              allLinesHaveSymbol
+                ? "GPS-linjer har redan valt linjelager — detta gäller övriga linjer utan eget lager."
+                : "För kartförslag ritade som linje."
+            }
             value={line}
             choices={lineChoices}
             onChange={setLine}
+            optional={allLinesHaveSymbol}
           />
           <SymbolSelect
             label="Yta / rektangel"
@@ -167,7 +193,11 @@ export function OcdSuggestionSymbolDialog({ layers, open, onCancel, onConfirm }:
             disabled={!canConfirm}
             onClick={() => {
               if (!canConfirm) return;
-              onConfirm({ point, line, area });
+              const resolvedLine =
+                typeof effectiveLine === "number"
+                  ? effectiveLine
+                  : lineSymbolNumsFromGeometries[0] ?? 0;
+              onConfirm({ point, area, line: resolvedLine });
             }}
             className="btn-primary px-3 py-1.5 disabled:opacity-50"
           >

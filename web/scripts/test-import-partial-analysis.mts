@@ -9,6 +9,7 @@ import {
   objectCrossesBbox,
   padBbox,
 } from "../src/lib/checkout/import-partial-analysis";
+import { IMPORT_BOUNDARY_SYMBOL_NUM } from "../src/lib/checkout/import-partial-boundary";
 import type { NormalizedOcadObject, OcadParseSummary } from "../src/lib/ocad/types";
 
 function assert(condition: boolean, message: string): void {
@@ -103,6 +104,8 @@ const head = makeSummary("head.ocd", headObjects, [101, 102, 103], [0, 0, 1000, 
     "Varning om hoppade kantobjekt",
   );
   assert(analysis.extent.minX === 100 && analysis.extent.maxX === 160, "Utbredning från delkartans objekt");
+  assert(analysis.boundary.type === "BBOX", "Defaultgräns är AABB");
+  assert(analysis.riskZoneMeters === 40, "Riskzon 40 m");
 }
 
 {
@@ -160,6 +163,89 @@ const head = makeSummary("head.ocd", headObjects, [101, 102, 103], [0, 0, 1000, 
     partial: makeSummary("empty.ocd", [], [101]),
   });
   assert(empty.blockers.some((item) => item.includes("inga kartobjekt")), "Tom delkarta ska blockera");
+}
+
+{
+  // Punkt nära kanten i grundkartan saknas i delkartan → riskzon, inte auto-radering.
+  const bigHead = makeSummary(
+    "head-edge.ocd",
+    [
+      makeObject(1, 101, [200, 200, 200, 200]), // inner (safe)
+      makeObject(2, 101, [105, 200, 105, 200]), // near left edge
+      makeObject(3, 102, [50, 100, 400, 120], { type: "line" }), // crosses
+    ],
+    [101, 102],
+    [0, 0, 1000, 1000],
+  );
+  const partial = makeSummary(
+    "partial-edge.ocd",
+    [
+      makeObject(1, 101, [200, 200, 200, 200]),
+      makeObject(10, 101, [100, 100, 100, 100]),
+      makeObject(11, 101, [300, 300, 300, 300]),
+    ],
+    [101],
+  );
+  const analysis = analyzeImportPartial({ head: bigHead, partial });
+  assert(analysis.extent.minX === 100 && analysis.extent.maxX === 300, "Extent 100–300");
+  assert(
+    analysis.riskRemovals.some((item) => item.objectIndex === 2),
+    "Kantpunkt ska ligga i riskRemovals",
+  );
+  assert(
+    !analysis.diff.mapChanges.some(
+      (change) => change.changeType === "removed" && change.objectIndex === 2,
+    ),
+    "Kantpunkt ska inte auto-räknas som borttagen",
+  );
+  assert(
+    !analysis.diff.mapChanges.some(
+      (change) => change.changeType === "removed" && change.objectIndex === 3,
+    ),
+    "Korsande linje ska inte auto-raderas",
+  );
+}
+
+{
+  const head = makeSummary(
+    "head-b.ocd",
+    [makeObject(1, 101, [150, 150, 150, 150]), makeObject(2, 101, [50, 50, 50, 50])],
+    [101],
+    [0, 0, 1000, 1000],
+  );
+  const partialWithFrame = makeSummary(
+    "partial-frame.ocd",
+    [
+      makeObject(1, 101, [150, 150, 150, 150]),
+      makeObject(99, IMPORT_BOUNDARY_SYMBOL_NUM, [100, 100, 200, 200], {
+        type: "area",
+        vertices: [
+          [100, 100],
+          [200, 100],
+          [200, 200],
+          [100, 200],
+          [100, 100],
+        ],
+      }),
+    ],
+    [101, IMPORT_BOUNDARY_SYMBOL_NUM],
+  );
+  const analysis = analyzeImportPartial({ head, partial: partialWithFrame });
+  assert(analysis.boundarySource === "symbol-1104.001", "Gräns från 1104.001");
+  assert(analysis.boundary.type === "POLYGON", "Gräns är polygon");
+  assert(
+    !analysis.diff.mapChanges.some(
+      (change) => change.changeType === "added" && change.objectIndex === 99,
+    ),
+    "Områdessymbolen ska inte räknas som tillagt kartobjekt",
+  );
+  // Punkt 2 ligger utanför polygon 100–200 → ska inte raderas
+  assert(
+    !analysis.diff.mapChanges.some(
+      (change) => change.changeType === "removed" && change.objectIndex === 2,
+    ),
+    "Objekt utanför 1104.001-polygonen ska inte auto-raderas",
+  );
 }
 
 console.log("test-import-partial-analysis: ok");

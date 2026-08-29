@@ -25,6 +25,11 @@ import {
   validateOcadBufferStructure,
 } from "@/lib/ocad/ocad-integrate";
 import {
+  appendOcadMapNotesIfComment,
+  displayMapNotesUserName,
+  extractOcadMapNotes,
+} from "@/lib/ocad/ocad-map-notes";
+import {
   copyMatchingObjectData,
   copySkipReasonText,
   markObjectsDeletedByIndices,
@@ -104,6 +109,7 @@ export async function integrateCheckout(
       include: {
         mapFile: true,
         baseVersion: true,
+        user: { select: { name: true, email: true } },
       },
     });
 
@@ -309,6 +315,14 @@ export async function integrateCheckout(
       throw wrapped;
     }
 
+    const notes = appendOcadMapNotesIfComment(working, {
+      comment: checkout.integrationComment,
+      userName: displayMapNotesUserName(checkout.user),
+    });
+    if (notes.changed) {
+      working = Buffer.from(notes.buffer);
+    }
+
     const versionNumber =
       (
         await prisma.mapVersion.findFirst({
@@ -358,6 +372,7 @@ export async function integrateCheckout(
           comment:
             checkout.integrationComment?.trim() ||
             `Integrerad utcheckning ${checkout.id.slice(0, 8)}`,
+          mapNotes: extractOcadMapNotes(working),
           parseStatus: "PENDING",
         },
       });

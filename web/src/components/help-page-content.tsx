@@ -181,6 +181,7 @@ export async function HelpPageContent() {
               "Behörighet — visar din roll (läsare, redaktör eller administratör) och vad den innebär",
               "Notiser — kryssa i e-postnotiser vid nya versioner, utcheckning och incheckning; valfritt bifoga .ocd",
               "Lösenord — byt lösenord med nuvarande lösenord som bekräftelse",
+              "På mobil: installera appen (fråga vid uppstart) så kartförslag tål dålig mottagning i fält",
             ]}
           />
 
@@ -284,7 +285,7 @@ export async function HelpPageContent() {
               <HelpList
                 items={[
                   "Öppna området och välj OCAD-fil (.ocd) i uppladdningsformuläret",
-                  "Lägg till en valfri kommentar, t.ex. vad som ändrats",
+                  "Lägg till en valfri kommentar, t.ex. vad som ändrats — den läggs även in i OCAD under Karta > Kartinformation (datum, användare och kommentar). Utan kommentar lämnas kartinformationen oförändrad",
                   "Efter uppladdning jämförs automatiskt mot föregående version",
                   "Nya versioner är opublicerade tills du markerar dem som publicerade",
                   "Prenumeranter får e-post om ny version (om SMTP och notiser är aktiverade)",
@@ -301,11 +302,13 @@ export async function HelpPageContent() {
           <p>
             I versionshistoriken finns ikonknappar med tooltips för ladda ner, jämföra, publicera
             och radera. Klicka på raden (version, datum, storlek, uppladdare, kommentar eller status) för att öppna kartan.
+            Dokumentikonen efter kommentaren öppnar kartinformationen för versionen.
           </p>
           <HelpList
             items={[
               "Ladda ner — hämta originalfilen (.ocd)",
               "Jämför — diff mot föregående version",
+              "Kartinformation — dokumentikonen efter kommentaren visar hela texten från OCAD (Karta → Kartinformation), inklusive äldre rader",
               "Visa karta — klicka på raden i tabellen eller öppna via ikonmenyn",
               "Öppna i nytt fönster — helskärmsvy utan sidhuvud",
               "Publicera — kryssa i Publicerad (redaktör/admin)",
@@ -313,8 +316,8 @@ export async function HelpPageContent() {
           />
           <h3 className="font-medium text-slate-900">Versionshistorik</h3>
           <p>
-            Tabellen visar version och datum i samma kolumn. Hela raden (utom Pub. och
-            Åtgärder) öppnar kartan vid klick; klockslag i tooltip. Endast den
+            Tabellen visar version och datum i samma kolumn. Hela raden (utom Pub.,
+            Åtgärder och kartinformationsikonen) öppnar kartan vid klick; klockslag i tooltip. Endast den
             senaste versionen kan vara ihopfälld som standard beroende på vy — expandera för att se
             alla versioner.
           </p>
@@ -352,10 +355,10 @@ export async function HelpPageContent() {
                   "Öppna området och klicka «Importera delkarta» (bredvid Checka ut område)",
                   "Ladda upp den redigerade .ocd-filen — guiden jämför mot aktuell kartversion",
                   "Steg 2: kontrollera att symbolnumren finns i den stora kartan — saknade symboler stoppar import",
-                  "Steg 3: blå ram på kartan visar delkartans utbredning (inzoomad). Samma kartbild som på området används — även stora filer som Mora Väst. Om den inte syns: öppna området så kartan hinner laddas, gå tillbaka och försök igen",
-                  "Steg 4: orange/röda kantobjekt; växla mellan hela kartan och bara berörda objekt, och visa även vad som raderas i originalet respektive nya/ersatta objekt",
-                  "Steg 5: se tillagda, borttagna och ändrade objekt i området — samma kartväxling och lagerfilter som i steget Kanter",
-                  "Steg 6: bekräfta — systemet skapar en utcheckning i efterhand och checkar in filen",
+                  "Steg 3: blå ram eller polygon från symbol 1104.001 (om den finns i delkartan) visar importområdet. Samma kartbild som på området används — även stora filer. Om den inte syns: öppna området så kartan hinner laddas, gå tillbaka och försök igen",
+                  "Steg 4 (Kanter): jämför grundkarta och importkarta (opacitet/svep); zooma med +/− eller scroll, panorera genom att dra; växla Navigera/Rita för polygon-gräns (om 1104.001 saknas); granska riskzonen (40 m) — behåll som standard, markera radera vid behov",
+                  "Steg 5: se tillagda, borttagna och ändrade objekt i det säkra området — samma kartväxling och lagerfilter som i steget Kanter",
+                  "Steg 6: bekräfta — systemet skapar en utcheckning i efterhand och checkar in filen; riskzonsvalen följer med oförändrade till admin-integrationen",
                   "Därefter granskar du diffen som vid vanlig incheckning; admin integrerar till en ny version",
                 ]}
               />
@@ -364,7 +367,7 @@ export async function HelpPageContent() {
               <h3 className="font-medium text-slate-900">Checka in och integrera</h3>
               <HelpList
                 items={[
-                  "Ladda upp den redigerade .ocd-filen via Checka in på utcheckningssidan",
+                  "Ladda upp den redigerade .ocd-filen via Checka in på utcheckningssidan — kommentaren följer med till den nya versionen och till OCAD Kartinformation",
                   "Granska utcheckningsdiff mot aktuell version (tillagda, borttagna, ändrade)",
                   "Bekräfta integration — utcheckningen går till admin-bekräftelse",
                   "Administratör bekräftar och integrerar — en ny opublicerad kartversion skapas (publicera i versionshistoriken)",
@@ -533,13 +536,15 @@ export async function HelpPageContent() {
             items={[
               "Öppna en publicerad version via Visa karta och klicka Föreslå ändring",
               "Välj ritverktyg som ikoner till höger på kartan: punkt, rektangel, polygon, linje eller «Radera objektet» (rött X — pekar ut var något ska tas bort; beskriv vad i kommentaren)",
-              "«Min position» zooma till skala 1:50 och panorera till dig var 10:e sekund tills du stoppar GPS",
+              "«Min position» startar automatiskt när du öppnar Föreslå ändring (georefererad karta) — zooma till skala 1:50 och panorera till dig var 10:e sekund tills du stoppar GPS",
               "«GPS-spår» finns som ikon i ritverktygsraden till höger (mellan linje och radera) — spelar in en linje med telefonens GPS (kräver georefererad karta)",
+              "Efter «Sluta spåra» väljer du linjelager från kartans lagerlista — lagret sparas på markeringen och används vid export till OCD",
               "Under spårning zoomas kartan till skala 1:50 och följer din position var 10:e sekund",
               "GPS-spår filtreras (minst ca 4 m mellan punkter) och förenklas automatiskt innan linjen sparas",
               "Orimliga GPS-hopp filtreras bort och accepterade punkter utjämnas vid sämre mottagning — antal filtrerade hopp visas efter «Sluta spåra»",
               "Kartan startar i «Navigera» — välj ett ritverktyg till höger för att aktivera «Rita» och börja markera",
               "Växla «Rita» / «Navigera» via ikonerna till höger — i Navigera kan du dra och nypa utan att rita; i Rita zoomar två fingrar utan att skapa markering",
+              "«Riktning uppåt» (kompassikon) roterar kartan så att det som är framåt på telefonen är uppåt på kartan — «Norr uppåt» slutar rotera; fungerar tillsammans med Min position och GPS-spår, pausas i ritläge",
               "Klicka «Lägg till ändring» på kartan när markeringen är klar — längst ned på mobil, uppe till höger på större skärm; punkt, radera och rektangel aktiveras direkt efter klick/drag",
               "Varje markering numreras (1, 2, 3 …) på kartan — inte kategorinamn",
               "Lägg till flera markeringar innan du skickar in",
@@ -548,8 +553,11 @@ export async function HelpPageContent() {
               "Öppna «Infoga symbol för markering» under beskrivningen (ihopfälld som standard) — välj aktiv markering och symbolnamn; raden behålls (t.ex. «1. Punkt — Sten»); sökfältet ligger överst, listan är vertikal, sorterad efter hur ofta symbolen används på kartan, filtreras efter punkt/linje/yta (vid «Punkt (radera)» visas alla typer) och grupperas under kartlager («Visa alla» vid många symboler)",
               "«Tala» vid beskrivningen (i webbläsare som stödjer det) låter dig säga ett symbolnamn — det matchas mot kartans symboler och infogas på aktiv markering; «Rensa» tömmer beskrivningsrutan",
               "I dialogen: «Ta foto» öppnar kameran på mobil (direktfoto), «Välj bild» plockar från albumet",
+              "Utkast (markeringar, text och foto) sparas på telefonen om nätet dippar — skickas automatiskt när du är online igen; samma sak när du redigerar egna öppna förslag",
+              "På mobil får du en fråga om att installera appen vid uppstart (om den inte redan är installerad) — då fungerar fältläge bättre",
               "Skicka-sektionen ovanför kartan visar antal tillagda ändringar innan du skickar",
               "Öppna och pågående förslag från alla versioner visas på områdessidans karta (underlag: senaste publicerade version) — klicka markeringen eller ett förslag i listan",
+              "Listan sorteras efter täthet: områden med flest öppna/pågående förslag nära varandra visas först (inom ca 200 m); «X förslag inom samma område» visas vid kluster",
               "På detaljsidan zoomas kartan automatiskt till markeringen; «Zooma till markering» finns kvar om du vill fokusera om",
               "Växla «Visa kartförslag» i kartvyn för att dölja lagret",
               "Redaktörer markerar som Pågår, Införd eller Avvisad och kan koppla utcheckning",
@@ -626,7 +634,8 @@ export async function HelpPageContent() {
           />
           <p>
             Klicka på kartan eller i ändringslistan för att zooma in på ett objekt och se
-            symbolnummer, typ och position.
+            symbolnummer, typ och position. Därefter kan du zooma och panorera fritt — kartan
+            hoppar inte tillbaka till inzoomningen förrän du väljer ett objekt igen.
           </p>
 
           <h3 className="font-medium text-slate-900">Detaljerade ändringar</h3>
@@ -648,8 +657,13 @@ export async function HelpPageContent() {
           </p>
 
           <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
-            Stora kartfiler kan ta upp till en minut att parsa och jämföra. Sidan uppdateras
-            automatiskt när beräkningen är klar.
+            Stora kartfiler (t.ex. Mora Väst) kan ta flera minuter — ibland 5–15 minuter — mest
+            under <strong>Laddar och parsar</strong> (själva filhämtningen ska bara ta sekunder).
+            Under tiden visar sidan checklista, delstatus, förfluten tid och senaste
+            statusuppdatering. Om hämtningen fastnar startas jobbet om automatiskt. Sidan
+            uppdateras automatiskt. Statusdialogen med checklista visas direkt när du öppnar
+            jämförelsen. Om statusen ändå slutar uppdateras: använd{" "}
+            <strong>Starta om jämförelse</strong>.
           </p>
           <HelpProcessDiagram title="Flöde — jämföra versioner" chart={compareFlow} />
         </HelpSection>
@@ -711,7 +725,9 @@ export async function HelpPageContent() {
             din position var 10:e sekund tills du trycker <strong>Stoppa GPS</strong>. Statusraden
             visar positionsnoggrannhet; vid sämre mottagning (över ca 20 m) visas{" "}
             <strong>Osäker</strong> i rött och GPS-markeringen blir röd.{" "}
-            <strong>Panorera hit</strong> centrerar manuellt i samma skala.
+            <strong>Panorera hit</strong> centrerar manuellt i samma skala. I{" "}
+            <strong>Föreslå ändring</strong> startas Min position automatiskt när kartan är laddad
+            (du kan fortfarande stoppa den).
           </p>
           <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-700">
             GPS kräver georefererad karta och fungerar bäst utomhus med bra mottagning. Om kartan
@@ -918,6 +934,14 @@ export async function HelpPageContent() {
               </p>
             </div>
             <div>
+              <h3 className="font-medium text-slate-900">Var ser jag kartinformationen från OCAD?</h3>
+              <p className="mt-1">
+                I versionshistoriken, klicka på dokumentikonen efter kommentaren. Där visas samma
+                text som i OCAD under <strong>Karta → Kartinformation</strong> för den versionen,
+                inklusive rader som lagts till vid tidigare kommentarer.
+              </p>
+            </div>
+            <div>
               <h3 className="font-medium text-slate-900">Vad är utcheckning?</h3>
               <p className="mt-1">
                 Utcheckning låter redaktörer reservera ett kartområde, ladda ner en utcheckning .ocd,
@@ -991,6 +1015,23 @@ export async function HelpPageContent() {
               </p>
             </div>
             <div>
+              <h3 className="font-medium text-slate-900">Kartförslaget försvann när nätet dog</h3>
+              <p className="mt-1">
+                Utkast (markeringar, text och foto) sparas på enheten. Öppna samma karta igen — utkastet
+                återställs och skickas när du är online. Installera appen på telefonen (fråga vid
+                uppstart i mobilläge) för mer tillförlitligt fältläge. Kartbilden måste ha hunnit
+                laddas innan du tappar nätet.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-slate-900">Hur installerar jag appen på telefonen?</h3>
+              <p className="mt-1">
+                I mobilläge visas en fråga vid uppstart om appen inte redan är installerad. På
+                Android: «Installera». På iPhone: Dela → Lägg till på hemskärmen. «Inte nu» döljer
+                frågan tills du öppnar sajten nästa gång.
+              </p>
+            </div>
+            <div>
               <h3 className="font-medium text-slate-900">Jag ser inte den senaste versionen</h3>
               <p className="mt-1">
                 Som läsare visas bara publicerade versioner. Be en redaktör publicera versionen om
@@ -1007,9 +1048,10 @@ export async function HelpPageContent() {
             <div>
               <h3 className="font-medium text-slate-900">Jämförelsen tar lång tid</h3>
               <p className="mt-1">
-                Det är normalt för stora kartor. En spinner visar aktuellt steg (ladda filer, parsa,
-                beräkna diff) och förfluten tid. Sidan uppdateras automatiskt. Om det verkar ha
-                fastnat: använd «Starta om jämförelse».
+                Det är normalt för stora kartor under «Laddar och parsar» och «Beräknar
+                skillnader». Filhämtning ska bara ta sekunder; själva parsningen kan ta flera
+                minuter. Checklistan visar delstatus (hämtar/parsar v1 och v2). Om hämtningen
+                fastnar startas jobbet om automatiskt. Annars: «Starta om jämförelse».
               </p>
             </div>
             <div>

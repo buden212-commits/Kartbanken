@@ -37,16 +37,28 @@ import {
   type GpsTrackSample,
 } from "@/lib/suggestion/gps-track";
 import { SuggestionSubmitDialog } from "@/components/suggestion/suggestion-submit-dialog";
+import { SuggestionLineSymbolPicker } from "@/components/suggestion/suggestion-line-symbol-picker";
+import { OfflineDraftStatus } from "@/components/offline-draft-status";
 import type { OcadMapLayer } from "@/lib/ocad/layers";
 import {
   MAX_SUGGESTION_GEOMETRIES,
   type SuggestionGeometry,
 } from "@/lib/suggestion/types";
 import {
+  createSuggestionDraftId,
+  deleteSuggestionDraft,
+  draftHasContent,
+  emptyCreateDraft,
+  getSuggestionDraft,
+  mergeSuggestionDraft,
+} from "@/lib/suggestion/offline-drafts";
+import {
   SuggestionMapActionToolbar,
   SuggestionMapRightToolbars,
   type SuggestionDrawTool,
 } from "@/components/suggestion/suggestion-draw-toolbar";
+import { useSmoothedCompass } from "@/hooks/use-smoothed-compass";
+import { requestCompassPermission } from "@/lib/ocad/device-compass";
 
 type DrawTool = SuggestionDrawTool;
 
@@ -79,6 +91,13 @@ type CreateMapPanelProps = {
     mapCoordRef: MutableRefObject<[number, number] | null>;
     recenterToken: number;
   };
+  mapBearing: number;
+  mapBearingRef: MutableRefObject<number>;
+  compassStatus: string | null;
+  gpsLineSymbolNum: number | null;
+  onGpsLineSymbolChange: (symNum: number) => void;
+  pendingGpsLineSymbolPick: boolean;
+  ocadLayers: OcadMapLayer[];
   mapToolbarOverlay: React.ReactNode;
 };
 
@@ -100,6 +119,13 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
   onOcadLayersReady,
   gpsTrackingStatus,
   gpsTrackFollow,
+  mapBearing,
+  mapBearingRef,
+  compassStatus,
+  gpsLineSymbolNum,
+  onGpsLineSymbolChange,
+  pendingGpsLineSymbolPick,
+  ocadLayers,
   mapToolbarOverlay,
 }: CreateMapPanelProps) {
   const renderSvgOverlay = useCallback(
@@ -145,6 +171,9 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
       onOcadMapScale={onOcadMapScale}
       onOcadLayersReady={onOcadLayersReady}
       gpsTrackFollow={gpsTrackFollow}
+      mapBearing={mapBearing}
+      mapBearingRef={mapBearingRef}
+      autoStartGps
       mapToolbarOverlay={mapToolbarOverlay}
       secondaryHeaderContent={
         <div className="space-y-2 border-b border-slate-200 bg-slate-50 px-3 py-2 sm:px-4">
@@ -153,9 +182,21 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
               {gpsTrackingStatus}
             </p>
           )}
+          {compassStatus && (
+            <p className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              {compassStatus}
+            </p>
+          )}
+          {pendingGpsLineSymbolPick && (
+            <SuggestionLineSymbolPicker
+              layers={ocadLayers}
+              value={gpsLineSymbolNum}
+              onChange={onGpsLineSymbolChange}
+            />
+          )}
           <p className={`text-xs ${mapMode === "draw" ? "text-amber-700" : "text-slate-600"}`}>
             {mapMode === "navigate"
-              ? "Navigeringsläge — dra för att panorera och nyp med två fingrar för att zooma. Växla till Rita när du ska markera."
+              ? "Navigeringsläge — dra för att panorera och nyp med två fingrar för att zooma. «Riktning uppåt» roterar kartan efter telefonen. Växla till Rita när du ska markera."
               : drawHint}
             {markingCount > 0
               ? ` ${markingCount} markering${markingCount === 1 ? "" : "ar"}.`
@@ -190,6 +231,8 @@ export function SuggestionCreateClient({
 
   const [tool, setTool] = useState<DrawTool>("pin");
   const [mapMode, setMapMode] = useState<"draw" | "navigate">("navigate");
+  const [compassMode, setCompassMode] = useState(false);
+  const [gpsLineSymbolNum, setGpsLineSymbolNum] = useState<number | null>(null);
   const [ocadCrs, setOcadCrs] = useState<OcadCrsInfo | null>(null);
   const [ocadLayers, setOcadLayers] = useState<OcadMapLayer[]>([]);
   const [ocadMapScale, setOcadMapScale] = useState(15000);
@@ -212,6 +255,11 @@ export function SuggestionCreateClient({
   const [linePoints, setLinePoints] = useState<[number, number][]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
+  const [draftReady, setDraftReady] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
+  const [draftQueued, setDraftQueued] = useState(false);
+  const [online, setOnline] = useState(true);
+  const draftId = createSuggestionDraftId(mapSlug, versionId);
 
   const resetDraft = useCallback(() => {
     setDraftBbox(null);
@@ -266,6 +314,73 @@ export function SuggestionCreateClient({
       stopGpsWatch();
     };
   }, [stopGpsWatch]);
+
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine);
+    update();
+    window.addEventListener("online", update);
+    window.addEventListener("offline", update);
+    return () => {
+      window.removeEventListener("online", update);
+      window.removeEventListener("offline", update);
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const draft = await getSuggestionDraft(draftId);
+      if (cancelled) {
+        setDraftReady(true);
+        return;
+      }
+      if (draft) {
+        if (draft.markings.length > 0) setMarkings(draft.markings);
+        if (draft.currentGeometry) setGeometry(draft.currentGeometry);
+        if (draft.polygonPoints.length > 0) setPolygonPoints(draft.polygonPoints);
+        if (draft.linePoints.length > 0) setLinePoints(draft.linePoints);
+        if (draftHasContent(draft)) setDraftRestored(true);
+        if (draft.wantsSync) setDraftQueued(true);
+      }
+      setDraftReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [draftId]);
+
+  useEffect(() => {
+    if (!draftReady) return;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        const patch = {
+          markings,
+          currentGeometry: geometry,
+          polygonPoints,
+          linePoints,
+        };
+        const existing = await getSuggestionDraft(draftId);
+        if (
+          markings.length === 0 &&
+          !geometry &&
+          polygonPoints.length === 0 &&
+          linePoints.length === 0 &&
+          existing &&
+          !existing.wantsSync &&
+          !existing.comment.trim() &&
+          !existing.title.trim() &&
+          !existing.photoBlob
+        ) {
+          await deleteSuggestionDraft(draftId);
+          return;
+        }
+        await mergeSuggestionDraft(draftId, patch, () =>
+          emptyCreateDraft({ mapSlug, versionId }),
+        );
+      })();
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [draftId, draftReady, geometry, linePoints, mapSlug, markings, polygonPoints, versionId]);
 
   const handleOcadCrsReady = useCallback((crs: OcadCrsInfo | null) => {
     setOcadCrs(crs);
@@ -412,6 +527,7 @@ export function SuggestionCreateClient({
 
     setLinePoints(result.coordinates);
     setGeometry({ type: "LineString", coordinates: result.coordinates });
+    setGpsLineSymbolNum(null);
     setGpsTrackSummary({
       averageAccuracyMeters: result.averageAccuracyMeters,
       rawPointCount: result.rawPointCount,
@@ -579,7 +695,7 @@ export function SuggestionCreateClient({
         gpsTrackSummary.rejectedJumpCount > 0
           ? ` ${gpsTrackSummary.rejectedJumpCount} GPS-hopp filtrerades bort under spårningen.`
           : "";
-      return `Spår avslutat. Medelnoggrannhet ±${Math.round(gpsTrackSummary.averageAccuracyMeters)} m. ${gpsTrackSummary.rawPointCount} GPS-punkter förenklades till ${gpsTrackSummary.simplifiedPointCount} brytpunkter.${jumpText} Klicka «Lägg till ändring» om linjen ser bra ut.`;
+      return `Spår avslutat. Medelnoggrannhet ±${Math.round(gpsTrackSummary.averageAccuracyMeters)} m. ${gpsTrackSummary.rawPointCount} GPS-punkter förenklades till ${gpsTrackSummary.simplifiedPointCount} brytpunkter.${jumpText} Välj linjelager nedan och klicka «Lägg till ändring» om spåret ser bra ut.`;
     }
     return null;
   }, [gpsTracking, gpsSampleCount, gpsLiveAccuracyM, gpsRejectedJumpCount, gpsTrackSummary]);
@@ -594,6 +710,42 @@ export function SuggestionCreateClient({
   );
 
   const canUseGpsTracking = isGeoreferencedCrs(ocadCrs);
+
+  const compassActive = compassMode && mapMode !== "draw";
+  const {
+    bearingRef: mapBearingRef,
+    displayBearing: compassBearing,
+    error: compassError,
+    hasHeading,
+    supported: compassSupported,
+  } = useSmoothedCompass({
+    active: compassActive,
+    grivationRad: ocadCrs?.grivation ?? 0,
+  });
+  const mapBearing = compassActive ? compassBearing : 0;
+
+  const compassStatus = useMemo(() => {
+    if (compassError) return compassError;
+    if (compassActive && !hasHeading) return "Startar riktning uppåt… håll telefonen plant.";
+    if (compassActive) {
+      return "Riktning uppåt — det som är framåt på telefonen är uppåt på kartan. Tryck «Norr uppåt» för att sluta rotera.";
+    }
+    return null;
+  }, [compassActive, compassError, hasHeading]);
+
+  const handleCompassToggle = useCallback(async () => {
+    if (compassMode) {
+      setCompassMode(false);
+      return;
+    }
+    const granted = await requestCompassPermission();
+    if (!granted) {
+      setError("Kompass nekad — tillåt rörelse/riktning i webbläsaren.");
+      return;
+    }
+    setError(null);
+    setCompassMode(true);
+  }, [compassMode]);
 
   const handleGpsTrackingToggle = useCallback(() => {
     if (gpsTracking) {
@@ -616,7 +768,10 @@ export function SuggestionCreateClient({
     return null;
   }, [geometry, linePoints, polygonPoints, tool]);
 
-  const canAddMarking = finalizableGeometry !== null;
+  const pendingGpsLine = Boolean(gpsTrackSummary && geometry?.type === "LineString");
+
+  const canAddMarking =
+    finalizableGeometry !== null && (!pendingGpsLine || gpsLineSymbolNum != null);
   const totalMarkingCount = markings.length + (finalizableGeometry ? 1 : 0);
 
   const handleToolChange = useCallback(
@@ -629,24 +784,38 @@ export function SuggestionCreateClient({
       setGeometry(null);
       resetDraft();
       setGpsTrackSummary(null);
+      setGpsLineSymbolNum(null);
       setError(null);
     },
     [cancelGpsTracking, gpsTracking, resetDraft],
   );
 
+  const handleGpsLineSymbolChange = useCallback((symNum: number) => {
+    setGpsLineSymbolNum(symNum);
+  }, []);
+
   const handleAddMarking = useCallback(() => {
     const toAdd = finalizableGeometry;
     if (!toAdd) return;
+    if (pendingGpsLine && gpsLineSymbolNum == null) {
+      setError("Välj linjelager innan du lägger till GPS-spåret.");
+      return;
+    }
     if (markings.length >= MAX_SUGGESTION_GEOMETRIES) {
       setError(`Max ${MAX_SUGGESTION_GEOMETRIES} markeringar per förslag`);
       return;
     }
-    setMarkings((prev) => [...prev, toAdd]);
+    const withSymbol =
+      pendingGpsLine && toAdd.type === "LineString" && gpsLineSymbolNum != null
+        ? { ...toAdd, symbolNum: gpsLineSymbolNum }
+        : toAdd;
+    setMarkings((prev) => [...prev, withSymbol]);
     setGeometry(null);
     resetDraft();
     setGpsTrackSummary(null);
+    setGpsLineSymbolNum(null);
     setError(null);
-  }, [finalizableGeometry, markings.length, resetDraft]);
+  }, [finalizableGeometry, gpsLineSymbolNum, markings.length, pendingGpsLine, resetDraft]);
 
   const handleRemoveMarking = useCallback((index: number) => {
     setMarkings((prev) => prev.filter((_, i) => i !== index));
@@ -659,6 +828,7 @@ export function SuggestionCreateClient({
     setMarkings([]);
     setGeometry(null);
     setGpsTrackSummary(null);
+    setGpsLineSymbolNum(null);
     resetDraft();
     setError(null);
   }, [cancelGpsTracking, gpsTracking, resetDraft]);
@@ -680,6 +850,20 @@ export function SuggestionCreateClient({
     setSubmitDialogOpen(false);
   }, []);
 
+  const handleSubmitted = useCallback(() => {
+    setMarkings([]);
+    setGeometry(null);
+    resetDraft();
+    setSubmitDialogOpen(false);
+    setDraftQueued(false);
+    setDraftRestored(false);
+  }, [resetDraft]);
+
+  const handleQueued = useCallback(() => {
+    setSubmitDialogOpen(false);
+    setDraftQueued(true);
+  }, []);
+
   const mapToolbarOverlay = useMemo(
     () => (
       <>
@@ -699,15 +883,21 @@ export function SuggestionCreateClient({
           gpsTracking={gpsTracking}
           canUseGpsTracking={canUseGpsTracking}
           onGpsTrackingToggle={handleGpsTrackingToggle}
+          compassActive={compassMode}
+          onCompassToggle={handleCompassToggle}
+          compassSupported={compassSupported}
         />
       </>
     ),
     [
       canAddMarking,
       canUseGpsTracking,
+      compassMode,
+      compassSupported,
       gpsTracking,
       handleAddMarking,
       handleClearAll,
+      handleCompassToggle,
       handleGpsTrackingToggle,
       handleOpenSubmitDialog,
       handleToolChange,
@@ -734,6 +924,12 @@ export function SuggestionCreateClient({
         <HelpLinkIcon section="kartforslag" className="mt-1 shrink-0" />
       </div>
 
+      <OfflineDraftStatus
+        online={online}
+        restored={draftRestored}
+        queued={draftQueued}
+      />
+
       <div className="mt-6">
         <SuggestionCreateMapPanel
           mapSlug={mapSlug}
@@ -753,6 +949,13 @@ export function SuggestionCreateClient({
           onOcadLayersReady={handleOcadLayersReady}
           gpsTrackingStatus={gpsTrackingStatus}
           gpsTrackFollow={gpsTrackFollow}
+          mapBearing={mapBearing}
+          mapBearingRef={mapBearingRef}
+          compassStatus={compassStatus}
+          gpsLineSymbolNum={gpsLineSymbolNum}
+          onGpsLineSymbolChange={handleGpsLineSymbolChange}
+          pendingGpsLineSymbolPick={pendingGpsLine}
+          ocadLayers={ocadLayers}
           mapToolbarOverlay={mapToolbarOverlay}
         />
       </div>
@@ -771,6 +974,8 @@ export function SuggestionCreateClient({
           ocadLayers={ocadLayers}
           onClose={handleCloseSubmitDialog}
           onRemoveMarking={handleRemoveMarking}
+          onSubmitted={handleSubmitted}
+          onQueued={handleQueued}
         />
       )}
     </div>

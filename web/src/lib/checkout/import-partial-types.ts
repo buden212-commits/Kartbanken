@@ -1,4 +1,4 @@
-import type { Bbox } from "./types";
+import type { Bbox, CheckoutSelectionGeometry } from "./types";
 import type { OcadObjectType } from "@/lib/ocad/types";
 import type { ChangeType } from "@/lib/ocad/diff-types";
 
@@ -29,8 +29,24 @@ export type ImportDiffSample = {
   bbox: [number, number, number, number];
 };
 
+/** Objekt i riskzonen som skulle raderats men skyddas tills redaktören väljer «Radera». */
+export type ImportRiskRemoval = {
+  objectIndex: number;
+  symbolNumber: number;
+  symbolName: string;
+  type: OcadObjectType;
+  centroid: [number, number];
+  bbox: [number, number, number, number];
+};
+
 export type ImportPartialAnalysis = {
+  /** Automatisk AABB från delkartans objekt (blå start-ram). */
   extent: Bbox;
+  /** Aktiv importgräns (AABB eller ritad/auto polygon). */
+  boundary: CheckoutSelectionGeometry;
+  /** Hur gränsen valdes. */
+  boundarySource: "symbol-1104.001" | "extent" | "manual";
+  riskZoneMeters: number;
   extentInsideHead: boolean;
   headBounds: Bbox | null;
   symbols: {
@@ -42,6 +58,8 @@ export type ImportPartialAnalysis = {
   edgeCount: number;
   likelyClippedCount: number;
   edgeObjects: ImportEdgeObject[];
+  /** Skyddade borttagningskandidater i riskzonen (default: behåll). */
+  riskRemovals: ImportRiskRemoval[];
   diff: {
     added: number;
     removed: number;

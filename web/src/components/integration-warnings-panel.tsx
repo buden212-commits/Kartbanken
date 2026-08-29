@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { DiffMapPanel } from "@/components/diff-map-panel";
 import type { IntegrationWarning } from "@/lib/checkout/integration-warnings";
 import { warningObjectsToChanges } from "@/lib/checkout/integration-warnings";
@@ -22,6 +22,8 @@ export function IntegrationWarningsPanel({
 }: Props) {
   const [showMap, setShowMap] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [focusRequestId, setFocusRequestId] = useState(0);
+  const focusRequestIdRef = useRef(0);
 
   const mapChanges = useMemo(() => warningObjectsToChanges(warnings), [warnings]);
   const objectCount = useMemo(
@@ -30,14 +32,20 @@ export function IntegrationWarningsPanel({
   );
 
   const selectedChange = selectedIndex !== null ? mapChanges[selectedIndex] ?? null : null;
-  const focusTarget =
-    selectedChange != null
-      ? {
-          bbox: selectedChange.bbox,
-          centroid: selectedChange.centroid,
-          objectType: selectedChange.type,
-        }
-      : null;
+  const focusTarget = useMemo(() => {
+    if (selectedChange == null) return null;
+    return {
+      bbox: selectedChange.bbox,
+      centroid: selectedChange.centroid,
+      objectType: selectedChange.type,
+    };
+  }, [selectedChange]);
+
+  function handleSelectObject(index: number) {
+    focusRequestIdRef.current += 1;
+    setFocusRequestId(focusRequestIdRef.current);
+    setSelectedIndex(index);
+  }
 
   const clickableItems = useMemo(
     () => mapChanges.map((change, index) => ({ change, index })),
@@ -101,10 +109,11 @@ export function IntegrationWarningsPanel({
             versionId={headVersionId!}
             exportEnabled={false}
             focusTarget={focusTarget}
+            focusRequestId={focusRequestId}
             selectedChange={selectedChange}
             clickableItems={clickableItems}
             onClearFocus={() => setSelectedIndex(null)}
-            onObjectClick={setSelectedIndex}
+            onObjectClick={handleSelectObject}
           />
         </div>
       )}
@@ -133,7 +142,7 @@ export function IntegrationWarningsPanel({
                         onClick={() => {
                           if (changeIndex < 0) return;
                           setShowMap(true);
-                          setSelectedIndex(changeIndex);
+                          handleSelectObject(changeIndex);
                         }}
                         className={`flex w-full flex-wrap items-baseline gap-x-2 gap-y-1 px-3 py-2 text-left transition disabled:cursor-default ${
                           isSelected

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { OcadObjectChange } from "@/lib/ocad/diff-types";
 import type { ChangeType } from "@/lib/ocad/diff-types";
 import { DiffMapPanel } from "@/components/diff-map-panel";
@@ -90,20 +90,25 @@ export function CheckoutDiffMap({
 }: Props) {
   const [activeTab, setActiveTab] = useState<MapTab>("full");
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [focusRequestId, setFocusRequestId] = useState(0);
   const [changeFilter, setChangeFilter] = useState<ChangeFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const focusRequestIdRef = useRef(0);
 
   const selectedChange = selectedIndex !== null ? changes[selectedIndex] : null;
-  const selectedCentroid = selectedChange ? getChangeCentroid(selectedChange) : null;
+  const selectedCentroid = useMemo(
+    () => (selectedChange ? getChangeCentroid(selectedChange) : null),
+    [selectedChange],
+  );
 
-  const focusTarget =
-    selectedChange && selectedCentroid
-      ? {
-          bbox: getChangeBbox(selectedChange),
-          centroid: selectedCentroid,
-          objectType: selectedChange.type,
-        }
-      : null;
+  const focusTarget = useMemo(() => {
+    if (!selectedChange || !selectedCentroid) return null;
+    return {
+      bbox: getChangeBbox(selectedChange),
+      centroid: selectedCentroid,
+      objectType: selectedChange.type,
+    };
+  }, [selectedChange, selectedCentroid]);
 
   const previewUrls = useMemo(
     () => ({
@@ -145,6 +150,8 @@ export function CheckoutDiffMap({
   function handleSelectChange(index: number) {
     const change = changes[index];
     if (!change) return;
+    focusRequestIdRef.current += 1;
+    setFocusRequestId(focusRequestIdRef.current);
     setSelectedIndex(index);
     setActiveTab(CHANGE_TAB[change.changeType]);
   }
@@ -220,6 +227,7 @@ export function CheckoutDiffMap({
               versionId={headVersionId}
               exportEnabled={false}
               focusTarget={focusTarget}
+              focusRequestId={focusRequestId}
               selectedChange={selectedChange}
               clickableItems={clickableItems}
               onClearFocus={handleClearSelection}

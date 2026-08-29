@@ -1,25 +1,57 @@
 import { bboxFromGeometry } from "./overlap";
-import { CheckoutSelectionType, type Bbox } from "./types";
+import { CheckoutSelectionType, type Bbox, type CheckoutSelectionGeometry } from "./types";
 import { compareOcadObjects } from "@/lib/ocad/diff";
 import type { NormalizedOcadObject, OcadParseSummary } from "@/lib/ocad/types";
 import type {
   ImportDiffSample,
   ImportEdgeObject,
   ImportPartialAnalysis,
+  ImportRiskRemoval,
   ImportSymbolRow,
 } from "./import-partial-types";
+import {
+  IMPORT_RISK_ZONE_M,
+  boundaryFromBbox,
+  boundaryFromImportAreaSymbol,
+  formatImportBoundarySymbolLabel,
+  isImportBoundarySymbolObject,
+  objectCrossesBoundary,
+  objectFullyInsideBoundary,
+  objectInRiskZone,
+  objectIntersectsBoundary,
+  shrinkBbox,
+} from "./import-partial-boundary";
 
 export type {
   ImportDiffSample,
   ImportEdgeObject,
   ImportPartialAnalysis,
+  ImportRiskRemoval,
   ImportSymbolRow,
 } from "./import-partial-types";
+
+export {
+  IMPORT_RISK_ZONE_M,
+  IMPORT_BOUNDARY_SYMBOL_NUM,
+  boundaryFromBbox,
+  boundaryFromImportAreaSymbol,
+  bboxToRing,
+  formatImportBoundarySymbolLabel,
+  isImportBoundarySymbolObject,
+  objectCrossesBoundary,
+  objectFullyInsideBoundary,
+  objectInRiskZone,
+  objectInSafeZone,
+  objectIntersectsBoundary,
+  parseImportBoundary,
+  shrinkBbox,
+} from "./import-partial-boundary";
 
 const DIFF_TOLERANCE_M = Number(process.env.DIFF_SPATIAL_TOLERANCE_M ?? 2);
 const MAX_EDGE_SAMPLES = 80;
 const MAX_DIFF_SAMPLES = 40;
 const MAX_DIFF_MAP_SAMPLES = 300;
+const MAX_RISK_REMOVALS = 500;
 const MAX_SYMBOL_ROWS = 80;
 
 function bboxFromTuple(bounds: number[] | null): Bbox | null {
@@ -144,6 +176,8 @@ function usedSymbols(
 export function analyzeImportPartial(input: {
   head: OcadParseSummary;
   partial: OcadParseSummary;
+  /** Override automatic AABB boundary (e.g. user-drawn polygon). */
+  boundary?: CheckoutSelectionGeometry;
 }): ImportPartialAnalysis {
   const blockers: string[] = [];
   const warnings: string[] = [];
@@ -152,8 +186,40 @@ export function analyzeImportPartial(input: {
   const extent = bboxFromObjects(input.partial.objects);
   const headBounds = bboxFromTuple(input.head.bounds) ?? bboxFromObjects(input.head.objects);
 
+  const symbolBoundary = boundaryFromImportAreaSymbol(input.partial.objects);
+  let boundarySource: ImportPartialAnalysis["boundarySource"] = "extent";
+  let boundary: CheckoutSelectionGeometry;
+  if (input.boundary) {
+    boundary = input.boundary;
+    boundarySource = "manual";
+  } else if (symbolBoundary) {
+    boundary = symbolBoundary;
+    boundarySource = "symbol-1104.001";
+  } else {
+    boundary = extent
+      ? boundaryFromBbox(extent)
+      : boundaryFromBbox({ minX: 0, minY: 0, maxX: 0, maxY: 0 });
+    boundarySource = "extent";
+  }
+  const boundaryBbox = bboxFromGeometry(boundary);
+
+  // Områdessymbolen är gräns, inte kartinnehåll som ska läggas till/ersättas.
+  const partialMapObjects = input.partial.objects.filter(
+    (object) => !isImportBoundarySymbolObject(object),
+  );
+
+  if (symbolBoundary) {
+    warnings.push(
+      `Importgräns från symbol ${formatImportBoundarySymbolLabel()} (områdespolygon i delkartan).`,
+    );
+  }
+
   if (!extent || input.partial.objects.length === 0) {
     blockers.push("Delkartan innehåller inga kartobjekt att importera.");
+  } else if (partialMapObjects.length === 0) {
+    blockers.push(
+      `Delkartan innehåller bara områdessymbol ${formatImportBoundarySymbolLabel()} — inga kartobjekt att importera.`,
+    );
   }
 
   const extentInsideHead =
@@ -168,7 +234,7 @@ export function analyzeImportPartial(input: {
   }
 
   const headUsed = usedSymbols(input.head.objects);
-  const partialUsed = usedSymbols(input.partial.objects);
+  const partialUsed = usedSymbols(partialMapObjects);
 
   const matched: ImportSymbolRow[] = [];
   const onlyInPartial: ImportSymbolRow[] = [];
@@ -202,9 +268,8 @@ export function analyzeImportPartial(input: {
     );
   }
 
-  const extentForHead = extent ?? { minX: 0, minY: 0, maxX: 0, maxY: 0 };
   const headInArea = extent
-    ? input.head.objects.filter((object) => objectIntersectsBbox(object, extentForHead))
+    ? input.head.objects.filter((object) => objectIntersectsBoundary(object, boundary))
     : [];
 
   const onlyInHeadUsedByPartialArea: ImportSymbolRow[] = [];
@@ -220,16 +285,16 @@ export function analyzeImportPartial(input: {
     });
   }
 
-  const edgeSource = input.partial.objects;
+  const edgeSource = partialMapObjects;
   const edgeObjects: ImportEdgeObject[] = [];
   let interiorCount = 0;
   let likelyClippedCount = 0;
 
   if (extent) {
     for (const object of edgeSource) {
-      const crosses = objectCrossesBbox(object, extent);
-      const clipped = isLikelyClipped(object, extent);
-      if (objectFullyInsideBbox(object, extent) && !crosses) {
+      const crosses = objectCrossesBoundary(object, boundary);
+      const clipped = isLikelyClipped(object, boundaryBbox);
+      if (objectFullyInsideBoundary(object, boundary) && !crosses) {
         interiorCount += 1;
       }
       if (crosses || clipped) {
@@ -256,29 +321,58 @@ export function analyzeImportPartial(input: {
   }
 
   const baseline = extent
-    ? input.head.objects.filter((object) => objectIntersectsBbox(object, extent))
+    ? input.head.objects.filter((object) => objectIntersectsBoundary(object, boundary))
     : [];
   const diff = compareOcadObjects(
     baseline,
-    input.partial.objects,
+    partialMapObjects,
     { fileNameA: input.head.fileName, fileNameB: input.partial.fileName },
     { toleranceMeters: DIFF_TOLERANCE_M, matchByObjectIndex: false },
   );
 
-  const protectedRemovals = new Set(
-    baseline.filter((object) => extent && objectCrossesBbox(object, extent)).map((o) => o.objectIndex),
-  );
+  const baselineByIndex = new Map(baseline.map((object) => [object.objectIndex, object]));
+  const protectedCrossing = new Set<number>();
+  const protectedRisk = new Set<number>();
+  const riskRemovals: ImportRiskRemoval[] = [];
+
+  for (const change of diff.changes) {
+    if (change.changeType === "added") continue;
+    const baselineObject = baselineByIndex.get(change.objectIndex);
+    if (!baselineObject) continue;
+    if (objectCrossesBoundary(baselineObject, boundary)) {
+      protectedCrossing.add(change.objectIndex);
+      continue;
+    }
+    if (change.changeType === "removed" && objectInRiskZone(baselineObject, boundary)) {
+      protectedRisk.add(change.objectIndex);
+      if (riskRemovals.length < MAX_RISK_REMOVALS) {
+        riskRemovals.push({
+          objectIndex: baselineObject.objectIndex,
+          symbolNumber: baselineObject.symbolNumber,
+          symbolName: baselineObject.symbolName,
+          type: baselineObject.type,
+          centroid: baselineObject.centroid,
+          bbox: baselineObject.bbox,
+        });
+      }
+    }
+  }
 
   const appliedChanges = diff.changes.filter((change) => {
     if (change.changeType === "added") return true;
-    if (protectedRemovals.has(change.objectIndex)) return false;
+    if (protectedCrossing.has(change.objectIndex)) return false;
+    if (change.changeType === "removed" && protectedRisk.has(change.objectIndex)) return false;
     return true;
   });
 
-  const skippedEdge = diff.changes.length - appliedChanges.length;
-  if (skippedEdge > 0) {
+  if (protectedCrossing.size > 0) {
     warnings.push(
-      `${skippedEdge} kantöverskridande objekt i den stora kartan tas inte bort automatiskt (de går utanför delkartans ram).`,
+      `${protectedCrossing.size} kantöverskridande objekt i den stora kartan tas inte bort automatiskt (de går utanför importgränsen).`,
+    );
+  }
+  if (riskRemovals.length > 0) {
+    warnings.push(
+      `${riskRemovals.length} objekt i riskzonen (${IMPORT_RISK_ZONE_M} m från kanten) skyddas från auto-radering — granska listan under Kanter.`,
     );
   }
 
@@ -302,6 +396,9 @@ export function analyzeImportPartial(input: {
 
   return {
     extent: extent ?? { minX: 0, minY: 0, maxX: 0, maxY: 0 },
+    boundary,
+    boundarySource,
+    riskZoneMeters: IMPORT_RISK_ZONE_M,
     extentInsideHead,
     headBounds,
     symbols: {
@@ -313,6 +410,7 @@ export function analyzeImportPartial(input: {
     edgeCount: edgeObjects.length,
     likelyClippedCount,
     edgeObjects,
+    riskRemovals,
     diff: {
       added,
       removed,
@@ -327,7 +425,7 @@ export function analyzeImportPartial(input: {
 }
 
 export function selectionBboxFromAnalysis(analysis: ImportPartialAnalysis): Bbox {
-  return padBbox(analysis.extent);
+  return padBbox(bboxFromGeometry(analysis.boundary));
 }
 
 export function checkoutGeometryFromAnalysis(analysis: ImportPartialAnalysis) {
@@ -338,8 +436,16 @@ export function checkoutGeometryFromAnalysis(analysis: ImportPartialAnalysis) {
   } as const;
 }
 
+/** Unpadded AABB used for OCD crop / extent storage. */
 export function importExtentFromAnalysis(analysis: ImportPartialAnalysis): Bbox {
-  return analysis.extent;
+  return bboxFromGeometry(analysis.boundary);
+}
+
+export function safeZoneBboxFromBoundary(
+  boundary: CheckoutSelectionGeometry,
+  riskMeters = IMPORT_RISK_ZONE_M,
+): Bbox | null {
+  return shrinkBbox(bboxFromGeometry(boundary), riskMeters);
 }
 
 export { bboxFromGeometry };

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { formatBytes, formatDateOnly, formatTimeOnly } from "@/lib/format";
 import { VersionHistoryActions } from "@/components/version-history-actions";
+import { VersionMapNotesButton } from "@/components/version-map-notes-button";
 import { VersionPublishToggle } from "@/components/version-publish-toggle";
 import { VersionRecommendedToggle } from "@/components/version-recommended-toggle";
 import { HelpLinkIcon } from "@/components/help-link-icon";
@@ -187,7 +188,24 @@ function VersionCard({
           </div>
           <div className="col-span-2">
             <dt className="text-slate-400">Kommentar</dt>
-            <dd className="mt-0.5 whitespace-pre-wrap break-words">{version.comment ?? "—"}</dd>
+            <dd className="mt-0.5 flex items-start gap-2">
+              <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">
+                {version.comment ?? "—"}
+              </span>
+              {version.canView && (
+                <span
+                  className="shrink-0"
+                  onClick={stopRowNavigation}
+                  onKeyDown={stopRowNavigation}
+                >
+                  <VersionMapNotesButton
+                    mapSlug={mapSlug}
+                    versionId={version.id}
+                    versionNumber={version.versionNumber}
+                  />
+                </span>
+              )}
+            </dd>
           </div>
         </dl>
       </div>
@@ -279,13 +297,25 @@ function VersionRow({
       >
         <span className="block truncate text-slate-600">{version.uploaderLabel}</span>
       </td>
-      <td
-        className="px-2 py-2.5"
-        title={version.comment ?? undefined}
-      >
-        <span className="line-clamp-2 break-words text-slate-600">
-          {version.comment ?? "—"}
-        </span>
+      <td className="px-2 py-2.5" title={version.comment ?? undefined}>
+        <div className="flex items-start gap-1.5">
+          <span className="min-w-0 flex-1 line-clamp-2 break-words text-slate-600">
+            {version.comment ?? "—"}
+          </span>
+          {version.canView && (
+            <span
+              className="shrink-0"
+              onClick={stopRowNavigation}
+              onKeyDown={stopRowNavigation}
+            >
+              <VersionMapNotesButton
+                mapSlug={mapSlug}
+                versionId={version.id}
+                versionNumber={version.versionNumber}
+              />
+            </span>
+          )}
+        </div>
       </td>
       <td
         className="whitespace-nowrap px-2 py-2.5 text-xs text-slate-500"

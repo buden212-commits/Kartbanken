@@ -42,8 +42,15 @@ export type CheckoutSelection = {
   objectIds: string[];
   /** True when checkout was created from an imported partial map (no prior checkout). */
   importPartial?: boolean;
-  /** Unpadded utbredning för den importerade filen (crop/diff). */
+  /** Unpadded AABB for the imported area (crop/diff). */
   importExtent?: Bbox;
+  /** Exact import boundary (bbox or polygon). Defaults to importExtent as BBOX when missing. */
+  importBoundary?: CheckoutSelectionGeometry;
+  /**
+   * Object indices in the base map that the editor explicitly marked for deletion
+   * even though they lie in the import risk zone (normally protected).
+   */
+  forceDeleteObjectIndices?: number[];
 };
 
 export type CheckoutSelectionInput = {
@@ -82,11 +89,48 @@ export function parseBbox(value: unknown): Bbox | null {
   return { minX, minY, maxX, maxY };
 }
 
-function importFields(record: Record<string, unknown>): Pick<CheckoutSelection, "importPartial" | "importExtent"> {
-  const importExtent = record.importPartial === true ? parseBbox(record.importExtent) ?? undefined : undefined;
+function importFields(
+  record: Record<string, unknown>,
+): Pick<
+  CheckoutSelection,
+  "importPartial" | "importExtent" | "importBoundary" | "forceDeleteObjectIndices"
+> {
+  const importPartial = record.importPartial === true;
+  const importExtent = importPartial ? parseBbox(record.importExtent) ?? undefined : undefined;
+  let importBoundary: CheckoutSelectionGeometry | undefined;
+  if (importPartial && record.importBoundary && typeof record.importBoundary === "object") {
+    const raw = record.importBoundary as Record<string, unknown>;
+    if (raw.type === CheckoutSelectionType.BBOX) {
+      const bbox = parseBbox(raw.bbox);
+      if (bbox) importBoundary = { type: CheckoutSelectionType.BBOX, bbox };
+    } else if (raw.type === CheckoutSelectionType.POLYGON && Array.isArray(raw.ring)) {
+      const ring: PolygonRing = [];
+      for (const point of raw.ring) {
+        if (!Array.isArray(point) || point.length < 2) continue;
+        const x = Number(point[0]);
+        const y = Number(point[1]);
+        if (Number.isFinite(x) && Number.isFinite(y)) ring.push([x, y]);
+      }
+      if (ring.length >= 3) {
+        importBoundary = { type: CheckoutSelectionType.POLYGON, ring };
+      }
+    }
+  }
+  if (!importBoundary && importExtent) {
+    importBoundary = { type: CheckoutSelectionType.BBOX, bbox: importExtent };
+  }
+  const forceDeleteObjectIndices = Array.isArray(record.forceDeleteObjectIndices)
+    ? record.forceDeleteObjectIndices
+        .map((value) => Number(value))
+        .filter((value) => Number.isFinite(value))
+    : undefined;
   return {
-    importPartial: record.importPartial === true,
+    importPartial,
     ...(importExtent ? { importExtent } : {}),
+    ...(importBoundary ? { importBoundary } : {}),
+    ...(forceDeleteObjectIndices && forceDeleteObjectIndices.length > 0
+      ? { forceDeleteObjectIndices }
+      : {}),
   };
 }
 

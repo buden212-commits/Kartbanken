@@ -154,7 +154,8 @@ export function SuggestionOverviewMap({
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-slate-600">
           Öppna och pågående kartförslag från alla versioner. Kartan visar senaste publicerade
-          version (v{versionNumber}). Klicka på en markering för att öppna förslaget.
+          version (v{versionNumber}). Klicka på en markering eller i listan nedan — områden med
+          flest förslag nära varandra listas först.
         </p>
         {toggle}
       </div>
@@ -233,6 +234,7 @@ export function SuggestionAreaSection({
         onZoomToSuggestion={zoomToSuggestion}
         highlightedSuggestionId={highlightedId}
         publishedVersionNumber={versionNumber}
+        densityOverlays={overlays}
       />
     </>
   );

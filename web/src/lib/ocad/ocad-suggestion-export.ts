@@ -259,18 +259,19 @@ function geometryToObjectSpec(
       return buildObjectSpec(template, [{ x, y }], OCAD_POINT_OBJECT, color);
     }
     case "LineString": {
+      const sym = geometry.symbolNum ?? mapping.line;
       assertSymbolType(
         ocadFile,
-        mapping.line,
+        sym,
         [OCAD_LINE_SYMBOL, OCAD_LINE_TEXT_SYMBOL],
         "linje",
         geometryName,
       );
-      const templateObj = findTemplateObject(ocadFile, mapping.line, OCAD_LINE_OBJECT);
+      const templateObj = findTemplateObject(ocadFile, sym, OCAD_LINE_OBJECT);
       const template = templateObj
-        ? templateFromObject(templateObj, mapping.line, OCAD_LINE_OBJECT)
-        : defaultTObject12Template(mapping.line, OCAD_LINE_OBJECT);
-      const color = resolveObjectColor(ocadFile, mapping.line, templateObj?.col ?? template.col);
+        ? templateFromObject(templateObj, sym, OCAD_LINE_OBJECT)
+        : defaultTObject12Template(sym, OCAD_LINE_OBJECT);
+      const color = resolveObjectColor(ocadFile, sym, templateObj?.col ?? template.col);
       const coords = geometry.coordinates.map(([x, y]) => ({ x, y }));
       if (coords.length < 2) {
         throw new Error(`${geometryName}: linjen har för få punkter (minst 2 krävs).`);

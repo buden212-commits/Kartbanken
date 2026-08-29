@@ -177,7 +177,14 @@ function validateLineGeometry(record: Record<string, unknown>): SuggestionLineGe
     coordinates.push([x, y]);
   }
   if (!isValidSuggestionLineCoordinates(coordinates)) return null;
-  return { type: "LineString", coordinates };
+  const geometry: SuggestionLineGeometry = { type: "LineString", coordinates };
+  if (record.symbolNum != null) {
+    if (typeof record.symbolNum !== "number" || !Number.isFinite(record.symbolNum) || record.symbolNum <= 0) {
+      return null;
+    }
+    geometry.symbolNum = Math.round(record.symbolNum);
+  }
+  return geometry;
 }
 
 export function validateSuggestionGeometry(value: unknown): SuggestionGeometry | null {

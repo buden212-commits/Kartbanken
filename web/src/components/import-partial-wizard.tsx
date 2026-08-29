@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ImportPartialMapPreview } from "@/components/import-partial-map-preview";
 import type { ImportPartialAnalysis } from "@/lib/checkout/import-partial-types";
+import type { CheckoutSelectionGeometry } from "@/lib/checkout/types";
 import { uploadImportPartial } from "@/lib/upload-client";
 
 type StepId = "upload" | "symbols" | "extent" | "edges" | "diff" | "confirm";
@@ -13,9 +14,17 @@ const STEPS: { id: StepId; title: string; hint: string }[] = [
   { id: "upload", title: "1. Välj fil", hint: "Ladda upp den redigerade delkartan (.ocd)." },
   { id: "symbols", title: "2. Symboler", hint: "Kontrollera att symbolnumren stämmer med den stora kartan." },
   { id: "extent", title: "3. Läge", hint: "Ramen ska ligga på rätt ställe på den stora kartan." },
-  { id: "edges", title: "4. Kanter", hint: "Objekt som skär ramen klipps inte — de får inte radera originalet utanför." },
-  { id: "diff", title: "5. Ändringar", hint: "Tillagt, borttaget och ändrat inne i området." },
-  { id: "confirm", title: "6. Bekräfta", hint: "Skapar en utcheckning i efterhand. Inget slås ihop förrän du och admin bekräftar." },
+  {
+    id: "edges",
+    title: "4. Kanter",
+    hint: "Jämför grundkarta och import, justera gränsen och granska riskzonen (40 m).",
+  },
+  { id: "diff", title: "5. Ändringar", hint: "Tillagt, borttaget och ändrat inne i det säkra området." },
+  {
+    id: "confirm",
+    title: "6. Bekräfta",
+    hint: "Skapar en utcheckning i efterhand. Inget slås ihop förrän du och admin bekräftar.",
+  },
 ];
 
 type Props = {
@@ -38,10 +47,15 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
   const [analysis, setAnalysis] = useState<ImportPartialAnalysis | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [boundaryBusy, setBoundaryBusy] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
+  const [forceDeleteObjectIndices, setForceDeleteObjectIndices] = useState<number[]>([]);
+  const [selectedRiskObjectIndex, setSelectedRiskObjectIndex] = useState<number | null>(null);
 
-  // Endast redan genererad SVG — regenerering av kartbilden kan ta en minut och ge 500.
   const previewUrl = `/api/maps/${mapSlug}/versions/${headVersionId}/preview?cached=1`;
+  const importPreviewUrl = jobId
+    ? `/api/maps/${mapSlug}/import-partial/${jobId}/preview`
+    : null;
   const stepIndex = STEPS.findIndex((entry) => entry.id === step);
   const blockers = analysis?.blockers ?? [];
   const symbolBlocked = (analysis?.symbols.onlyInPartial.length ?? 0) > 0;
@@ -49,12 +63,22 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
   const canProceedPastSymbols = !symbolBlocked;
   const canCommit = blockers.length === 0;
   const mapMode = step === "extent" || step === "edges" || step === "diff" ? step : null;
+  const riskRemovals = analysis?.riskRemovals ?? [];
+  const forceDeleteCount = forceDeleteObjectIndices.length;
+  const keepRiskCount = Math.max(0, riskRemovals.length - forceDeleteCount);
+
+  const forceDeleteSet = useMemo(
+    () => new Set(forceDeleteObjectIndices),
+    [forceDeleteObjectIndices],
+  );
 
   async function onFile(file: File | undefined) {
     if (!file) return;
     setError(null);
     setLoading(true);
     setAcknowledged(false);
+    setForceDeleteObjectIndices([]);
+    setSelectedRiskObjectIndex(null);
     try {
       const res = await uploadImportPartial(mapSlug, file);
       const data = (await res.json()) as {
@@ -76,15 +100,49 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
     }
   }
 
-  async function commit() {
+  async function commitBoundary(boundary: CheckoutSelectionGeometry) {
     if (!jobId) return;
+    setBoundaryBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/maps/${mapSlug}/import-partial/${jobId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ boundary }),
+      });
+      const data = (await res.json()) as { error?: string; analysis?: ImportPartialAnalysis };
+      if (!res.ok) throw new Error(data.error ?? "Kunde inte uppdatera gränsen");
+      if (!data.analysis) throw new Error("Analys saknas i svaret");
+      setAnalysis(data.analysis);
+      setForceDeleteObjectIndices([]);
+      setSelectedRiskObjectIndex(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Kunde inte uppdatera gränsen");
+    } finally {
+      setBoundaryBusy(false);
+    }
+  }
+
+  function toggleForceDelete(objectIndex: number) {
+    setForceDeleteObjectIndices((prev) =>
+      prev.includes(objectIndex)
+        ? prev.filter((value) => value !== objectIndex)
+        : [...prev, objectIndex],
+    );
+  }
+
+  async function commit() {
+    if (!jobId || !analysis) return;
     setError(null);
     setLoading(true);
     try {
       const res = await fetch(`/api/maps/${mapSlug}/import-partial/${jobId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({
+          boundary: analysis.boundary,
+          forceDeleteObjectIndices,
+        }),
       });
       const raw = await res.text();
       let data: { error?: string; checkoutId?: string } = {};
@@ -218,7 +276,8 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
         </div>
       )}
 
-      {analysis && (step === "extent" || step === "edges" || step === "diff") &&
+      {analysis &&
+        (step === "extent" || step === "edges" || step === "diff") &&
         analysis.warnings.length > 0 &&
         otherBlockers.length === 0 && (
           <ul className="list-disc rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 pl-8 text-sm text-amber-900">
@@ -231,37 +290,97 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
       {analysis && mapMode && (
         <ImportPartialMapPreview
           previewUrl={previewUrl}
+          importPreviewUrl={mapMode === "edges" ? importPreviewUrl : null}
           analysis={analysis}
           mode={mapMode}
           areaHref={`/maps/${mapSlug}`}
           title={
-            mapMode === "extent" ? "Utbredning" : mapMode === "edges" ? "Kantobjekt" : "Ändringar"
+            mapMode === "extent" ? "Utbredning" : mapMode === "edges" ? "Kanter & riskzon" : "Ändringar"
           }
+          forceDeleteObjectIndices={forceDeleteObjectIndices}
+          selectedRiskObjectIndex={selectedRiskObjectIndex}
+          onSelectRiskObject={setSelectedRiskObjectIndex}
+          onBoundaryCommit={mapMode === "edges" ? commitBoundary : undefined}
+          boundaryBusy={boundaryBusy}
         />
       )}
 
       {analysis && step === "extent" && (
         <p className="text-sm text-slate-600">
-          Blå ram är delkartans utbredning. Zooma och kontrollera att den ligger rätt. Fil:{" "}
-          <span className="font-medium">{fileName}</span>.
+          {analysis.boundarySource === "symbol-1104.001" ? (
+            <>
+              Importgränsen kommer från områdessymbol <span className="font-medium">1104.001</span> i
+              delkartan (polygon). Kontrollera att den ligger rätt. Fil:{" "}
+              <span className="font-medium">{fileName}</span>.
+            </>
+          ) : (
+            <>
+              Blå ram är delkartans utbredning. Zooma och kontrollera att den ligger rätt. Fil:{" "}
+              <span className="font-medium">{fileName}</span>. I nästa steg kan du rita en egen
+              polygon om området inte är en rektangel — eller lägga till symbol 1104.001 i OCAD.
+            </>
+          )}
         </p>
       )}
 
       {analysis && step === "edges" && (
-        <div className="space-y-2 text-sm text-slate-600">
+        <div className="space-y-4 text-sm text-slate-600">
           <p>
-            Orange/rött = kantobjekt som skär eller slutar vid ramen ({analysis.edgeCount} visade).
-            Rött betyder troligen klippt ({analysis.likelyClippedCount} st).{" "}
-            {analysis.interiorCount} objekt ligger helt inne i området.
+            Grundkartan visas nedtonad med importkartan ovanpå. Orange streckad ram = säker zon innanför
+            riskbufferten ({analysis.riskZoneMeters ?? 40} m). Objekt i riskzonen raderas inte
+            automatiskt — välj «Radera» per rad om det ska bort.
           </p>
-          <p>
-            Växla mellan <span className="font-medium">Hela kartan</span> och{" "}
-            <span className="font-medium">Bara berörda objekt</span> för tydligare överblick. Kryssa i{" "}
-            <span className="font-medium">Raderas i original</span>,{" "}
-            <span className="font-medium">Nya i delkartan</span> och{" "}
-            <span className="font-medium">Ändrade / ersatta</span> för att jämföra vad som tas bort
-            mot vad som kommer in (streckad röd = raderas).
-          </p>
+          <section className="rounded-xl border border-amber-200 bg-amber-50/50 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h3 className="font-medium text-amber-950">
+                  Objekt i riskzonen ({riskRemovals.length})
+                </h3>
+                <p className="mt-1 text-xs text-amber-900">
+                  {keepRiskCount} behålls · {forceDeleteCount} markeras för radering
+                </p>
+              </div>
+            </div>
+            {riskRemovals.length === 0 ? (
+              <p className="mt-3 text-xs text-amber-900">Inga skyddade borttagningskandidater i riskzonen.</p>
+            ) : (
+              <ul className="mt-3 max-h-64 divide-y divide-amber-100 overflow-y-auto rounded-lg border border-amber-200 bg-white text-xs">
+                {riskRemovals.map((item) => {
+                  const marked = forceDeleteSet.has(item.objectIndex);
+                  const selected = selectedRiskObjectIndex === item.objectIndex;
+                  return (
+                    <li
+                      key={item.objectIndex}
+                      className={`flex flex-wrap items-center gap-2 px-3 py-2 ${
+                        selected ? "bg-ifk-blue-pale/60" : ""
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        className="min-w-0 flex-1 text-left"
+                        onClick={() => setSelectedRiskObjectIndex(item.objectIndex)}
+                      >
+                        <span className="font-mono text-slate-500">{item.symbolNumber}</span>{" "}
+                        <span className="text-slate-800">{item.symbolName}</span>{" "}
+                        <span className="text-slate-400">({item.type})</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleForceDelete(item.objectIndex)}
+                        className={`rounded-md px-2 py-1 text-xs font-medium ${
+                          marked
+                            ? "bg-red-600 text-white"
+                            : "border border-emerald-300 bg-emerald-50 text-emerald-800"
+                        }`}
+                      >
+                        {marked ? "Raderas — klicka för behåll" : "Behålls — klicka för radera"}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
         </div>
       )}
 
@@ -277,8 +396,8 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
             {analysis.diff.unchanged} oförändrade i området
           </p>
           <p className="text-slate-600">
-            Använd samma kartväxling som i steget Kanter: hela kartan eller bara berörda objekt, och
-            filtrera tillagda / borttagna / ändrade.
+            Siffrorna gäller det säkra området. {keepRiskCount} riskzonsobjekt behålls och{" "}
+            {forceDeleteCount} raderas enligt ditt val under Kanter.
           </p>
           {analysis.diff.samples.length > 0 && (
             <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white text-xs">
@@ -306,13 +425,24 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
             </div>
           )}
           <p>
-            En utcheckning skapas från delkartans utbredning och filen checkas in. Därefter granskar
-            du diffen som vanligt och admin integrerar.
+            En utcheckning skapas från importgränsen och filen checkas in. Därefter granskar du
+            diffen som vanligt och admin integrerar — riskzonsvalen följer med oförändrade.
           </p>
           <ul className="list-disc pl-5">
             <li>
               {analysis.diff.added} tillägg, {analysis.diff.modified} ändringar, {analysis.diff.removed}{" "}
-              borttagningar (kantöverskridande objekt raderas inte automatiskt)
+              auto-borttagningar i säkra zonen
+            </li>
+            <li>
+              Riskzon: {keepRiskCount} behålls · {forceDeleteCount} raderas enligt granskning
+            </li>
+            <li>
+              Gräns:{" "}
+              {analysis.boundarySource === "symbol-1104.001"
+                ? "polygon från symbol 1104.001"
+                : analysis.boundary?.type === "POLYGON"
+                  ? "ritad polygon"
+                  : "blå rektangel"}
             </li>
             <li>{analysis.likelyClippedCount} objekt markerade som troligen klippta</li>
           </ul>
@@ -324,7 +454,8 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
               onChange={(event) => setAcknowledged(event.target.checked)}
             />
             <span>
-              Jag har kontrollerat symboler, läge och kanter. Delkartan tillhör det här området.
+              Jag har kontrollerat symboler, läge, kanter och riskzon. Delkartan tillhör det här
+              området.
             </span>
           </label>
         </div>
@@ -337,7 +468,7 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
               type="button"
               onClick={goPrev}
               className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700"
-              disabled={loading}
+              disabled={loading || boundaryBusy}
             >
               Tillbaka
             </button>
@@ -353,7 +484,11 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
           <button
             type="button"
             onClick={goNext}
-            disabled={loading || (step === "symbols" && !canProceedPastSymbols)}
+            disabled={
+              loading ||
+              boundaryBusy ||
+              (step === "symbols" && !canProceedPastSymbols)
+            }
             className="btn-primary"
           >
             Nästa

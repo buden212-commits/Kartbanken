@@ -7,68 +7,115 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
-    date: "2026-08-16",
-    title: "Jämför versioner: stegstatus och omstart",
+    date: "2026-08-29",
+    title: "Riktning uppåt (kompass)",
     items: [
-      "Under «Jämför versioner» visas vilket steg som pågår (ladda filer, parsa, beräkna diff)",
-      "Jämförelsen startas inte om vid varje uppdatering — det kunde få stora kartor att fastna",
-      "Om det ändå hänger: «Starta om jämförelse»",
+      "«Riktning uppåt» vrider kartan så att telefonens framåt blir uppåt på kartan — som i en GPS-app",
+      "«Norr uppåt» återgår mjukt till norr i toppen",
+      "Kompassen fungerar tillsammans med Min position och GPS-spår, och pausas när du ritar",
+    ],
+  },
+  {
+    date: "2026-08-29",
+    title: "GPS startar automatiskt i Föreslå ändring",
+    items: [
+      "När du öppnar «Föreslå ändring» aktiveras Min position automatiskt (georefererad karta) — kartan zoomar till dig när GPS-fixen kommer",
+      "Du kan fortfarande trycka «Stoppa GPS» om du inte vill att kartan ska följa dig",
+    ],
+  },
+  {
+    date: "2026-08-19",
+    title: "Kompass och GPS-spår",
+    items: [
+      "Kompassen svarar snabbare när du vrider telefonen",
+      "Kartan hålls norr-upp under GPS-spår och tills du lagt till spåret",
+    ],
+  },
+  {
+    date: "2026-08-19",
+    title: "Linjelager för GPS-spår",
+    items: [
+      "Efter GPS-spårning i «Föreslå ändring»: välj linjelager från kartans lager innan du lägger till spåret",
+      "Valt lager sparas på markeringen och används automatiskt vid export till OCD",
+    ],
+  },
+  {
+    date: "2026-08-19",
+    title: "Kompassläge i kartförslag",
+    items: [
+      "På mobil i «Föreslå ändring»: slå på «Passa efter norr» i navigationsläge — kartan roterar mjukt efter telefonens kompass",
+      "Liten «N»-markering visar var norr är när kompassen är aktiv",
+      "Kompassen stängs automatiskt om du byter till Rita eller startar GPS-spår",
+    ],
+  },
+  {
+    date: "2026-08-19",
+    title: "Underhållsöversikt för kartförslag",
+    items: [
+      "På områdessidan: karta och lista som tidigare, men listan sorteras efter täthet — områden med flest öppna eller pågående förslag nära varandra visas först",
+      "«X förslag inom samma område» visas när flera förslag ligger nära varandra på kartan",
+      "Klicka i listan för att zooma kartan till markeringen",
+    ],
+  },
+  {
+    date: "2026-08-18",
+    title: "Fältläge för kartförslag",
+    items: [
+      "Kartförslag (skapa och redigera egna öppna) sparas som utkast på enheten — markeringar, text och foto följer med om nätet dippar",
+      "Utkast skickas automatiskt när du är online igen, eller när du trycker Skicka / Spara",
+      "På mobil visas en fråga om att installera appen vid uppstart om den inte redan finns på hemskärmen",
+    ],
+  },
+  {
+    date: "2026-08-17",
+    title: "Kartinformation i OCAD",
+    items: [
+      "När du anger en kommentar vid ny version (uppladdning eller incheckning) läggs en rad med datum, användare och kommentaren till i OCAD under Karta > Kartinformation",
+      "Utan kommentar lämnas kartinformationen som den är",
+      "I versionshistoriken finns en dokumentikon efter kommentaren — klicka för att läsa hela kartinformationen för den versionen (samma text som i OCAD)",
     ],
   },
   {
     date: "2026-08-16",
-    title: "Spinner vid jämförelse av versioner",
+    title: "Importera delkarta — riskzon, lagerjämförelse och gräns",
     items: [
-      "När «Jämför versioner» arbetar visas en spinner och förfluten tid, så det syns att sidan inte hängt sig",
+      "Om delkartan har områdessymbol 1104.001 används den automatiskt som importgräns (annars blå rektangel); symbolen läggs inte till i grundkartan",
+      "Under Kanter: grundkarta och importkarta ovanpå varandra — opacitet, svep, «Bara grund» / «Bara import»",
+      "Zooma (+/−, scroll, nyp), panorera genom att dra, och rita polygon i ritläge (eller återställ blå ram) — reglage och zoomknappar ska kännas snabba även på stora kartor",
+      "Objekt inom 40 m från gränsen raderas inte automatiskt — granska listan och välj behåll/radera; valen följer med till admin-integrationen (ingen obligatorisk kryssruta innan Nästa)",
+      "Växla mellan hela kartan och bara berörda objekt; visa raderas / nya / ändrade",
+      "Steget «Bekräfta» fungerar även för stora områden (t.ex. Mora Väst)",
     ],
   },
   {
     date: "2026-08-16",
-    title: "Admin-integration av stora utcheckningar",
+    title: "Jämför versioner",
     items: [
-      "«Bekräfta och integrera» ska inte längre ge falskt fel när versionen redan sparats — kartbild skapas i bakgrunden",
-      "Sammanslagning av många tillagda objekt (t.ex. importerad delkarta) använder mindre minne",
-      "Om ett fel visas: ladda om sidan och kontrollera om utcheckningen redan är integrerad",
+      "Statusdialogen med checklista visas direkt när du öppnar jämförelsen",
+      "Tydligare status: delstatus (hämtar/parsar v1 och v2), förfluten tid och senaste uppdatering",
+      "Hämtning av .ocd ska ta sekunder — om den fastnar startas jobbet om automatiskt; timeout vid långsam lagring",
+      "Jämförelsen genererar inte kartbild under jobbet (snabbare och mer stabilt på stora kartor)",
+      "Längre tidsgräns och hjärtslag under I/O-steg så jobbet inte lämnas hängande",
+      "Kartan zooma till objekt bara när du klickar i listan eller på objektet — inte automatiskt tillbaka till ~1:500 medan du zooma/panorera",
+      "«Starta om jämförelse» om det ändå hänger — endast ett jobb körs åt gången",
     ],
   },
   {
     date: "2026-08-16",
-    title: "Tydligare fel vid admin-integration",
+    title: "Admin-integration",
     items: [
-      "Om «Bekräfta och integrera» misslyckas visas vilket steg som gick fel, tips och mer detaljer i stället för bara «Integration misslyckades»",
-      "Integrering av stora kartor (t.ex. Mora Väst) valideras lättare så den inte lika lätt kraschar mitt i processen",
+      "Tydligare fel: vilket steg som gick fel, tips och mer detaljer",
+      "«Bekräfta och integrera» ger inte längre falskt fel när versionen redan sparats — kartbild skapas i bakgrunden",
+      "Stora utcheckningar (t.ex. många tillagda objekt) använder mindre minne och valideras lättare",
+      "Om ett fel visas: ladda om och kontrollera om utcheckningen redan är integrerad",
     ],
   },
   {
     date: "2026-08-16",
-    title: "Importera delkarta: tydligare kartvy i Kanter",
+    title: "Stora kartor (t.ex. Mora Väst)",
     items: [
-      "I steget «Kanter» (och «Ändringar») kan du växla mellan hela kartan och bara berörda objekt",
-      "Du kan visa objekt som raderas i originalkartan tillsammans med nya och ändrade/ersatta objekt från delkartan",
-    ],
-  },
-  {
-    date: "2026-08-16",
-    title: "Importera delkarta: bekräfta fungerar på stora kartor",
-    items: [
-      "Steget «Bekräfta» i Importera delkarta slutförs nu även för stora områden (t.ex. Mora Väst) i stället för att stanna med ett tekniskt fel",
-      "Det kan fortfarande ta en stund — vänta tills utcheckningen öppnas",
-    ],
-  },
-  {
-    date: "2026-08-16",
-    title: "Mora Väst går att öppna efter uppladdning",
-    items: [
-      "Uppladdade stora kartor (t.ex. Mora_Väst_med_VenjanKos12.ocd) fastnade tidigare på «Parsar…» utan kartbild — det är åtgärdat",
-      "Kartbilden skapas mer tillförlitligt för stora filer, så området går att öppna och titta på",
-    ],
-  },
-  {
-    date: "2026-08-16",
-    title: "Stora kartor som Mora Väst går att öppna",
-    items: [
-      "Kartbilden för stora filer (ca 30 MB SVG) hämtas direkt från lagringen med tillfällig länk — den stoppas inte längre av serverns storleksgräns",
-      "Öppna området eller «Visa karta» och vänta tills kartan ritas (kan ta en stund första gången)",
+      "Uppladdade stora kartor ska inte längre fastna på «Parsar…» utan kartbild",
+      "Kartbilden hämtas tillförlitligare (bl.a. direktlänk från lagringen) så området går att öppna",
     ],
   },
   {

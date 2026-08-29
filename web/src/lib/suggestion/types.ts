@@ -117,6 +117,8 @@ export type SuggestionPolygonGeometry = {
 export type SuggestionLineGeometry = {
   type: "LineString";
   coordinates: [number, number][];
+  /** OCAD symbol number for OCD export (e.g. GPS track line layer). */
+  symbolNum?: number;
 };
 
 export type SuggestionGeometry =

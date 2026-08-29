@@ -11,6 +11,11 @@ import {
 } from "@/lib/ocad/crs";
 import { findChangeAtPoint, parseViewBoxString, screenToSvgPoint } from "@/lib/ocad/map-hit-test";
 import {
+  buildMapLayerTransform,
+  mapContentToScreen,
+  panForCenteredMapPoint,
+} from "@/lib/ocad/map-view-transform";
+import {
   geoBboxToSvgUser,
   geoToSvgUserPoint,
   IDENTITY_SVG_TRANSFORM,
@@ -93,6 +98,12 @@ type Props = {
   exportEnabled?: boolean;
   fullscreen?: boolean;
   focusTarget?: FocusTarget | null;
+  /**
+   * Bump when the user explicitly picks an object (list/map click).
+   * Zoom-to-object runs only when this changes — not on every parent re-render
+   * while the same object stays selected.
+   */
+  focusRequestId?: number;
   selectedChange?: OcadObjectChange | null;
   clickableItems?: ClickableItem[];
   onClearFocus?: () => void;
@@ -137,6 +148,12 @@ type Props = {
     /** Ökas när spårning startar eller första GPS-fix kommer. */
     recenterToken: number;
   } | null;
+  /** Clockwise rotation in degrees (0 = north up). Used for compass mode. */
+  mapBearing?: number;
+  /** Live bearing updated every frame — applied via DOM to avoid React re-renders. */
+  mapBearingRef?: MutableRefObject<number>;
+  /** Start «Min position» automatically when the map CRS is ready (e.g. Föreslå ändring). */
+  autoStartGps?: boolean;
 };
 
 const MIN_ZOOM = 0.2;
@@ -265,6 +282,7 @@ export function DiffMapPanel({
   exportEnabled = true,
   fullscreen = false,
   focusTarget,
+  focusRequestId,
   selectedChange,
   clickableItems = [],
   onClearFocus,
@@ -284,6 +302,9 @@ export function DiffMapPanel({
   onOcadLayersReady,
   fitGeoBbox = null,
   gpsTrackFollow = null,
+  mapBearing = 0,
+  mapBearingRef,
+  autoStartGps = false,
 }: Props) {
   const [svgInner, setSvgInner] = useState<string | null>(null);
   const [svgFill, setSvgFill] = useState("transparent");
@@ -324,6 +345,11 @@ export function DiffMapPanel({
   const gpsWatchIdRef = useRef<number | null>(null);
   const gpsCenteredOnceRef = useRef(false);
   const gpsFixRef = useRef<GpsFix | null>(null);
+  const autoStartedGpsRef = useRef(false);
+  const mapLayerElRef = useRef<HTMLDivElement | null>(null);
+  const northRoseElRef = useRef<HTMLDivElement | null>(null);
+  const gpsMarkerElRef = useRef<HTMLDivElement | null>(null);
+  const gpsBaseRef = useRef<{ x: number; y: number } | null>(null);
   gpsFixRef.current = gpsFix;
   const dragRef = useRef<{
     startX: number;
@@ -350,6 +376,8 @@ export function DiffMapPanel({
   const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userInteractedRef = useRef(false);
   const initialFitDoneRef = useRef(false);
+  /** Last focus apply key — avoids re-zooming to ~1:500 on unrelated re-renders. */
+  const lastFocusApplyKeyRef = useRef<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [slowLoad, setSlowLoad] = useState(false);
   const [mapLayers, setMapLayers] = useState<OcadMapLayer[]>([]);
@@ -528,6 +556,11 @@ export function DiffMapPanel({
     });
   }, [exportSettings, exportMode, ocadMapScale]);
 
+  const exportDialogGeometries = useMemo(
+    () => suggestionOverlays?.map((item) => item.geometry) ?? [],
+    [suggestionOverlays],
+  );
+
   const performExport = useCallback(
     async (ocdSuggestionSymbols?: OcdSuggestionSymbolMapping) => {
       if (!exportFrame) return;
@@ -634,8 +667,9 @@ export function DiffMapPanel({
     await performExport();
   }, [exportFrame, exportSettings.outputFormat, exportSettings.includeSuggestions, performExport]);
 
-  const viewStateRef = useRef({ pan: { x: 0, y: 0 }, zoom: FIT_WHOLE_ZOOM });
-  viewStateRef.current = { pan, zoom };
+  const viewStateRef = useRef({ pan: { x: 0, y: 0 }, zoom: FIT_WHOLE_ZOOM, bearing: 0 });
+  const liveBearing = () => mapBearingRef?.current ?? mapBearing;
+  viewStateRef.current = { pan, zoom, bearing: liveBearing() };
 
   const markUserInteracted = useCallback(() => {
     userInteractedRef.current = true;
@@ -663,7 +697,22 @@ export function DiffMapPanel({
   }, [maxZoom]);
 
   useEffect(() => {
-    if (!focusTarget || !fullViewBox || loading) return;
+    if (!focusTarget) {
+      lastFocusApplyKeyRef.current = null;
+      return;
+    }
+    if (!fullViewBox || loading) return;
+
+    const applyKey =
+      focusRequestId != null
+        ? `req:${focusRequestId}`
+        : [
+            focusTarget.objectType,
+            focusTarget.bbox.join(","),
+            focusTarget.centroid.join(","),
+          ].join(":");
+
+    if (lastFocusApplyKeyRef.current === applyKey) return;
 
     const viewport = viewportRef.current;
     if (!viewport) return;
@@ -678,9 +727,10 @@ export function DiffMapPanel({
       maxZoom,
     );
     if (!next) return;
+    lastFocusApplyKeyRef.current = applyKey;
     setPan(next.pan);
     setZoom(next.zoom);
-  }, [focusTarget, fullViewBox, loading, rootTransform, maxZoom]);
+  }, [focusTarget, focusRequestId, fullViewBox, loading, rootTransform, maxZoom]);
 
   useEffect(() => {
     if (!fitGeoBbox || !fullViewBox || loading) return;
@@ -1031,12 +1081,18 @@ export function DiffMapPanel({
         rect.height,
       );
       setZoom(nextZoom);
-      setPan({
-        x: rect.width / 2 - screenX * nextZoom,
-        y: rect.height / 2 - screenY * nextZoom,
-      });
+      setPan(
+        panForCenteredMapPoint(
+          screenX,
+          screenY,
+          rect.width,
+          rect.height,
+          nextZoom,
+          liveBearing(),
+        ),
+      );
     },
-    [fullViewBox, markUserInteracted, rootTransform],
+    [fullViewBox, mapBearing, mapBearingRef, markUserInteracted, rootTransform],
   );
 
   const panToMapCoordAtDisplayScale = useCallback(
@@ -1178,6 +1234,13 @@ export function DiffMapPanel({
   }, [applyGpsPosition, canUseGps]);
 
   useEffect(() => {
+    if (!autoStartGps || autoStartedGpsRef.current) return;
+    if (!canUseGps || loading || !fullViewBox || gpsEnabled) return;
+    autoStartedGpsRef.current = true;
+    startGps();
+  }, [autoStartGps, canUseGps, fullViewBox, gpsEnabled, loading, startGps]);
+
+  useEffect(() => {
     return () => {
       if (gpsWatchIdRef.current != null && typeof navigator !== "undefined") {
         navigator.geolocation.clearWatch(gpsWatchIdRef.current);
@@ -1201,15 +1264,59 @@ export function DiffMapPanel({
       rect.width,
       rect.height,
     );
-    const x = pan.x + baseX * zoom;
-    const y = pan.y + baseY * zoom;
+    gpsBaseRef.current = { x: baseX, y: baseY };
+    const [x, y] = mapContentToScreen(baseX, baseY, rect.width, rect.height, {
+      pan,
+      zoom,
+      bearing: liveBearing(),
+    });
 
     return {
       x,
       y,
       uncertain: gpsFix.accuracyMeters > GPS_UNCERTAIN_ACCURACY_M,
     };
-  }, [fullViewBox, gpsFix, pan.x, pan.y, rootTransform, zoom]);
+  }, [fullViewBox, gpsFix, mapBearing, mapBearingRef, pan, rootTransform, zoom]);
+
+  useEffect(() => {
+    if (!gpsFix) gpsBaseRef.current = null;
+  }, [gpsFix]);
+
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      const bearing = liveBearing();
+      const layer = mapLayerElRef.current;
+      if (layer) {
+        layer.style.transform = buildMapLayerTransform({
+          pan: viewStateRef.current.pan,
+          zoom: viewStateRef.current.zoom,
+          bearing,
+        });
+      }
+      const rose = northRoseElRef.current;
+      if (rose) {
+        rose.style.transform = `rotate(${bearing}deg)`;
+        rose.style.opacity = Math.abs(bearing) > 0.5 && Math.abs(bearing - 360) > 0.5 ? "1" : "0";
+      }
+      const marker = gpsMarkerElRef.current;
+      const gpsBase = gpsBaseRef.current;
+      const viewport = viewportRef.current;
+      if (marker && gpsBase && viewport) {
+        const rect = viewport.getBoundingClientRect();
+        const [x, y] = mapContentToScreen(gpsBase.x, gpsBase.y, rect.width, rect.height, {
+          pan: viewStateRef.current.pan,
+          zoom: viewStateRef.current.zoom,
+          bearing,
+        });
+        marker.style.left = `${x}px`;
+        marker.style.top = `${y}px`;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [mapBearing, mapBearingRef]);
 
   const gpsAccuracyUncertain = Boolean(
     gpsFix && gpsFix.accuracyMeters > GPS_UNCERTAIN_ACCURACY_M,
@@ -1325,6 +1432,7 @@ export function DiffMapPanel({
 
       <OcdSuggestionSymbolDialog
         layers={mapLayers}
+        geometries={exportDialogGeometries}
         open={ocdSymbolDialogOpen}
         onCancel={() => setOcdSymbolDialogOpen(false)}
         onConfirm={(mapping) => {
@@ -1372,9 +1480,10 @@ export function DiffMapPanel({
         )}
         {svgInner && fullViewBox && (
           <div
+            ref={mapLayerElRef}
             className="absolute inset-0"
             style={{
-              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+              transform: buildMapLayerTransform({ pan, zoom, bearing: liveBearing() }),
               transformOrigin: "0 0",
             }}
           >
@@ -1430,6 +1539,7 @@ export function DiffMapPanel({
 
         {gpsMarker && (
           <div
+            ref={gpsMarkerElRef}
             className="pointer-events-none absolute z-20 drop-shadow-sm"
             style={{
               left: gpsMarker.x,
@@ -1501,6 +1611,18 @@ export function DiffMapPanel({
             </svg>
           </div>
         )}
+
+        <div
+          ref={northRoseElRef}
+          className="pointer-events-none absolute left-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-xs font-semibold text-slate-700 shadow-sm"
+          style={{
+            transform: `rotate(${liveBearing()}deg)`,
+            opacity: Math.abs(mapBearing) > 0.5 && Math.abs(mapBearing - 360) > 0.5 ? 1 : 0,
+          }}
+          aria-hidden
+        >
+          N
+        </div>
 
         {infoChange && (
           <div className="pointer-events-none absolute bottom-3 left-3 right-3 z-20 max-w-xs rounded-lg border border-slate-200 bg-white/95 p-3 text-sm shadow-lg backdrop-blur sm:right-auto">
