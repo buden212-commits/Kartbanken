@@ -395,16 +395,16 @@ export function DiffMapPanel({
 
     async function loadTiles(): Promise<void> {
       const statusUrl = `/api/maps/${mapSlug}/versions/${versionId}/tiles/status`;
+      let consecutiveFailures = 0;
+
+      const scheduleNextPoll = (delayMs: number) => {
+        pollTimer = setTimeout(() => {
+          void poll();
+        }, delayMs);
+      };
 
       const poll = async (): Promise<void> => {
-        const res = await fetch(statusUrl, {
-          signal: controller.signal,
-          credentials: "same-origin",
-        });
-        if (!res.ok) {
-          throw new Error(`Kunde inte hämta tile-status (${res.status})`);
-        }
-        const data = (await res.json()) as {
+        let data: {
           status: string;
           error?: string | null;
           manifest?: TileManifest | null;
@@ -418,7 +418,32 @@ export function DiffMapPanel({
             preparing: boolean;
           } | null;
         };
+
+        try {
+          const res = await fetch(statusUrl, {
+            signal: controller.signal,
+            credentials: "same-origin",
+          });
+          if (!res.ok) {
+            throw new Error(`Kunde inte hämta tile-status (${res.status})`);
+          }
+          data = await res.json();
+        } catch (err) {
+          if (cancelled || controller.signal.aborted) return;
+          consecutiveFailures++;
+          // Tile builds run in background invocations that can briefly drop
+          // requests; only surface an error after repeated failures.
+          if (consecutiveFailures >= 5) {
+            setError(err instanceof Error ? err.message : "Fel vid laddning");
+            setLoading(false);
+            return;
+          }
+          scheduleNextPoll(3000);
+          return;
+        }
+
         if (cancelled) return;
+        consecutiveFailures = 0;
 
         setTileStatus(data.status);
         setTileProgress(data.progress ?? null);
@@ -445,14 +470,8 @@ export function DiffMapPanel({
           return;
         }
 
-        // PENDING / PROCESSING — keep polling
-        pollTimer = setTimeout(() => {
-          void poll().catch((err) => {
-            if (cancelled || controller.signal.aborted) return;
-            setError(err instanceof Error ? err.message : "Fel vid laddning");
-            setLoading(false);
-          });
-        }, 1500);
+        // PENDING / PROCESSING — keep polling; each poll also resumes the build
+        scheduleNextPoll(1500);
       };
 
       await poll();
@@ -512,10 +531,16 @@ export function DiffMapPanel({
 
   const retryPreviewLoad = useCallback(() => {
     if (basemap === "tiles") {
+      setError(null);
+      setLoading(true);
+      setTileProgress(null);
+      setTileStatus(null);
       void fetch(`/api/maps/${mapSlug}/versions/${versionId}/tiles/status`, {
         method: "POST",
         credentials: "same-origin",
-      }).finally(() => setReloadKey((key) => key + 1));
+      })
+        .catch(() => undefined)
+        .finally(() => setReloadKey((key) => key + 1));
       return;
     }
     clearPreviewCache(previewUrl);

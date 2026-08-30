@@ -269,118 +269,92 @@ async function uploadTilesFromRaster(params: {
   }
 }
 
-async function generatePregenTiles(
-  svgText: string,
-  manifest: TileManifest,
-  mapFileId: string,
-  versionNumber: number,
-  versionId: string,
-): Promise<void> {
-  const bounds = manifest.bounds;
+type PregenUnit = { z: number; quad: number | null };
 
-  // z0–z2: one full-map render each (small enough)
-  for (let z = 0; z <= Math.min(2, manifest.maxZPregen); z++) {
-    await prisma.mapVersion.update({
-      where: { id: versionId },
-      data: { tileBuildCurrentZ: z },
-    });
-    const n = tilesPerSide(z);
-    const px = n * TILE_SIZE_PX;
-    const { data, info } = await rasterizeFullBounds(svgText, bounds, px, px);
-    await uploadTilesFromRaster({
-      raster: data,
-      width: info.width,
-      height: info.height,
-      channels: info.channels,
-      z,
-      mapFileId,
-      versionNumber,
-      versionId,
-    });
-  }
-
-  if (manifest.maxZPregen < 3) return;
-
-  // z3: 4096² full render
-  {
-    const z = 3;
-    await prisma.mapVersion.update({
-      where: { id: versionId },
-      data: { tileBuildCurrentZ: z },
-    });
-    const px = tilesPerSide(z) * TILE_SIZE_PX;
-    const { data, info } = await rasterizeFullBounds(svgText, bounds, px, px);
-    await uploadTilesFromRaster({
-      raster: data,
-      width: info.width,
-      height: info.height,
-      channels: info.channels,
-      z,
-      mapFileId,
-      versionNumber,
-      versionId,
-    });
-  }
-
-  if (manifest.maxZPregen < 4) return;
-
-  // z4: four 4096² quadrants → 16×16 tiles without holding 8192² in memory
-  {
-    const z = 4;
-    await prisma.mapVersion.update({
-      where: { id: versionId },
-      data: { tileBuildCurrentZ: z },
-    });
-    const n = tilesPerSide(z);
-    const half = n / 2;
-    const midX = (bounds.minX + bounds.maxX) / 2;
-    const midY = (bounds.minY + bounds.maxY) / 2;
-    const quads: Array<{ bounds: SvgBounds; originX: number; originY: number }> = [
-      {
-        bounds: { minX: bounds.minX, minY: bounds.minY, maxX: midX, maxY: midY },
-        originX: 0,
-        originY: 0,
-      },
-      {
-        bounds: { minX: midX, minY: bounds.minY, maxX: bounds.maxX, maxY: midY },
-        originX: half,
-        originY: 0,
-      },
-      {
-        bounds: { minX: bounds.minX, minY: midY, maxX: midX, maxY: bounds.maxY },
-        originX: 0,
-        originY: half,
-      },
-      {
-        bounds: { minX: midX, minY: midY, maxX: bounds.maxX, maxY: bounds.maxY },
-        originX: half,
-        originY: half,
-      },
-    ];
-
-    const quadPx = half * TILE_SIZE_PX;
-    for (const quad of quads) {
-      const { data, info } = await rasterizeFullBounds(
-        svgText,
-        quad.bounds,
-        quadPx,
-        quadPx,
-      );
-      await uploadTilesFromRaster({
-        raster: data,
-        width: info.width,
-        height: info.height,
-        channels: info.channels,
-        z,
-        mapFileId,
-        versionNumber,
-        versionId,
-        originTileX: quad.originX,
-        originTileY: quad.originY,
-      });
+/** Build order: low zooms as one render each, z4+ split into quadrants. */
+function pregenUnits(maxZPregen: number): PregenUnit[] {
+  const units: PregenUnit[] = [];
+  for (let z = 0; z <= maxZPregen; z++) {
+    if (z <= 3) {
+      units.push({ z, quad: null });
+    } else {
+      for (let quad = 0; quad < 4; quad++) units.push({ z, quad });
     }
   }
+  return units;
 }
+
+function quadrantBounds(
+  bounds: SvgBounds,
+  z: number,
+  quad: number,
+): { bounds: SvgBounds; originX: number; originY: number } {
+  const half = tilesPerSide(z) / 2;
+  const midX = (bounds.minX + bounds.maxX) / 2;
+  const midY = (bounds.minY + bounds.maxY) / 2;
+  const left = quad % 2 === 0;
+  const top = quad < 2;
+  return {
+    bounds: {
+      minX: left ? bounds.minX : midX,
+      maxX: left ? midX : bounds.maxX,
+      minY: top ? bounds.minY : midY,
+      maxY: top ? midY : bounds.maxY,
+    },
+    originX: left ? 0 : half,
+    originY: top ? 0 : half,
+  };
+}
+
+async function runPregenUnit(params: {
+  unit: PregenUnit;
+  svgText: string;
+  manifest: TileManifest;
+  mapFileId: string;
+  versionNumber: number;
+  versionId: string;
+}): Promise<void> {
+  const { unit, svgText, manifest, mapFileId, versionNumber, versionId } = params;
+  const { z, quad } = unit;
+
+  await prisma.mapVersion.update({
+    where: { id: versionId },
+    data: { tileBuildCurrentZ: z },
+  });
+
+  if (quad == null) {
+    const px = tilesPerSide(z) * TILE_SIZE_PX;
+    const { data, info } = await rasterizeFullBounds(svgText, manifest.bounds, px, px);
+    await uploadTilesFromRaster({
+      raster: data,
+      width: info.width,
+      height: info.height,
+      channels: info.channels,
+      z,
+      mapFileId,
+      versionNumber,
+      versionId,
+    });
+    return;
+  }
+
+  const region = quadrantBounds(manifest.bounds, z, quad);
+  const quadPx = (tilesPerSide(z) / 2) * TILE_SIZE_PX;
+  const { data, info } = await rasterizeFullBounds(svgText, region.bounds, quadPx, quadPx);
+  await uploadTilesFromRaster({
+    raster: data,
+    width: info.width,
+    height: info.height,
+    channels: info.channels,
+    z,
+    mapFileId,
+    versionNumber,
+    versionId,
+    originTileX: region.originX,
+    originTileY: region.originY,
+  });
+}
+
 
 export async function generateOnDemandTile(params: {
   ocdBuffer: Buffer;
@@ -426,10 +400,50 @@ export async function generateOnDemandTile(params: {
   return webp;
 }
 
+/** Stop starting new units after this long so the invocation can finish cleanly. */
+const CHUNK_BUDGET_MS = 150 * 1000;
+
+async function prepareTileBuild(version: {
+  id: string;
+  mapFileId: string;
+  versionNumber: number;
+  storagePath: string;
+  previewSvgPath: string | null;
+}): Promise<{ manifest: TileManifest; manifestPath: string }> {
+  const { svgText } = await ensurePreviewSvg(version);
+  const ocdBuffer = await readStoredFile(version.storagePath);
+  const ocadFile = await readOcad(ocdBuffer, { quietWarnings: true });
+  const rawBounds = ocadFile.getBounds();
+  const yFlip = rawBounds && rawBounds.length >= 4 ? rawBounds[1]! + rawBounds[3]! : 0;
+  const crsScale = ocadFile.getCrs()?.scale;
+  const scale = typeof crsScale === "number" && crsScale > 0 ? crsScale : 15000;
+
+  const manifest = buildManifestFromSvg(svgText, yFlip, scale);
+  const manifestPath = buildTileManifestPath(version.mapFileId, version.versionNumber);
+  await uploadFile(manifestPath, Buffer.from(JSON.stringify(manifest), "utf-8"));
+
+  await prisma.mapVersion.update({
+    where: { id: version.id },
+    data: {
+      tileManifestPath: manifestPath,
+      tileBuildTotal: countPregenTiles(manifest.maxZPregen),
+      tileBuildDone: 0,
+      tileBuildStage: 0,
+      tileBuildCurrentZ: null,
+      tileBuildMaxZPregen: manifest.maxZPregen,
+    },
+  });
+
+  return { manifest, manifestPath };
+}
+
 /**
- * Build z0–maxZPregen tiles and write manifest. Idempotent via tileStatus lock.
+ * Run as many pregen units as fit in one invocation, then release the claim so
+ * the next status poll continues where this left off. Keeps every serverless
+ * invocation well inside its time limit even for large maps.
  */
-export async function buildTilePyramidForVersion(versionId: string): Promise<void> {
+export async function runNextTileBuildChunk(versionId: string): Promise<void> {
+  const startedAt = Date.now();
   const version = await prisma.mapVersion.findUnique({ where: { id: versionId } });
   if (!version) return;
 
@@ -437,70 +451,67 @@ export async function buildTilePyramidForVersion(versionId: string): Promise<voi
     if (await fileExists(version.tileManifestPath)) return;
   }
 
-  // Allow re-entry when claimTilePyramidBuild already set PROCESSING
-  const alreadyClaimed = version.tileStatus === "PROCESSING";
-  if (!alreadyClaimed) {
-    await prisma.mapVersion.update({
-      where: { id: versionId },
-      data: {
-        tileStatus: "PROCESSING",
-        tileError: null,
-        tileBuildTotal: null,
-        tileBuildDone: 0,
-        tileBuildCurrentZ: null,
-        tileBuildMaxZPregen: null,
-        tileBuildStartedAt: new Date(),
-      },
-    });
-  }
-
   try {
-    const { svgText } = await ensurePreviewSvg(version);
-    const ocdBuffer = await readStoredFile(version.storagePath);
-    const ocadFile = await readOcad(ocdBuffer, { quietWarnings: true });
-    const rawBounds = ocadFile.getBounds();
-    const yFlip =
-      rawBounds && rawBounds.length >= 4 ? rawBounds[1]! + rawBounds[3]! : 0;
-    const scale =
-      typeof ocadFile.getCrs()?.scale === "number" && ocadFile.getCrs().scale! > 0
-        ? ocadFile.getCrs().scale!
-        : 15000;
+    let manifest: TileManifest | null = null;
+    if (version.tileManifestPath && version.tileBuildStage != null) {
+      try {
+        if (await fileExists(version.tileManifestPath)) {
+          manifest = await readTileManifest(version.tileManifestPath);
+        }
+      } catch {
+        manifest = null;
+      }
+    }
 
-    const manifest = buildManifestFromSvg(svgText, yFlip, scale);
-    const pregenTotal = countPregenTiles(manifest.maxZPregen);
+    if (!manifest) {
+      manifest = (await prepareTileBuild(version)).manifest;
+    }
+
+    const units = pregenUnits(manifest.maxZPregen);
+    let stage = Math.max(0, version.tileBuildStage ?? 0);
+
+    if (stage < units.length) {
+      const { svgText } = await ensurePreviewSvg(version);
+
+      while (stage < units.length) {
+        await runPregenUnit({
+          unit: units[stage]!,
+          svgText,
+          manifest,
+          mapFileId: version.mapFileId,
+          versionNumber: version.versionNumber,
+          versionId,
+        });
+        stage++;
+        await prisma.mapVersion.update({
+          where: { id: versionId },
+          data: { tileBuildStage: stage, tileBuildStartedAt: new Date() },
+        });
+        if (Date.now() - startedAt > CHUNK_BUDGET_MS) break;
+      }
+    }
+
+    if (stage >= units.length) {
+      await prisma.mapVersion.update({
+        where: { id: versionId },
+        data: {
+          tileStatus: "READY",
+          tileError: null,
+          tileBuildTotal: null,
+          tileBuildDone: null,
+          tileBuildCurrentZ: null,
+          tileBuildMaxZPregen: null,
+          tileBuildStartedAt: null,
+          tileBuildStage: null,
+        },
+      });
+      return;
+    }
+
+    // Release the claim so the next poll picks up the remaining units.
     await prisma.mapVersion.update({
       where: { id: versionId },
-      data: {
-        tileBuildTotal: pregenTotal,
-        tileBuildDone: 0,
-        tileBuildCurrentZ: null,
-        tileBuildMaxZPregen: manifest.maxZPregen,
-      },
-    });
-
-    await generatePregenTiles(
-      svgText,
-      manifest,
-      version.mapFileId,
-      version.versionNumber,
-      versionId,
-    );
-
-    const manifestPath = buildTileManifestPath(version.mapFileId, version.versionNumber);
-    await uploadFile(manifestPath, Buffer.from(JSON.stringify(manifest), "utf-8"));
-
-    await prisma.mapVersion.update({
-      where: { id: versionId },
-      data: {
-        tileStatus: "READY",
-        tileManifestPath: manifestPath,
-        tileError: null,
-        tileBuildTotal: null,
-        tileBuildDone: null,
-        tileBuildCurrentZ: null,
-        tileBuildMaxZPregen: null,
-        tileBuildStartedAt: null,
-      },
+      data: { tileBuildStartedAt: null },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Tile-generering misslyckades";
@@ -514,6 +525,19 @@ export async function buildTilePyramidForVersion(versionId: string): Promise<voi
       },
     });
     throw err;
+  }
+}
+
+/** Build every remaining chunk in one call (upload path, no HTTP poller). */
+export async function buildTilePyramidForVersion(versionId: string): Promise<void> {
+  for (let guard = 0; guard < 40; guard++) {
+    const version = await prisma.mapVersion.findUnique({
+      where: { id: versionId },
+      select: { tileStatus: true, tileManifestPath: true },
+    });
+    if (!version) return;
+    if (version.tileStatus === "READY" || version.tileStatus === "ERROR") return;
+    await runNextTileBuildChunk(versionId);
   }
 }
 

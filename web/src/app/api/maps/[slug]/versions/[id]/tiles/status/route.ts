@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth/api";
-import { canUpload } from "@/lib/auth/permissions";
 import {
   assertVersionViewAccess,
   getMapVersionOr404,
 } from "@/lib/maps/version-lookup";
 import { prisma } from "@/lib/prisma";
-import { isStaleTileBuild, scheduleTilePyramidBuild } from "@/lib/ocad/tile-build-kick";
+import { scheduleTileBuildChunk } from "@/lib/ocad/tile-build-kick";
 import {
   claimTilePyramidBuild,
   markTilePyramidPending,
@@ -32,6 +31,7 @@ async function loadTileStatusVersion(versionId: string) {
       tileBuildCurrentZ: true,
       tileBuildMaxZPregen: true,
       tileBuildStartedAt: true,
+      tileBuildStage: true,
     },
   });
 }
@@ -69,30 +69,22 @@ export async function GET(_request: Request, { params }: RouteParams) {
       }
     }
 
-    const needsBuild =
-      status === "PENDING" ||
-      status === "ERROR" ||
-      (status === "READY" && !manifest) ||
-      (status === "PROCESSING" && isStaleTileBuild(version));
-
-    if (needsBuild) {
+    if (status !== "READY" || !manifest) {
       const claim = await claimTilePyramidBuild(version.id);
       if (claim.claimed) {
-        scheduleTilePyramidBuild(version.id);
-        version = await loadTileStatusVersion(version.id);
-        if (version) status = version.tileStatus;
+        scheduleTileBuildChunk(version.id);
+        version = (await loadTileStatusVersion(version.id)) ?? version;
+        status = version.tileStatus;
       } else if (claim.status !== "MISSING") {
         status = claim.status;
       }
     }
 
-    const progress = version ? tileBuildProgressFromVersion(version) : null;
-
     return NextResponse.json({
       status,
-      error: version?.tileError,
+      error: version.tileError,
       manifest,
-      progress,
+      progress: tileBuildProgressFromVersion(version),
     });
   } catch (err) {
     console.error("Tile status failed:", err);
@@ -108,10 +100,6 @@ export async function POST(_request: Request, { params }: RouteParams) {
     const session = await requireSession();
     if (session instanceof NextResponse) return session;
 
-    if (!canUpload(session.user.role)) {
-      return NextResponse.json({ error: "Otillräcklig behörighet" }, { status: 403 });
-    }
-
     const { slug, id } = await params;
     const lookup = await getMapVersionOr404(slug, id);
     if (lookup instanceof NextResponse) return lookup;
@@ -122,7 +110,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
     const versionId = lookup.version.id;
     await markTilePyramidPending(versionId);
     await claimTilePyramidBuild(versionId);
-    scheduleTilePyramidBuild(versionId);
+    scheduleTileBuildChunk(versionId);
 
     return NextResponse.json({ status: "PROCESSING" });
   } catch (err) {

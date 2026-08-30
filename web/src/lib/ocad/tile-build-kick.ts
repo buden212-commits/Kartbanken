@@ -1,10 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { runAfterResponse } from "@/lib/background";
 
-/** Stuck in preview/OCD read before tile count is known. */
-const PREPARE_STALE_MS = 2 * 60 * 1000;
-/** Overall build timeout (large maps). */
-const BUILD_STALE_MS = 15 * 60 * 1000;
+/**
+ * A chunk claim is considered dead after this long. Chunks run inside a single
+ * serverless invocation (maxDuration 300 s), so anything older has crashed or
+ * been killed.
+ */
+const CHUNK_STALE_MS = 6 * 60 * 1000;
 
 export async function markTileBuildFailed(versionId: string, message: string): Promise<void> {
   await prisma.mapVersion.update({
@@ -12,39 +14,35 @@ export async function markTileBuildFailed(versionId: string, message: string): P
     data: {
       tileStatus: "ERROR",
       tileError: message,
-      tileBuildTotal: null,
-      tileBuildDone: null,
-      tileBuildCurrentZ: null,
-      tileBuildMaxZPregen: null,
       tileBuildStartedAt: null,
     },
   });
 }
 
-export function isStaleTileBuild(version: {
+/** True when no worker currently holds the build (finished chunk, crash, or never started). */
+export function tileBuildChunkIsFree(version: {
   tileStatus: string;
   tileBuildStartedAt: Date | null;
-  tileBuildTotal: number | null;
 }): boolean {
   if (version.tileStatus !== "PROCESSING") return false;
   const started = version.tileBuildStartedAt?.getTime();
   if (!started) return true;
-  const elapsed = Date.now() - started;
-  if (version.tileBuildTotal == null && elapsed > PREPARE_STALE_MS) return true;
-  if (elapsed > BUILD_STALE_MS) return true;
-  return false;
+  return Date.now() - started > CHUNK_STALE_MS;
 }
 
-/** Schedule tile pyramid build after HTTP response; errors are persisted on MapVersion. */
-export function scheduleTilePyramidBuild(versionId: string): void {
+/**
+ * Run the next build chunk after the HTTP response. Each chunk renders one
+ * zoom level (or quadrant) so a single invocation never exceeds its limit;
+ * the client keeps polling and each poll starts the following chunk.
+ */
+export function scheduleTileBuildChunk(versionId: string): void {
   runAfterResponse(async () => {
     try {
-      const { buildTilePyramidForVersion } = await import("@/lib/ocad/tile-generate");
-      await buildTilePyramidForVersion(versionId);
+      const { runNextTileBuildChunk } = await import("@/lib/ocad/tile-generate");
+      await runNextTileBuildChunk(versionId);
     } catch (err) {
-      console.error("Tile pyramid background build failed:", versionId, err);
-      const message =
-        err instanceof Error ? err.message : "Kunde inte bygga karttiles";
+      console.error("Tile build chunk failed:", versionId, err);
+      const message = err instanceof Error ? err.message : "Kunde inte bygga karttiles";
       await markTileBuildFailed(versionId, message);
     }
   });

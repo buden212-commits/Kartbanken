@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { fileExists, readStoredFile } from "@/lib/storage";
 import type { TileManifest } from "@/lib/ocad/tile-math";
-import { isStaleTileBuild } from "@/lib/ocad/tile-build-kick";
+import { tileBuildChunkIsFree } from "@/lib/ocad/tile-build-kick";
 
 export async function readTileManifest(manifestPath: string): Promise<TileManifest> {
   const buf = await readStoredFile(manifestPath);
@@ -9,43 +9,48 @@ export async function readTileManifest(manifestPath: string): Promise<TileManife
 }
 
 /**
- * Claim PROCESSING if not already building/ready. Caller runs build after response.
- * Stale PROCESSING (crashed background job) can be reclaimed.
+ * Take over the build when nothing is running. Returns claimed=true when the
+ * caller should start the next chunk after the response.
  */
 export async function claimTilePyramidBuild(versionId: string): Promise<{
   claimed: boolean;
   status: string;
-  restarted: boolean;
 }> {
   const version = await prisma.mapVersion.findUnique({ where: { id: versionId } });
   if (!version) {
-    return { claimed: false, status: "MISSING", restarted: false };
+    return { claimed: false, status: "MISSING" };
   }
 
   if (version.tileStatus === "READY" && version.tileManifestPath) {
     if (await fileExists(version.tileManifestPath)) {
-      return { claimed: false, status: "READY", restarted: false };
+      return { claimed: false, status: "READY" };
     }
   }
 
-  const wasProcessing = version.tileStatus === "PROCESSING";
-  if (wasProcessing && !isStaleTileBuild(version)) {
-    return { claimed: false, status: "PROCESSING", restarted: false };
+  if (version.tileStatus === "PROCESSING" && !tileBuildChunkIsFree(version)) {
+    return { claimed: false, status: "PROCESSING" };
   }
+
+  const resuming = version.tileStatus === "PROCESSING" && version.tileBuildStage != null;
 
   await prisma.mapVersion.update({
     where: { id: versionId },
     data: {
       tileStatus: "PROCESSING",
       tileError: null,
-      tileBuildTotal: null,
-      tileBuildDone: 0,
-      tileBuildCurrentZ: null,
-      tileBuildMaxZPregen: null,
       tileBuildStartedAt: new Date(),
+      ...(resuming
+        ? {}
+        : {
+            tileBuildTotal: null,
+            tileBuildDone: 0,
+            tileBuildCurrentZ: null,
+            tileBuildMaxZPregen: null,
+            tileBuildStage: null,
+          }),
     },
   });
-  return { claimed: true, status: "PROCESSING", restarted: wasProcessing };
+  return { claimed: true, status: "PROCESSING" };
 }
 
 export async function markTilePyramidPending(versionId: string): Promise<void> {
@@ -60,6 +65,7 @@ export async function markTilePyramidPending(versionId: string): Promise<void> {
       tileBuildCurrentZ: null,
       tileBuildMaxZPregen: null,
       tileBuildStartedAt: null,
+      tileBuildStage: null,
     },
   });
 }
@@ -81,7 +87,6 @@ export function tileBuildProgressFromVersion(version: {
   tileBuildDone: number | null;
   tileBuildCurrentZ: number | null;
   tileBuildMaxZPregen: number | null;
-  tileBuildStartedAt: Date | null;
 }): TileBuildProgress | null {
   if (version.tileStatus !== "PROCESSING") return null;
 

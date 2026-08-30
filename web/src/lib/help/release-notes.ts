@@ -16,7 +16,8 @@ export const releaseNotes: ReleaseNote[] = [
       "Zoom ner till skala 1:100 stöds via detaljtiles som skapas vid behov",
       "Fix: kartbilden på utcheckningssidan laddas igen för stora .ocd-filer — tidigare kraschade förhandsvisningen på servern",
       "Fix: «Kunde inte hämta tile-status» vid utcheckning — tile-status laddar inte längre bildbiblioteket som kraschade i molnet",
-      "Fix: tile-bygg som fastnar på «Förbereder karttiles…» startar om efter timeout och visar fel om bygget misslyckas",
+      "Fix: tile-bygg som fastnar startar om automatiskt vid nästa uppdatering — bygget körs nu i etapper så det inte avbryts av tidsgränsen",
+      "Fix: «Försök igen» startar om tile-bygget även när kartan visat felmeddelande",
     ],
   },
   {
