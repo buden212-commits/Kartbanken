@@ -17,6 +17,10 @@ import { NextResponse } from "next/server";
 
 export const maxDuration = 300;
 
+/** Skip in-request layered upgrade above this size — OOMs on Vercel (~2 GB). */
+const LAYER_UPGRADE_MAX_OCD_BYTES = 8 * 1024 * 1024;
+const LAYER_UPGRADE_MAX_SVG_BYTES = 12 * 1024 * 1024;
+
 type RouteParams = { params: Promise<{ slug: string; id: string }> };
 
 async function readPreviewOrNull(storagePath: string): Promise<Buffer | null> {
@@ -71,24 +75,49 @@ export async function GET(_request: Request, { params }: RouteParams) {
   }
 
   try {
-    let ocdBuffer: Buffer | null = null;
-
     const needsLayerUpgrade = !svgBufferHasLayers(svgBuffer);
     const needsMetadata = !svgBufferHasMetadata(svgBuffer);
 
-    if (needsLayerUpgrade || needsMetadata) {
-      ocdBuffer = await readStoredFile(version.storagePath);
-
-      if (needsLayerUpgrade) {
-        const { svg } = await generateOcadSvgLayered(ocdBuffer);
-        svgBuffer = Buffer.from(svg, "utf-8");
-        await uploadFile(previewSvgPath!, svgBuffer);
-      } else if (needsMetadata) {
+    if (needsMetadata && !needsLayerUpgrade) {
+      try {
+        const ocdBuffer = await readStoredFile(version.storagePath);
         const { buffer, changed } = await ensureSvgMetadata(svgBuffer, ocdBuffer);
         if (changed) {
           await uploadFile(previewSvgPath!, buffer);
         }
         svgBuffer = buffer;
+      } catch (err) {
+        console.warn("SVG metadata-uppgradering misslyckades, serverar befintlig preview:", err);
+      }
+    } else if (needsLayerUpgrade) {
+      const svgTooLarge = svgBuffer.byteLength > LAYER_UPGRADE_MAX_SVG_BYTES;
+      if (svgTooLarge) {
+        console.warn(
+          "Hoppar över lager-uppgradering — preview-SVG för stor:",
+          previewSvgPath,
+          svgBuffer.byteLength,
+        );
+      } else {
+        try {
+          const ocdBuffer = await readStoredFile(version.storagePath);
+          if (ocdBuffer.byteLength > LAYER_UPGRADE_MAX_OCD_BYTES) {
+            console.warn(
+              "Hoppar över lager-uppgradering — OCD för stor:",
+              version.storagePath,
+              ocdBuffer.byteLength,
+            );
+          } else {
+            const { svg } = await generateOcadSvgLayered(ocdBuffer);
+            svgBuffer = Buffer.from(svg, "utf-8");
+            await uploadFile(previewSvgPath!, svgBuffer);
+          }
+        } catch (err) {
+          console.warn(
+            "Lager-uppgradering misslyckades, serverar flat preview:",
+            previewSvgPath,
+            err,
+          );
+        }
       }
     }
 

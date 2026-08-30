@@ -428,11 +428,18 @@ export function buildPreviewSvgPath(mapFileId: string, versionNumber: number): s
   return `maps/${mapFileId}/v${versionNumber}/preview.svg`;
 }
 
+/**
+ * Store a flat (non-layered) preview SVG.
+ * Layered generation runs ocadToSvg many times and OOMs on Vercel for ~20 MB maps.
+ * Checkout and map view work with flat SVG; layers can be upgraded later when memory allows.
+ */
 export async function generateAndStorePreviewSvg(
   buffer: Buffer,
   storagePath: string,
 ): Promise<SvgBounds | null> {
-  const { svg, bounds } = await generateOcadSvgLayered(buffer);
+  const ocadFile = (await readOcad(buffer, { quietWarnings: true })) as OcadFile;
+  const bounds = boundsFromOcad(ocadFile);
+  const svg = await generateOcadSvgFlat(buffer, ocadFile, bounds);
   await uploadFile(storagePath, Buffer.from(svg, "utf-8"));
   return bounds;
 }
