@@ -19,6 +19,9 @@ import {
   tilesPerSide,
   type TileManifest,
 } from "@/lib/ocad/tile-math";
+import { markTilePyramidPending, readTileManifest } from "@/lib/ocad/tile-status";
+
+export { readTileManifest, claimTilePyramidBuild } from "@/lib/ocad/tile-status";
 
 const require = createRequire(import.meta.url);
 const { readOcad } = require("ocad2geojson") as {
@@ -402,11 +405,6 @@ export async function generateOnDemandTile(params: {
   return webp;
 }
 
-export async function readTileManifest(manifestPath: string): Promise<TileManifest> {
-  const buf = await readStoredFile(manifestPath);
-  return JSON.parse(buf.toString("utf-8")) as TileManifest;
-}
-
 /**
  * Build z0–maxZPregen tiles and write manifest. Idempotent via tileStatus lock.
  */
@@ -464,39 +462,7 @@ export async function buildTilePyramidForVersion(versionId: string): Promise<voi
   }
 }
 
-/**
- * Claim PROCESSING if not already building/ready. Caller runs buildTilePyramidForVersion after response.
- */
-export async function claimTilePyramidBuild(versionId: string): Promise<{
-  claimed: boolean;
-  status: string;
-}> {
-  const version = await prisma.mapVersion.findUnique({ where: { id: versionId } });
-  if (!version) {
-    return { claimed: false, status: "MISSING" };
-  }
-
-  if (version.tileStatus === "READY" && version.tileManifestPath) {
-    if (await fileExists(version.tileManifestPath)) {
-      return { claimed: false, status: "READY" };
-    }
-  }
-
-  if (version.tileStatus === "PROCESSING") {
-    return { claimed: false, status: "PROCESSING" };
-  }
-
-  await prisma.mapVersion.update({
-    where: { id: versionId },
-    data: { tileStatus: "PROCESSING", tileError: null },
-  });
-  return { claimed: true, status: "PROCESSING" };
-}
-
 export async function rebuildTilePyramid(versionId: string): Promise<void> {
-  await prisma.mapVersion.update({
-    where: { id: versionId },
-    data: { tileStatus: "PENDING", tileError: null, tileManifestPath: null },
-  });
+  await markTilePyramidPending(versionId);
   await buildTilePyramidForVersion(versionId);
 }

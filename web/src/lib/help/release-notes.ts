@@ -14,6 +14,7 @@ export const releaseNotes: ReleaseNote[] = [
       "Första gången en version öppnas kan systemet bygga tiles i bakgrunden («Bygger karttiles…»); därefter laddas bara synliga rutor",
       "Zoom ner till skala 1:100 stöds via detaljtiles som skapas vid behov",
       "Fix: kartbilden på utcheckningssidan laddas igen för stora .ocd-filer — tidigare kraschade förhandsvisningen på servern",
+      "Fix: «Kunde inte hämta tile-status» vid utcheckning — tile-status laddar inte längre bildbiblioteket som kraschade i molnet",
     ],
   },
   {
