@@ -20,6 +20,7 @@ export async function deleteMapFile(mapFileId: string): Promise<DeleteMapResult>
         select: {
           storagePath: true,
           previewSvgPath: true,
+          tileManifestPath: true,
         },
       },
       checkouts: {
@@ -51,7 +52,7 @@ export async function deleteMapFile(mapFileId: string): Promise<DeleteMapResult>
 
   const storagePaths: (string | null | undefined)[] = [];
   for (const version of map.versions) {
-    storagePaths.push(version.storagePath, version.previewSvgPath);
+    storagePaths.push(version.storagePath, version.previewSvgPath, version.tileManifestPath);
   }
   for (const checkout of map.checkouts) {
     storagePaths.push(checkout.exportStoragePath, checkout.checkinStoragePath);

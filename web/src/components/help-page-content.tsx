@@ -332,7 +332,7 @@ export async function HelpPageContent() {
                 items={[
                   "Öppna området och klicka Checka ut område (knappen bredvid karttiteln)",
                   "Välj verktyg: rektangel eller polygon",
-                  "Rita området på kartan och bekräfta urvalet",
+                  "Rita området på kartan och bekräfta urvalet — kartan använder tiles för smidigare zoom/pan (särskilt på stora kartor); första gången kan tiles byggas en stund",
                   "Klicka Checka ut område — du kommer till utcheckningssidan",
                   "Välj OCAD-format (t.ex. OCAD 12 eller OCAD 2018) — måste matcha din OCAD-installation",
                   "Ladda ner utcheckning .ocd och redigera i OCAD — filen genereras av systemet; öppna och spara i OCAD innan du redigerar",
@@ -521,6 +521,7 @@ export async function HelpPageContent() {
               "GPS-spår filtreras (minst ca 4 m mellan punkter) och förenklas automatiskt innan linjen sparas",
               "Orimliga GPS-hopp filtreras bort och accepterade punkter utjämnas vid sämre mottagning — antal filtrerade hopp visas efter «Sluta spåra»",
               "Kartan startar i «Navigera» — välj ett ritverktyg till höger för att aktivera «Rita» och börja markera",
+              "Kartan i utcheckning och kartförslag använder tiles (snabbare zoom/pan på stora kartor); första öppningen kan bygga tiles i bakgrunden",
               "Växla «Rita» / «Navigera» via ikonerna till höger — i Navigera kan du dra och nypa utan att rita; i Rita zoomar två fingrar utan att skapa markering",
               "Klicka «Lägg till ändring» på kartan när markeringen är klar — längst ned på mobil, uppe till höger på större skärm; punkt, radera och rektangel aktiveras direkt efter klick/drag",
               "Varje markering numreras (1, 2, 3 …) på kartan — inte kategorinamn",

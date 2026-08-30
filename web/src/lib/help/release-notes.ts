@@ -8,9 +8,12 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-30",
-    title: "Utcheckning — stora kartor",
+    title: "Snabbare karta vid utcheckning och kartförslag",
     items: [
-      "Fix: kartbilden på utcheckningssidan laddas igen för stora .ocd-filer (t.ex. Väst med Venjan) — tidigare kraschade förhandsvisningen på servern",
+      "Utcheckning och kartförslag använder karttiles i stället för en enda stor SVG — zoom och panering ska kännas smidigare även på stora kartor (t.ex. Väst med Venjan)",
+      "Första gången en version öppnas kan systemet bygga tiles i bakgrunden («Bygger karttiles…»); därefter laddas bara synliga rutor",
+      "Zoom ner till skala 1:100 stöds via detaljtiles som skapas vid behov",
+      "Fix: kartbilden på utcheckningssidan laddas igen för stora .ocd-filer — tidigare kraschade förhandsvisningen på servern",
     ],
   },
   {

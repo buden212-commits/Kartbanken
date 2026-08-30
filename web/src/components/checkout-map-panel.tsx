@@ -803,6 +803,8 @@ export function CheckoutMapPanel({
 
         versionId={versionId}
 
+        basemap="tiles"
+
         exportEnabled={false}
 
         headerContent={<span className="text-sm font-medium text-slate-800">Karta</span>}

@@ -99,6 +99,9 @@ model MapVersion {
   isRecommended    Boolean  @default(false)
   isPublished      Boolean  @default(false)
   previewSvgPath   String?
+  tileStatus       String   @default("PENDING")
+  tileError        String?
+  tileManifestPath String?
   objectCount      Int?
   parseStatus      String   @default("PENDING")
   parseError       String?

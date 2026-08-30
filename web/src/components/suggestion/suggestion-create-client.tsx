@@ -150,6 +150,8 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
       title="Markera plats"
       mapSlug={mapSlug}
       versionId={versionId}
+      basemap="tiles"
+      exportEnabled={false}
       interactionMode={mapMode}
       drawPointerHandlers={mapMode === "draw" ? drawPointerHandlers : undefined}
       onDrawInterrupt={onDrawInterrupt}

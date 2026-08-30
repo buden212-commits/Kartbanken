@@ -17,9 +17,11 @@ import {
   mapPointToScreen,
   type SvgRootTransform,
 } from "@/lib/ocad/svg-coords";
-import { extractSvgInner, type OcadMapLayer } from "@/lib/ocad/svg-utils";
+import { extractSvgInner, boundsToViewBox, type OcadMapLayer } from "@/lib/ocad/svg-utils";
 import { flattenOcadLayers, initialLayerVisibility } from "@/lib/ocad/layers";
 import { MapLayerPanel } from "@/components/map-layer-panel";
+import { MapTileLayer } from "@/components/map-tile-layer";
+import type { TileManifest } from "@/lib/ocad/tile-math";
 import { formatMapDisplayScale, maxZoomForMapScale } from "@/lib/ocad/map-display-scale";
 import {
   createExportFrame,
@@ -90,6 +92,8 @@ type Props = {
   title: string;
   mapSlug: string;
   versionId: string;
+  /** "tiles" = raster pyramid for large maps (checkout / kartförslag). Default SVG. */
+  basemap?: "svg" | "tiles";
   exportEnabled?: boolean;
   fullscreen?: boolean;
   focusTarget?: FocusTarget | null;
@@ -245,6 +249,7 @@ export function DiffMapPanel({
   title,
   mapSlug,
   versionId,
+  basemap = "svg",
   exportEnabled = true,
   fullscreen = false,
   focusTarget,
@@ -334,15 +339,34 @@ export function DiffMapPanel({
   const [reloadKey, setReloadKey] = useState(0);
   const [mapLayers, setMapLayers] = useState<OcadMapLayer[]>([]);
   const [layerVisibility, setLayerVisibility] = useState<Record<string, boolean>>({});
+  const [tileManifest, setTileManifest] = useState<TileManifest | null>(null);
+  const [tileStatus, setTileStatus] = useState<string | null>(null);
+  const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const update = () => {
+      const rect = el.getBoundingClientRect();
+      setViewportSize({ width: rect.width, height: rect.height });
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [loading, fullViewBox]);
 
   useEffect(() => {
     const controller = new AbortController();
     let cancelled = false;
+    let pollTimer: ReturnType<typeof setTimeout> | null = null;
     setLoading(true);
     setError(null);
     setSvgInner(null);
     setFullViewBox(null);
     setFullSvgText(null);
+    setTileManifest(null);
+    setTileStatus(null);
     setMapLayers([]);
     setLayerVisibility({});
     onOcadLayersReady?.([]);
@@ -359,53 +383,124 @@ export function DiffMapPanel({
     userInteractedRef.current = false;
     initialFitDoneRef.current = false;
 
-    fetchPreviewText(previewUrl, { signal: controller.signal })
-      .then((text) => {
+    async function loadTiles(): Promise<void> {
+      const statusUrl = `/api/maps/${mapSlug}/versions/${versionId}/tiles/status`;
+
+      const poll = async (): Promise<void> => {
+        const res = await fetch(statusUrl, {
+          signal: controller.signal,
+          credentials: "same-origin",
+        });
+        if (!res.ok) {
+          throw new Error(`Kunde inte hämta tile-status (${res.status})`);
+        }
+        const data = (await res.json()) as {
+          status: string;
+          error?: string | null;
+          manifest?: TileManifest | null;
+        };
         if (cancelled) return;
-        const {
-          inner,
-          viewBox,
-          fill,
-          ocadMapScale: mapScale,
-          ocadFileVersion,
-          ocadCrs: crs,
-          ocadLayers,
-          rootTransform: transform,
-        } = extractSvgInner(text);
-        setSvgInner(inner);
-        setSvgFill(fill ?? "transparent");
-        setFullViewBox(viewBox);
-        setRootTransform(transform);
-        const resolvedScale = mapScale ?? crs?.scale ?? 15000;
-        setOcadMapScale(resolvedScale);
-        onOcadMapScale?.(resolvedScale);
-        setOcadCrs(crs);
-        setMapLayers(ocadLayers);
-        setLayerVisibility(initialLayerVisibility(ocadLayers));
-        onOcadLayersReady?.(ocadLayers);
-        setExportSettings((prev) => ({
-          ...prev,
-          ocadVersion: defaultOcadExportVersion(ocadFileVersion),
-        }));
-        setFullSvgText(text);
-        setLoading(false);
-      })
-      .catch((err) => {
+
+        setTileStatus(data.status);
+
+        if (data.status === "READY" && data.manifest) {
+          const manifest = data.manifest;
+          setTileManifest(manifest);
+          setFullViewBox(boundsToViewBox(manifest.bounds));
+          setSvgInner("");
+          setSvgFill("transparent");
+          setRootTransform(manifest.rootTransform ?? IDENTITY_SVG_TRANSFORM);
+          const resolvedScale = manifest.scale || 15000;
+          setOcadMapScale(resolvedScale);
+          onOcadMapScale?.(resolvedScale);
+          setMapLayers([]);
+          onOcadLayersReady?.([]);
+          setLoading(false);
+          return;
+        }
+
+        if (data.status === "ERROR") {
+          setError(data.error || "Kunde inte bygga karttiles");
+          setLoading(false);
+          return;
+        }
+
+        // PENDING / PROCESSING — keep polling
+        pollTimer = setTimeout(() => {
+          void poll().catch((err) => {
+            if (cancelled || controller.signal.aborted) return;
+            setError(err instanceof Error ? err.message : "Fel vid laddning");
+            setLoading(false);
+          });
+        }, 2000);
+      };
+
+      await poll();
+    }
+
+    if (basemap === "tiles") {
+      void loadTiles().catch((err) => {
         if (cancelled || controller.signal.aborted) return;
         setError(err instanceof Error ? err.message : "Fel vid laddning");
         setLoading(false);
       });
+    } else {
+      fetchPreviewText(previewUrl, { signal: controller.signal })
+        .then((text) => {
+          if (cancelled) return;
+          const {
+            inner,
+            viewBox,
+            fill,
+            ocadMapScale: mapScale,
+            ocadFileVersion,
+            ocadCrs: crs,
+            ocadLayers,
+            rootTransform: transform,
+          } = extractSvgInner(text);
+          setSvgInner(inner);
+          setSvgFill(fill ?? "transparent");
+          setFullViewBox(viewBox);
+          setRootTransform(transform);
+          const resolvedScale = mapScale ?? crs?.scale ?? 15000;
+          setOcadMapScale(resolvedScale);
+          onOcadMapScale?.(resolvedScale);
+          setOcadCrs(crs);
+          setMapLayers(ocadLayers);
+          setLayerVisibility(initialLayerVisibility(ocadLayers));
+          onOcadLayersReady?.(ocadLayers);
+          setExportSettings((prev) => ({
+            ...prev,
+            ocadVersion: defaultOcadExportVersion(ocadFileVersion),
+          }));
+          setFullSvgText(text);
+          setLoading(false);
+        })
+        .catch((err) => {
+          if (cancelled || controller.signal.aborted) return;
+          setError(err instanceof Error ? err.message : "Fel vid laddning");
+          setLoading(false);
+        });
+    }
 
     return () => {
       cancelled = true;
       controller.abort();
+      if (pollTimer) clearTimeout(pollTimer);
     };
-  }, [previewUrl, reloadKey]);
+  }, [previewUrl, reloadKey, basemap, mapSlug, versionId]);
 
   const retryPreviewLoad = useCallback(() => {
+    if (basemap === "tiles") {
+      void fetch(`/api/maps/${mapSlug}/versions/${versionId}/tiles/status`, {
+        method: "POST",
+        credentials: "same-origin",
+      }).finally(() => setReloadKey((key) => key + 1));
+      return;
+    }
     clearPreviewCache(previewUrl);
     setReloadKey((key) => key + 1);
-  }, [previewUrl]);
+  }, [previewUrl, basemap, mapSlug, versionId]);
 
   const toggleLayer = useCallback((layerId: string) => {
     setLayerVisibility((prev) => ({
@@ -1299,7 +1394,9 @@ export function DiffMapPanel({
 
         {loading && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/90 text-sm text-slate-600">
-            Laddar kartbild…
+            {basemap === "tiles" && (tileStatus === "PROCESSING" || tileStatus === "PENDING")
+              ? "Bygger karttiles… Det kan ta en stund första gången."
+              : "Laddar kartbild…"}
           </div>
         )}
         {error && (
@@ -1314,7 +1411,7 @@ export function DiffMapPanel({
             </button>
           </div>
         )}
-        {svgInner && fullViewBox && (
+        {svgInner !== null && fullViewBox && (
           <div
             className="absolute inset-0"
             style={{
@@ -1330,6 +1427,19 @@ export function DiffMapPanel({
               preserveAspectRatio="xMidYMid meet"
               className="h-full w-full max-h-full max-w-full"
             >
+              {basemap === "tiles" && tileManifest && (
+                <MapTileLayer
+                  mapSlug={mapSlug}
+                  versionId={versionId}
+                  manifest={tileManifest}
+                  viewBox={tileManifest.bounds}
+                  containerWidth={viewportSize.width}
+                  containerHeight={viewportSize.height}
+                  panX={pan.x}
+                  panY={pan.y}
+                  zoom={zoom}
+                />
+              )}
               {highlightShape?.kind === "circle" && (
                 <circle
                   cx={highlightShape.cx}
@@ -1366,7 +1476,7 @@ export function DiffMapPanel({
                   pointerEvents="none"
                 />
               )}
-              <g dangerouslySetInnerHTML={{ __html: svgInner }} />
+              {svgInner ? <g dangerouslySetInnerHTML={{ __html: svgInner }} /> : null}
               {renderSvgOverlay?.(rootTransform)}
             </svg>
           </div>
@@ -1495,7 +1605,7 @@ export function DiffMapPanel({
         )}
       </div>
 
-      {showLayerPanel && (
+      {showLayerPanel && basemap !== "tiles" && (
         <MapLayerPanel
           layers={mapLayers}
           visibility={layerVisibility}
