@@ -11,12 +11,29 @@ import {
   claimTilePyramidBuild,
   markTilePyramidPending,
   readTileManifest,
+  tileBuildProgressFromVersion,
 } from "@/lib/ocad/tile-status";
 import { fileExists } from "@/lib/storage";
 
 export const maxDuration = 300;
 
 type RouteParams = { params: Promise<{ slug: string; id: string }> };
+
+async function loadTileStatusVersion(versionId: string) {
+  return prisma.mapVersion.findUnique({
+    where: { id: versionId },
+    select: {
+      id: true,
+      tileStatus: true,
+      tileError: true,
+      tileManifestPath: true,
+      tileBuildTotal: true,
+      tileBuildDone: true,
+      tileBuildCurrentZ: true,
+      tileBuildMaxZPregen: true,
+    },
+  });
+}
 
 export async function GET(_request: Request, { params }: RouteParams) {
   try {
@@ -30,15 +47,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
     const denied = assertVersionViewAccess(session, lookup.version);
     if (denied) return denied;
 
-    const version = await prisma.mapVersion.findUnique({
-      where: { id: lookup.version.id },
-      select: {
-        id: true,
-        tileStatus: true,
-        tileError: true,
-        tileManifestPath: true,
-      },
-    });
+    let version = await loadTileStatusVersion(lookup.version.id);
 
     if (!version) {
       return NextResponse.json({ error: "Version hittades inte" }, { status: 404 });
@@ -68,15 +77,19 @@ export async function GET(_request: Request, { params }: RouteParams) {
           const { buildTilePyramidForVersion } = await import("@/lib/ocad/tile-generate");
           await buildTilePyramidForVersion(versionId);
         });
+        version = await loadTileStatusVersion(version.id);
       } else {
         status = claim.status === "MISSING" ? status : claim.status;
       }
     }
 
+    const progress = version ? tileBuildProgressFromVersion(version) : null;
+
     return NextResponse.json({
       status,
-      error: version.tileError,
+      error: version?.tileError,
       manifest,
+      progress,
     });
   } catch (err) {
     console.error("Tile status failed:", err);

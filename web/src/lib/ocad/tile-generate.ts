@@ -15,6 +15,7 @@ import {
   TILE_MAX_Z_PREGEN,
   TILE_SIZE_PX,
   computeMaxTileZoom,
+  countPregenTiles,
   tileBounds,
   tilesPerSide,
   type TileManifest,
@@ -223,6 +224,7 @@ async function uploadTilesFromRaster(params: {
   z: number;
   mapFileId: string;
   versionNumber: number;
+  versionId?: string;
   /** Origin tile indices when raster is a quadrant of a larger grid. */
   originTileX?: number;
   originTileY?: number;
@@ -235,12 +237,14 @@ async function uploadTilesFromRaster(params: {
     z,
     mapFileId,
     versionNumber,
+    versionId,
     originTileX = 0,
     originTileY = 0,
   } = params;
 
   const tilesX = Math.floor(width / TILE_SIZE_PX);
   const tilesY = Math.floor(height / TILE_SIZE_PX);
+  let uploaded = 0;
 
   for (let ty = 0; ty < tilesY; ty++) {
     for (let tx = 0; tx < tilesX; tx++) {
@@ -252,15 +256,16 @@ async function uploadTilesFromRaster(params: {
         .extract({ left, top, width: TILE_SIZE_PX, height: TILE_SIZE_PX })
         .webp({ quality: 80 })
         .toBuffer();
-      await uploadTile(
-        mapFileId,
-        versionNumber,
-        z,
-        originTileX + tx,
-        originTileY + ty,
-        webp,
-      );
+      await uploadTile(mapFileId, versionNumber, z, originTileX + tx, originTileY + ty, webp);
+      uploaded++;
     }
+  }
+
+  if (versionId && uploaded > 0) {
+    await prisma.mapVersion.update({
+      where: { id: versionId },
+      data: { tileBuildDone: { increment: uploaded } },
+    });
   }
 }
 
@@ -269,11 +274,16 @@ async function generatePregenTiles(
   manifest: TileManifest,
   mapFileId: string,
   versionNumber: number,
+  versionId: string,
 ): Promise<void> {
   const bounds = manifest.bounds;
 
   // z0–z2: one full-map render each (small enough)
   for (let z = 0; z <= Math.min(2, manifest.maxZPregen); z++) {
+    await prisma.mapVersion.update({
+      where: { id: versionId },
+      data: { tileBuildCurrentZ: z },
+    });
     const n = tilesPerSide(z);
     const px = n * TILE_SIZE_PX;
     const { data, info } = await rasterizeFullBounds(svgText, bounds, px, px);
@@ -285,6 +295,7 @@ async function generatePregenTiles(
       z,
       mapFileId,
       versionNumber,
+      versionId,
     });
   }
 
@@ -293,6 +304,10 @@ async function generatePregenTiles(
   // z3: 4096² full render
   {
     const z = 3;
+    await prisma.mapVersion.update({
+      where: { id: versionId },
+      data: { tileBuildCurrentZ: z },
+    });
     const px = tilesPerSide(z) * TILE_SIZE_PX;
     const { data, info } = await rasterizeFullBounds(svgText, bounds, px, px);
     await uploadTilesFromRaster({
@@ -303,6 +318,7 @@ async function generatePregenTiles(
       z,
       mapFileId,
       versionNumber,
+      versionId,
     });
   }
 
@@ -311,6 +327,10 @@ async function generatePregenTiles(
   // z4: four 4096² quadrants → 16×16 tiles without holding 8192² in memory
   {
     const z = 4;
+    await prisma.mapVersion.update({
+      where: { id: versionId },
+      data: { tileBuildCurrentZ: z },
+    });
     const n = tilesPerSide(z);
     const half = n / 2;
     const midX = (bounds.minX + bounds.maxX) / 2;
@@ -354,6 +374,7 @@ async function generatePregenTiles(
         z,
         mapFileId,
         versionNumber,
+        versionId,
         originTileX: quad.originX,
         originTileY: quad.originY,
       });
@@ -438,7 +459,24 @@ export async function buildTilePyramidForVersion(versionId: string): Promise<voi
         : 15000;
 
     const manifest = buildManifestFromSvg(svgText, yFlip, scale);
-    await generatePregenTiles(svgText, manifest, version.mapFileId, version.versionNumber);
+    const pregenTotal = countPregenTiles(manifest.maxZPregen);
+    await prisma.mapVersion.update({
+      where: { id: versionId },
+      data: {
+        tileBuildTotal: pregenTotal,
+        tileBuildDone: 0,
+        tileBuildCurrentZ: null,
+        tileBuildMaxZPregen: manifest.maxZPregen,
+      },
+    });
+
+    await generatePregenTiles(
+      svgText,
+      manifest,
+      version.mapFileId,
+      version.versionNumber,
+      versionId,
+    );
 
     const manifestPath = buildTileManifestPath(version.mapFileId, version.versionNumber);
     await uploadFile(manifestPath, Buffer.from(JSON.stringify(manifest), "utf-8"));
@@ -449,6 +487,10 @@ export async function buildTilePyramidForVersion(versionId: string): Promise<voi
         tileStatus: "READY",
         tileManifestPath: manifestPath,
         tileError: null,
+        tileBuildTotal: null,
+        tileBuildDone: null,
+        tileBuildCurrentZ: null,
+        tileBuildMaxZPregen: null,
       },
     });
   } catch (err) {

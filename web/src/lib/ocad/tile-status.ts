@@ -32,7 +32,14 @@ export async function claimTilePyramidBuild(versionId: string): Promise<{
 
   await prisma.mapVersion.update({
     where: { id: versionId },
-    data: { tileStatus: "PROCESSING", tileError: null },
+    data: {
+      tileStatus: "PROCESSING",
+      tileError: null,
+      tileBuildTotal: null,
+      tileBuildDone: 0,
+      tileBuildCurrentZ: null,
+      tileBuildMaxZPregen: null,
+    },
   });
   return { claimed: true, status: "PROCESSING" };
 }
@@ -40,6 +47,47 @@ export async function claimTilePyramidBuild(versionId: string): Promise<{
 export async function markTilePyramidPending(versionId: string): Promise<void> {
   await prisma.mapVersion.update({
     where: { id: versionId },
-    data: { tileStatus: "PENDING", tileError: null, tileManifestPath: null },
+    data: {
+      tileStatus: "PENDING",
+      tileError: null,
+      tileManifestPath: null,
+      tileBuildTotal: null,
+      tileBuildDone: 0,
+      tileBuildCurrentZ: null,
+      tileBuildMaxZPregen: null,
+    },
   });
+}
+
+export type TileBuildProgress = {
+  total: number;
+  done: number;
+  remaining: number;
+  percent: number;
+  currentZ: number | null;
+  maxZPregen: number | null;
+};
+
+export function tileBuildProgressFromVersion(version: {
+  tileBuildTotal: number | null;
+  tileBuildDone: number | null;
+  tileBuildCurrentZ: number | null;
+  tileBuildMaxZPregen: number | null;
+}): TileBuildProgress | null {
+  if (version.tileBuildTotal == null || version.tileBuildTotal <= 0) return null;
+  const total = version.tileBuildTotal;
+  const done = Math.min(total, Math.max(0, version.tileBuildDone ?? 0));
+  const remaining = Math.max(0, total - done);
+  const percent = Math.min(100, Math.round((done / total) * 100));
+  return {
+    total,
+    done,
+    remaining,
+    percent,
+    currentZ:
+      version.tileBuildCurrentZ != null && version.tileBuildCurrentZ >= 0
+        ? version.tileBuildCurrentZ
+        : null,
+    maxZPregen: version.tileBuildMaxZPregen,
+  };
 }

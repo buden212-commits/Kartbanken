@@ -12,6 +12,7 @@ export const releaseNotes: ReleaseNote[] = [
     items: [
       "Utcheckning och kartförslag använder karttiles i stället för en enda stor SVG — zoom och panering ska kännas smidigare även på stora kartor (t.ex. Väst med Venjan)",
       "Första gången en version öppnas kan systemet bygga tiles i bakgrunden («Bygger karttiles…»); därefter laddas bara synliga rutor",
+      "Medan tiles byggs visas hur många rutor skapats och hur många återstår",
       "Zoom ner till skala 1:100 stöds via detaljtiles som skapas vid behov",
       "Fix: kartbilden på utcheckningssidan laddas igen för stora .ocd-filer — tidigare kraschade förhandsvisningen på servern",
       "Fix: «Kunde inte hämta tile-status» vid utcheckning — tile-status laddar inte längre bildbiblioteket som kraschade i molnet",

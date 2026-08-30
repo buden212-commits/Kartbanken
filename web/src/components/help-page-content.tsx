@@ -332,7 +332,7 @@ export async function HelpPageContent() {
                 items={[
                   "Öppna området och klicka Checka ut område (knappen bredvid karttiteln)",
                   "Välj verktyg: rektangel eller polygon",
-                  "Rita området på kartan och bekräfta urvalet — kartan använder tiles för smidigare zoom/pan (särskilt på stora kartor); första gången kan tiles byggas en stund",
+                  "Rita området på kartan och bekräfta urvalet — kartan använder tiles för smidigare zoom/pan (särskilt på stora kartor); första gången kan tiles byggas en stund med räknare (X av Y rutor)",
                   "Klicka Checka ut område — du kommer till utcheckningssidan",
                   "Välj OCAD-format (t.ex. OCAD 12 eller OCAD 2018) — måste matcha din OCAD-installation",
                   "Ladda ner utcheckning .ocd och redigera i OCAD — filen genereras av systemet; öppna och spara i OCAD innan du redigerar",

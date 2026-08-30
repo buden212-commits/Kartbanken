@@ -32,6 +32,16 @@ export function tilesPerSide(z: number): number {
   return 2 ** z;
 }
 
+/** Number of pregenerated tiles for zoom levels 0…maxZPregen inclusive. */
+export function countPregenTiles(maxZPregen: number): number {
+  let total = 0;
+  for (let z = 0; z <= maxZPregen; z++) {
+    const n = tilesPerSide(z);
+    total += n * n;
+  }
+  return total;
+}
+
 export function tileBounds(manifest: TileManifest, z: number, x: number, y: number): SvgBounds {
   const n = tilesPerSide(z);
   const width = manifest.bounds.maxX - manifest.bounds.minX;

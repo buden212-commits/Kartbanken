@@ -102,6 +102,10 @@ model MapVersion {
   tileStatus       String   @default("PENDING")
   tileError        String?
   tileManifestPath String?
+  tileBuildTotal   Int?
+  tileBuildDone    Int?
+  tileBuildCurrentZ Int?
+  tileBuildMaxZPregen Int?
   objectCount      Int?
   parseStatus      String   @default("PENDING")
   parseError       String?

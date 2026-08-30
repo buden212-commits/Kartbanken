@@ -341,6 +341,14 @@ export function DiffMapPanel({
   const [layerVisibility, setLayerVisibility] = useState<Record<string, boolean>>({});
   const [tileManifest, setTileManifest] = useState<TileManifest | null>(null);
   const [tileStatus, setTileStatus] = useState<string | null>(null);
+  const [tileProgress, setTileProgress] = useState<{
+    total: number;
+    done: number;
+    remaining: number;
+    percent: number;
+    currentZ: number | null;
+    maxZPregen: number | null;
+  } | null>(null);
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
@@ -367,6 +375,7 @@ export function DiffMapPanel({
     setFullSvgText(null);
     setTileManifest(null);
     setTileStatus(null);
+    setTileProgress(null);
     setMapLayers([]);
     setLayerVisibility({});
     onOcadLayersReady?.([]);
@@ -398,10 +407,19 @@ export function DiffMapPanel({
           status: string;
           error?: string | null;
           manifest?: TileManifest | null;
+          progress?: {
+            total: number;
+            done: number;
+            remaining: number;
+            percent: number;
+            currentZ: number | null;
+            maxZPregen: number | null;
+          } | null;
         };
         if (cancelled) return;
 
         setTileStatus(data.status);
+        setTileProgress(data.progress ?? null);
 
         if (data.status === "READY" && data.manifest) {
           const manifest = data.manifest;
@@ -1393,10 +1411,47 @@ export function DiffMapPanel({
         {mapToolbarOverlay}
 
         {loading && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/90 text-sm text-slate-600">
-            {basemap === "tiles" && (tileStatus === "PROCESSING" || tileStatus === "PENDING")
-              ? "Bygger karttiles… Det kan ta en stund första gången."
-              : "Laddar kartbild…"}
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-white/90 px-6 text-center text-sm text-slate-600">
+            {basemap === "tiles" && (tileStatus === "PROCESSING" || tileStatus === "PENDING") ? (
+              <>
+                <p>
+                  {tileProgress
+                    ? `Bygger karttiles… ${tileProgress.done} av ${tileProgress.total} rutor`
+                    : tileStatus === "PROCESSING"
+                      ? "Förbereder karttiles…"
+                      : "Bygger karttiles…"}
+                  {tileProgress?.currentZ != null && tileProgress.maxZPregen != null
+                    ? ` (detaljnivå ${tileProgress.currentZ} av ${tileProgress.maxZPregen})`
+                    : null}
+                </p>
+                {tileProgress ? (
+                  <>
+                    <p className="text-xs text-slate-500">
+                      {tileProgress.remaining} rutor kvar ({tileProgress.percent} %)
+                    </p>
+                    <div
+                      className="h-2 w-48 max-w-full overflow-hidden rounded-full bg-slate-200"
+                      role="progressbar"
+                      aria-valuenow={tileProgress.percent}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-label="Bygger karttiles"
+                    >
+                      <div
+                        className="h-full rounded-full bg-ifk-blue transition-[width] duration-300"
+                        style={{ width: `${tileProgress.percent}%` }}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-xs text-slate-500">
+                    Första gången kan det ta en stund för stora kartor.
+                  </p>
+                )}
+              </>
+            ) : (
+              "Laddar kartbild…"
+            )}
           </div>
         )}
         {error && (
