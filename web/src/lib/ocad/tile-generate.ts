@@ -7,7 +7,13 @@ import {
   generateAndStorePreviewSvg,
   generateOcadSvgFiltered,
 } from "@/lib/ocad/svg";
-import { extractSvgInner, parseViewBox, type SvgBounds } from "@/lib/ocad/svg-utils";
+import {
+  boundsToViewBox,
+  extractSvgInner,
+  parseViewBox,
+  type SvgBounds,
+} from "@/lib/ocad/svg-utils";
+import { rewriteSvgRootTag } from "@/lib/ocad/svg-root";
 import { IDENTITY_SVG_TRANSFORM } from "@/lib/ocad/svg-coords";
 import { buildTileManifestPath, buildTilePath } from "@/lib/ocad/tile-paths";
 import {
@@ -105,24 +111,27 @@ function boundsIntersect(a: SvgBounds, b: SvgBounds): boolean {
   return a.minX <= b.maxX && a.maxX >= b.minX && a.minY <= b.maxY && a.maxY >= b.minY;
 }
 
-function rewriteSvgViewBox(svgText: string, bounds: SvgBounds, widthPx: number, heightPx: number): string {
-  const vb = `${bounds.minX} ${bounds.minY} ${bounds.maxX - bounds.minX} ${bounds.maxY - bounds.minY}`;
-  let out = svgText.replace(/viewBox=["'][^"']*["']/i, `viewBox="${vb}"`);
-  if (/width=["']/i.test(out)) {
-    out = out.replace(/width=["'][^"']*["']/i, `width="${widthPx}"`);
-  } else {
-    out = out.replace(/<svg/i, `<svg width="${widthPx}"`);
-  }
-  if (/height=["']/i.test(out)) {
-    out = out.replace(/height=["'][^"']*["']/i, `height="${heightPx}"`);
-  } else {
-    out = out.replace(/<svg/i, `<svg height="${heightPx}"`);
-  }
-  out = out.replace(/preserveAspectRatio=["'][^"']*["']/i, `preserveAspectRatio="none"`);
-  if (!/preserveAspectRatio=/i.test(out)) {
-    out = out.replace(/<svg/i, `<svg preserveAspectRatio="none"`);
-  }
-  return out;
+/**
+ * Point the SVG at `bounds` and give it a pixel size for rasterization.
+ *
+ * Only the root tag is touched: child elements carry their own width/height and
+ * the root carries megabyte-sized `data-ocad-*` JSON attributes, so document-wide
+ * regexes hit the wrong attribute. Rebuilding the root tag also repairs SVG:er
+ * stored before the attribute separator fix, which librsvg refuses to parse.
+ */
+export function rewriteSvgViewBox(
+  svgText: string,
+  bounds: SvgBounds,
+  widthPx: number,
+  heightPx: number,
+): string {
+  return rewriteSvgRootTag(svgText, {
+    viewBox: boundsToViewBox(bounds),
+    width: String(widthPx),
+    height: String(heightPx),
+    preserveAspectRatio: "none",
+    dropOcadMetadata: true,
+  });
 }
 
 async function rasterizeSvgRegion(

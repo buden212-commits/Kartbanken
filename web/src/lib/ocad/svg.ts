@@ -319,17 +319,24 @@ export async function generateOcadSvgLayered(buffer: Buffer): Promise<{
 
   const crs = crsFromOcad(ocadFile);
   const kartramAttr = kartramAttributeForOcad(ocadFile);
-  const svg = [
-    `<svg xmlns="http://www.w3.org/2000/svg"`,
+  // Attributes must be space-separated; strict XML parsers (libxml via sharp)
+  // reject the tag otherwise, even though browsers accept it.
+  const rootAttributes = [
+    `xmlns="http://www.w3.org/2000/svg"`,
     `viewBox="${viewBox}"`,
-    `width="100%" height="100%"`,
+    `width="100%"`,
+    `height="100%"`,
     `preserveAspectRatio="xMidYMid meet"`,
     `fill="transparent"`,
     `data-ocad-scale="${crs.scale}"`,
     `data-ocad-version="${ocadFile.header.version}"`,
     `data-ocad-crs="${escapeXmlAttr(serializeOcadCrs(crs))}"`,
     `data-ocad-layers-version="${OCAD_LAYERS_FORMAT_VERSION}"`,
-    `data-ocad-layers="${layersJson}"${kartramAttr}>`,
+    `data-ocad-layers="${layersJson}"`,
+  ].join(" ");
+
+  const svg = [
+    `<svg ${rootAttributes}${kartramAttr}>`,
     defsMarkup ? `<defs>${defsMarkup}</defs>` : "",
     `<g transform="${rootTransform}">`,
     layerMarkupParts.join(""),

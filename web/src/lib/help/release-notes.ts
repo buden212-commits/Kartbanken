@@ -16,8 +16,9 @@ export const releaseNotes: ReleaseNote[] = [
       "Zoom ner till skala 1:100 stöds via detaljtiles som skapas vid behov",
       "Fix: kartbilden på utcheckningssidan laddas igen för stora .ocd-filer — tidigare kraschade förhandsvisningen på servern",
       "Fix: «Kunde inte hämta tile-status» vid utcheckning — tile-status laddar inte längre bildbiblioteket som kraschade i molnet",
-      "Fix: tile-bygg som fastnar startar om automatiskt vid nästa uppdatering — bygget körs nu i etapper så det inte avbryts av tidsgränsen",
+      "Fix: tile-bygget körs nu direkt i anropet i etapper i stället för som bakgrundsjobb — tidigare kunde bygget dö tyst efter några rutor",
       "Fix: «Försök igen» startar om tile-bygget även när kartan visat felmeddelande",
+      "Fix: kartor vars sparade kartbild hade ett formatfel gick inte att bygga tiles för («Input buffer has corrupt header») — formatet repareras nu automatiskt vid bygget",
     ],
   },
   {
