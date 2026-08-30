@@ -7,6 +7,13 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-08-30",
+    title: "Utcheckning — stora kartor",
+    items: [
+      "Fix: kartbilden på utcheckningssidan laddas igen för stora .ocd-filer (t.ex. Väst med Venjan) — tidigare kraschade förhandsvisningen på servern",
+    ],
+  },
+  {
     date: "2026-08-29",
     title: "Kartförslag — verktyg och inskickning",
     items: [
