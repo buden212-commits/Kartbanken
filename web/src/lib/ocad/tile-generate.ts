@@ -401,7 +401,7 @@ export async function generateOnDemandTile(params: {
 }
 
 /** Stop starting new units after this long so the invocation can finish cleanly. */
-const CHUNK_BUDGET_MS = 150 * 1000;
+const CHUNK_BUDGET_MS = 120 * 1000;
 
 async function prepareTileBuild(version: {
   id: string;

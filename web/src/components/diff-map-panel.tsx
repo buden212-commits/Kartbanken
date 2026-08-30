@@ -394,57 +394,26 @@ export function DiffMapPanel({
     initialFitDoneRef.current = false;
 
     async function loadTiles(): Promise<void> {
-      const statusUrl = `/api/maps/${mapSlug}/versions/${versionId}/tiles/status`;
+      const baseUrl = `/api/maps/${mapSlug}/versions/${versionId}/tiles`;
       let consecutiveFailures = 0;
+      let finished = false;
 
-      const scheduleNextPoll = (delayMs: number) => {
-        pollTimer = setTimeout(() => {
-          void poll();
-        }, delayMs);
+      type StatusPayload = {
+        status: string;
+        error?: string | null;
+        manifest?: TileManifest | null;
+        progress?: {
+          total: number;
+          done: number;
+          remaining: number;
+          percent: number;
+          currentZ: number | null;
+          maxZPregen: number | null;
+          preparing: boolean;
+        } | null;
       };
 
-      const poll = async (): Promise<void> => {
-        let data: {
-          status: string;
-          error?: string | null;
-          manifest?: TileManifest | null;
-          progress?: {
-            total: number;
-            done: number;
-            remaining: number;
-            percent: number;
-            currentZ: number | null;
-            maxZPregen: number | null;
-            preparing: boolean;
-          } | null;
-        };
-
-        try {
-          const res = await fetch(statusUrl, {
-            signal: controller.signal,
-            credentials: "same-origin",
-          });
-          if (!res.ok) {
-            throw new Error(`Kunde inte hämta tile-status (${res.status})`);
-          }
-          data = await res.json();
-        } catch (err) {
-          if (cancelled || controller.signal.aborted) return;
-          consecutiveFailures++;
-          // Tile builds run in background invocations that can briefly drop
-          // requests; only surface an error after repeated failures.
-          if (consecutiveFailures >= 5) {
-            setError(err instanceof Error ? err.message : "Fel vid laddning");
-            setLoading(false);
-            return;
-          }
-          scheduleNextPoll(3000);
-          return;
-        }
-
-        if (cancelled) return;
-        consecutiveFailures = 0;
-
+      const applyStatus = (data: StatusPayload): boolean => {
         setTileStatus(data.status);
         setTileProgress(data.progress ?? null);
 
@@ -461,20 +430,100 @@ export function DiffMapPanel({
           setMapLayers([]);
           onOcadLayersReady?.([]);
           setLoading(false);
-          return;
+          return true;
         }
 
         if (data.status === "ERROR") {
           setError(data.error || "Kunde inte bygga karttiles");
           setLoading(false);
-          return;
+          return true;
         }
 
-        // PENDING / PROCESSING — keep polling; each poll also resumes the build
-        scheduleNextPoll(1500);
+        return false;
       };
 
-      await poll();
+      const pollStatus = async (): Promise<void> => {
+        if (cancelled || finished) return;
+        try {
+          const res = await fetch(`${baseUrl}/status`, {
+            signal: controller.signal,
+            credentials: "same-origin",
+          });
+          if (!res.ok) throw new Error(`Kunde inte hämta tile-status (${res.status})`);
+          const data = (await res.json()) as StatusPayload;
+          if (cancelled || finished) return;
+          consecutiveFailures = 0;
+          if (applyStatus(data)) {
+            finished = true;
+            return;
+          }
+        } catch (err) {
+          if (cancelled || controller.signal.aborted) return;
+          consecutiveFailures++;
+          if (consecutiveFailures >= 6) {
+            finished = true;
+            setError(err instanceof Error ? err.message : "Fel vid laddning");
+            setLoading(false);
+            return;
+          }
+        }
+        pollTimer = setTimeout(() => void pollStatus(), 1500);
+      };
+
+      // The build runs inside the request; background work is cut short once a
+      // serverless response is sent, so the client keeps requesting chunks.
+      const driveBuild = async (): Promise<void> => {
+        for (let attempt = 0; attempt < 200; attempt++) {
+          if (cancelled || finished) return;
+          const res = await fetch(`${baseUrl}/build`, {
+            method: "POST",
+            credentials: "same-origin",
+            signal: controller.signal,
+          });
+          if (cancelled || finished) return;
+          if (!res.ok) throw new Error(`Kunde inte bygga karttiles (${res.status})`);
+          const data = (await res.json()) as StatusPayload & { busy?: boolean };
+          if (data.status === "READY" || data.status === "ERROR") return;
+          if (data.busy) {
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+          }
+        }
+      };
+
+      void pollStatus();
+
+      try {
+        await driveBuild();
+      } catch (err) {
+        if (cancelled || controller.signal.aborted || finished) return;
+        finished = true;
+        if (pollTimer) clearTimeout(pollTimer);
+        setError(err instanceof Error ? err.message : "Kunde inte bygga karttiles");
+        setLoading(false);
+        return;
+      }
+
+      if (!cancelled && !finished) {
+        finished = true;
+        if (pollTimer) clearTimeout(pollTimer);
+        try {
+          const res = await fetch(`${baseUrl}/status`, {
+            signal: controller.signal,
+            credentials: "same-origin",
+          });
+          if (!res.ok) throw new Error(`Kunde inte hämta tile-status (${res.status})`);
+          const data = (await res.json()) as StatusPayload;
+          if (cancelled) return;
+          if (!applyStatus(data)) {
+            setError("Karttiles blev inte klara");
+            setLoading(false);
+          }
+        } catch (err) {
+          if (cancelled || controller.signal.aborted) return;
+          setError(err instanceof Error ? err.message : "Fel vid laddning");
+          setLoading(false);
+        }
+      }
     }
 
     if (basemap === "tiles") {

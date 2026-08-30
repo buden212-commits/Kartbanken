@@ -5,16 +5,14 @@ import {
   getMapVersionOr404,
 } from "@/lib/maps/version-lookup";
 import { prisma } from "@/lib/prisma";
-import { scheduleTileBuildChunk } from "@/lib/ocad/tile-build-kick";
 import {
-  claimTilePyramidBuild,
   markTilePyramidPending,
   readTileManifest,
   tileBuildProgressFromVersion,
 } from "@/lib/ocad/tile-status";
 import { fileExists } from "@/lib/storage";
 
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 type RouteParams = { params: Promise<{ slug: string; id: string }> };
 
@@ -48,7 +46,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
     const denied = assertVersionViewAccess(session, lookup.version);
     if (denied) return denied;
 
-    let version = await loadTileStatusVersion(lookup.version.id);
+    const version = await loadTileStatusVersion(lookup.version.id);
 
     if (!version) {
       return NextResponse.json({ error: "Version hittades inte" }, { status: 404 });
@@ -69,17 +67,6 @@ export async function GET(_request: Request, { params }: RouteParams) {
       }
     }
 
-    if (status !== "READY" || !manifest) {
-      const claim = await claimTilePyramidBuild(version.id);
-      if (claim.claimed) {
-        scheduleTileBuildChunk(version.id);
-        version = (await loadTileStatusVersion(version.id)) ?? version;
-        status = version.tileStatus;
-      } else if (claim.status !== "MISSING") {
-        status = claim.status;
-      }
-    }
-
     return NextResponse.json({
       status,
       error: version.tileError,
@@ -95,6 +82,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
   }
 }
 
+/** Reset so the next build request starts a fresh pyramid ("Försök igen"). */
 export async function POST(_request: Request, { params }: RouteParams) {
   try {
     const session = await requireSession();
@@ -107,14 +95,11 @@ export async function POST(_request: Request, { params }: RouteParams) {
     const denied = assertVersionViewAccess(session, lookup.version);
     if (denied) return denied;
 
-    const versionId = lookup.version.id;
-    await markTilePyramidPending(versionId);
-    await claimTilePyramidBuild(versionId);
-    scheduleTileBuildChunk(versionId);
+    await markTilePyramidPending(lookup.version.id);
 
-    return NextResponse.json({ status: "PROCESSING" });
+    return NextResponse.json({ status: "PENDING" });
   } catch (err) {
-    console.error("Tile rebuild failed:", err);
+    console.error("Tile reset failed:", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Kunde inte bygga om tiles" },
       { status: 500 },
