@@ -348,6 +348,7 @@ export function DiffMapPanel({
     percent: number;
     currentZ: number | null;
     maxZPregen: number | null;
+    preparing: boolean;
   } | null>(null);
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
 
@@ -414,6 +415,7 @@ export function DiffMapPanel({
             percent: number;
             currentZ: number | null;
             maxZPregen: number | null;
+            preparing: boolean;
           } | null;
         };
         if (cancelled) return;
@@ -450,7 +452,7 @@ export function DiffMapPanel({
             setError(err instanceof Error ? err.message : "Fel vid laddning");
             setLoading(false);
           });
-        }, 2000);
+        }, 1500);
       };
 
       await poll();
@@ -1415,16 +1417,18 @@ export function DiffMapPanel({
             {basemap === "tiles" && (tileStatus === "PROCESSING" || tileStatus === "PENDING") ? (
               <>
                 <p>
-                  {tileProgress
-                    ? `Bygger karttiles… ${tileProgress.done} av ${tileProgress.total} rutor`
-                    : tileStatus === "PROCESSING"
-                      ? "Förbereder karttiles…"
+                  {tileProgress?.preparing
+                    ? "Förbereder karttiles… (läser kartfil och förhandsvisning)"
+                    : tileProgress
+                      ? `Bygger karttiles… ${tileProgress.done} av ${tileProgress.total} rutor`
                       : "Bygger karttiles…"}
-                  {tileProgress?.currentZ != null && tileProgress.maxZPregen != null
+                  {!tileProgress?.preparing &&
+                  tileProgress?.currentZ != null &&
+                  tileProgress.maxZPregen != null
                     ? ` (detaljnivå ${tileProgress.currentZ} av ${tileProgress.maxZPregen})`
                     : null}
                 </p>
-                {tileProgress ? (
+                {tileProgress && !tileProgress.preparing ? (
                   <>
                     <p className="text-xs text-slate-500">
                       {tileProgress.remaining} rutor kvar ({tileProgress.percent} %)
@@ -1445,7 +1449,9 @@ export function DiffMapPanel({
                   </>
                 ) : (
                   <p className="text-xs text-slate-500">
-                    Första gången kan det ta en stund för stora kartor.
+                    {tileProgress?.preparing
+                      ? "Räknaren visas när systemet vet hur många rutor ska skapas."
+                      : "Första gången kan det ta en stund för stora kartor."}
                   </p>
                 )}
               </>

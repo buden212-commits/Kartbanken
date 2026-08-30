@@ -1,8 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // sharp måste externa:as så libvips-native hittas i Vercel serverless
-  serverExternalPackages: ["ocad2geojson", "sharp"],
+  serverExternalPackages: ["ocad2geojson"],
   outputFileTracingIncludes: {
     "/api/maps/[slug]/versions/[id]/tiles/**": [
       "./node_modules/@img/sharp-linux-x64/**",

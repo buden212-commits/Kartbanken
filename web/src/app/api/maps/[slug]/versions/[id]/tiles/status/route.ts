@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth/api";
 import { canUpload } from "@/lib/auth/permissions";
-import { runAfterResponse } from "@/lib/background";
 import {
   assertVersionViewAccess,
   getMapVersionOr404,
 } from "@/lib/maps/version-lookup";
 import { prisma } from "@/lib/prisma";
+import { isStaleTileBuild, scheduleTilePyramidBuild } from "@/lib/ocad/tile-build-kick";
 import {
   claimTilePyramidBuild,
   markTilePyramidPending,
@@ -31,6 +31,7 @@ async function loadTileStatusVersion(versionId: string) {
       tileBuildDone: true,
       tileBuildCurrentZ: true,
       tileBuildMaxZPregen: true,
+      tileBuildStartedAt: true,
     },
   });
 }
@@ -68,18 +69,20 @@ export async function GET(_request: Request, { params }: RouteParams) {
       }
     }
 
-    if (status === "PENDING" || status === "ERROR" || (status === "READY" && !manifest)) {
+    const needsBuild =
+      status === "PENDING" ||
+      status === "ERROR" ||
+      (status === "READY" && !manifest) ||
+      (status === "PROCESSING" && isStaleTileBuild(version));
+
+    if (needsBuild) {
       const claim = await claimTilePyramidBuild(version.id);
       if (claim.claimed) {
-        status = "PROCESSING";
-        const versionId = version.id;
-        runAfterResponse(async () => {
-          const { buildTilePyramidForVersion } = await import("@/lib/ocad/tile-generate");
-          await buildTilePyramidForVersion(versionId);
-        });
+        scheduleTilePyramidBuild(version.id);
         version = await loadTileStatusVersion(version.id);
-      } else {
-        status = claim.status === "MISSING" ? status : claim.status;
+        if (version) status = version.tileStatus;
+      } else if (claim.status !== "MISSING") {
+        status = claim.status;
       }
     }
 
@@ -118,10 +121,8 @@ export async function POST(_request: Request, { params }: RouteParams) {
 
     const versionId = lookup.version.id;
     await markTilePyramidPending(versionId);
-    runAfterResponse(async () => {
-      const { rebuildTilePyramid } = await import("@/lib/ocad/tile-generate");
-      await rebuildTilePyramid(versionId);
-    });
+    await claimTilePyramidBuild(versionId);
+    scheduleTilePyramidBuild(versionId);
 
     return NextResponse.json({ status: "PROCESSING" });
   } catch (err) {

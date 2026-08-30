@@ -106,6 +106,7 @@ model MapVersion {
   tileBuildDone    Int?
   tileBuildCurrentZ Int?
   tileBuildMaxZPregen Int?
+  tileBuildStartedAt DateTime?
   objectCount      Int?
   parseStatus      String   @default("PENDING")
   parseError       String?

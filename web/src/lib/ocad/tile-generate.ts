@@ -442,7 +442,15 @@ export async function buildTilePyramidForVersion(versionId: string): Promise<voi
   if (!alreadyClaimed) {
     await prisma.mapVersion.update({
       where: { id: versionId },
-      data: { tileStatus: "PROCESSING", tileError: null },
+      data: {
+        tileStatus: "PROCESSING",
+        tileError: null,
+        tileBuildTotal: null,
+        tileBuildDone: 0,
+        tileBuildCurrentZ: null,
+        tileBuildMaxZPregen: null,
+        tileBuildStartedAt: new Date(),
+      },
     });
   }
 
@@ -491,6 +499,7 @@ export async function buildTilePyramidForVersion(versionId: string): Promise<voi
         tileBuildDone: null,
         tileBuildCurrentZ: null,
         tileBuildMaxZPregen: null,
+        tileBuildStartedAt: null,
       },
     });
   } catch (err) {
@@ -498,7 +507,11 @@ export async function buildTilePyramidForVersion(versionId: string): Promise<voi
     console.error("Tile pyramid failed:", versionId, err);
     await prisma.mapVersion.update({
       where: { id: versionId },
-      data: { tileStatus: "ERROR", tileError: message },
+      data: {
+        tileStatus: "ERROR",
+        tileError: message,
+        tileBuildStartedAt: null,
+      },
     });
     throw err;
   }
