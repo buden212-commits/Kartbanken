@@ -8,7 +8,6 @@ import {
 } from "./diff-layers";
 import { parseOcadBuffer } from "./read";
 import { buildPreviewSvgPath, generateAndStorePreviewSvg } from "./svg";
-import { buildTilePyramidForVersion } from "./tile-generate";
 import { readStoredFile } from "@/lib/storage";
 import { prisma } from "@/lib/prisma";
 
@@ -254,6 +253,7 @@ export async function processVersionAfterUpload(
   await parseMapVersion(newVersionId);
 
   try {
+    const { buildTilePyramidForVersion } = await import("./tile-generate");
     await buildTilePyramidForVersion(newVersionId);
   } catch (err) {
     console.error("Tile pyramid after upload failed:", newVersionId, err);
