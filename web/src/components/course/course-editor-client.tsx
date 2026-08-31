@@ -14,7 +14,7 @@ import {
 } from "@/components/course/course-symbol-panel";
 import { CourseTextModal } from "@/components/course/course-text-modal";
 import { HelpLinkIcon } from "@/components/help-link-icon";
-import type { CourseSummary, EditorObject, EditorTool } from "@/lib/course/types";
+import type { CourseSummary, EditorObject, EditorTool, CoursePointGeometry, CourseLineGeometry } from "@/lib/course/types";
 import { CourseObjectType } from "@/lib/course/types";
 import {
   defaultControlNumberForControl,
@@ -25,6 +25,15 @@ import {
   migrateLegacyControlNumbers,
   resyncControlNumberIndices,
 } from "@/lib/course/control-numbers";
+import {
+  angleFromCenter,
+  hitTestControlForClip,
+  hitTestCourseLeg,
+  hitTestManualLineForGap,
+  toggleCutout,
+  toggleLegGap,
+  toggleLineGap,
+} from "@/lib/course/cutouts";
 import {
   computeCourseLengthMeters,
   computeHitTolerance,
@@ -305,9 +314,77 @@ export function CourseEditorClient({
     setPolygonDraft([]);
   }, [addObject, polygonDraft, selectedSymbol]);
 
+  const handleClipClick = useCallback(
+    (geo: [number, number]) => {
+      const vb = parseViewBoxString(viewBoxRef.current);
+      const tol = computeHitTolerance(vb?.width ?? 1000, vb?.height ?? 1000);
+
+      const controlHit = objects
+        .slice()
+        .sort((a, b) => b.sortOrder - a.sortOrder)
+        .find((o) => hitTestControlForClip(geo, o, tol));
+      if (controlHit?.geometry.type === "Point") {
+        const angle = angleFromCenter(controlHit.geometry.coordinates, geo);
+        const cutouts = toggleCutout(controlHit.geometry.cutouts, angle);
+        updateObject(controlHit.clientId, {
+          geometry: {
+            ...controlHit.geometry,
+            cutouts: cutouts.length > 0 ? cutouts : undefined,
+          },
+        });
+        setSelectedId(controlHit.clientId);
+        return;
+      }
+
+      const legHit = hitTestCourseLeg(geo, objects, tol);
+      if (legHit && legHit.fromControl.geometry.type === "Point") {
+        const from = legHit.fromControl as EditorObject;
+        const pointGeo = from.geometry as CoursePointGeometry;
+        const legGaps = toggleLegGap(
+          pointGeo.legGaps,
+          legHit.distanceFromStart,
+        );
+        updateObject(from.clientId, {
+          geometry: {
+            ...pointGeo,
+            legGaps: legGaps.length > 0 ? legGaps : undefined,
+          },
+        });
+        setSelectedId(from.clientId);
+        return;
+      }
+
+      const sorted = objects.slice().sort((a, b) => b.sortOrder - a.sortOrder);
+      for (const obj of sorted) {
+        const lineHit = hitTestManualLineForGap(geo, obj, tol);
+        if (!lineHit || lineHit.object.geometry.type !== "LineString") continue;
+        const editorObj = lineHit.object as EditorObject;
+        const lineGeo = lineHit.object.geometry as CourseLineGeometry;
+        const gaps = toggleLineGap(
+          lineGeo.gaps,
+          lineHit.distanceAlongLine,
+        );
+        updateObject(editorObj.clientId, {
+          geometry: {
+            ...lineGeo,
+            gaps: gaps.length > 0 ? gaps : undefined,
+          },
+        });
+        setSelectedId(editorObj.clientId);
+        return;
+      }
+    },
+    [objects, updateObject],
+  );
+
   const handleMapClickGeo = useCallback(
     (geo: [number, number]) => {
       if (!canEdit) return;
+
+      if (tool === "clip") {
+        handleClipClick(geo);
+        return;
+      }
 
       if (tool === "delete") {
         const vb = parseViewBoxString(viewBoxRef.current);
@@ -395,6 +472,7 @@ export function CourseEditorClient({
       removeObject,
       selectedSymbol,
       tool,
+      handleClipClick,
     ],
   );
 
@@ -718,7 +796,7 @@ export function CourseEditorClient({
       <HelpLinkIcon section="bana" />
       <span className="text-xs text-slate-500">· Publicerad version v{headVersionNumber}</span>
       <span className="text-xs font-medium text-slate-700">Banlängd: {courseLengthLabel}</span>
-      {(["draw", "move", "delete"] as EditorTool[]).map((t) => (
+      {(["draw", "move", "clip", "delete"] as EditorTool[]).map((t) => (
         <button
           key={t}
           type="button"
@@ -866,7 +944,7 @@ export function CourseEditorClient({
             fullscreen
             exportEnabled={false}
             showLayerPanel={false}
-            interactionMode={canEdit && tool !== "move" ? "draw" : tool === "move" ? "draw" : "navigate"}
+            interactionMode={canEdit ? "draw" : "navigate"}
             drawPointerHandlers={canEdit ? drawPointerHandlers : undefined}
             renderSvgOverlay={renderSvgOverlay}
             headerContent={toolbar}

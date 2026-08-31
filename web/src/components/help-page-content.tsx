@@ -444,13 +444,14 @@ export async function HelpPageContent() {
           <h3 className="font-medium text-slate-900">Rita och redigera</h3>
           <HelpList
             items={[
-              "Välj symbol i panelen till höger och verktyg: Rita, Flytta eller Radera",
+              "Välj symbol i panelen till höger och verktyg: Rita, Flytta, Klipp eller Radera",
               "Punkt — klicka på kartan",
               "Linje — klicka punkter, dubbelklicka eller Avsluta linje",
               "Yta — klicka hörn, dubbelklicka nära start eller Avsluta yta",
               "Text — klicka och skriv i dialogrutan",
               "Flytta — dra valt objekt; vid kontroll (703) följer kontrollnumret (704) med",
               "Flytta kontrollnummer (704) separat via verktyget Flytta eller knappen nr i kontrollistan",
+              "Klipp — klicka på kontrollcirkel, bansträcka eller manuell linje (705/707) för att skapa en lucka så kartsymboler under syns; klicka igen för att ta bort",
               "Radera — välj objekt och tryck Radera, eller använd verktyget Radera",
             ]}
           />

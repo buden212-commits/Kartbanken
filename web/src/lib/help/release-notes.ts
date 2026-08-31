@@ -8,6 +8,15 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-31",
+    title: "Banläggning — klipp bort del av kontroll eller sträcka",
+    items: [
+      "Nytt verktyg «Klipp» i banredigeraren — klicka på kontrollcirkel, bansträcka eller manuell linje för att skapa en lucka så kartsymboler under syns",
+      "Klicka igen på samma ställe för att ta bort luckan",
+      "Luckor sparas med banan och följer med vid PDF-export",
+    ],
+  },
+  {
+    date: "2026-08-31",
     title: "Lägg bana — knapp i sidhuvudet",
     items: [
       "Knappen «Lägg bana» ligger nu uppe bredvid «Checka ut område» och «Föreslå ändring»",
