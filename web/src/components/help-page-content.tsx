@@ -418,6 +418,10 @@ export async function HelpPageContent() {
             Öppna banredigeraren via knappen <strong>Lägg bana</strong> på områdessidan, eller
             gå direkt till <code className="rounded bg-slate-100 px-1">/maps/[slug]/bana</code>.
           </p>
+          <p>
+            Kartan i banredigeraren använder karttiles för smidig zoom och panorering även på
+            stora kartor. Första gången en version öppnas kan tiles byggas en kort stund.
+          </p>
 
           <h3 className="font-medium text-slate-900">IOF-symboler 701–709</h3>
           <p>

@@ -9,6 +9,7 @@ import {
   markTilePyramidPending,
   readTileManifest,
   tileBuildProgressFromVersion,
+  upgradeTileManifest,
 } from "@/lib/ocad/tile-status";
 import { fileExists } from "@/lib/storage";
 
@@ -30,6 +31,7 @@ async function loadTileStatusVersion(versionId: string) {
       tileBuildMaxZPregen: true,
       tileBuildStartedAt: true,
       tileBuildStage: true,
+      previewSvgPath: true,
     },
   });
 }
@@ -58,7 +60,11 @@ export async function GET(_request: Request, { params }: RouteParams) {
     if (status === "READY" && version.tileManifestPath) {
       try {
         if (await fileExists(version.tileManifestPath)) {
-          manifest = await readTileManifest(version.tileManifestPath);
+          manifest = await upgradeTileManifest(
+            await readTileManifest(version.tileManifestPath),
+            version.tileManifestPath,
+            version.previewSvgPath,
+          );
         } else {
           status = "PENDING";
         }

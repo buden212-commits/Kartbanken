@@ -1,6 +1,10 @@
 import type { SvgBounds } from "./svg-utils";
 import type { SvgRootTransform } from "./svg-coords";
+import type { OcadCrsInfo } from "./crs";
 import { maxZoomForMapScale } from "./map-display-scale";
+
+/** Bump when the manifest gains fields; older manifests are refreshed in place. */
+export const TILE_MANIFEST_VERSION = 2;
 
 export const TILE_SIZE_PX = 512;
 export const TILE_FORMAT = "webp" as const;
@@ -8,7 +12,7 @@ export const TILE_FORMAT = "webp" as const;
 export const TILE_MAX_Z_PREGEN = 4;
 
 export type TileManifest = {
-  version: 1;
+  version: number;
   bounds: SvgBounds;
   tileSize: number;
   minZ: number;
@@ -19,6 +23,8 @@ export type TileManifest = {
   /** OCAD native Y-flip used when filtering objects for on-demand tiles. */
   yFlip: number;
   rootTransform: SvgRootTransform;
+  /** Georeferencing, needed for GPS and geo bbox zoom. Absent in version 1. */
+  crs?: OcadCrsInfo | null;
 };
 
 export type TileCoord = { z: number; x: number; y: number };

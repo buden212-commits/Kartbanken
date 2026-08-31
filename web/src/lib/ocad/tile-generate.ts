@@ -16,8 +16,10 @@ import {
 import { rewriteSvgRootTag } from "@/lib/ocad/svg-root";
 import { IDENTITY_SVG_TRANSFORM } from "@/lib/ocad/svg-coords";
 import { buildTileManifestPath, buildTilePath } from "@/lib/ocad/tile-paths";
+import { parseOcadCrsFromSvg } from "@/lib/ocad/crs";
 import {
   TILE_FORMAT,
+  TILE_MANIFEST_VERSION,
   TILE_MAX_Z_PREGEN,
   TILE_SIZE_PX,
   computeMaxTileZoom,
@@ -195,7 +197,8 @@ function buildManifestFromSvg(
   const { rootTransform } = extractSvgInner(svgText);
   const maxZ = computeMaxTileZoom(scale);
   return {
-    version: 1,
+    version: TILE_MANIFEST_VERSION,
+    crs: parseOcadCrsFromSvg(svgText),
     bounds,
     tileSize: TILE_SIZE_PX,
     minZ: 0,

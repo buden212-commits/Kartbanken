@@ -424,9 +424,11 @@ export function DiffMapPanel({
           setSvgInner("");
           setSvgFill("transparent");
           setRootTransform(manifest.rootTransform ?? IDENTITY_SVG_TRANSFORM);
-          const resolvedScale = manifest.scale || 15000;
+          const crs = manifest.crs ?? null;
+          const resolvedScale = manifest.scale || crs?.scale || 15000;
           setOcadMapScale(resolvedScale);
           onOcadMapScale?.(resolvedScale);
+          setOcadCrs(crs);
           setMapLayers([]);
           onOcadLayersReady?.([]);
           setLoading(false);
