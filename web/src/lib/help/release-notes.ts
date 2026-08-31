@@ -20,6 +20,7 @@ export const releaseNotes: ReleaseNote[] = [
       "Fix: «Försök igen» startar om tile-bygget även när kartan visat felmeddelande",
       "Fix: kartor vars sparade kartbild hade ett formatfel gick inte att bygga tiles för («Input buffer has corrupt header») — formatet repareras nu automatiskt vid bygget",
       "Fix: vita rutor i kartan vid hög zoom — en grövre kartbild visas medan detaljrutor hämtas, och rutor som inte kom fram hämtas om automatiskt i stället för att lämnas tomma",
+      "Den grövre kartbilden släcks så snart de skarpa rutorna täcker vyn, så kartan bara är suddig medan detaljerna laddas",
     ],
   },
   {

@@ -46,7 +46,7 @@ function TileImages({
   versionId,
   attempts,
   onTileError,
-  opacity,
+  onTileLoad,
 }: {
   tiles: TileCoord[];
   manifest: TileManifest;
@@ -54,7 +54,7 @@ function TileImages({
   versionId: string;
   attempts: Record<string, number>;
   onTileError: (key: string) => void;
-  opacity?: number;
+  onTileLoad?: (key: string) => void;
 }) {
   return (
     <>
@@ -72,8 +72,8 @@ function TileImages({
             width={b.maxX - b.minX}
             height={b.maxY - b.minY}
             preserveAspectRatio="none"
-            opacity={opacity}
             onError={() => onTileError(key)}
+            onLoad={onTileLoad ? () => onTileLoad(key) : undefined}
           />
         );
       })}
@@ -130,6 +130,7 @@ export function MapTileLayer({
   );
 
   const [attempts, setAttempts] = useState<Record<string, number>>({});
+  const [loaded, setLoaded] = useState<Record<string, boolean>>({});
   const attemptsRef = useRef(attempts);
   attemptsRef.current = attempts;
   const retryTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -144,7 +145,12 @@ export function MapTileLayer({
 
   useEffect(() => {
     setAttempts({});
+    setLoaded({});
   }, [mapSlug, versionId]);
+
+  const handleTileLoad = useCallback((key: string) => {
+    setLoaded((prev) => (prev[key] ? prev : { ...prev, [key]: true }));
+  }, []);
 
   const handleTileError = useCallback((key: string) => {
     if (retryTimers.current.has(key)) return;
@@ -163,9 +169,15 @@ export function MapTileLayer({
     retryTimers.current.set(key, timer);
   }, []);
 
+  // Drop the coarse layer as soon as the sharp tiles cover the viewport, so the
+  // map is only blurry while detail is still on its way.
+  const detailCoversViewport =
+    detailTiles.length > 0 && detailTiles.every((t) => loaded[tileKey(t)]);
+  const showBase = baseTiles.length > 0 && !detailCoversViewport;
+
   return (
     <g data-map-tiles="true" style={{ pointerEvents: "none" }}>
-      {baseTiles.length > 0 && (
+      {showBase && (
         <TileImages
           tiles={baseTiles}
           manifest={manifest}
@@ -182,6 +194,7 @@ export function MapTileLayer({
         versionId={versionId}
         attempts={attempts}
         onTileError={handleTileError}
+        onTileLoad={handleTileLoad}
       />
     </g>
   );
