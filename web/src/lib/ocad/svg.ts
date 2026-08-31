@@ -422,8 +422,12 @@ export async function generateOcadSvgFiltered(
   buffer: Buffer,
   objectIndices: Set<number>,
   viewBounds: SvgBounds,
+  /** Pass an already parsed file to avoid re-reading large .ocd buffers. */
+  parsedOcadFile?: unknown,
 ): Promise<string> {
-  const ocadFile = (await readOcad(buffer, { quietWarnings: true })) as OcadFile;
+  const ocadFile =
+    (parsedOcadFile as OcadFile | undefined) ??
+    ((await readOcad(buffer, { quietWarnings: true })) as OcadFile);
   const filtered = filterObjectsByIndex(ocadFile, objectIndices);
   const document = new DOMImplementation().createDocument(null, null, null);
   const svgElement = ocadToSvg(ocadFile, { document, objects: filtered }) as Element;

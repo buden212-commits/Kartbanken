@@ -78,6 +78,8 @@ export function visibleTiles(params: {
   panY: number;
   zoom: number;
   padTiles?: number;
+  /** Render this zoom level instead of the one derived from `zoom`. */
+  forceZ?: number;
 }): TileCoord[] {
   const {
     manifest,
@@ -87,7 +89,7 @@ export function visibleTiles(params: {
     panX,
     panY,
     zoom,
-    padTiles = 1,
+    forceZ,
   } = params;
 
   if (!(containerWidth > 0) || !(containerHeight > 0) || !(zoom > 0)) {
@@ -130,7 +132,13 @@ export function visibleTiles(params: {
 
   // CSS zoom ≈ detail multiplier; pick tile z near log2(zoom)
   const idealZ = Math.log2(Math.max(zoom, 1));
-  const z = Math.max(0, Math.min(manifest.maxZ, Math.round(idealZ)));
+  const z =
+    forceZ != null
+      ? Math.max(0, Math.min(manifest.maxZ, forceZ))
+      : Math.max(0, Math.min(manifest.maxZ, Math.round(idealZ)));
+
+  // On-demand levels are generated per request, so keep the request count low.
+  const padTiles = params.padTiles ?? (z > manifest.maxZPregen ? 0 : 1);
 
   const n = tilesPerSide(z);
   const tileW = (manifest.bounds.maxX - manifest.bounds.minX) / n;

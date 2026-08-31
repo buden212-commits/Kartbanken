@@ -365,6 +365,21 @@ async function runPregenUnit(params: {
 }
 
 
+type ParsedOcad = Awaited<ReturnType<typeof readOcad>>;
+
+/**
+ * Parsing a 20 MB .ocd takes seconds, and a viewport asks for several detail
+ * tiles at once. Reuse the parse across requests handled by the same instance.
+ */
+let ocadCache: { key: string; file: ParsedOcad } | null = null;
+
+async function parseOcadCached(cacheKey: string, ocdBuffer: Buffer): Promise<ParsedOcad> {
+  if (ocadCache?.key === cacheKey) return ocadCache.file;
+  const file = await readOcad(ocdBuffer, { quietWarnings: true });
+  ocadCache = { key: cacheKey, file };
+  return file;
+}
+
 export async function generateOnDemandTile(params: {
   ocdBuffer: Buffer;
   manifest: TileManifest;
@@ -377,7 +392,7 @@ export async function generateOnDemandTile(params: {
   const { ocdBuffer, manifest, mapFileId, versionNumber, z, x, y } = params;
   const bounds = tileBounds(manifest, z, x, y);
 
-  const ocadFile = await readOcad(ocdBuffer, { quietWarnings: true });
+  const ocadFile = await parseOcadCached(`${mapFileId}/v${versionNumber}`, ocdBuffer);
   const indices = new Set<number>();
   for (const obj of ocadFile.objects) {
     const idx = obj.objIndex?._index;
@@ -403,7 +418,7 @@ export async function generateOnDemandTile(params: {
       .toBuffer();
   }
 
-  svg = await generateOcadSvgFiltered(ocdBuffer, indices, bounds);
+  svg = await generateOcadSvgFiltered(ocdBuffer, indices, bounds, ocadFile);
   const webp = await rasterizeSvgRegion(svg, bounds);
   await uploadTile(mapFileId, versionNumber, z, x, y, webp);
   return webp;
