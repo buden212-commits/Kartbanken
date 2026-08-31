@@ -150,6 +150,23 @@ export default async function MapDetailPage({ params }: PageProps) {
               headVersionId={headVersionId}
             />
           )}
+          {session?.user?.id && role && canCreateCourse(role) && !mapArchived && (
+            latestPublishedVersion ? (
+              <Link
+                href={`/maps/${map.slug}/bana`}
+                className="rounded-lg bg-ifk-blue px-4 py-2 text-sm font-medium text-white transition hover:bg-ifk-blue/90"
+              >
+                {courseList.length > 0 ? `Banor (${courseList.length})` : "Lägg bana"}
+              </Link>
+            ) : (
+              <span
+                title="Kräver en publicerad kartversion"
+                className="cursor-not-allowed rounded-lg bg-slate-200 px-4 py-2 text-sm font-medium text-slate-500"
+              >
+                Lägg bana
+              </span>
+            )
+          )}
           {latestPublishedVersion && role && canCreateMapSuggestion(role) && !mapArchived && (
             <Link
               href={`/maps/${map.slug}/versions/${latestPublishedVersion.id}/suggest`}
@@ -291,7 +308,6 @@ export default async function MapDetailPage({ params }: PageProps) {
           courses={courseList}
           sessionUserId={session.user.id}
           isAdmin={role === Role.ADMIN}
-          publishedVersionId={latestPublishedVersion?.id ?? null}
         />
       )}
     </div>

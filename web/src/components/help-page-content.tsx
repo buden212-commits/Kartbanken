@@ -415,8 +415,9 @@ export async function HelpPageContent() {
             kartfilen — de är overlay-lager som kan delas med andra användare.
           </p>
           <p>
-            Öppna banredigeraren via knappen <strong>Lägg bana</strong> på områdessidan, eller
-            gå direkt till <code className="rounded bg-slate-100 px-1">/maps/[slug]/bana</code>.
+            Öppna banredigeraren via knappen <strong>Lägg bana</strong> (eller{" "}
+            <strong>Banor (antal)</strong> om banor redan finns) uppe till höger på områdessidan,
+            eller gå direkt till <code className="rounded bg-slate-100 px-1">/maps/[slug]/bana</code>.
           </p>
           <p>
             Kartan i banredigeraren använder karttiles för smidig zoom och panorering även på

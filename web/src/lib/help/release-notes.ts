@@ -7,6 +7,14 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-08-31",
+    title: "Lägg bana — knapp i sidhuvudet",
+    items: [
+      "Knappen «Lägg bana» ligger nu uppe bredvid «Checka ut område» och «Föreslå ändring»",
+      "När minst en bana finns visas «Banor (antal)» i stället — klick öppnar banredigeraren",
+    ],
+  },
+  {
     date: "2026-08-30",
     title: "Snabbare karta vid utcheckning och kartförslag",
     items: [
