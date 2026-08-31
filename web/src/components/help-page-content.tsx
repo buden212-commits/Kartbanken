@@ -452,6 +452,8 @@ export async function HelpPageContent() {
               "Flytta — dra valt objekt; vid kontroll (703) följer kontrollnumret (704) med",
               "Flytta kontrollnummer (704) separat via verktyget Flytta eller knappen nr i kontrollistan",
               "Klipp — klicka på kontrollcirkel, bansträcka eller manuell linje (705/707) för att skapa en lucka så kartsymboler under syns; klicka igen för att ta bort",
+              "I Klipp-läge: gröna markörer visar luckor — dra för att flytta; nya luckor snäpps mot närmaste kartsymbol under",
+              "Lucka nära sträckans slut vid en kontroll påverkar inkommande sträcka; lucka närmare föregående kontroll påverkar utgående sträcka",
               "Radera — välj objekt och tryck Radera, eller använd verktyget Radera",
             ]}
           />

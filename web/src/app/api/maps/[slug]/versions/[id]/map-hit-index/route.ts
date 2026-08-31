@@ -3,7 +3,7 @@ import {
   assertVersionViewAccess,
   getMapVersionOr404,
 } from "@/lib/maps/version-lookup";
-import { loadMapHitIndexFromOcd } from "@/lib/ocad/map-hit-index";
+import { loadMapHitIndexFromOcd } from "@/lib/ocad/map-hit-index-build";
 import { prisma } from "@/lib/prisma";
 import { readStoredFile } from "@/lib/storage";
 import { NextResponse } from "next/server";
