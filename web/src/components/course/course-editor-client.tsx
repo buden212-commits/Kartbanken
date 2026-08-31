@@ -33,7 +33,22 @@ import {
   toggleCutout,
   toggleLegGap,
   toggleLineGap,
+  applyClipMarkerDrag,
+  cutoutContainsAngle,
+  controlClipRadiusGeo,
+  hitTestCutoutMarker,
+  cumulativeLineDistances,
+  renderCutoutMarkersSvg,
+  type CutoutMarkerHit,
 } from "@/lib/course/cutouts";
+import type { MapHitIndexEntry } from "@/lib/ocad/map-hit-index";
+import {
+  angleTowardFeature,
+  distanceAlongSegmentTowardFeature,
+  distanceFromEndTowardFeature,
+  findNearestMapFeature,
+  findNearestMapFeatureNearSegment,
+} from "@/lib/ocad/map-hit-index";
 import {
   computeCourseLengthMeters,
   computeHitTolerance,
@@ -172,6 +187,10 @@ export function CourseEditorClient({
     linkedNumberOriginalGeometry?: EditorObject["geometry"];
   } | null>(null);
   const lastClickRef = useRef<number>(0);
+  const clipDragRef = useRef<CutoutMarkerHit | null>(null);
+
+  const [mapHitIndex, setMapHitIndex] = useState<MapHitIndexEntry[]>([]);
+  const [mapIndexReady, setMapIndexReady] = useState(false);
 
   const activeGeometry = geometryForSymbol(selectedSymbol);
   const controlNumbers = useMemo(() => buildControlNumberMap(objects), [objects]);
@@ -243,6 +262,27 @@ export function CourseEditorClient({
   useEffect(() => {
     loadCourses();
   }, [loadCourses]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setMapIndexReady(false);
+    fetch(`/api/maps/${mapSlug}/versions/${headVersionId}/map-hit-index`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.index) {
+          setMapHitIndex(data.index as MapHitIndexEntry[]);
+        }
+      })
+      .catch(() => {
+        /* auto-suggest optional */
+      })
+      .finally(() => {
+        if (!cancelled) setMapIndexReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [mapSlug, headVersionId]);
 
   useEffect(() => {
     if (initialCourseId) {
@@ -318,17 +358,38 @@ export function CourseEditorClient({
     (geo: [number, number]) => {
       const vb = parseViewBoxString(viewBoxRef.current);
       const tol = computeHitTolerance(vb?.width ?? 1000, vb?.height ?? 1000);
+      const snapRadius = tol * 4;
+
+      const markerHit = hitTestCutoutMarker(geo, objects, tol * 1.5);
+      if (markerHit) {
+        setSelectedId(markerHit.objectId);
+        return;
+      }
 
       const controlHit = objects
         .slice()
         .sort((a, b) => b.sortOrder - a.sortOrder)
         .find((o) => hitTestControlForClip(geo, o, tol));
       if (controlHit?.geometry.type === "Point") {
-        const angle = angleFromCenter(controlHit.geometry.coordinates, geo);
-        const cutouts = toggleCutout(controlHit.geometry.cutouts, angle);
+        const pointGeo = controlHit.geometry as CoursePointGeometry;
+        let angle = angleFromCenter(pointGeo.coordinates, geo);
+        const removing = (pointGeo.cutouts ?? []).some((c) =>
+          cutoutContainsAngle(c, angle),
+        );
+        if (!removing && mapHitIndex.length > 0) {
+          const feature = findNearestMapFeature(
+            mapHitIndex,
+            pointGeo.coordinates,
+            controlClipRadiusGeo(controlHit.symbolNr) * 1.8,
+          );
+          if (feature) {
+            angle = angleTowardFeature(pointGeo.coordinates, feature);
+          }
+        }
+        const cutouts = toggleCutout(pointGeo.cutouts, angle);
         updateObject(controlHit.clientId, {
           geometry: {
-            ...controlHit.geometry,
+            ...pointGeo,
             cutouts: cutouts.length > 0 ? cutouts : undefined,
           },
         });
@@ -338,19 +399,71 @@ export function CourseEditorClient({
 
       const legHit = hitTestCourseLeg(geo, objects, tol);
       if (legHit && legHit.fromControl.geometry.type === "Point") {
-        const from = legHit.fromControl as EditorObject;
-        const pointGeo = from.geometry as CoursePointGeometry;
-        const legGaps = toggleLegGap(
-          pointGeo.legGaps,
-          legHit.distanceFromStart,
-        );
-        updateObject(from.clientId, {
-          geometry: {
-            ...pointGeo,
-            legGaps: legGaps.length > 0 ? legGaps : undefined,
-          },
-        });
-        setSelectedId(from.clientId);
+        if (legHit.atEndControl && legHit.toControl.geometry.type === "Point") {
+          const to = legHit.toControl as EditorObject;
+          const pointGeo = to.geometry as CoursePointGeometry;
+          let distFromEnd = legHit.fullLen - legHit.distanceFromStart;
+          const removing = (pointGeo.incomingLegGaps ?? []).some(
+            (g) =>
+              distFromEnd >= g.distance &&
+              distFromEnd <= g.distance + g.length,
+          );
+          if (!removing && mapHitIndex.length > 0) {
+            const a = legHit.fromControl.geometry.coordinates as [number, number];
+            const b = legHit.toControl.geometry.coordinates as [number, number];
+            const feature = findNearestMapFeatureNearSegment(
+              mapHitIndex,
+              a,
+              b,
+              snapRadius,
+            );
+            if (feature) {
+              distFromEnd = distanceFromEndTowardFeature(a, b, feature);
+            }
+          }
+          const incomingLegGaps = toggleLegGap(
+            pointGeo.incomingLegGaps,
+            distFromEnd,
+          );
+          updateObject(to.clientId, {
+            geometry: {
+              ...pointGeo,
+              incomingLegGaps:
+                incomingLegGaps.length > 0 ? incomingLegGaps : undefined,
+            },
+          });
+          setSelectedId(to.clientId);
+        } else {
+          const from = legHit.fromControl as EditorObject;
+          const pointGeo = from.geometry as CoursePointGeometry;
+          let distFromStart = legHit.distanceFromStart;
+          const removing = (pointGeo.legGaps ?? []).some(
+            (g) =>
+              distFromStart >= g.distance &&
+              distFromStart <= g.distance + g.length,
+          );
+          if (!removing && mapHitIndex.length > 0) {
+            const a = legHit.fromControl.geometry.coordinates as [number, number];
+            const b = legHit.toControl.geometry.coordinates as [number, number];
+            const feature = findNearestMapFeatureNearSegment(
+              mapHitIndex,
+              a,
+              b,
+              snapRadius,
+            );
+            if (feature) {
+              distFromStart = distanceAlongSegmentTowardFeature(a, b, feature);
+            }
+          }
+          const legGaps = toggleLegGap(pointGeo.legGaps, distFromStart);
+          updateObject(from.clientId, {
+            geometry: {
+              ...pointGeo,
+              legGaps: legGaps.length > 0 ? legGaps : undefined,
+            },
+          });
+          setSelectedId(from.clientId);
+        }
         return;
       }
 
@@ -360,10 +473,47 @@ export function CourseEditorClient({
         if (!lineHit || lineHit.object.geometry.type !== "LineString") continue;
         const editorObj = lineHit.object as EditorObject;
         const lineGeo = lineHit.object.geometry as CourseLineGeometry;
-        const gaps = toggleLineGap(
-          lineGeo.gaps,
-          lineHit.distanceAlongLine,
+        let dist = lineHit.distanceAlongLine;
+        const removing = (lineGeo.gaps ?? []).some(
+          (g) => dist >= g.distance && dist <= g.distance + g.length,
         );
+        if (
+          !removing &&
+          mapHitIndex.length > 0 &&
+          lineGeo.coordinates.length >= 2
+        ) {
+          const coords = lineGeo.coordinates;
+          let feature: MapHitIndexEntry | null = null;
+          for (let i = 0; i < coords.length - 1; i++) {
+            feature = findNearestMapFeatureNearSegment(
+              mapHitIndex,
+              coords[i]!,
+              coords[i + 1]!,
+              snapRadius,
+            );
+            if (feature) break;
+          }
+          if (feature) {
+            const cumDist = cumulativeLineDistances(lineGeo.coordinates);
+            for (let i = 0; i < coords.length - 1; i++) {
+              const f = findNearestMapFeatureNearSegment(
+                mapHitIndex,
+                coords[i]!,
+                coords[i + 1]!,
+                snapRadius,
+              );
+              if (f) {
+                dist = cumDist[i]! + distanceAlongSegmentTowardFeature(
+                  coords[i]!,
+                  coords[i + 1]!,
+                  f,
+                );
+                break;
+              }
+            }
+          }
+        }
+        const gaps = toggleLineGap(lineGeo.gaps, dist);
         updateObject(editorObj.clientId, {
           geometry: {
             ...lineGeo,
@@ -374,7 +524,7 @@ export function CourseEditorClient({
         return;
       }
     },
-    [objects, updateObject],
+    [mapHitIndex, objects, updateObject],
   );
 
   const handleMapClickGeo = useCallback(
@@ -482,6 +632,17 @@ export function CourseEditorClient({
       if (!pt) return;
       const geo = svgUserToGeoPoint(pt, rootTransformRef.current);
 
+      if (tool === "clip" && canEdit) {
+        const vb = parseViewBoxString(viewBoxRef.current);
+        const tol = computeHitTolerance(vb?.width ?? 1000, vb?.height ?? 1000);
+        const marker = hitTestCutoutMarker(geo, objects, tol * 1.5);
+        if (marker) {
+          clipDragRef.current = marker;
+          setSelectedId(marker.objectId);
+          return;
+        }
+      }
+
       if (tool === "move" && canEdit) {
         const vb = parseViewBoxString(viewBoxRef.current);
         const tol = computeHitTolerance(vb?.width ?? 1000, vb?.height ?? 1000);
@@ -535,6 +696,16 @@ export function CourseEditorClient({
 
   const handlePointerMove = useCallback(
     (_e: React.PointerEvent, svg: SVGSVGElement) => {
+      const clipDrag = clipDragRef.current;
+      if (clipDrag && tool === "clip") {
+        const pt = screenToSvgPoint(svg, _e.clientX, _e.clientY);
+        if (!pt) return;
+        const geo = svgUserToGeoPoint(pt, rootTransformRef.current);
+        setObjects((prev) => applyClipMarkerDrag(prev, clipDrag, geo));
+        setDirty(true);
+        return;
+      }
+
       const move = moveRef.current;
       if (!move || tool !== "move") return;
       const pt = screenToSvgPoint(svg, _e.clientX, _e.clientY);
@@ -566,6 +737,7 @@ export function CourseEditorClient({
 
   const handlePointerUp = useCallback(() => {
     moveRef.current = null;
+    clipDragRef.current = null;
   }, []);
 
   const drawPointerHandlers = useMemo<MapDrawPointerHandlers>(
@@ -758,12 +930,23 @@ export function CourseEditorClient({
         selectedId,
       });
 
+      const markerMarkup =
+        tool === "clip"
+          ? renderCutoutMarkersSvg(objects, rootTransform, {
+              selectedId,
+              showAll: true,
+            })
+          : "";
+
       return (
         <g data-course-overlay="true">
           {ghostObjects.length > 0 && (
             <g opacity={0.5} dangerouslySetInnerHTML={{ __html: ghostMarkup }} />
           )}
           <g dangerouslySetInnerHTML={{ __html: activeMarkup }} />
+          {markerMarkup && (
+            <g dangerouslySetInnerHTML={{ __html: markerMarkup }} />
+          )}
           {draftLinePoints && (
             <polyline
               points={draftLinePoints}
@@ -787,7 +970,7 @@ export function CourseEditorClient({
         </g>
       );
     },
-    [ghostObjects, lineDraft, objects, polygonDraft, selectedId],
+    [ghostObjects, lineDraft, objects, polygonDraft, selectedId, tool],
   );
 
   const toolbar = (
@@ -811,6 +994,14 @@ export function CourseEditorClient({
           {TOOL_LABELS[t]}
         </button>
       ))}
+      {tool === "clip" && canEdit && (
+        <span className="text-xs text-teal-700">
+          Klicka för lucka · dra grön markör ·{" "}
+          {mapIndexReady && mapHitIndex.length > 0
+            ? "snäpps mot kartsymbol"
+            : "laddar kartindex…"}
+        </span>
+      )}
       {geometryForSymbol(selectedSymbol) === "line" && lineDraft.length > 0 && (
         <button
           type="button"

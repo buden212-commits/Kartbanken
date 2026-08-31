@@ -58,6 +58,7 @@ export function validateGeometry(
     if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
     if (!validateCutouts(g.cutouts)) return false;
     if (!validateLegGaps(g.legGaps, 4)) return false;
+    if (!validateLegGaps(g.incomingLegGaps, 4)) return false;
     return true;
   }
 

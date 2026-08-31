@@ -8,6 +8,15 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-31",
+    title: "Klipp — fler luckor, markörer och auto-förslag",
+    items: [
+      "Luckor kan läggas på starttriangeln (701) och på sträckans slut vid kontroll/mål (inkommande sträcka)",
+      "Gröna markörer visar luckor i Klipp-läge — dra markören för att flytta luckan",
+      "Nya luckor snäpps automatiskt mot närmaste kartsymbol (sten, höjd etc.) när kartindex laddats",
+    ],
+  },
+  {
+    date: "2026-08-31",
     title: "Banläggning — klipp bort del av kontroll eller sträcka",
     items: [
       "Nytt verktyg «Klipp» i banredigeraren — klicka på kontrollcirkel, bansträcka eller manuell linje för att skapa en lucka så kartsymboler under syns",

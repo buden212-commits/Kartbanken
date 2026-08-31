@@ -31,6 +31,8 @@ export type CoursePointGeometry = {
   cutouts?: CourseCircleCutout[];
   /** Gaps on auto-leg toward next control. */
   legGaps?: CourseLegGap[];
+  /** Gaps on auto-leg from previous control (distance from this control toward previous). */
+  incomingLegGaps?: CourseLegGap[];
 };
 
 export type CourseLineGeometry = {

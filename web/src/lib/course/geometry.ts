@@ -9,10 +9,13 @@ import {
   isControlNumberObject,
 } from "./control-numbers";
 import {
+  mapIncomingLegGapsToShortenedLine,
   mapLegGapsToShortenedLine,
+  mergeLegGapsForRender,
   renderLineSegmentsWithGapsSvg,
   renderPointWithCutoutsSvg,
-  supportsCircleCutouts,
+  renderStartTriangleWithCutoutsSvg,
+  supportsPointCutouts,
 } from "./cutouts";
 import {
   COURSE_LEG_SYMBOLS,
@@ -25,6 +28,7 @@ import {
   renderLineSymbolSvg,
   renderPointSymbolSvg,
   renderTextSymbolSvg,
+  IOF_SYMBOL_STROKE,
 } from "./symbols";
 
 export function objectCentroid(geometry: CourseGeometry): [number, number] {
@@ -303,8 +307,19 @@ export function renderObjectSvg(
     const [cx, cy] = geoToSvgUserPoint(centerGeo, transform);
     if (
       geometry.cutouts?.length &&
-      supportsCircleCutouts(obj.symbolNr)
+      supportsPointCutouts(obj.symbolNr)
     ) {
+      if (obj.symbolNr === 701) {
+        return renderStartTriangleWithCutoutsSvg(
+          centerGeo,
+          options?.headingRad ?? -Math.PI / 2,
+          geometry.cutouts,
+          transform,
+          IOF_MAGENTA,
+          options?.selected ? IOF_SYMBOL_STROKE * 1.4 : IOF_SYMBOL_STROKE,
+          opacity,
+        );
+      }
       return renderPointWithCutoutsSvg(
         obj.symbolNr,
         centerGeo,
@@ -501,9 +516,19 @@ export function renderCourseLegsSvg(
             a.geometry.legGaps,
           )
         : [];
+    const incomingGapsGeo =
+      b.geometry.incomingLegGaps && geoShortLen > 0
+        ? mapIncomingLegGapsToShortenedLine(
+            fullLenGeo,
+            gapStart,
+            gapEnd,
+            b.geometry.incomingLegGaps,
+          )
+        : [];
+    const mergedGapsGeo = mergeLegGapsForRender(legGapsGeo, incomingGapsGeo);
     const svgGaps =
-      geoShortLen > 0 && svgShortLen > 0
-        ? legGapsGeo.map((g) => ({
+      geoShortLen > 0 && svgShortLen > 0 && mergedGapsGeo.length
+        ? mergedGapsGeo.map((g) => ({
             distance: (g.distance / geoShortLen) * svgShortLen,
             length: (g.length / geoShortLen) * svgShortLen,
           }))
