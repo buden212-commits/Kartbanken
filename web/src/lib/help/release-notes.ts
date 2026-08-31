@@ -23,6 +23,7 @@ export const releaseNotes: ReleaseNote[] = [
       "Den grövre kartbilden släcks så snart de skarpa rutorna täcker vyn, så kartan bara är suddig medan detaljerna laddas",
       "Banläggning («Lägg bana») och kartan över felobjekt vid incheckning använder nu också karttiles — snabbare zoom och panorering",
       "Fix: GPS-knappen och «zooma till plats» fungerar igen på kartor som använder karttiles",
+      "Helskärmsvyn («Öppna i nytt fönster») använder också karttiles — export finns kvar och laddar kartan först vid behov, medan lagerpanelen finns i standardvyn",
     ],
   },
   {

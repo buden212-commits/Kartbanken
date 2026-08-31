@@ -300,6 +300,7 @@ export function DiffMapPanel({
   });
   const [exportFrame, setExportFrame] = useState<ExportFrame | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [preparingExport, setPreparingExport] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [ocdSymbolDialogOpen, setOcdSymbolDialogOpen] = useState(false);
   const [ocadCrs, setOcadCrs] = useState<OcadCrsInfo | null>(null);
@@ -665,14 +666,42 @@ export function DiffMapPanel({
     return createExportFrame(center[0], center[1], exportSettings, ocadMapScale);
   }, [exportSettings, ocadMapScale]);
 
+  /**
+   * Tile mode never loads the full SVG, but PDF/GeoTIFF export renders from it.
+   * Fetch it on demand so export stays available without slowing down viewing.
+   */
+  const ensureFullSvgText = useCallback(async (): Promise<string | null> => {
+    if (fullSvgText) return fullSvgText;
+    setPreparingExport(true);
+    try {
+      const text = await fetchPreviewText(previewUrl);
+      const { ocadCrs: crs, ocadFileVersion } = extractSvgInner(text);
+      setFullSvgText(text);
+      if (crs) setOcadCrs(crs);
+      setExportSettings((prev) => ({
+        ...prev,
+        ocadVersion: defaultOcadExportVersion(ocadFileVersion),
+      }));
+      return text;
+    } catch (err) {
+      setExportError(
+        err instanceof Error ? err.message : "Kunde inte läsa kartan för export",
+      );
+      return null;
+    } finally {
+      setPreparingExport(false);
+    }
+  }, [fullSvgText, previewUrl]);
+
   const startExportMode = useCallback(() => {
     setExportError(null);
+    void ensureFullSvgText();
     setExportMode(true);
     requestAnimationFrame(() => {
       const frame = initExportFrame();
       if (frame) setExportFrame(frame);
     });
-  }, [initExportFrame]);
+  }, [initExportFrame, ensureFullSvgText]);
 
   const cancelExportMode = useCallback(() => {
     setExportMode(false);
@@ -743,7 +772,8 @@ export function DiffMapPanel({
             window.alert(suggestionWarnings);
           }
         } else if (exportSettings.outputFormat === "geotiff") {
-          if (!fullSvgText) return;
+          const svgText = await ensureFullSvgText();
+          if (!svgText) return;
           if (!isGeoreferencedCrs(ocadCrs)) {
             throw new Error(
               "Kartan saknar georeferering — GeoTIFF-export kräver EPSG-koordinater i filen.",
@@ -752,14 +782,15 @@ export function DiffMapPanel({
           await downloadMapGeoTiff(
             mapSlug,
             versionId,
-            fullSvgText,
+            svgText,
             exportFrame,
             `${safeTitle}-${exportSettings.scale}`,
             { suggestionOverlaySvg },
           );
         } else {
-          if (!fullSvgText) return;
-          await downloadMapPdf(fullSvgText, exportFrame, `${safeTitle}-${exportSettings.scale}`, {
+          const svgText = await ensureFullSvgText();
+          if (!svgText) return;
+          await downloadMapPdf(svgText, exportFrame, `${safeTitle}-${exportSettings.scale}`, {
             suggestionOverlaySvg,
           });
         }
@@ -772,7 +803,7 @@ export function DiffMapPanel({
       }
     },
     [
-      fullSvgText,
+      ensureFullSvgText,
       exportFrame,
       title,
       exportSettings,
@@ -1428,10 +1459,10 @@ export function DiffMapPanel({
             <button
               type="button"
               onClick={startExportMode}
-              disabled={loading || !fullSvgText}
+              disabled={loading || preparingExport || (basemap !== "tiles" && !fullSvgText)}
               className={toolbarBtnPrimary}
             >
-              Exportera
+              {preparingExport ? "Förbereder export…" : "Exportera"}
             </button>
           )}
         </div>
@@ -1455,7 +1486,7 @@ export function DiffMapPanel({
           onChange={setExportSettings}
           onExport={handleExport}
           onCancel={cancelExportMode}
-          exporting={exporting}
+          exporting={exporting || preparingExport}
           error={exportError}
           suggestionOverlayCount={suggestionOverlays?.length}
         />

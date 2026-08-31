@@ -707,6 +707,12 @@ export async function HelpPageContent() {
             separat fönster utan sidhuvud och navigation — bra för presentation, fältarbete eller
             arbete på en second skärm. GPS och export fungerar även i helskärmsvyn.
           </p>
+          <p>
+            Helskärmsvyn använder karttiles för snabb zoom och panorering på stora kartor. Kartan
+            läses in i sin helhet först när du klickar <strong>Exportera</strong> (knappen visar
+            «Förbereder export…» en kort stund). Behöver du visa eller dölja kartlager gör du det i
+            standardvyn för versionen.
+          </p>
 
           <h3 className="font-medium text-slate-900">Exportera utsnitt</h3>
           <p>
