@@ -2,6 +2,7 @@ import { requireSession } from "@/lib/auth/api";
 import { logAction } from "@/lib/audit";
 import { runAfterResponse } from "@/lib/background";
 import { assertVersionViewAccess } from "@/lib/maps/version-lookup";
+import { deriveCompareProcessingProgress } from "@/lib/compare/processing-progress";
 import {
   computeVersionDiff,
   ensureDiffLayers,
@@ -21,6 +22,43 @@ type CompareResponseLayerPaths = {
   modified: string;
   bounds: { minX: number; minY: number; maxX: number; maxY: number };
 };
+
+const versionProgressSelect = {
+  versionNumber: true,
+  parseStatus: true,
+  tileStatus: true,
+  tileBuildTotal: true,
+  tileBuildDone: true,
+  tileBuildCurrentZ: true,
+  tileBuildMaxZPregen: true,
+} as const;
+
+async function compareProcessingPayload(
+  mapId: string,
+  v1: string,
+  v2: string,
+  versionA: { id: string; versionNumber: number },
+  versionB: { id: string; versionNumber: number },
+) {
+  const [fullA, fullB] = await Promise.all([
+    prisma.mapVersion.findFirst({
+      where: { id: v1, mapFileId: mapId },
+      select: versionProgressSelect,
+    }),
+    prisma.mapVersion.findFirst({
+      where: { id: v2, mapFileId: mapId },
+      select: versionProgressSelect,
+    }),
+  ]);
+
+  return {
+    status: "processing" as const,
+    versionA,
+    versionB,
+    progress:
+      fullA && fullB ? deriveCompareProcessingProgress(fullA, fullB) : null,
+  };
+}
 
 export async function GET(request: Request, { params }: RouteParams) {
   const session = await requireSession();
@@ -73,11 +111,15 @@ export async function GET(request: Request, { params }: RouteParams) {
 
   if (!diffRecord || diffRecord.status === "PENDING" || diffRecord.status === "PROCESSING") {
     runAfterResponse(() => processVersionAfterUpload(map.id, v2, v1));
-    return NextResponse.json({
-      status: "processing",
-      versionA: { id: versionA.id, versionNumber: versionA.versionNumber },
-      versionB: { id: versionB.id, versionNumber: versionB.versionNumber },
-    });
+    return NextResponse.json(
+      await compareProcessingPayload(map.id, v1, v2, {
+        id: versionA.id,
+        versionNumber: versionA.versionNumber,
+      }, {
+        id: versionB.id,
+        versionNumber: versionB.versionNumber,
+      }),
+    );
   }
 
   if (diffRecord.status === "ERROR") {
@@ -97,11 +139,15 @@ export async function GET(request: Request, { params }: RouteParams) {
         where: { versionAId_versionBId: { versionAId: v1, versionBId: v2 } },
       });
       if (!diffRecord || diffRecord.status !== "OK") {
-        return NextResponse.json({
-          status: "processing",
-          versionA: { id: versionA.id, versionNumber: versionA.versionNumber },
-          versionB: { id: versionB.id, versionNumber: versionB.versionNumber },
-        });
+        return NextResponse.json(
+          await compareProcessingPayload(map.id, v1, v2, {
+            id: versionA.id,
+            versionNumber: versionA.versionNumber,
+          }, {
+            id: versionB.id,
+            versionNumber: versionB.versionNumber,
+          }),
+        );
       }
       summary = JSON.parse(diffRecord.summaryJson!) as Record<string, unknown>;
     } catch (recomputeErr) {
@@ -110,11 +156,15 @@ export async function GET(request: Request, { params }: RouteParams) {
   }
 
   if (!diffRecord || diffRecord.status !== "OK") {
-    return NextResponse.json({
-      status: "processing",
-      versionA: { id: versionA.id, versionNumber: versionA.versionNumber },
-      versionB: { id: versionB.id, versionNumber: versionB.versionNumber },
-    });
+    return NextResponse.json(
+      await compareProcessingPayload(map.id, v1, v2, {
+        id: versionA.id,
+        versionNumber: versionA.versionNumber,
+      }, {
+        id: versionB.id,
+        versionNumber: versionB.versionNumber,
+      }),
+    );
   }
 
   const changes = JSON.parse(diffRecord.changesJson ?? "[]") as OcadObjectChange[];

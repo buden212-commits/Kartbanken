@@ -8,6 +8,15 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-31",
+    title: "Jämför versioner — tydligare vänteläge",
+    items: [
+      "Medan jämförelsen körs visas spinner, vilket steg som pågår och förfluten tid",
+      "När kartlager byggs visas räknare (X av Y rutor) och progressfält",
+      "Samma förbättrade vänteläge gäller även Verifiera-jämförelsen",
+    ],
+  },
+  {
+    date: "2026-08-31",
     title: "Klipp — fler luckor, markörer och auto-förslag",
     items: [
       "Luckor kan läggas på starttriangeln (701) och på sträckans slut vid kontroll/mål (inkommande sträcka)",

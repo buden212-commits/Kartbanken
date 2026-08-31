@@ -639,8 +639,9 @@ export async function HelpPageContent() {
           </p>
 
           <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
-            Stora kartfiler kan ta upp till en minut att parsa och jämföra. Sidan uppdateras
-            automatiskt när beräkningen är klar.
+            Medan jämförelsen körs visas en spinner, vilket steg som pågår (parsning, kartlager eller
+            diff) och förfluten tid. Om kartlager byggs visas räknare (X av Y rutor). Sidan
+            uppdateras automatiskt när beräkningen är klar.
           </p>
           <HelpProcessDiagram title="Flöde — jämföra versioner" chart={compareFlow} />
         </HelpSection>

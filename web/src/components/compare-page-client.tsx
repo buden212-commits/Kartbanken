@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { CompareProcessingPanel } from "@/components/compare-processing-panel";
 import { DiffViewClient, type DiffSummary, type LayerPaths } from "@/components/diff-view-client";
+import type { CompareProcessingProgress } from "@/lib/compare/processing-progress";
 import type { OcadObjectChange } from "@/lib/ocad/diff-types";
 
 type CompareResponse =
@@ -11,6 +13,7 @@ type CompareResponse =
       status: "processing";
       versionA: { id: string; versionNumber: number };
       versionB: { id: string; versionNumber: number };
+      progress: CompareProcessingProgress | null;
     }
   | { status: "error"; error: string }
   | {
@@ -33,15 +36,26 @@ export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
   const router = useRouter();
   const [data, setData] = useState<CompareResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [processingStartedAt, setProcessingStartedAt] = useState<number | null>(null);
+  const [processingElapsedMs, setProcessingElapsedMs] = useState(0);
+  const processingStartedAtRef = useRef<number | null>(null);
 
   const fetchCompare = useCallback(async () => {
     const res = await fetch(`/api/maps/${mapSlug}/compare?v1=${v1}&v2=${v2}`);
     const json = (await res.json()) as CompareResponse;
     setData(json);
     setLoading(false);
+    if (json.status !== "processing") {
+      processingStartedAtRef.current = null;
+      setProcessingStartedAt(null);
+      setProcessingElapsedMs(0);
+    }
   }, [mapSlug, v1, v2]);
 
   useEffect(() => {
+    processingStartedAtRef.current = Date.now();
+    setProcessingStartedAt(Date.now());
+    setProcessingElapsedMs(0);
     void fetchCompare();
   }, [fetchCompare]);
 
@@ -52,6 +66,14 @@ export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
     }, 3000);
     return () => clearInterval(timer);
   }, [data?.status, fetchCompare]);
+
+  useEffect(() => {
+    if (data?.status !== "processing" || processingStartedAt === null) return;
+    const timer = setInterval(() => {
+      setProcessingElapsedMs(Date.now() - processingStartedAt);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [data?.status, processingStartedAt]);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
@@ -66,6 +88,7 @@ export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
 
       {loading && !data && (
         <div className="card mt-10 text-center">
+          <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-ifk-blue" />
           <p className="text-slate-700">Laddar jämförelse…</p>
           <p className="mt-2 text-sm text-slate-500">
             Stora kartfiler kan ta upp till en minut att parsa.
@@ -74,13 +97,16 @@ export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
       )}
 
       {data?.status === "processing" && (
-        <div className="mt-10 rounded-xl border border-amber-200 bg-amber-50 p-8 text-center">
-          <p className="font-medium text-amber-800">
-            Jämför v{data.versionA.versionNumber} → v{data.versionB.versionNumber}…
-          </p>
-          <p className="mt-2 text-sm text-slate-600">
-            Parsar OCAD-filer, beräknar diff och skapar kartlager. Sidan uppdateras automatiskt.
-          </p>
+        <div className="mt-10">
+          <CompareProcessingPanel
+            title={`Jämför v${data.versionA.versionNumber} → v${data.versionB.versionNumber}…`}
+            progress={data.progress}
+            elapsedMs={processingElapsedMs}
+            onRetry={() => {
+              setLoading(true);
+              void fetchCompare();
+            }}
+          />
         </div>
       )}
 
