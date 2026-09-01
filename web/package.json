@@ -18,6 +18,7 @@
     "db:seed": "prisma db seed",
     "env:sync-local": "tsx scripts/sync-local-env.mts",
     "docs:screenshots": "tsx scripts/capture-course-screenshots.mts",
+    "docs:pdf": "tsx ../docs/generate-kursmaterial-pdf.mts",
     "check:help": "tsx scripts/check-help-updated.mts",
     "check:help:deploy": "tsx scripts/check-help-deploy.mts",
     "deploy:check": "tsx scripts/pre-deploy.mts",
