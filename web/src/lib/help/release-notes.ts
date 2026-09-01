@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-31",
+    title: "Uppladdare vid integrerad utcheckning",
+    items: [
+      "När en utcheckning integreras visas den som checkade in som «Uppladdare» i versionshistoriken — inte administratören som granskar",
+      "Gäller även när någon annan (t.ex. admin) checkar in åt utcheckningsägaren",
+    ],
+  },
+  {
+    date: "2026-08-31",
     title: "Jämför versioner — tydligare vänteläge",
     items: [
       "Medan jämförelsen körs visas spinner, vilket steg som pågår och förfluten tid",

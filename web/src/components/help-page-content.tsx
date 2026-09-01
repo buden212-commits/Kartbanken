@@ -347,6 +347,7 @@ export async function HelpPageContent() {
                   "Granska utcheckningsdiff mot aktuell version (tillagda, borttagna, ändrade)",
                   "Bekräfta integration — utcheckningen går till admin-bekräftelse",
                   "Administratör bekräftar och integrerar — en ny opublicerad kartversion skapas (publicera i versionshistoriken)",
+                  "Uppladdare i versionshistoriken är den som checkade in filen — inte administratören som integrerar",
                   "Efter integration: jämför, granska och publicera så att läsare ser ändringarna",
                   "Vid incheckning skickas e-post med .ocd-bilaga till admin och prenumeranter med «Bifoga .ocd»",
                 ]}

@@ -88,7 +88,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
   }
 
   try {
-    const result = await integrateCheckout(checkout.id, session.user.id);
+    const result = await integrateCheckout(checkout.id);
 
     await logAction(session.user.id, "CHECKOUT_INTEGRATED", "MapCheckout", checkout.id, {
       mapSlug: slug,
@@ -117,12 +117,20 @@ export async function POST(_request: Request, { params }: RouteParams) {
         originalFilename: true,
         comment: true,
         storagePath: true,
+        uploadedById: true,
       },
     });
 
     if (integratedVersion) {
+      const uploader = integratedVersion.uploadedById
+        ? await prisma.user.findUnique({
+            where: { id: integratedVersion.uploadedById },
+            select: { name: true, email: true },
+          })
+        : null;
+
       queueNotifyAdminOfNewUpload({
-        uploader: { name: session.user.name, email: session.user.email },
+        uploader: uploader ?? { name: checkout.user.name, email: checkout.user.email },
         map: { title: map.title, slug: map.slug },
         version: integratedVersion,
       });

@@ -81,10 +81,7 @@ async function resolveIntegrationDiff(
  * - Copies modified object bytes from checkin where object size is unchanged
  * - Appends new objects from checkin into head's object index
  */
-export async function integrateCheckout(
-  checkoutId: string,
-  integratedById: string,
-): Promise<IntegrationResult> {
+export async function integrateCheckout(checkoutId: string): Promise<IntegrationResult> {
   const logCtx: IntegrationLogContext = { checkoutId };
 
   try {
@@ -279,6 +276,8 @@ export async function integrateCheckout(
       contentHash,
     });
 
+    const uploaderId = checkout.checkedInById ?? checkout.userId;
+
     const version = await prisma.mapVersion.create({
       data: {
         mapFileId: checkout.mapFileId,
@@ -287,7 +286,7 @@ export async function integrateCheckout(
         originalFilename: `integrerad-utcheckning-${checkout.id.slice(0, 8)}.ocd`,
         fileSizeBytes: working.byteLength,
         contentHash,
-        uploadedById: integratedById,
+        uploadedById: uploaderId,
         comment:
           checkout.integrationComment?.trim() ||
           `Integrerad utcheckning ${checkout.id.slice(0, 8)}`,

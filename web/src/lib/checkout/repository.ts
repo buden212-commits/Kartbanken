@@ -19,6 +19,7 @@ const checkoutWithUserSelect = {
   selectionJson: true,
   exportStoragePath: true,
   checkinStoragePath: true,
+  checkedInById: true,
   diffSummaryJson: true,
   userConfirmedAt: true,
   adminConfirmedAt: true,
@@ -139,12 +140,14 @@ export async function updateCheckoutCheckin(
   checkoutId: string,
   checkinStoragePath: string,
   status: CheckoutStatus,
+  checkedInById: string,
   integrationComment?: string | null,
 ) {
   return prisma.mapCheckout.update({
     where: { id: checkoutId },
     data: {
       checkinStoragePath,
+      checkedInById,
       status,
       ...(integrationComment !== undefined ? { integrationComment } : {}),
       updatedAt: new Date(),
@@ -279,6 +282,7 @@ export function serializeCheckoutResponse(
     selection: parseSelectionJson(checkout.selectionJson),
     exportStoragePath: checkout.exportStoragePath,
     checkinStoragePath: checkout.checkinStoragePath,
+    checkedInById: checkout.checkedInById,
     diffSummaryJson: checkout.diffSummaryJson,
     userConfirmedAt: checkout.userConfirmedAt?.toISOString() ?? null,
     adminConfirmedAt: checkout.adminConfirmedAt?.toISOString() ?? null,

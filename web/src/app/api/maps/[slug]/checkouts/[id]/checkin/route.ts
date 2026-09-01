@@ -98,6 +98,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       checkout.id,
       storedRef,
       CheckoutStatus.CHECKED_IN,
+      session.user.id,
       integrationComment,
     );
     await markCheckoutDiffPending(checkout.id);

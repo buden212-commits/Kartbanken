@@ -29,6 +29,7 @@ model User {
   sessions           Session[]
   checkouts          MapCheckout[] @relation("CheckoutUser")
   cancelledCheckouts MapCheckout[] @relation("CheckoutCancelledBy")
+  checkinsSubmitted  MapCheckout[] @relation("CheckoutCheckedInBy")
   courses            Course[]
   suggestionsCreated MapSuggestion[] @relation("SuggestionAuthor")
   suggestionsReviewed MapSuggestion[] @relation("SuggestionReviewer")
@@ -130,6 +131,7 @@ model MapCheckout {
   selectionJson       String
   exportStoragePath   String?
   checkinStoragePath  String?
+  checkedInById       String?
   diffSummaryJson     String?
   userConfirmedAt     DateTime?
   adminConfirmedAt    DateTime?
@@ -147,6 +149,7 @@ model MapCheckout {
   mapFile           MapFile     @relation(fields: [mapFileId], references: [id], onDelete: Cascade)
   baseVersion       MapVersion  @relation("CheckoutBaseVersion", fields: [baseVersionId], references: [id])
   user              User        @relation("CheckoutUser", fields: [userId], references: [id])
+  checkedInBy       User?       @relation("CheckoutCheckedInBy", fields: [checkedInById], references: [id])
   integratedVersion MapVersion? @relation("CheckoutIntegratedVersion", fields: [integratedVersionId], references: [id])
   cancelledBy       User?       @relation("CheckoutCancelledBy", fields: [cancelledById], references: [id])
   suggestions       MapSuggestion[]
