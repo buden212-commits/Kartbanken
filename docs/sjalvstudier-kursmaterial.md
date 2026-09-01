@@ -82,7 +82,9 @@ Läsare får e-postnotiser men **inte** .ocd-bilaga i mail.
 <!-- /bild:1.1 -->
 
 <!-- bild:1.2 -->
-**[BILD 1.2]** Profildialogen: behörighet «Läsare», kryssrutor för e-postnotiser, byt lösenord.
+![Profildialogen: behörighet «Läsare», kryssrutor för e-postnotiser, byt lösenord.](bilder/1.2.png)
+
+*Bild 1.2 — Profildialogen: behörighet «Läsare», kryssrutor för e-postnotiser, byt lösenord.*
 <!-- /bild:1.2 -->
 
 ---
@@ -115,15 +117,21 @@ Läsare får e-postnotiser men **inte** .ocd-bilaga i mail.
 ### Bilder
 
 <!-- bild:2.1 -->
-**[BILD 2.1]** Startsidan med lista över kartområden (namn, senaste version, datum).
+![Startsidan med lista över kartområden (namn, senaste version, datum).](bilder/2.1.png)
+
+*Bild 2.1 — Startsidan med lista över kartområden (namn, senaste version, datum).*
 <!-- /bild:2.1 -->
 
 <!-- bild:2.2 -->
-**[BILD 2.2]** Områdessidan: versionshistorik med en rad markerad som «Publicerad».
+![Områdessidan: versionshistorik med en rad markerad som «Publicerad».](bilder/2.2.png)
+
+*Bild 2.2 — Områdessidan: versionshistorik med en rad markerad som «Publicerad».*
 <!-- /bild:2.2 -->
 
 <!-- bild:2.3 -->
-**[BILD 2.3]** Kartvyn i webbläsaren: karta, zoomkontroller, lagerpanel.
+![Kartvyn i webbläsaren: karta, zoomkontroller, lagerpanel.](bilder/2.3.png)
+
+*Bild 2.3 — Kartvyn i webbläsaren: karta, zoomkontroller, lagerpanel.*
 <!-- /bild:2.3 -->
 
 ---
@@ -177,15 +185,21 @@ flowchart TD
 ### Bilder
 
 <!-- bild:3.1 -->
-**[BILD 3.1]** Områdessidan: knappen «Föreslå ändring» i sidhuvudet bredvid andra åtgärder.
+![Områdessidan: knappen «Föreslå ändring» i sidhuvudet bredvid andra åtgärder.](bilder/3.1.png)
+
+*Bild 3.1 — Områdessidan: knappen «Föreslå ändring» i sidhuvudet bredvid andra åtgärder.*
 <!-- /bild:3.1 -->
 
 <!-- bild:3.2 -->
-**[BILD 3.2]** Kartförslagsvyn: ritverktyg till höger, «Skicka in» uppe till höger, karta i mitten.
+![Kartförslagsvyn: ritverktyg till höger, «Skicka in» uppe till höger, karta i mitten.](bilder/3.2.png)
+
+*Bild 3.2 — Kartförslagsvyn: ritverktyg till höger, «Skicka in» uppe till höger, karta i mitten.*
 <!-- /bild:3.2 -->
 
 <!-- bild:3.3 -->
-**[BILD 3.3]** Lista över kartförslag med status (t.ex. «Väntar på granskning»).
+![Lista över kartförslag med status (t.ex. «Väntar på granskning»).](bilder/3.3.png)
+
+*Bild 3.3 — Lista över kartförslag med status (t.ex. «Väntar på granskning»).*
 <!-- /bild:3.3 -->
 
 ---
@@ -241,11 +255,15 @@ flowchart TD
 ### Bilder
 
 <!-- bild:4.1 -->
-**[BILD 4.1]** Områdessidan: knapparna «Arkivera», «Checka ut», «Lägg bana»/«Banor (2)», «Föreslå ändring».
+![Områdessidan: knapparna «Arkivera», «Checka ut», «Lägg bana»/«Banor (2)», «Föreslå ändring».](bilder/4.1.png)
+
+*Bild 4.1 — Områdessidan: knapparna «Arkivera», «Checka ut», «Lägg bana»/«Banor (2)», «Föreslå ändring».*
 <!-- /bild:4.1 -->
 
 <!-- bild:4.2 -->
-**[BILD 4.2]** Banredigeraren: verktygsrad (Rita, Flytta, Klipp, Radera), kontrollista, symbolpanel.
+![Banredigeraren: verktygsrad (Rita, Flytta, Klipp, Radera), kontrollista, symbolpanel.](bilder/4.2.png)
+
+*Bild 4.2 — Banredigeraren: verktygsrad (Rita, Flytta, Klipp, Radera), kontrollista, symbolpanel.*
 <!-- /bild:4.2 -->
 
 <!-- bild:4.3 -->
@@ -298,15 +316,21 @@ flowchart TD
 ### Bilder
 
 <!-- bild:5.1 -->
-**[BILD 5.1]** Exportdialog i kartvyn med val av format (PDF / OCAD / GeoTIFF).
+![Exportdialog i kartvyn med val av format (PDF / OCAD / GeoTIFF).](bilder/5.1.png)
+
+*Bild 5.1 — Exportdialog i kartvyn med val av format (PDF / OCAD / GeoTIFF).*
 <!-- /bild:5.1 -->
 
 <!-- bild:5.2 -->
-**[BILD 5.2]** Sidan Verifiera med uppladdning av två filer och diff-resultat.
+![Sidan Verifiera med uppladdning av två filer och diff-resultat.](bilder/5.2.png)
+
+*Bild 5.2 — Sidan Verifiera med uppladdning av två filer och diff-resultat.*
 <!-- /bild:5.2 -->
 
 <!-- bild:5.3 -->
-**[BILD 5.3]** (Valfritt) Jämförelsevy mellan två versioner med färgkodad diff.
+![(Valfritt) Jämförelsevy mellan två versioner med färgkodad diff.](bilder/5.3.png)
+
+*Bild 5.3 — (Valfritt) Jämförelsevy mellan två versioner med färgkodad diff.*
 <!-- /bild:5.3 -->
 
 ---
@@ -382,15 +406,21 @@ flowchart TD
 ### Bilder
 
 <!-- bild:6.1 -->
-**[BILD 6.1]** Områdessidan: avsnittet «Ladda upp ny version» med filväljare och kommentarsfält.
+![Områdessidan: avsnittet «Ladda upp ny version» med filväljare och kommentarsfält.](bilder/6.1.png)
+
+*Bild 6.1 — Områdessidan: avsnittet «Ladda upp ny version» med filväljare och kommentarsfält.*
 <!-- /bild:6.1 -->
 
 <!-- bild:6.2 -->
-**[BILD 6.2]** Diff-vy efter uppladdning: grönt = tillagt, rött = borttaget, gult = ändrat.
+![Diff-vy efter uppladdning: grönt = tillagt, rött = borttaget, gult = ändrat.](bilder/6.2.png)
+
+*Bild 6.2 — Diff-vy efter uppladdning: grönt = tillagt, rött = borttaget, gult = ändrat.*
 <!-- /bild:6.2 -->
 
 <!-- bild:6.3 -->
-**[BILD 6.3]** Versionshistorik med både publicerade och opublicerade rader.
+![Versionshistorik med både publicerade och opublicerade rader.](bilder/6.3.png)
+
+*Bild 6.3 — Versionshistorik med både publicerade och opublicerade rader.*
 <!-- /bild:6.3 -->
 
 ---
@@ -434,11 +464,15 @@ flowchart TD
 ### Bilder
 
 <!-- bild:7.1 -->
-**[BILD 7.1]** Versionsrad med knapp «Publicera» och badge «Publicerad».
+![Versionsrad med knapp «Publicera» och badge «Publicerad».](bilder/7.1.png)
+
+*Bild 7.1 — Versionsrad med knapp «Publicera» och badge «Publicerad».*
 <!-- /bild:7.1 -->
 
 <!-- bild:7.2 -->
-**[BILD 7.2]** AreaStatusBanner: «Publicerad version v3», ev. antal väntande kartförslag.
+![AreaStatusBanner: «Publicerad version v3», ev. antal väntande kartförslag.](bilder/7.2.png)
+
+*Bild 7.2 — AreaStatusBanner: «Publicerad version v3», ev. antal väntande kartförslag.*
 <!-- /bild:7.2 -->
 
 ---
@@ -502,11 +536,15 @@ stateDiagram-v2
 ### Bilder
 
 <!-- bild:8.1 -->
-**[BILD 8.1]** Utcheckning: rita polygon på kartan, bekräfta utcheckning.
+![Utcheckning: rita polygon på kartan, bekräfta utcheckning.](bilder/8.1.png)
+
+*Bild 8.1 — Utcheckning: rita polygon på kartan, bekräfta utcheckning.*
 <!-- /bild:8.1 -->
 
 <!-- bild:8.2 -->
-**[BILD 8.2]** Översiktskarta med färgade utcheckningsytor och namn.
+![Översiktskarta med färgade utcheckningsytor och namn.](bilder/8.2.png)
+
+*Bild 8.2 — Översiktskarta med färgade utcheckningsytor och namn.*
 <!-- /bild:8.2 -->
 
 <!-- bild:8.3 -->
@@ -514,7 +552,9 @@ stateDiagram-v2
 <!-- /bild:8.3 -->
 
 <!-- bild:8.4 -->
-**[BILD 8.4]** Utcheckningslistan på områdessidan med status «Aktiv».
+![Utcheckningslistan på områdessidan med status «Aktiv».](bilder/8.4.png)
+
+*Bild 8.4 — Utcheckningslistan på områdessidan med status «Aktiv».*
 <!-- /bild:8.4 -->
 
 ---
@@ -548,7 +588,9 @@ Integrering i kartfil sker manuellt i OCAD och via ny version — förslagen spa
 ### Bilder
 
 <!-- bild:9.1 -->
-**[BILD 9.1]** Områdessidan: kartförslagssektion med antal väntande.
+![Områdessidan: kartförslagssektion med antal väntande.](bilder/9.1.png)
+
+*Bild 9.1 — Områdessidan: kartförslagssektion med antal väntande.*
 <!-- /bild:9.1 -->
 
 <!-- bild:9.2 -->
@@ -602,7 +644,9 @@ flowchart TD
 ### Bilder
 
 <!-- bild:10.1 -->
-**[BILD 10.1]** Versionsjämförelse: väljare + kartvy med diff.
+![Versionsjämförelse: väljare + kartvy med diff.](bilder/10.1.png)
+
+*Bild 10.1 — Versionsjämförelse: väljare + kartvy med diff.*
 <!-- /bild:10.1 -->
 
 <!-- bild:10.2 -->
@@ -673,7 +717,9 @@ flowchart TD
 ### Bilder
 
 <!-- bild:11.1 -->
-**[BILD 11.1]** Admin → Användare: tabell med filter «Väntar på godkännande».
+![Admin → Användare: tabell med filter «Väntar på godkännande».](bilder/11.1.png)
+
+*Bild 11.1 — Admin → Användare: tabell med filter «Väntar på godkännande».*
 <!-- /bild:11.1 -->
 
 <!-- bild:11.2 -->
@@ -711,7 +757,9 @@ flowchart TD
 ### Bilder
 
 <!-- bild:12.1 -->
-**[BILD 12.1]** Startsidan: «Skapa nytt kartområde» under listan.
+![Startsidan: «Skapa nytt kartområde» under listan.](bilder/12.1.png)
+
+*Bild 12.1 — Startsidan: «Skapa nytt kartområde» under listan.*
 <!-- /bild:12.1 -->
 
 <!-- bild:12.2 -->
@@ -761,7 +809,9 @@ Efter integration skapas ny version; redaktör kan publicera den.
 ### Bilder
 
 <!-- bild:13.1 -->
-**[BILD 13.1]** Admin → Utcheckningar: lista med statuskolumner.
+![Admin → Utcheckningar: lista med statuskolumner.](bilder/13.1.png)
+
+*Bild 13.1 — Admin → Utcheckningar: lista med statuskolumner.*
 <!-- /bild:13.1 -->
 
 <!-- bild:13.2 -->
@@ -809,15 +859,21 @@ Användare når feedback via **Hjälp → Buggar / Förbättringar**.
 ### Bilder
 
 <!-- bild:14.1 -->
-**[BILD 14.1]** Admin → Lagring: tabell med områden, antal versioner, banor, storlek.
+![Admin → Lagring: tabell med områden, antal versioner, banor, storlek.](bilder/14.1.png)
+
+*Bild 14.1 — Admin → Lagring: tabell med områden, antal versioner, banor, storlek.*
 <!-- /bild:14.1 -->
 
 <!-- bild:14.2 -->
-**[BILD 14.2]** Admin → Inställningar: SMTP-fält och «Skicka testmail».
+![Admin → Inställningar: SMTP-fält och «Skicka testmail».](bilder/14.2.png)
+
+*Bild 14.2 — Admin → Inställningar: SMTP-fält och «Skicka testmail».*
 <!-- /bild:14.2 -->
 
 <!-- bild:14.3 -->
-**[BILD 14.3]** (Valfritt) Admin → Loggning eller Feedback.
+![(Valfritt) Admin → Loggning eller Feedback.](bilder/14.3.png)
+
+*Bild 14.3 — (Valfritt) Admin → Loggning eller Feedback.*
 <!-- /bild:14.3 -->
 
 ---

@@ -56,10 +56,11 @@ export const courseShots: CourseShot[] = [
       "Profildialogen: behörighet «Läsare», kryssrutor för e-postnotiser, byt lösenord.",
     url: () => "/",
     prepare: async (page) => {
-      await page.locator('button[title$="öppna profil"]').first().click();
-      await page.getByRole("dialog").first().waitFor({ state: "visible" });
+      await page.getByTitle(/öppna profil/i).first().click();
+      await page.getByRole("heading", { name: "Min profil" }).waitFor({ state: "visible" });
     },
-    region: (page) => page.getByRole("dialog").first(),
+    region: (page) =>
+      page.locator("div.rounded-xl.bg-white").filter({ has: page.getByRole("heading", { name: "Min profil" }) }),
   },
   {
     id: "2.1",
