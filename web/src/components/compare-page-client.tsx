@@ -85,11 +85,15 @@ export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
             setData(json);
           }
         } catch {
-          setData({
-            status: "error",
-            error:
-              "Jämförelsen avbröts innan den blev klar. Kartfilerna kan vara mycket stora — försök igen.",
-          });
+          // Anropet kan dö efter att diffen redan sparats — kolla status innan vi visar fel.
+          const latest = await pollStatus().catch(() => null);
+          if (latest?.status !== "ok") {
+            setData({
+              status: "error",
+              error:
+                "Jämförelsen avbröts innan den blev klar. Kartfilerna kan vara mycket stora — försök igen.",
+            });
+          }
         } finally {
           workRequestRef.current = null;
         }

@@ -15,6 +15,7 @@ export const releaseNotes: ReleaseNote[] = [
       "Resultatet sparas så snart skillnaderna är uträknade, innan kartlagren ritas — en avbruten körning tappar inte längre hela jobbet",
       "Vänteläget visar vilken av etapperna «Läser kartfiler», «Beräknar skillnader» och «Skapar kartlager» som pågår",
       "Statussidan svarar direkt medan beräkningen körs, så förfluten tid och etapp uppdateras hela tiden",
+      "Om kartlagren inte hinner bli klara visas skillnaderna ändå, och lagren skapas vid nästa besök",
     ],
   },
   {
