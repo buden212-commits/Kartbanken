@@ -52,6 +52,30 @@ export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
     }
   }, [mapSlug, v1, v2]);
 
+  const retryCompare = useCallback(async () => {
+    setLoading(true);
+    processingStartedAtRef.current = Date.now();
+    setProcessingStartedAt(Date.now());
+    setProcessingElapsedMs(0);
+    try {
+      const res = await fetch(`/api/maps/${mapSlug}/compare`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ v1, v2 }),
+      });
+      const json = (await res.json()) as CompareResponse & { error?: string };
+      if (!res.ok && json.error) {
+        setData({ status: "error", error: json.error });
+      } else if (json.status === "processing") {
+        await fetchCompare();
+      } else {
+        setData(json as CompareResponse);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [mapSlug, v1, v2, fetchCompare]);
+
   useEffect(() => {
     processingStartedAtRef.current = Date.now();
     setProcessingStartedAt(Date.now());
@@ -103,8 +127,7 @@ export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
             progress={data.progress}
             elapsedMs={processingElapsedMs}
             onRetry={() => {
-              setLoading(true);
-              void fetchCompare();
+              void retryCompare();
             }}
           />
         </div>
@@ -116,8 +139,7 @@ export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
           <button
             type="button"
             onClick={() => {
-              setLoading(true);
-              void fetchCompare();
+              void retryCompare();
             }}
             className="mt-4 rounded-lg border border-red-300 px-4 py-2 text-sm transition hover:bg-red-100"
           >

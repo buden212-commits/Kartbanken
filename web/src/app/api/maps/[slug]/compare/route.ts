@@ -1,13 +1,9 @@
 import { requireSession } from "@/lib/auth/api";
 import { logAction } from "@/lib/audit";
-import { runAfterResponse } from "@/lib/background";
-import { assertVersionViewAccess } from "@/lib/maps/version-lookup";
 import { deriveCompareProcessingProgress } from "@/lib/compare/processing-progress";
-import {
-  computeVersionDiff,
-  ensureDiffLayers,
-  processVersionAfterUpload,
-} from "@/lib/ocad/process-version";
+import { ensureVersionDiffReady } from "@/lib/compare/ensure-version-diff";
+import { assertVersionViewAccess } from "@/lib/maps/version-lookup";
+import { computeVersionDiff, ensureDiffLayers } from "@/lib/ocad/process-version";
 import type { OcadObjectChange } from "@/lib/ocad/diff-types";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
@@ -60,6 +56,89 @@ async function compareProcessingPayload(
   };
 }
 
+async function buildCompareOkResponse(
+  map: { id: string; slug: string },
+  v1: string,
+  v2: string,
+  versionA: { id: string; versionNumber: number; originalFilename: string },
+  versionB: { id: string; versionNumber: number; originalFilename: string },
+  userId: string,
+) {
+  let diffRecord = await prisma.versionDiff.findUnique({
+    where: { versionAId_versionBId: { versionAId: v1, versionBId: v2 } },
+  });
+
+  if (!diffRecord || diffRecord.status !== "OK" || !diffRecord.summaryJson) {
+    return NextResponse.json(
+      await compareProcessingPayload(map.id, v1, v2, {
+        id: versionA.id,
+        versionNumber: versionA.versionNumber,
+      }, {
+        id: versionB.id,
+        versionNumber: versionB.versionNumber,
+      }),
+    );
+  }
+
+  let summary = JSON.parse(diffRecord.summaryJson) as Record<string, unknown>;
+
+  if (summary.coordSpace !== "ocad-native") {
+    try {
+      await computeVersionDiff(map.id, v1, v2);
+      const refreshed = await prisma.versionDiff.findUnique({
+        where: { versionAId_versionBId: { versionAId: v1, versionBId: v2 } },
+      });
+      if (!refreshed?.summaryJson) {
+        return NextResponse.json(
+          await compareProcessingPayload(map.id, v1, v2, {
+            id: versionA.id,
+            versionNumber: versionA.versionNumber,
+          }, {
+            id: versionB.id,
+            versionNumber: versionB.versionNumber,
+          }),
+        );
+      }
+      diffRecord = refreshed;
+      summary = JSON.parse(refreshed.summaryJson) as Record<string, unknown>;
+    } catch (recomputeErr) {
+      console.error("Kunde inte migrera diff-koordinater:", recomputeErr);
+    }
+  }
+
+  const changes = JSON.parse(diffRecord.changesJson ?? "[]") as OcadObjectChange[];
+
+  let finalSummary = summary;
+  try {
+    finalSummary = await ensureDiffLayers(map.id, v1, v2, changes, summary);
+  } catch (layerErr) {
+    console.error("Kunde inte generera diff-lager:", layerErr);
+  }
+
+  await logAction(userId, "COMPARE", "VersionDiff", diffRecord.id, {
+    mapSlug: map.slug,
+    v1: versionA.versionNumber,
+    v2: versionB.versionNumber,
+  });
+
+  return NextResponse.json({
+    status: "ok",
+    versionA: {
+      id: versionA.id,
+      versionNumber: versionA.versionNumber,
+      fileName: versionA.originalFilename,
+    },
+    versionB: {
+      id: versionB.id,
+      versionNumber: versionB.versionNumber,
+      fileName: versionB.originalFilename,
+    },
+    summary: finalSummary,
+    changes,
+    layerPaths: (finalSummary.layerPaths as CompareResponseLayerPaths) ?? null,
+  });
+}
+
 export async function GET(request: Request, { params }: RouteParams) {
   const session = await requireSession();
   if (session instanceof NextResponse) return session;
@@ -105,12 +184,9 @@ export async function GET(request: Request, { params }: RouteParams) {
     );
   }
 
-  let diffRecord = await prisma.versionDiff.findUnique({
-    where: { versionAId_versionBId: { versionAId: v1, versionBId: v2 } },
-  });
+  const diffState = await ensureVersionDiffReady(map.id, v1, v2);
 
-  if (!diffRecord || diffRecord.status === "PENDING" || diffRecord.status === "PROCESSING") {
-    runAfterResponse(() => processVersionAfterUpload(map.id, v2, v1));
+  if (diffState.status === "processing") {
     return NextResponse.json(
       await compareProcessingPayload(map.id, v1, v2, {
         id: versionA.id,
@@ -122,82 +198,14 @@ export async function GET(request: Request, { params }: RouteParams) {
     );
   }
 
-  if (diffRecord.status === "ERROR") {
-    const errorInfo = diffRecord.summaryJson ? JSON.parse(diffRecord.summaryJson) : {};
+  if (diffState.status === "error") {
     return NextResponse.json({
       status: "error",
-      error: errorInfo.error ?? "Diff misslyckades",
+      error: diffState.error,
     });
   }
 
-  let summary = JSON.parse(diffRecord.summaryJson!) as Record<string, unknown>;
-
-  if (summary.coordSpace !== "ocad-native") {
-    try {
-      await computeVersionDiff(map.id, v1, v2);
-      diffRecord = await prisma.versionDiff.findUnique({
-        where: { versionAId_versionBId: { versionAId: v1, versionBId: v2 } },
-      });
-      if (!diffRecord || diffRecord.status !== "OK") {
-        return NextResponse.json(
-          await compareProcessingPayload(map.id, v1, v2, {
-            id: versionA.id,
-            versionNumber: versionA.versionNumber,
-          }, {
-            id: versionB.id,
-            versionNumber: versionB.versionNumber,
-          }),
-        );
-      }
-      summary = JSON.parse(diffRecord.summaryJson!) as Record<string, unknown>;
-    } catch (recomputeErr) {
-      console.error("Kunde inte migrera diff-koordinater:", recomputeErr);
-    }
-  }
-
-  if (!diffRecord || diffRecord.status !== "OK") {
-    return NextResponse.json(
-      await compareProcessingPayload(map.id, v1, v2, {
-        id: versionA.id,
-        versionNumber: versionA.versionNumber,
-      }, {
-        id: versionB.id,
-        versionNumber: versionB.versionNumber,
-      }),
-    );
-  }
-
-  const changes = JSON.parse(diffRecord.changesJson ?? "[]") as OcadObjectChange[];
-
-  let finalSummary = summary;
-  try {
-    finalSummary = await ensureDiffLayers(map.id, v1, v2, changes, summary);
-  } catch (layerErr) {
-    console.error("Kunde inte generera diff-lager:", layerErr);
-  }
-
-  await logAction(session.user.id, "COMPARE", "VersionDiff", diffRecord.id, {
-    mapSlug: slug,
-    v1: versionA.versionNumber,
-    v2: versionB.versionNumber,
-  });
-
-  return NextResponse.json({
-    status: "ok",
-    versionA: {
-      id: versionA.id,
-      versionNumber: versionA.versionNumber,
-      fileName: versionA.originalFilename,
-    },
-    versionB: {
-      id: versionB.id,
-      versionNumber: versionB.versionNumber,
-      fileName: versionB.originalFilename,
-    },
-    summary: finalSummary,
-    changes,
-    layerPaths: (finalSummary.layerPaths as CompareResponseLayerPaths) ?? null,
-  });
+  return buildCompareOkResponse(map, v1, v2, versionA, versionB, session.user.id);
 }
 
 export async function POST(request: Request, { params }: RouteParams) {
@@ -218,11 +226,35 @@ export async function POST(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Kartfil hittades inte" }, { status: 404 });
   }
 
-  try {
-    await computeVersionDiff(map.id, v1, v2);
-    return NextResponse.json({ status: "ok" });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Diff misslyckades";
-    return NextResponse.json({ error: message }, { status: 500 });
+  const [versionA, versionB] = await Promise.all([
+    prisma.mapVersion.findFirst({
+      where: { id: v1, mapFileId: map.id },
+      select: { id: true, versionNumber: true, isPublished: true, originalFilename: true },
+    }),
+    prisma.mapVersion.findFirst({
+      where: { id: v2, mapFileId: map.id },
+      select: { id: true, versionNumber: true, isPublished: true, originalFilename: true },
+    }),
+  ]);
+
+  if (!versionA || !versionB) {
+    return NextResponse.json({ error: "Version hittades inte" }, { status: 404 });
   }
+
+  const deniedA = assertVersionViewAccess(session, versionA);
+  if (deniedA) return deniedA;
+  const deniedB = assertVersionViewAccess(session, versionB);
+  if (deniedB) return deniedB;
+
+  const diffState = await ensureVersionDiffReady(map.id, v1, v2, { force: true });
+
+  if (diffState.status === "error") {
+    return NextResponse.json({ error: diffState.error }, { status: 500 });
+  }
+
+  if (diffState.status === "processing") {
+    return NextResponse.json({ status: "processing" });
+  }
+
+  return buildCompareOkResponse(map, v1, v2, versionA, versionB, session.user.id);
 }

@@ -8,6 +8,15 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-08-31",
+    title: "Jämför versioner — fix för evigt vänteläge",
+    items: [
+      "Jämförelse mellan versioner beräknas nu direkt i anropet i stället för i bakgrunden som kunde avbrytas",
+      "Tidigare fastnade jämförelsen ofta på «Beräknar skillnader…» — särskilt vid v2 mot v3",
+      "Knappen «Uppdatera / försök igen» startar om beräkningen explicit",
+    ],
+  },
+  {
+    date: "2026-08-31",
     title: "Uppladdare vid integrerad utcheckning",
     items: [
       "När en utcheckning integreras visas den som checkade in som «Uppladdare» i versionshistoriken — inte administratören som granskar",

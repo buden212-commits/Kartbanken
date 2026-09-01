@@ -640,9 +640,10 @@ export async function HelpPageContent() {
           </p>
 
           <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
-            Medan jämförelsen körs visas en spinner, vilket steg som pågår (parsning, kartlager eller
-            diff) och förfluten tid. Om kartlager byggs visas räknare (X av Y rutor). Sidan
-            uppdateras automatiskt när beräkningen är klar.
+            Medan jämförelsen körs visas en spinner, vilket steg som pågår (parsning eller diff) och
+            förfluten tid. Beräkningen sker i anropet och kan ta upp till några minuter på stora
+            kartfiler — sidan uppdateras automatiskt när resultatet är klart. Om det fastnar, använd
+            «Uppdatera / försök igen».
           </p>
           <HelpProcessDiagram title="Flöde — jämföra versioner" chart={compareFlow} />
         </HelpSection>
