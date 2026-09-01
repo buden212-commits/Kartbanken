@@ -3,8 +3,14 @@
 import type { CompareProcessingProgress } from "@/lib/compare/processing-progress";
 import { compareProcessingStageMessage } from "@/lib/compare/processing-progress";
 
-const SLOW_PROCESSING_MS = 3 * 60 * 1000;
+const SLOW_PROCESSING_MS = 2 * 60 * 1000;
 const STUCK_PROCESSING_MS = 8 * 60 * 1000;
+
+const STAGE_ORDER = [
+  { key: "parse", label: "Läser kartfiler" },
+  { key: "diff", label: "Beräknar skillnader" },
+  { key: "layers", label: "Skapar kartlager" },
+] as const;
 
 function formatElapsedMs(ms: number): string {
   const totalSec = Math.floor(ms / 1000);
@@ -23,7 +29,9 @@ type Props = {
 
 export function CompareProcessingPanel({ title, progress, elapsedMs, onRetry }: Props) {
   const stageMessage = progress ? compareProcessingStageMessage(progress) : null;
-  const tileProgress = progress?.stage === "tiles" ? progress.tileProgress : null;
+  const activeStageIndex = progress
+    ? STAGE_ORDER.findIndex((stage) => stage.key === progress.stage)
+    : -1;
   const isSlowProcessing = elapsedMs >= SLOW_PROCESSING_MS;
   const isStuckProcessing = elapsedMs >= STUCK_PROCESSING_MS;
 
@@ -43,45 +51,44 @@ export function CompareProcessingPanel({ title, progress, elapsedMs, onRetry }: 
           </p>
         </div>
 
-        {tileProgress && !tileProgress.preparing && (
-          <div className="w-full max-w-xs space-y-2">
-            <p className="text-xs text-slate-500">
-              {tileProgress.remaining} rutor kvar ({tileProgress.percent} %)
-            </p>
-            <div
-              className="h-2 w-full overflow-hidden rounded-full bg-amber-100"
-              role="progressbar"
-              aria-valuenow={tileProgress.percent}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label="Skapar kartlager"
-            >
-              <div
-                className="h-full rounded-full bg-amber-600 transition-[width] duration-300"
-                style={{ width: `${tileProgress.percent}%` }}
-              />
-            </div>
-          </div>
-        )}
-
-        {tileProgress?.preparing && (
-          <p className="text-xs text-slate-500">Räknaren visas när systemet vet hur många rutor som ska skapas.</p>
+        {activeStageIndex >= 0 && (
+          <ol className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs">
+            {STAGE_ORDER.map((stage, index) => {
+              const done = index < activeStageIndex;
+              const active = index === activeStageIndex;
+              return (
+                <li
+                  key={stage.key}
+                  className={
+                    active
+                      ? "font-medium text-amber-900"
+                      : done
+                        ? "text-amber-700"
+                        : "text-slate-400"
+                  }
+                >
+                  {done ? "✓ " : ""}
+                  {index + 1}. {stage.label}
+                </li>
+              );
+            })}
+          </ol>
         )}
 
         <p className="text-xs text-slate-500">Förfluten tid: {formatElapsedMs(elapsedMs)}</p>
 
         {isSlowProcessing && !isStuckProcessing && (
           <p className="text-sm text-amber-900">
-            Det tar längre tid än vanligt. Stora kartfiler kan behöva några minuter — vi försöker igen
-            automatiskt.
+            Stora kartfiler kan behöva några minuter första gången. Resultatet sparas sedan, så
+            nästa gång går det direkt.
           </p>
         )}
 
         {isStuckProcessing && onRetry && (
           <div className="space-y-3">
             <p className="text-sm text-amber-900">
-              Jämförelsen verkar ha fastnat. Prova att uppdatera — vi triggar om bearbetningen vid
-              varje försök.
+              Jämförelsen verkar ha fastnat. Prova att starta om den — beräkningen börjar då om från
+              början.
             </p>
             <button
               type="button"

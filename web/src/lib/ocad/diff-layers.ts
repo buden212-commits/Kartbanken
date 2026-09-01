@@ -1,6 +1,6 @@
 import type { OcadObjectChange } from "./diff-types";
 import type { SvgBounds } from "./svg-utils";
-import { generateOcadSvgFiltered, generateOcadSvg } from "./svg";
+import { generateOcadSvgFiltered } from "./svg";
 import { uploadFile } from "@/lib/storage";
 import { createRequire } from "module";
 
@@ -29,17 +29,17 @@ export function buildDiffLayerPath(
   return `maps/${mapFileId}/diff/${versionAId}_${versionBId}/${layer}.svg`;
 }
 
-async function resolveViewBounds(bufferB: Buffer): Promise<SvgBounds> {
-  const { bounds } = await generateOcadSvg(bufferB);
-  if (bounds) return bounds;
-
-  const ocadFile = await readOcad(bufferB, { quietWarnings: true });
+/**
+ * Vyns utsnitt är samma råa OCAD-bounds som SVG-renderingen använder.
+ * Läs dem direkt i stället för att rendera hela kartan bara för att få måtten —
+ * en full rendering tar minuter på stora kartor och gjorde jämförelsen ofärdig.
+ */
+function boundsFromOcadFile(ocadFile: { getBounds: () => number[] }): SvgBounds {
   const raw = ocadFile.getBounds();
   if (raw && raw.length >= 4) {
     const [minX, minY, maxX, maxY] = raw;
     return { minX, minY, maxX, maxY };
   }
-
   return { minX: 0, minY: 0, maxX: 1000, maxY: 1000 };
 }
 
@@ -65,15 +65,15 @@ export async function generateDiffLayerSvgs(
     modified: string;
   },
 ): Promise<DiffLayerPaths> {
-  const addedIndices = new Set(
-    changes.filter((c) => c.changeType === "added").map((c) => c.objectIndex),
-  );
-  const removedIndices = new Set(
-    changes.filter((c) => c.changeType === "removed").map((c) => c.objectIndex),
-  );
-  const modifiedIndices = new Set(
-    changes.filter((c) => c.changeType === "modified").map((c) => c.objectIndex),
-  );
+  const addedIndices = new Set<number>();
+  const removedIndices = new Set<number>();
+  const modifiedIndices = new Set<number>();
+
+  for (const change of changes) {
+    if (change.changeType === "added") addedIndices.add(change.objectIndex);
+    else if (change.changeType === "removed") removedIndices.add(change.objectIndex);
+    else modifiedIndices.add(change.objectIndex);
+  }
 
   return generateDiffLayerSvgsFromIndices(
     bufferA,
@@ -97,21 +97,34 @@ export async function generateDiffLayerSvgsFromIndices(
     modified: string;
   },
 ): Promise<DiffLayerPaths> {
-  const viewBounds = await resolveViewBounds(bufferB);
+  const ocadFileB = await readOcad(bufferB, { quietWarnings: true });
+  const viewBounds = boundsFromOcadFile(ocadFileB);
 
-  const paths = storagePaths;
+  // Renderingarna delar parsad fil och körs efter varandra för att hålla minnestoppen nere.
+  const addedSvg = await generateOcadSvgFiltered(
+    bufferB,
+    indices.added,
+    viewBounds,
+    ocadFileB,
+  );
+  await uploadFile(storagePaths.added, Buffer.from(addedSvg, "utf-8"));
 
-  const [addedSvg, removedSvg, modifiedSvg] = await Promise.all([
-    generateOcadSvgFiltered(bufferB, indices.added, viewBounds),
-    generateOcadSvgFiltered(bufferA, indices.removed, viewBounds),
-    generateOcadSvgFiltered(bufferB, indices.modified, viewBounds),
-  ]);
+  const modifiedSvg = await generateOcadSvgFiltered(
+    bufferB,
+    indices.modified,
+    viewBounds,
+    ocadFileB,
+  );
+  await uploadFile(storagePaths.modified, Buffer.from(modifiedSvg, "utf-8"));
 
-  await Promise.all([
-    uploadFile(paths.added, Buffer.from(addedSvg, "utf-8")),
-    uploadFile(paths.removed, Buffer.from(removedSvg, "utf-8")),
-    uploadFile(paths.modified, Buffer.from(modifiedSvg, "utf-8")),
-  ]);
+  const ocadFileA = await readOcad(bufferA, { quietWarnings: true });
+  const removedSvg = await generateOcadSvgFiltered(
+    bufferA,
+    indices.removed,
+    viewBounds,
+    ocadFileA,
+  );
+  await uploadFile(storagePaths.removed, Buffer.from(removedSvg, "utf-8"));
 
-  return { ...paths, bounds: viewBounds };
+  return { ...storagePaths, bounds: viewBounds };
 }

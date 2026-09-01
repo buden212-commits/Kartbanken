@@ -1,14 +1,22 @@
-import { computeVersionDiff, parseMapVersion } from "@/lib/ocad/process-version";
+import type { CompareProcessingStage } from "@/lib/compare/processing-progress";
+import { computeVersionDiff } from "@/lib/ocad/process-version";
 import { prisma } from "@/lib/prisma";
 
-/** Anta att pågående beräkning fortfarande körs — undvik parallella dubbelkörningar. */
-const VERSION_DIFF_LEASE_MS = 15 * 60 * 1000;
+/**
+ * Så länge ett anrop hunnit rapportera framsteg nyligen antas det fortfarande köra.
+ * Vercel avbryter funktionen efter 300 s, så en tystnad längre än så betyder att
+ * körningen dog och att nästa anrop ska ta över i stället för att vänta för alltid.
+ */
+const STAGE_HEARTBEAT_TIMEOUT_MS = 6 * 60 * 1000;
 
 type DiffProcessingMeta = {
   processingStartedAt?: string;
+  stageUpdatedAt?: string;
+  stage?: CompareProcessingStage;
   error?: string;
 };
 
+/** Meta finns bara medan diffen körs eller misslyckats — klara diffar har numeriska fält. */
 function parseDiffMeta(summaryJson: string | null): DiffProcessingMeta {
   if (!summaryJson) return {};
   try {
@@ -18,6 +26,12 @@ function parseDiffMeta(summaryJson: string | null): DiffProcessingMeta {
     return {
       processingStartedAt:
         typeof parsed.processingStartedAt === "string" ? parsed.processingStartedAt : undefined,
+      stageUpdatedAt:
+        typeof parsed.stageUpdatedAt === "string" ? parsed.stageUpdatedAt : undefined,
+      stage:
+        parsed.stage === "parse" || parsed.stage === "diff" || parsed.stage === "layers"
+          ? parsed.stage
+          : undefined,
       error: typeof parsed.error === "string" ? parsed.error : undefined,
     };
   } catch {
@@ -25,41 +39,40 @@ function parseDiffMeta(summaryJson: string | null): DiffProcessingMeta {
   }
 }
 
-function processingStartedAtMs(
-  diffRecord: { createdAt: Date; summaryJson: string | null },
-): number {
+export function readDiffStage(summaryJson: string | null): CompareProcessingStage | null {
+  return parseDiffMeta(summaryJson).stage ?? null;
+}
+
+function lastHeartbeatMs(diffRecord: {
+  createdAt: Date;
+  summaryJson: string | null;
+}): number {
   const meta = parseDiffMeta(diffRecord.summaryJson);
-  if (meta.processingStartedAt) {
-    const t = Date.parse(meta.processingStartedAt);
-    if (!Number.isNaN(t)) return t;
+  for (const value of [meta.stageUpdatedAt, meta.processingStartedAt]) {
+    if (!value) continue;
+    const parsed = Date.parse(value);
+    if (!Number.isNaN(parsed)) return parsed;
   }
   return diffRecord.createdAt.getTime();
 }
 
-function isActiveProcessingLease(
-  diffRecord: { createdAt: Date; summaryJson: string | null; status: string },
-): boolean {
-  if (diffRecord.status !== "PROCESSING" && diffRecord.status !== "PENDING") {
-    return false;
-  }
-  return Date.now() - processingStartedAtMs(diffRecord) < VERSION_DIFF_LEASE_MS;
+/** True medan ett annat anrop rapporterar framsteg — då ska vi vänta i stället för att dubbelköra. */
+export function hasLiveWorker(diffRecord: {
+  createdAt: Date;
+  summaryJson: string | null;
+  status: string;
+}): boolean {
+  if (diffRecord.status !== "PROCESSING" && diffRecord.status !== "PENDING") return false;
+  return Date.now() - lastHeartbeatMs(diffRecord) < STAGE_HEARTBEAT_TIMEOUT_MS;
 }
 
-function isVersionDiffStale(
-  diffRecord: { createdAt: Date; summaryJson: string | null; status: string },
-): boolean {
-  if (diffRecord.status !== "PROCESSING" && diffRecord.status !== "PENDING") {
-    return false;
-  }
-  return Date.now() - processingStartedAtMs(diffRecord) >= VERSION_DIFF_LEASE_MS;
-}
-
-async function claimVersionDiffProcessing(
+async function claimProcessing(
   mapFileId: string,
   versionAId: string,
   versionBId: string,
+  meta: DiffProcessingMeta,
 ): Promise<void> {
-  const processingStartedAt = new Date().toISOString();
+  const summaryJson = JSON.stringify(meta);
   await prisma.versionDiff.upsert({
     where: { versionAId_versionBId: { versionAId, versionBId } },
     create: {
@@ -67,12 +80,29 @@ async function claimVersionDiffProcessing(
       versionAId,
       versionBId,
       status: "PROCESSING",
-      summaryJson: JSON.stringify({ processingStartedAt }),
+      summaryJson,
     },
-    update: {
-      status: "PROCESSING",
-      summaryJson: JSON.stringify({ processingStartedAt }),
+    update: { status: "PROCESSING", summaryJson },
+  });
+}
+
+/**
+ * Uppdatera etapp utan att skriva över ett färdigt resultat — diffen sparas som
+ * klar innan kartlagren renderas, och den hjärtslagsuppdateringen får inte
+ * återställa posten till PROCESSING.
+ */
+async function updateStage(
+  versionAId: string,
+  versionBId: string,
+  meta: DiffProcessingMeta,
+): Promise<void> {
+  await prisma.versionDiff.updateMany({
+    where: {
+      versionAId,
+      versionBId,
+      status: { in: ["PENDING", "PROCESSING"] },
     },
+    data: { summaryJson: JSON.stringify(meta) },
   });
 }
 
@@ -82,6 +112,7 @@ async function markVersionDiffError(
   versionBId: string,
   error: string,
 ): Promise<void> {
+  const summaryJson = JSON.stringify({ error });
   await prisma.versionDiff.upsert({
     where: { versionAId_versionBId: { versionAId, versionBId } },
     create: {
@@ -89,12 +120,9 @@ async function markVersionDiffError(
       versionAId,
       versionBId,
       status: "ERROR",
-      summaryJson: JSON.stringify({ error }),
+      summaryJson,
     },
-    update: {
-      status: "ERROR",
-      summaryJson: JSON.stringify({ error }),
-    },
+    update: { status: "ERROR", summaryJson },
   });
 }
 
@@ -104,8 +132,9 @@ export type EnsureVersionDiffResult =
   | { status: "error"; error: string };
 
 /**
- * Säkerställ att diff mellan två versioner är beräknad.
- * Kör beräkningen i anropet (inte bakgrund) så den faktiskt slutförs på Vercel.
+ * Säkerställ att diffen mellan två versioner är beräknad.
+ * Arbetet körs i anropet (inte som bakgrundsjobb) eftersom bakgrundsjobb
+ * avbryts av plattformen innan de hinner klart på stora kartor.
  */
 export async function ensureVersionDiffReady(
   mapFileId: string,
@@ -115,11 +144,11 @@ export async function ensureVersionDiffReady(
 ): Promise<EnsureVersionDiffResult> {
   const force = options?.force ?? false;
 
-  let diffRecord = await prisma.versionDiff.findUnique({
+  const diffRecord = await prisma.versionDiff.findUnique({
     where: { versionAId_versionBId: { versionAId, versionBId } },
   });
 
-  if (diffRecord?.status === "OK") {
+  if (diffRecord?.status === "OK" && !force) {
     return { status: "ok" };
   }
 
@@ -128,15 +157,25 @@ export async function ensureVersionDiffReady(
     return { status: "error", error: meta.error ?? "Diff misslyckades" };
   }
 
-  if (!force && diffRecord && isActiveProcessingLease(diffRecord)) {
+  if (!force && diffRecord && hasLiveWorker(diffRecord)) {
     return { status: "processing" };
   }
 
-  await claimVersionDiffProcessing(mapFileId, versionAId, versionBId);
+  const processingStartedAt = new Date().toISOString();
+  await claimProcessing(mapFileId, versionAId, versionBId, {
+    processingStartedAt,
+    stageUpdatedAt: processingStartedAt,
+    stage: "parse",
+  });
 
   try {
-    await Promise.all([parseMapVersion(versionAId), parseMapVersion(versionBId)]);
-    await computeVersionDiff(mapFileId, versionAId, versionBId);
+    await computeVersionDiff(mapFileId, versionAId, versionBId, async (stage) => {
+      await updateStage(versionAId, versionBId, {
+        processingStartedAt,
+        stageUpdatedAt: new Date().toISOString(),
+        stage,
+      });
+    });
     return { status: "ok" };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Diff misslyckades";

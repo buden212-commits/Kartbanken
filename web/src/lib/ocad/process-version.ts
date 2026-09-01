@@ -7,11 +7,58 @@ import {
   generateDiffLayerSvgsFromIndices,
 } from "./diff-layers";
 import { parseOcadBuffer } from "./read";
+import type { OcadParseSummary } from "./types";
 import { buildPreviewSvgPath, generateAndStorePreviewSvg } from "./svg";
 import { readStoredFile } from "@/lib/storage";
 import { prisma } from "@/lib/prisma";
 
 const TOLERANCE = Number(process.env.DIFF_SPATIAL_TOLERANCE_M ?? 2);
+
+type VersionRecord = {
+  id: string;
+  mapFileId: string;
+  versionNumber: number;
+  previewSvgPath: string | null;
+};
+
+/** Spara parsresultat och skapa förhandsvisning bara när den saknas. */
+async function persistParsedVersion(
+  version: VersionRecord,
+  buffer: Buffer,
+  summary: OcadParseSummary,
+): Promise<void> {
+  let previewSvgPath = version.previewSvgPath;
+  if (!previewSvgPath) {
+    previewSvgPath = buildPreviewSvgPath(version.mapFileId, version.versionNumber);
+    try {
+      await generateAndStorePreviewSvg(buffer, previewSvgPath);
+    } catch (svgErr) {
+      console.error("SVG-generering misslyckades:", svgErr);
+      previewSvgPath = null;
+    }
+  }
+
+  await prisma.mapVersion.update({
+    where: { id: version.id },
+    data: {
+      parseStatus: "OK",
+      objectCount: summary.objectCount,
+      parseError: null,
+      previewSvgPath,
+    },
+  });
+}
+
+async function markVersionParseError(versionId: string, err: unknown): Promise<void> {
+  const message = err instanceof Error ? err.message : "Parsning misslyckades";
+  await prisma.mapVersion.update({
+    where: { id: versionId },
+    data: {
+      parseStatus: "ERROR",
+      parseError: message,
+    },
+  });
+}
 
 export async function parseMapVersion(versionId: string): Promise<void> {
   const version = await prisma.mapVersion.findUnique({ where: { id: versionId } });
@@ -27,44 +74,20 @@ export async function parseMapVersion(versionId: string): Promise<void> {
   try {
     const buffer = await readStoredFile(version.storagePath);
     const summary = await parseOcadBuffer(buffer, version.originalFilename);
-
-    let previewSvgPath = version.previewSvgPath;
-    if (!previewSvgPath) {
-      previewSvgPath = buildPreviewSvgPath(version.mapFileId, version.versionNumber);
-      try {
-        await generateAndStorePreviewSvg(buffer, previewSvgPath);
-      } catch (svgErr) {
-        console.error("SVG-generering misslyckades:", svgErr);
-        previewSvgPath = null;
-      }
-    }
-
-    await prisma.mapVersion.update({
-      where: { id: versionId },
-      data: {
-        parseStatus: "OK",
-        objectCount: summary.objectCount,
-        parseError: null,
-        previewSvgPath,
-      },
-    });
+    await persistParsedVersion(version, buffer, summary);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Parsning misslyckades";
-    await prisma.mapVersion.update({
-      where: { id: versionId },
-      data: {
-        parseStatus: "ERROR",
-        parseError: message,
-      },
-    });
+    await markVersionParseError(versionId, err);
     throw err;
   }
 }
+
+export type VersionDiffStage = "parse" | "diff" | "layers";
 
 export async function computeVersionDiff(
   mapFileId: string,
   versionAId: string,
   versionBId: string,
+  onStage?: (stage: VersionDiffStage) => Promise<void> | void,
 ): Promise<OcadDiffResult> {
   const [versionA, versionB] = await Promise.all([
     prisma.mapVersion.findUnique({ where: { id: versionAId } }),
@@ -79,26 +102,36 @@ export async function computeVersionDiff(
     throw new Error("versionA måste vara äldre än versionB");
   }
 
-  await Promise.all([parseMapVersion(versionAId), parseMapVersion(versionBId)]);
-
-  const [freshA, freshB] = await Promise.all([
-    prisma.mapVersion.findUnique({ where: { id: versionAId } }),
-    prisma.mapVersion.findUnique({ where: { id: versionBId } }),
-  ]);
-
-  if (freshA?.parseStatus === "ERROR" || freshB?.parseStatus === "ERROR") {
-    throw new Error("Parsning misslyckades för en av versionerna");
-  }
+  await onStage?.("parse");
 
   const [bufferA, bufferB] = await Promise.all([
     readStoredFile(versionA.storagePath),
     readStoredFile(versionB.storagePath),
   ]);
 
-  const [summaryA, summaryB] = await Promise.all([
-    parseOcadBuffer(bufferA, versionA.originalFilename),
-    parseOcadBuffer(bufferB, versionB.originalFilename),
+  // Parsa varje fil exakt en gång — tidigare parsades båda filerna två gånger
+  // (en gång för versionsstatus och en gång för diffen), vilket dubblade tiden.
+  let summaryA: OcadParseSummary;
+  let summaryB: OcadParseSummary;
+  try {
+    summaryA = await parseOcadBuffer(bufferA, versionA.originalFilename);
+  } catch (err) {
+    await markVersionParseError(versionAId, err);
+    throw err;
+  }
+  try {
+    summaryB = await parseOcadBuffer(bufferB, versionB.originalFilename);
+  } catch (err) {
+    await markVersionParseError(versionBId, err);
+    throw err;
+  }
+
+  await Promise.all([
+    persistParsedVersion(versionA, bufferA, summaryA),
+    persistParsedVersion(versionB, bufferB, summaryB),
   ]);
+
+  await onStage?.("diff");
 
   const diff = compareOcadObjects(
     summaryA.objects,
@@ -113,18 +146,7 @@ export async function computeVersionDiff(
   const layerObjectIndices = changeIndicesByKind(diff.changes);
   const stored = limitStoredChanges(diff.changes);
 
-  let layerPaths = null;
-  try {
-    layerPaths = await generateDiffLayerSvgs(bufferA, bufferB, diff.changes, {
-      added: buildDiffLayerPath(mapFileId, versionAId, versionBId, "added"),
-      removed: buildDiffLayerPath(mapFileId, versionAId, versionBId, "removed"),
-      modified: buildDiffLayerPath(mapFileId, versionAId, versionBId, "modified"),
-    });
-  } catch (layerErr) {
-    console.error("Diff-lager SVG misslyckades:", layerErr);
-  }
-
-  const summaryJson = JSON.stringify({
+  const baseSummary = {
     coordSpace: "ocad-native",
     added: diff.added,
     removed: diff.removed,
@@ -139,18 +161,13 @@ export async function computeVersionDiff(
     bySymbol: diff.bySymbol,
     versionA: diff.versionA,
     versionB: diff.versionB,
-    layerPaths: layerPaths
-      ? {
-          added: layerPaths.added,
-          removed: layerPaths.removed,
-          modified: layerPaths.modified,
-          bounds: layerPaths.bounds,
-        }
-      : null,
-  });
+  };
 
   const changesJson = JSON.stringify(stored.changes);
 
+  // Spara diffen som klar innan kartlagren renderas. Lagren är den tyngsta delen
+  // och om körningen avbryts där ska diffen ändå finnas kvar i stället för att
+  // fastna i PROCESSING.
   await prisma.versionDiff.upsert({
     where: {
       versionAId_versionBId: { versionAId, versionBId },
@@ -160,17 +177,44 @@ export async function computeVersionDiff(
       versionAId,
       versionBId,
       status: "OK",
-      summaryJson,
+      summaryJson: JSON.stringify({ ...baseSummary, layerPaths: null }),
       changesJson,
       computedAt: new Date(),
     },
     update: {
       status: "OK",
-      summaryJson,
+      summaryJson: JSON.stringify({ ...baseSummary, layerPaths: null }),
       changesJson,
       computedAt: new Date(),
     },
   });
+
+  await onStage?.("layers");
+
+  try {
+    const layerPaths = await generateDiffLayerSvgs(bufferA, bufferB, diff.changes, {
+      added: buildDiffLayerPath(mapFileId, versionAId, versionBId, "added"),
+      removed: buildDiffLayerPath(mapFileId, versionAId, versionBId, "removed"),
+      modified: buildDiffLayerPath(mapFileId, versionAId, versionBId, "modified"),
+    });
+
+    await prisma.versionDiff.update({
+      where: { versionAId_versionBId: { versionAId, versionBId } },
+      data: {
+        summaryJson: JSON.stringify({
+          ...baseSummary,
+          layerPaths: {
+            added: layerPaths.added,
+            removed: layerPaths.removed,
+            modified: layerPaths.modified,
+            bounds: layerPaths.bounds,
+          },
+        }),
+      },
+    });
+  } catch (layerErr) {
+    console.error("Diff-lager SVG misslyckades:", layerErr);
+  }
 
   return {
     ...diff,

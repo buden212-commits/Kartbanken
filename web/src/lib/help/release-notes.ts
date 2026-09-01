@@ -7,12 +7,14 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
-    date: "2026-08-31",
-    title: "Jämför versioner — fix för evigt vänteläge",
+    date: "2026-09-01",
+    title: "Jämför versioner — mycket snabbare och blir klar",
     items: [
-      "Jämförelse mellan versioner beräknas nu direkt i anropet i stället för i bakgrunden som kunde avbrytas",
-      "Tidigare fastnade jämförelsen ofta på «Beräknar skillnader…» — särskilt vid v2 mot v3",
-      "Knappen «Uppdatera / försök igen» startar om beräkningen explicit",
+      "Jämförelsen ritade tidigare upp hela kartan i onödan bara för att räkna ut bildens mått — det steget är borta och var huvudorsaken till att jämförelsen aldrig blev klar",
+      "Kartfilerna läses nu en gång i stället för flera gånger per jämförelse",
+      "Resultatet sparas så snart skillnaderna är uträknade, innan kartlagren ritas — en avbruten körning tappar inte längre hela jobbet",
+      "Vänteläget visar vilken av etapperna «Läser kartfiler», «Beräknar skillnader» och «Skapar kartlager» som pågår",
+      "Statussidan svarar direkt medan beräkningen körs, så förfluten tid och etapp uppdateras hela tiden",
     ],
   },
   {

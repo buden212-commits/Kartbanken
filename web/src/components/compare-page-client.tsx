@@ -14,6 +14,7 @@ type CompareResponse =
       versionA: { id: string; versionNumber: number };
       versionB: { id: string; versionNumber: number };
       progress: CompareProcessingProgress | null;
+      workerActive: boolean;
     }
   | { status: "error"; error: string }
   | {
@@ -32,72 +33,121 @@ type Props = {
   v2: string;
 };
 
+const POLL_INTERVAL_MS = 2500;
+
 export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
   const router = useRouter();
   const [data, setData] = useState<CompareResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [processingStartedAt, setProcessingStartedAt] = useState<number | null>(null);
-  const [processingElapsedMs, setProcessingElapsedMs] = useState(0);
-  const processingStartedAtRef = useRef<number | null>(null);
+  const [startedAt, setStartedAt] = useState(() => Date.now());
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const workRequestRef = useRef<Promise<void> | null>(null);
 
-  const fetchCompare = useCallback(async () => {
+  const isDone = data?.status === "ok" || data?.status === "error";
+
+  const pollStatus = useCallback(async () => {
     const res = await fetch(`/api/maps/${mapSlug}/compare?v1=${v1}&v2=${v2}`);
     const json = (await res.json()) as CompareResponse;
-    setData(json);
-    setLoading(false);
-    if (json.status !== "processing") {
-      processingStartedAtRef.current = null;
-      setProcessingStartedAt(null);
-      setProcessingElapsedMs(0);
-    }
+    setData((current) => {
+      // Ett klart resultat får inte skrivas över av ett fördröjt statussvar.
+      if (current?.status === "ok" && json.status === "processing") return current;
+      return json;
+    });
+    return json;
   }, [mapSlug, v1, v2]);
 
-  const retryCompare = useCallback(async () => {
-    setLoading(true);
-    processingStartedAtRef.current = Date.now();
-    setProcessingStartedAt(Date.now());
-    setProcessingElapsedMs(0);
-    try {
-      const res = await fetch(`/api/maps/${mapSlug}/compare`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ v1, v2 }),
-      });
-      const json = (await res.json()) as CompareResponse & { error?: string };
-      if (!res.ok && json.error) {
-        setData({ status: "error", error: json.error });
-      } else if (json.status === "processing") {
-        await fetchCompare();
-      } else {
-        setData(json as CompareResponse);
+  /**
+   * Beräkningen körs i detta anrop och kan ta flera minuter. Den startas en gång
+   * per sidladdning medan statuspollningen håller vyn uppdaterad under tiden.
+   */
+  const runCompare = useCallback(
+    (force: boolean) => {
+      if (workRequestRef.current) return workRequestRef.current;
+
+      const request = (async () => {
+        try {
+          const res = await fetch(`/api/maps/${mapSlug}/compare`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ v1, v2, force }),
+          });
+          if (!res.ok) {
+            const body = (await res.json().catch(() => ({}))) as { error?: string };
+            setData({
+              status: "error",
+              error: body.error ?? "Jämförelsen kunde inte slutföras. Försök igen.",
+            });
+            return;
+          }
+          const json = (await res.json()) as CompareResponse;
+          if (json.status === "processing") {
+            await pollStatus();
+          } else {
+            setData(json);
+          }
+        } catch {
+          setData({
+            status: "error",
+            error:
+              "Jämförelsen avbröts innan den blev klar. Kartfilerna kan vara mycket stora — försök igen.",
+          });
+        } finally {
+          workRequestRef.current = null;
+        }
+      })();
+
+      workRequestRef.current = request;
+      return request;
+    },
+    [mapSlug, v1, v2, pollStatus],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      const res = await fetch(`/api/maps/${mapSlug}/compare?v1=${v1}&v2=${v2}`);
+      const json = (await res.json()) as CompareResponse;
+      if (cancelled) return;
+      setData(json);
+      // Kartlagren kan saknas om en tidigare körning avbröts efter att diffen sparats.
+      if (json.status === "processing" || (json.status === "ok" && !json.layerPaths)) {
+        void runCompare(false);
       }
-    } finally {
-      setLoading(false);
-    }
-  }, [mapSlug, v1, v2, fetchCompare]);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mapSlug, v1, v2, runCompare]);
 
   useEffect(() => {
-    processingStartedAtRef.current = Date.now();
-    setProcessingStartedAt(Date.now());
-    setProcessingElapsedMs(0);
-    void fetchCompare();
-  }, [fetchCompare]);
-
-  useEffect(() => {
-    if (data?.status !== "processing") return;
+    if (isDone) return;
     const timer = setInterval(() => {
-      void fetchCompare();
-    }, 3000);
+      void (async () => {
+        const json = await pollStatus();
+        // Plattformen kan avbryta ett långt anrop; ta då över beräkningen igen.
+        if (json.status === "processing" && !json.workerActive) {
+          void runCompare(false);
+        }
+      })();
+    }, POLL_INTERVAL_MS);
     return () => clearInterval(timer);
-  }, [data?.status, fetchCompare]);
+  }, [isDone, pollStatus, runCompare]);
 
   useEffect(() => {
-    if (data?.status !== "processing" || processingStartedAt === null) return;
+    if (isDone) return;
     const timer = setInterval(() => {
-      setProcessingElapsedMs(Date.now() - processingStartedAt);
+      setElapsedMs(Date.now() - startedAt);
     }, 1000);
     return () => clearInterval(timer);
-  }, [data?.status, processingStartedAt]);
+  }, [isDone, startedAt]);
+
+  const retry = useCallback(() => {
+    setData(null);
+    setStartedAt(Date.now());
+    setElapsedMs(0);
+    void runCompare(true);
+  }, [runCompare]);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
@@ -110,25 +160,17 @@ export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
         Granskar skillnader mellan två uppladdade versioner.
       </p>
 
-      {loading && !data && (
-        <div className="card mt-10 text-center">
-          <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-ifk-blue" />
-          <p className="text-slate-700">Laddar jämförelse…</p>
-          <p className="mt-2 text-sm text-slate-500">
-            Stora kartfiler kan ta upp till en minut att parsa.
-          </p>
-        </div>
-      )}
-
-      {data?.status === "processing" && (
+      {!isDone && (
         <div className="mt-10">
           <CompareProcessingPanel
-            title={`Jämför v${data.versionA.versionNumber} → v${data.versionB.versionNumber}…`}
-            progress={data.progress}
-            elapsedMs={processingElapsedMs}
-            onRetry={() => {
-              void retryCompare();
-            }}
+            title={
+              data?.status === "processing"
+                ? `Jämför v${data.versionA.versionNumber} → v${data.versionB.versionNumber}…`
+                : "Förbereder jämförelse…"
+            }
+            progress={data?.status === "processing" ? data.progress : null}
+            elapsedMs={elapsedMs}
+            onRetry={retry}
           />
         </div>
       )}
@@ -138,9 +180,7 @@ export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
           <p>{data.error}</p>
           <button
             type="button"
-            onClick={() => {
-              void retryCompare();
-            }}
+            onClick={retry}
             className="mt-4 rounded-lg border border-red-300 px-4 py-2 text-sm transition hover:bg-red-100"
           >
             Försök igen
