@@ -1,7 +1,7 @@
 import {
   tileBuildProgressFromVersion,
   type TileBuildProgress,
-} from "@/lib/ocad/tile-status";
+} from "@/lib/ocad/tile-progress";
 
 export type CompareProcessingStage = "parse" | "tiles" | "diff";
 
