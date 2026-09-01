@@ -9,7 +9,9 @@ Materialet är uppdelat i **tre delar** efter behörighetsnivå:
 | [Del 2 — Redaktör](#del-2--redaktör) | Redaktör | 60–90 min (förutsätter del 1) |
 | [Del 3 — Administratör](#del-3--administratör) | Administratör | 45–60 min (förutsätter del 2) |
 
-**Tips:** Klistra in skärmdumpar där det står `[BILD …]`. Bildtexten under varje platshållare beskriver exakt vad som ska synas.
+**Bilderna sköter sig själva.** Skärmdumparna hämtas automatiskt från en körande app — se
+[Bilaga D — så uppdaterar du bilderna](#bilaga-d--så-uppdaterar-du-bilderna). Flödesscheman är
+Mermaid-diagram som hämtas från samma källa som hjälpen i appen och behöver aldrig fotograferas.
 
 **Mer hjälp i systemet:** [Hjälp — guide](/hjalp/guide) · [Release notes](/hjalp/release-notes)
 
@@ -24,6 +26,19 @@ Materialet är uppdelat i **tre delar** efter behörighetsnivå:
 | **Administratör** | Allt redaktör kan + områden, användare, integrera incheckningar, systeminställningar |
 
 Varje högre roll **inkluderar** allt som lägre roller kan göra.
+
+<!-- diagram:roller -->
+**Roller — varje nivå inkluderar den under**
+
+```mermaid
+flowchart BT
+  R[Läsare — publicerade versioner, banor, kartförslag]
+  E[Redaktör — + uppladdning, publicering, utcheckning]
+  A[Administratör — + områden, användare, integration]
+  R --> E
+  E --> A
+```
+<!-- /diagram:roller -->
 
 ---
 
@@ -60,9 +75,15 @@ Läsare får e-postnotiser men **inte** .ocd-bilaga i mail.
 
 ### Bilder
 
-**[BILD 1.1]** Inloggningssidan med flikarna «Logga in» och «Skapa konto».
+<!-- bild:1.1 -->
+![Inloggningssidan med flikarna «Logga in» och «Skapa konto».](bilder/1.1.png)
 
+*Bild 1.1 — Inloggningssidan med flikarna «Logga in» och «Skapa konto».*
+<!-- /bild:1.1 -->
+
+<!-- bild:1.2 -->
 **[BILD 1.2]** Profildialogen: behörighet «Läsare», kryssrutor för e-postnotiser, byt lösenord.
+<!-- /bild:1.2 -->
 
 ---
 
@@ -93,11 +114,17 @@ Läsare får e-postnotiser men **inte** .ocd-bilaga i mail.
 
 ### Bilder
 
+<!-- bild:2.1 -->
 **[BILD 2.1]** Startsidan med lista över kartområden (namn, senaste version, datum).
+<!-- /bild:2.1 -->
 
+<!-- bild:2.2 -->
 **[BILD 2.2]** Områdessidan: versionshistorik med en rad markerad som «Publicerad».
+<!-- /bild:2.2 -->
 
+<!-- bild:2.3 -->
 **[BILD 2.3]** Kartvyn i webbläsaren: karta, zoomkontroller, lagerpanel.
+<!-- /bild:2.3 -->
 
 ---
 
@@ -115,6 +142,20 @@ Kartförslag låter dig föreslå ändringar på den **publicerade** kartan utan
 6. Följ status på områdessidan eller under «Kartförslag».
 
 Redaktörer granskar och hanterar förslagen; du behöver inte göra mer efter inskick.
+
+<!-- diagram:kartforslag -->
+**Flöde — skicka in kartförslag**
+
+```mermaid
+flowchart TD
+  A[Öppna publicerad version] --> B[Föreslå ändring]
+  B --> C[Rita markering eller GPS-spår]
+  C --> D[Lägg till flera ändringar]
+  D --> E[Skicka in — kategori och beskrivning]
+  E --> F[Förslag syns på karta och i lista]
+  F --> G[Redaktör granskar status]
+```
+<!-- /diagram:kartforslag -->
 
 ### Användarfall
 
@@ -135,11 +176,17 @@ Redaktörer granskar och hanterar förslagen; du behöver inte göra mer efter i
 
 ### Bilder
 
+<!-- bild:3.1 -->
 **[BILD 3.1]** Områdessidan: knappen «Föreslå ändring» i sidhuvudet bredvid andra åtgärder.
+<!-- /bild:3.1 -->
 
+<!-- bild:3.2 -->
 **[BILD 3.2]** Kartförslagsvyn: ritverktyg till höger, «Skicka in» uppe till höger, karta i mitten.
+<!-- /bild:3.2 -->
 
+<!-- bild:3.3 -->
 **[BILD 3.3]** Lista över kartförslag med status (t.ex. «Väntar på granskning»).
+<!-- /bild:3.3 -->
 
 ---
 
@@ -157,6 +204,21 @@ Banor ritas ovanpå kartans **publicerade** version. Banor sparas separat och **
 6. Spara bana, välj **Gör publik** om andra ska se den.
 7. **Skuggbana:** visa annan bana halvtransparent för jämförelse.
 8. **PDF-export** längst ned i banredigeraren.
+
+<!-- diagram:bana -->
+**Flöde — lägg bana**
+
+```mermaid
+flowchart TD
+  A[Lägg bana på områdessidan] --> B[Välj IOF-symbol och verktyg]
+  B --> C[Rita start, kontroller och mål]
+  C --> D[Spara med namn]
+  D --> E{Gör publik?}
+  E -->|Ja| F[Alla kan öppna]
+  E -->|Nej| G[Endast du ser banan]
+  D --> H[Valfritt: skuggbana eller PDF-export]
+```
+<!-- /diagram:bana -->
 
 ### Användarfall
 
@@ -178,13 +240,25 @@ Banor ritas ovanpå kartans **publicerade** version. Banor sparas separat och **
 
 ### Bilder
 
+<!-- bild:4.1 -->
 **[BILD 4.1]** Områdessidan: knapparna «Arkivera», «Checka ut», «Lägg bana»/«Banor (2)», «Föreslå ändring».
+<!-- /bild:4.1 -->
 
+<!-- bild:4.2 -->
 **[BILD 4.2]** Banredigeraren: verktygsrad (Rita, Flytta, Klipp, Radera), kontrollista, symbolpanel.
+<!-- /bild:4.2 -->
 
+<!-- bild:4.3 -->
 **[BILD 4.3]** Bana med kontrollcirkel och lucka (Klipp) — kartsymbol syns genom luckan.
 
+> Tas för hand: Öppna en bana, välj verktyget Klipp, klicka på en kontrollcirkel som ligger över en kartsymbol och zooma in innan du tar bilden.
+<!-- /bild:4.3 -->
+
+<!-- bild:4.4 -->
 **[BILD 4.4]** (Valfritt) Skuggbana vald i rullgardinsmenyn, halvtransparent overlay.
+
+> Tas för hand: Kräver minst två sparade banor på samma område. Välj skuggbana i rullgardinsmenyn.
+<!-- /bild:4.4 -->
 
 ---
 
@@ -223,11 +297,17 @@ Banor ritas ovanpå kartans **publicerade** version. Banor sparas separat och **
 
 ### Bilder
 
+<!-- bild:5.1 -->
 **[BILD 5.1]** Exportdialog i kartvyn med val av format (PDF / OCAD / GeoTIFF).
+<!-- /bild:5.1 -->
 
+<!-- bild:5.2 -->
 **[BILD 5.2]** Sidan Verifiera med uppladdning av två filer och diff-resultat.
+<!-- /bild:5.2 -->
 
+<!-- bild:5.3 -->
 **[BILD 5.3]** (Valfritt) Jämförelsevy mellan två versioner med färgkodad diff.
+<!-- /bild:5.3 -->
 
 ---
 
@@ -268,6 +348,23 @@ Steg:
 3. Vänta tills parsning är klar (objektantal syns).
 4. Granska diff mot föregående version.
 
+<!-- diagram:uppladdning -->
+**Flöde — ladda upp ny version**
+
+```mermaid
+flowchart TD
+  O[Öppna område] --> W{Aktiva utcheckningar?}
+  W -->|Ja| V[Varning visas]
+  V --> U
+  W -->|Nej| U[Välj .ocd-fil och kommentar]
+  U --> P[Uppladdning och parsning]
+  P --> N[Ny opublicerad version skapas]
+  N --> D[Automatisk diff mot föregående]
+  D --> M[E-post till prenumeranter]
+  M --> R[Granska i jämförelsevy]
+```
+<!-- /diagram:uppladdning -->
+
 ### Användarfall
 
 **«Ny terränginventering — ladda upp och granska vad som ändrats»**
@@ -284,11 +381,17 @@ Steg:
 
 ### Bilder
 
+<!-- bild:6.1 -->
 **[BILD 6.1]** Områdessidan: avsnittet «Ladda upp ny version» med filväljare och kommentarsfält.
+<!-- /bild:6.1 -->
 
+<!-- bild:6.2 -->
 **[BILD 6.2]** Diff-vy efter uppladdning: grönt = tillagt, rött = borttaget, gult = ändrat.
+<!-- /bild:6.2 -->
 
+<!-- bild:6.3 -->
 **[BILD 6.3]** Versionshistorik med både publicerade och opublicerade rader.
+<!-- /bild:6.3 -->
 
 ---
 
@@ -300,6 +403,19 @@ Steg:
 - När du publicerar en ny version **avpubliceras** den tidigare automatiskt.
 - **Läsare** och funktioner som **Lägg bana** / **Kartförslag** använder den publicerade versionen.
 - **Rekommenderad version** kan markeras separat (vägledning, inte samma som publicerad).
+
+<!-- diagram:publicering -->
+**Flöde — publicera version**
+
+```mermaid
+flowchart TD
+  V[Version i historiken] --> C{Kryssa i Publicerad?}
+  C -->|Ja| P[Denna version blir synlig för läsare]
+  P --> U[Tidigare publicerad version avpubliceras automatiskt]
+  C -->|Nej| H[Version dold för läsare]
+  U --> E[Endast en publicerad version per område]
+```
+<!-- /diagram:publicering -->
 
 ### Användarfall
 
@@ -317,9 +433,13 @@ Steg:
 
 ### Bilder
 
+<!-- bild:7.1 -->
 **[BILD 7.1]** Versionsrad med knapp «Publicera» och badge «Publicerad».
+<!-- /bild:7.1 -->
 
+<!-- bild:7.2 -->
 **[BILD 7.2]** AreaStatusBanner: «Publicerad version v3», ev. antal väntande kartförslag.
+<!-- /bild:7.2 -->
 
 ---
 
@@ -328,6 +448,22 @@ Steg:
 ### Teori
 
 Utcheckning låter flera redaktörer arbeta parallellt i OCAD på **olika delar** av samma karta.
+
+<!-- diagram:utcheckning -->
+**Status — utcheckning till integrerad version**
+
+```mermaid
+stateDiagram-v2
+  direction LR
+  [*] --> ACTIVE: Checka ut område
+  ACTIVE --> CHECKED_IN: Ladda upp redigerad .ocd
+  CHECKED_IN --> PENDING_ADMIN: Användaren bekräftar diff
+  PENDING_ADMIN --> INTEGRATED: Admin integrerar
+  INTEGRATED --> [*]: Ny kartversion skapas
+  ACTIVE --> CANCELLED: Admin avbryter
+  CANCELLED --> [*]
+```
+<!-- /diagram:utcheckning -->
 
 **Checka ut**
 
@@ -365,13 +501,21 @@ Utcheckning låter flera redaktörer arbeta parallellt i OCAD på **olika delar*
 
 ### Bilder
 
+<!-- bild:8.1 -->
 **[BILD 8.1]** Utcheckning: rita polygon på kartan, bekräfta utcheckning.
+<!-- /bild:8.1 -->
 
+<!-- bild:8.2 -->
 **[BILD 8.2]** Översiktskarta med färgade utcheckningsytor och namn.
+<!-- /bild:8.2 -->
 
+<!-- bild:8.3 -->
 **[BILD 8.3]** Incheckning: diff mellan utcheckad fil och inlämnad fil.
+<!-- /bild:8.3 -->
 
+<!-- bild:8.4 -->
 **[BILD 8.4]** Utcheckningslistan på områdessidan med status «Aktiv».
+<!-- /bild:8.4 -->
 
 ---
 
@@ -403,9 +547,13 @@ Integrering i kartfil sker manuellt i OCAD och via ny version — förslagen spa
 
 ### Bilder
 
+<!-- bild:9.1 -->
 **[BILD 9.1]** Områdessidan: kartförslagssektion med antal väntande.
+<!-- /bild:9.1 -->
 
+<!-- bild:9.2 -->
 **[BILD 9.2]** Detaljvy för ett kartförslag med karta, beskrivning och bifogat foto.
+<!-- /bild:9.2 -->
 
 ---
 
@@ -416,6 +564,27 @@ Integrering i kartfil sker manuellt i OCAD och via ny version — förslagen spa
 - **Jämförelseväljaren** på områdessidan: välj två versioner → öppna jämförelsevy.
 - Exportera diff som PDF för dokumentation.
 - **Rekommenderad version** — markera vilken version som bör användas som referens ( separat från publicerad).
+
+<!-- diagram:jamforelse -->
+**Flöde — jämföra versioner**
+
+```mermaid
+flowchart TD
+  S[Välj två versioner] --> B[Diff beräknas]
+  B --> K[Kartlager: tillagda, borttagna, ändrade]
+  K --> L[Ändringslista med filter och sök]
+  L --> Z[Zoom till objekt på kartan]
+
+  subgraph entry ["Vägar in"]
+    E1[Efter uppladdning]
+    E2[Jämför-knapp i historiken]
+    E3[Välj två versioner]
+  end
+  E1 --> S
+  E2 --> S
+  E3 --> S
+```
+<!-- /diagram:jamforelse -->
 
 ### Användarfall
 
@@ -432,9 +601,15 @@ Integrering i kartfil sker manuellt i OCAD och via ny version — förslagen spa
 
 ### Bilder
 
+<!-- bild:10.1 -->
 **[BILD 10.1]** Versionsjämförelse: väljare + kartvy med diff.
+<!-- /bild:10.1 -->
 
+<!-- bild:10.2 -->
 **[BILD 10.2]** (Valfritt) PDF-export av versionsdiff.
+
+> Tas för hand: Klicka «Exportera PDF-rapport» i jämförelsevyn och ta bilden på den nedladdade PDF:en.
+<!-- /bild:10.2 -->
 
 ---
 
@@ -466,6 +641,20 @@ Integrering i kartfil sker manuellt i OCAD och via ny version — förslagen spa
 - Vid godkännande skickas e-post ( om SMTP är konfigurerat ) med tilldelad roll.
 - Admin kan även återställa lösenord och hantera avvisade konton.
 
+<!-- diagram:anvandare -->
+**Flöde — användarhantering**
+
+```mermaid
+flowchart TD
+  A[Admin — Användare] --> B{Åtgärd}
+  B --> C[Godkänn väntande konto]
+  B --> D[Avvisa konto]
+  B --> E[Skapa konto manuellt]
+  B --> F[Redigera roll och notiser]
+  C --> G[E-post till användaren]
+```
+<!-- /diagram:anvandare -->
+
 ### Användarfall
 
 **«Ny tränare registrerad — ge läsarbehörighet»**
@@ -483,9 +672,15 @@ Integrering i kartfil sker manuellt i OCAD och via ny version — förslagen spa
 
 ### Bilder
 
+<!-- bild:11.1 -->
 **[BILD 11.1]** Admin → Användare: tabell med filter «Väntar på godkännande».
+<!-- /bild:11.1 -->
 
+<!-- bild:11.2 -->
 **[BILD 11.2]** Dialog för godkännande: välj roll Läsare / Redaktör / Administratör.
+
+> Tas för hand: Kräver ett konto med status «Väntar på godkännande». Öppna godkännandedialogen utan att bekräfta.
+<!-- /bild:11.2 -->
 
 ---
 
@@ -515,11 +710,21 @@ Integrering i kartfil sker manuellt i OCAD och via ny version — förslagen spa
 
 ### Bilder
 
+<!-- bild:12.1 -->
 **[BILD 12.1]** Startsidan: «Skapa nytt kartområde» under listan.
+<!-- /bild:12.1 -->
 
+<!-- bild:12.2 -->
 **[BILD 12.2]** Områdessidan: «Arkivera område» och meddelande om arkiverat område.
 
+> Tas för hand: Arkivera ett testområde och ta bilden innan du återställer det.
+<!-- /bild:12.2 -->
+
+<!-- bild:12.3 -->
 **[BILD 12.3]** (Valfritt) Redigera namn vid sidtitel.
+
+> Tas för hand: Klicka redigeringsikonen vid områdestiteln och ta bilden med fältet öppet.
+<!-- /bild:12.3 -->
 
 ---
 
@@ -555,11 +760,21 @@ Efter integration skapas ny version; redaktör kan publicera den.
 
 ### Bilder
 
+<!-- bild:13.1 -->
 **[BILD 13.1]** Admin → Utcheckningar: lista med statuskolumner.
+<!-- /bild:13.1 -->
 
+<!-- bild:13.2 -->
 **[BILD 13.2]** Integrera incheckning: bekräftelsedialog och resultat «Version vN skapad».
 
+> Tas för hand: Kräver en incheckning med status «Väntar på integration». Ta bilden på bekräftelsedialogen.
+<!-- /bild:13.2 -->
+
+<!-- bild:13.3 -->
 **[BILD 13.3]** (Valfritt) Avbryt utcheckning — adminåtgärd.
+
+> Tas för hand: Öppna en aktiv utcheckning och ta bilden på dialogen för «Avbryt utcheckning».
+<!-- /bild:13.3 -->
 
 ---
 
@@ -593,11 +808,17 @@ Användare når feedback via **Hjälp → Buggar / Förbättringar**.
 
 ### Bilder
 
+<!-- bild:14.1 -->
 **[BILD 14.1]** Admin → Lagring: tabell med områden, antal versioner, banor, storlek.
+<!-- /bild:14.1 -->
 
+<!-- bild:14.2 -->
 **[BILD 14.2]** Admin → Inställningar: SMTP-fält och «Skicka testmail».
+<!-- /bild:14.2 -->
 
+<!-- bild:14.3 -->
 **[BILD 14.3]** (Valfritt) Admin → Loggning eller Feedback.
+<!-- /bild:14.3 -->
 
 ---
 
@@ -615,6 +836,28 @@ Skapa område (admin)
     → Publicera ny version (redaktör)
 ```
 
+<!-- diagram:helhet -->
+**Översikt — systemets huvudflöden**
+
+```mermaid
+flowchart TB
+  subgraph core ["Versionshantering"]
+    A[Logga in] --> B[Välj område]
+    B --> C[Ladda upp .ocd]
+    C --> D[Jämför diff]
+    D --> E[Publicera]
+    E --> F[Läsare ser kartan]
+  end
+
+  subgraph parallel ["Parallella flöden"]
+    B --> G[Checka ut / in]
+    B --> H[Lägg bana]
+    F --> I[Kartförslag]
+    B --> J[Verifiera filer]
+  end
+```
+<!-- /diagram:helhet -->
+
 ### Användarfall
 
 **«Säsongstart — alla ska komma igång»**
@@ -622,10 +865,6 @@ Skapa område (admin)
 1. Kontrollera att rätt version är publicerad på alla aktiva områden.
 2. Godkänn nya konton.
 3. Kommunicera länk till `/hjalp/guide` och detta kursmaterial.
-
-### Bilder
-
-**[BILD 15.1]** (Valfritt) Översiktsdiagram: roller och huvudflöden ( kan återanvända schema från hjälpen ).
 
 ---
 
@@ -662,7 +901,7 @@ Skapa område (admin)
 
 ---
 
-# Bilaga B — Bildindex ( för dig som klistrar in skärmdumpar )
+# Bilaga B — Bildindex
 
 | Bild-ID | Del | Beskrivning |
 |---------|-----|-------------|
@@ -705,9 +944,8 @@ Skapa område (admin)
 | 14.1 | 3 | Admin lagring |
 | 14.2 | 3 | Admin inställningar SMTP |
 | 14.3 | 3 | Loggning/feedback (valfritt) |
-| 15.1 | 3 | Flödesdiagram (valfritt) |
 
-**Tips vid inklistring:** Ersätt raden `[BILD X.Y]` med `![Bildtext](sökväg/till/bild.png)` eller klistra in bilden direkt om editorn stödjer det.
+Flödesdiagrammet som tidigare låg som bild 15.1 är numera ett Mermaid-diagram i modul 3.5.
 
 ---
 
@@ -724,4 +962,55 @@ Skapa område (admin)
 
 ---
 
-*Senast uppdaterad: 2026-08-31. Matchar Kartbanken inkl. Klipp-verktyg i banläggning och knapp «Lägg bana» / «Banor (N)» i sidhuvudet.*
+# Bilaga D — så uppdaterar du bilderna
+
+Skärmdumparna tas automatiskt av ett skript som loggar in i appen, går igenom sidorna och
+skriver in bilderna i det här dokumentet. Kör om det när gränssnittet ändrats, så är materialet
+aktuellt igen utan handpåläggning.
+
+### Kör
+
+```bash
+cd web
+npx playwright install chromium        # bara första gången
+
+DOCS_BASE_URL=https://kartor.ifkmora.se \
+DOCS_EMAIL=din@epost.se \
+DOCS_PASSWORD='ditt-lösenord' \
+npm run docs:screenshots
+```
+
+Logga in med ett **administratörskonto** för att få med alla bilder — skriptet hoppar över de
+sidor kontot inte kommer åt. Utan `DOCS_EMAIL` tas bara inloggningssidan.
+
+### Miljövariabler och flaggor
+
+| Variabel / flagga | Betydelse |
+|-------------------|-----------|
+| `DOCS_BASE_URL` | Adress till appen (standard `http://localhost:3000`) |
+| `DOCS_EMAIL`, `DOCS_PASSWORD` | Inloggning |
+| `DOCS_AREA_SLUG` | Tvinga ett visst kartområde i stället för automatiskt val |
+| `--only=2.1,4.2` | Ta om bara vissa bilder |
+| `--headed` | Visa webbläsaren medan bilderna tas |
+| `--skip-capture` | Skriv bara om dokumentet utifrån bilder som redan finns |
+
+### Bilder som tas för hand
+
+Ett tiotal bilder kräver ett läge som inte går att skapa utan att ändra riktig data — till
+exempel att arkivera ett område eller öppna dialogen för att integrera en incheckning. De är
+markerade med **Tas för hand** i texten. Så här lägger du in en sådan bild:
+
+1. Ta skärmdumpen manuellt.
+2. Spara den som `docs/bilder/<bild-id>.png`, till exempel `docs/bilder/4.3.png`.
+3. Kör `npm run docs:screenshots -- --skip-capture` så byts platshållaren mot bilden.
+
+### Flödesdiagram
+
+Diagrammen är Mermaid och renderas direkt av GitHub. De hämtas från
+`web/src/lib/help/process-diagrams.ts` — alltså exakt samma diagram som hjälpen i appen visar —
+och skrivs in av samma skript. Ändra aldrig ett diagram direkt i den här filen; ändra i
+källfilen och kör skriptet.
+
+---
+
+*Senast uppdaterad: 2026-09-01. Matchar Kartbanken inkl. Klipp-verktyg i banläggning och knapp «Lägg bana» / «Banor (N)» i sidhuvudet.*
