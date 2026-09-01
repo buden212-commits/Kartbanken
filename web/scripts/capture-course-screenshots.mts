@@ -65,16 +65,37 @@ async function login(page: Page): Promise<boolean> {
   await page.goto(`${BASE_URL}/login`, { waitUntil: "domcontentloaded" });
   await page.fill("#email", EMAIL);
   await page.fill("#password", PASSWORD);
-  await page.getByRole("button", { name: "Logga in" }).click();
+  // Både fliken och submit-knappen heter «Logga in» — peka ut formulärets knapp.
+  await page.locator('form button[type="submit"]').click();
 
   try {
     await page.waitForURL((url) => !url.pathname.startsWith("/login"), { timeout: 30_000 });
   } catch {
+    const message = (await page.locator("form p.text-red-800").first().textContent())?.trim();
     throw new Error(
-      "Inloggningen gick inte igenom. Kontrollera DOCS_EMAIL och DOCS_PASSWORD, samt att kontot är godkänt.",
+      `Inloggningen gick inte igenom${message ? `: ${message}` : ". Kontrollera DOCS_EMAIL och DOCS_PASSWORD."}`,
     );
   }
+
+  const landedOn = new URL(page.url()).pathname;
+  if (landedOn === "/byt-losenord") {
+    throw new Error(
+      "Kontot har ett tillfälligt lösenord och måste byta det innan det kan användas. " +
+        "Logga in i webbläsaren en gång, sätt ett eget lösenord, och använd det i DOCS_PASSWORD.",
+    );
+  }
+  if (landedOn === "/pending") {
+    throw new Error("Kontot väntar på godkännande. Låt en administratör godkänna det först.");
+  }
+
   return true;
+}
+
+/** Admin-sidorna krävs för del 3 — varna tidigt i stället för att bara hoppa över bilder. */
+async function isAdmin(page: Page): Promise<boolean> {
+  const response = await page.goto(`${BASE_URL}/admin/users`, { waitUntil: "domcontentloaded" });
+  if (!response) return false;
+  return new URL(page.url()).pathname.startsWith("/admin");
 }
 
 type ApiVersion = { id: string; versionNumber: number; parseStatus: string };
@@ -338,10 +359,22 @@ async function main(): Promise<void> {
     });
     const page = await context.newPage();
 
-    const authenticated = await login(page);
+    let authenticated: boolean;
+    try {
+      authenticated = await login(page);
+    } catch (err) {
+      console.error(`\n${err instanceof Error ? err.message : String(err)}`);
+      process.exitCode = 1;
+      return;
+    }
+
     if (!authenticated) {
       console.log(
         "Ingen inloggning angiven (DOCS_EMAIL/DOCS_PASSWORD) — bara öppna sidor kan fångas.",
+      );
+    } else if (!(await isAdmin(page))) {
+      console.log(
+        "Kontot är inte administratör — bilderna i del 3 och delar av del 2 kommer att hoppas över.",
       );
     }
 

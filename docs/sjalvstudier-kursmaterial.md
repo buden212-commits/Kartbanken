@@ -968,6 +968,22 @@ Skärmdumparna tas automatiskt av ett skript som loggar in i appen, går igenom 
 skriver in bilderna i det här dokumentet. Kör om det när gränssnittet ändrats, så är materialet
 aktuellt igen utan handpåläggning.
 
+### Skapa ett konto för dokumentationen
+
+Skriptet behöver logga in. Använd ett eget konto för ändamålet i stället för ditt personliga —
+då syns inte ditt namn i bilderna och lösenordet kan bytas utan att påverka någon.
+
+1. Logga in som administratör och gå till **Admin → Användare**.
+2. Under **Skapa nytt konto**: fyll i namn (t.ex. `Dokumentation`), e-post, ett lösenord på minst
+   8 tecken och välj rollen **Administratör**.
+3. Klicka **Skapa konto**. Kontot godkänns automatiskt och fungerar direkt.
+
+Rollen bör vara **Administratör** — annars hoppas bilderna i del 3 och delar av del 2 över,
+eftersom kontot inte kommer åt de sidorna. Skriptet säger till om rollen inte räcker.
+
+Använd **inte** «Glömt lösenord?» för det här kontot. Det ger ett tillfälligt lösenord som måste
+bytas vid inloggning, och då fastnar skriptet på sidan för lösenordsbyte.
+
 ### Kör
 
 ```bash
@@ -975,13 +991,13 @@ cd web
 npx playwright install chromium        # bara första gången
 
 DOCS_BASE_URL=https://kartor.ifkmora.se \
-DOCS_EMAIL=din@epost.se \
-DOCS_PASSWORD='ditt-lösenord' \
+DOCS_EMAIL=dokumentation@ifkmora.se \
+DOCS_PASSWORD='lösenordet-du-satte' \
 npm run docs:screenshots
 ```
 
-Logga in med ett **administratörskonto** för att få med alla bilder — skriptet hoppar över de
-sidor kontot inte kommer åt. Utan `DOCS_EMAIL` tas bara inloggningssidan.
+Lösenordet ska aldrig checkas in — skicka det som miljövariabel vid körning. Utan `DOCS_EMAIL`
+tas bara inloggningssidan.
 
 ### Miljövariabler och flaggor
 
