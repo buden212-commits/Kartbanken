@@ -14,16 +14,10 @@ type RouteParams = { params: Promise<{ slug: string; id: string }> };
 function parseOpsBody(body: unknown): FieldEditOps | null {
   if (!body || typeof body !== "object") return null;
   const record = body as Record<string, unknown>;
-  const current = emptyOpsFromPartial(record);
-  return current;
-}
-
-function emptyOpsFromPartial(record: Record<string, unknown>): FieldEditOps | null {
-  const deletes = record.deletes;
-  const adds = record.adds;
-  if (deletes != null && !Array.isArray(deletes)) return null;
-  if (adds != null && !Array.isArray(adds)) return null;
-  return parseFieldEditOps(JSON.stringify({ deletes: deletes ?? [], adds: adds ?? [] }));
+  if (record.deletes != null && !Array.isArray(record.deletes)) return null;
+  if (record.adds != null && !Array.isArray(record.adds)) return null;
+  if (record.modifies != null && !Array.isArray(record.modifies)) return null;
+  return parseFieldEditOps(JSON.stringify(body));
 }
 
 export async function PATCH(request: Request, { params }: RouteParams) {

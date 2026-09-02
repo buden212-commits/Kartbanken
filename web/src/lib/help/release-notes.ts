@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-02",
+    title: "Fältredigering — sparade linjer och ytor försvann inte",
+    items: [
+      "Nya linjer och ytor (t.ex. höjdkurvor) syns kvar på kartan efter «Klar»",
+      "Linjer och ytor kan publiceras — de räknades tidigare felaktigt bort",
+    ],
+  },
+  {
+    date: "2026-09-02",
     title: "Fältredigering — tunnare begränsningslinje och brytpunkter",
     items: [
       "Utcheckat område markeras med tunn röd begränsningslinje — utan blå fyllnadsyta",

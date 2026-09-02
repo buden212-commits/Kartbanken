@@ -52,10 +52,8 @@ function parseCoordinateList(value: unknown): [number, number][] {
 }
 
 function parseLegacyAdd(raw: Record<string, unknown>): FieldEditAdd | null {
-  const x = Number(raw.x);
-  const y = Number(raw.y);
   const symbolNumber = Number(raw.symbolNumber);
-  if (![x, y, symbolNumber].every(Number.isFinite)) return null;
+  if (!Number.isFinite(symbolNumber)) return null;
   if (raw.kind === "line") {
     const coordinates = parseCoordinateList(raw.coordinates);
     if (coordinates.length < 2) return null;
@@ -66,6 +64,9 @@ function parseLegacyAdd(raw: Record<string, unknown>): FieldEditAdd | null {
     if (ring.length < 3) return null;
     return { kind: "area", ring, symbolNumber };
   }
+  const x = Number(raw.x);
+  const y = Number(raw.y);
+  if (![x, y].every(Number.isFinite)) return null;
   return { kind: "point", x, y, symbolNumber };
 }
 
