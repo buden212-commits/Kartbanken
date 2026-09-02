@@ -50,7 +50,6 @@ export default async function FieldEditSessionPage({ params }: PageProps) {
           mapSlug={map.slug}
           mapTitle={map.title}
           sessionId={checkout.id}
-          versionId={checkout.baseVersionId}
           selection={selection}
           initialOps={ops}
         />

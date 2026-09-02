@@ -118,6 +118,7 @@ export function FieldEditCreateClient({
         createError={error}
         disabled={loading}
         hideOcadVersion
+        polygonOnly
         createButtonLabel="Starta fältredigering"
         createLoadingLabel="Startar…"
         areaHint={areaHint}

@@ -1,7 +1,12 @@
 import { logAction } from "@/lib/audit";
 import { CheckoutMode, CheckoutStatus } from "@/lib/checkout/types";
 import { applyFieldEditOps, validateFieldEditOps } from "@/lib/field-edit/apply-ops";
-import { parseFieldEditOps, serializeFieldEditOps, type FieldEditOps } from "@/lib/field-edit/types";
+import {
+  countFieldEditChanges,
+  parseFieldEditOps,
+  serializeFieldEditOps,
+  type FieldEditOps,
+} from "@/lib/field-edit/types";
 import { setVersionPublished } from "@/lib/maps/publish-version";
 import { parseOcadBuffer } from "@/lib/ocad/read";
 import { processVersionAfterUpload } from "@/lib/ocad/process-version";
@@ -17,12 +22,13 @@ export type PublishFieldEditResult = {
   published: boolean;
   deletedCount: number;
   addedCount: number;
+  modifiedCount: number;
 };
 
 export async function publishFieldEditSession(
   checkoutId: string,
   userId: string,
-  options?: { publish?: boolean; comment?: string | null },
+  options?: { publish?: boolean; comment?: string | null; ops?: FieldEditOps },
 ): Promise<PublishFieldEditResult> {
   const checkout = await prisma.mapCheckout.findUnique({
     where: { id: checkoutId },
@@ -39,7 +45,7 @@ export async function publishFieldEditSession(
     throw new Error("Fältredigeringen är inte aktiv");
   }
 
-  const ops = parseFieldEditOps(checkout.editOpsJson);
+  const ops = options?.ops ?? parseFieldEditOps(checkout.editOpsJson);
   const validationError = await validateFieldEditOps(
     await readStoredFile(checkout.baseVersion.storagePath),
     checkout.baseVersion.originalFilename,
@@ -64,7 +70,8 @@ export async function publishFieldEditSession(
   }
 
   const headBuffer = await readStoredFile(headVersion.storagePath);
-  const { buffer: working, deletedCount, addedCount } = await applyFieldEditOps(headBuffer, ops);
+  const { buffer: working, deletedCount, addedCount, modifiedCount } =
+    await applyFieldEditOps(headBuffer, ops);
 
   try {
     await parseOcadBuffer(working, "field-edit-preview.ocd");
@@ -77,9 +84,10 @@ export async function publishFieldEditSession(
   const storedRef = await uploadFile(storagePath, working);
   const contentHash = sha256(working);
 
+  const counts = countFieldEditChanges(ops);
   const comment =
     options?.comment?.trim() ||
-    `Fältredigering (${deletedCount} borttagna, ${addedCount} nya punkter)`;
+    `Fältredigering (${counts.deletes} borttagna, ${counts.adds} nya, ${counts.modifies} ändrade)`;
 
   const version = await prisma.mapVersion.create({
     data: {
@@ -126,6 +134,7 @@ export async function publishFieldEditSession(
     versionNumber: version.versionNumber,
     deletedCount,
     addedCount,
+    modifiedCount,
     published,
   });
 
@@ -135,6 +144,7 @@ export async function publishFieldEditSession(
     published,
     deletedCount,
     addedCount,
+    modifiedCount,
   };
 }
 
@@ -159,6 +169,6 @@ export async function enrichFieldEditSelection(
   });
 }
 
-export function countFieldEditOps(ops: FieldEditOps): { deletes: number; adds: number } {
-  return { deletes: ops.deletes.length, adds: ops.adds.length };
+export function countFieldEditOpsSummary(ops: FieldEditOps): ReturnType<typeof countFieldEditChanges> {
+  return countFieldEditChanges(ops);
 }

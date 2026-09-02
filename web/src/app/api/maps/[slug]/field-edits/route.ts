@@ -17,6 +17,7 @@ import {
 } from "@/lib/checkout/repository";
 import { CheckoutMode, CheckoutSelectionType } from "@/lib/checkout/types";
 import { enrichFieldEditSelection } from "@/lib/field-edit/publish";
+import { generateFieldEditSubset } from "@/lib/field-edit/subset-preview";
 import { readMapScaleFromBuffer } from "@/lib/field-edit/scale";
 import { emptyFieldEditOps, serializeFieldEditOps } from "@/lib/field-edit/types";
 import { logAction } from "@/lib/audit";
@@ -81,9 +82,9 @@ export async function POST(request: Request, { params }: RouteParams) {
 
   const record = body as Record<string, unknown>;
   const selectionType = record.selectionType;
-  if (selectionType !== CheckoutSelectionType.BBOX && selectionType !== CheckoutSelectionType.POLYGON) {
+  if (selectionType !== CheckoutSelectionType.POLYGON) {
     return NextResponse.json(
-      { error: "selectionType måste vara BBOX eller POLYGON" },
+      { error: "Fältredigering kräver polygon — rita områdets kontur" },
       { status: 400 },
     );
   }
@@ -145,6 +146,17 @@ export async function POST(request: Request, { params }: RouteParams) {
     where: { id: checkout.id },
     data: { selectionJson: enrichedSelectionJson },
   });
+
+  try {
+    await generateFieldEditSubset(map.id, checkout.id, headVersionId, enrichedSelectionJson);
+  } catch (err) {
+    await prisma.mapCheckout.delete({ where: { id: checkout.id } });
+    console.error("Field edit subset failed:", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Kunde inte skapa delkarta" },
+      { status: 500 },
+    );
+  }
 
   await logAction(session.user.id, "FIELD_EDIT_CREATED", "MapCheckout", checkout.id, {
     mapSlug: map.slug,

@@ -92,6 +92,7 @@ type Props = {
   createButtonLabel?: string;
   createLoadingLabel?: string;
   areaHint?: string | null;
+  polygonOnly?: boolean;
 };
 
 
@@ -213,9 +214,10 @@ export function CheckoutMapPanel({
   createButtonLabel = "Checka ut område",
   createLoadingLabel = "Skapar utcheckning…",
   areaHint = null,
+  polygonOnly = false,
 }: Props) {
 
-  const [tool, setTool] = useState<DrawTool>("rectangle");
+  const [tool, setTool] = useState<DrawTool>(polygonOnly ? "polygon" : "rectangle");
 
   const [draftBbox, setDraftBbox] = useState<Bbox | null>(null);
 
@@ -543,6 +545,7 @@ export function CheckoutMapPanel({
 
       <span className="text-sm font-medium text-slate-700">Verktyg:</span>
 
+      {!polygonOnly && (
       <button
 
         type="button"
@@ -572,6 +575,7 @@ export function CheckoutMapPanel({
         Rektangel
 
       </button>
+      )}
 
       <button
 

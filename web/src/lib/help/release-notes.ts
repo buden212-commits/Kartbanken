@@ -8,6 +8,17 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-02",
+    title: "Fältredigering — full redigering i fält",
+    items: [
+      "Polygon-utcheckning (max 1 km²) — bara det området visas i editorn",
+      "Välj och redigera befintliga objekt genom att dra brytpunkter (linjer, ytor, punkter)",
+      "Lägg till nya punkter, linjer och ytor — symboler grupperade efter geometrityp",
+      "Bättre träfftest på linjer och ytor; hela objektet redigeras även om det delvis sticker ut",
+      "Session sparas lokalt tills du publicerar (checkar in)",
+    ],
+  },
+  {
+    date: "2026-09-02",
     title: "Fältredigering (admin)",
     items: [
       "Administratörer kan checka ut max 1 km² och redigera kartan direkt i webben — radera objekt och lägg till punkter",

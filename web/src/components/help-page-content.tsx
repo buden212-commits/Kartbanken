@@ -337,10 +337,11 @@ export async function HelpPageContent() {
               <HelpList
                 items={[
                   "Knappen «Fältredigering» på områdessidan — endast administratörer",
-                  "Rita ett område på kartan (max 1 km²) och redigera direkt i webben",
-                  "Radera befintliga kartobjekt genom att klicka på dem, eller lägg till nya punkter med vald symbol",
+                  "Rita en polygon (max 1 km²) — bara utcheckat område visas i editorn för bättre prestanda",
+                  "Välj / redigera: klicka objekt, dra brytpunkter (höjdkurva, stig, myr m.m.)",
+                  "Radera objekt, eller lägg till nya punkter, linjer och ytor med symbol grupperad efter geometri",
                   "Helt separerat från «Föreslå ändring» och vanlig OCAD-utcheckning",
-                  "Publicera skapar en ny kartversion direkt — utan .ocd-fil eller incheckning",
+                  "Ändringar sparas lokalt i webbläsaren tills du publicerar (checkar in)",
                 ]}
               />
             </>

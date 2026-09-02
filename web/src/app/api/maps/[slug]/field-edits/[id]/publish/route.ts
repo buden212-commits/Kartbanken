@@ -3,6 +3,7 @@ import { canFieldEdit } from "@/lib/auth/permissions";
 import { getCheckoutById, serializeCheckoutResponse } from "@/lib/checkout/repository";
 import { CheckoutMode } from "@/lib/checkout/types";
 import { publishFieldEditSession } from "@/lib/field-edit/publish";
+import { parseFieldEditOps, serializeFieldEditOps } from "@/lib/field-edit/types";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -31,6 +32,7 @@ export async function POST(request: Request, { params }: RouteParams) {
 
   let publish = false;
   let comment: string | null = null;
+  let opsOverride = undefined;
   try {
     const body = await request.json();
     if (body && typeof body === "object") {
@@ -39,13 +41,20 @@ export async function POST(request: Request, { params }: RouteParams) {
       if (typeof record.comment === "string") {
         comment = record.comment.trim() || null;
       }
+      if (record.ops && typeof record.ops === "object") {
+        opsOverride = parseFieldEditOps(serializeFieldEditOps(record.ops as never));
+      }
     }
   } catch {
     // optional body
   }
 
   try {
-    const result = await publishFieldEditSession(id, session.user.id, { publish, comment });
+    const result = await publishFieldEditSession(id, session.user.id, {
+      publish,
+      comment,
+      ops: opsOverride,
+    });
     const refreshed = await getCheckoutById(map.id, id);
     return NextResponse.json({
       ...result,

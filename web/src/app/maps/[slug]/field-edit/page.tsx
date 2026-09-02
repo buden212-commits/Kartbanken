@@ -52,8 +52,8 @@ export default async function FieldEditCreatePage({ params }: PageProps) {
         <div>
           <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">Fältredigering</h1>
           <p className="mt-2 text-sm text-slate-600">
-            Admin: rita ett område (max 1 km²) och redigera kartan direkt i webben — separat från
-            kartförslag och OCAD-utcheckning.
+            Admin: rita en polygon (max 1 km²) kring området du ska redigera i fält. Endast
+            utcheckat område laddas i editorn.
           </p>
         </div>
         <HelpLinkIcon section="admin" className="mt-1 shrink-0" />
