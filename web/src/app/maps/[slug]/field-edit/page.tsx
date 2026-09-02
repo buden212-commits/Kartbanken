@@ -44,7 +44,7 @@ export default async function FieldEditCreatePage({ params }: PageProps) {
   const locks = await findActiveAreaLocksForMap(map.id);
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+    <div className="mx-auto max-w-6xl px-2 py-4 sm:px-6 sm:py-12">
       <Link href={`/maps/${slug}`} className="link-muted text-sm">
         ← {map.title}
       </Link>

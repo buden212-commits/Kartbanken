@@ -8,6 +8,15 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-02",
+    title: "Fältredigering — mobilanpassad editor",
+    items: [
+      "Verktyg och kartläge (Rita / Navigera) som flytande ikoner på kartan — större kartyta på telefon",
+      "«Klar» och «Publicera» med stora knappar längst ned, anpassat för pekskärm",
+      "Snappning och CAD-verktyg i hopfällbara paneler på mobil",
+    ],
+  },
+  {
+    date: "2026-09-02",
     title: "Fältredigering — snappning och CAD-verktyg",
     items: [
       "Snappa mot befintliga objekt med inställbar tolerans (meter) vid ritning och redigering",

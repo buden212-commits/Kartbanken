@@ -347,6 +347,7 @@ export async function HelpPageContent() {
                   "Nya och ändrade objekt visas med riktig OCAD-symbol i editorn — inte bara enkla streck",
                   "«Min position» och «GPS-spår» fungerar som i kartförslag på georefererade kartor — spela in stigar med telefonens GPS",
                   "Helt separerat från «Föreslå ändring» och vanlig OCAD-utcheckning",
+                  "Mobilanpassad: verktyg på kartan, Navigera/Rita-läge, stora knappar och hopfällbara paneler",
                   "Ändringar sparas lokalt i webbläsaren tills du publicerar (checkar in)",
                 ]}
               />

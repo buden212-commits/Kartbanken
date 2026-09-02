@@ -64,12 +64,12 @@ type Props = {
 export function FieldEditSymbolPicker({ groups, kind, value, onChange }: Props) {
   const choices = groups[kind];
   return (
-    <label className="flex items-center gap-2 text-sm">
+    <label className="flex w-full flex-col gap-1 text-sm sm:w-auto sm:flex-row sm:items-center sm:gap-2">
       <span className="text-slate-600">{GROUP_LABELS[kind]}-symbol</span>
       <select
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="form-select min-w-[200px]"
+        className="form-select min-h-11 w-full sm:min-w-[200px] sm:min-h-0 sm:w-auto"
       >
         {choices.length === 0 ? (
           <option value="">Inga symboler</option>

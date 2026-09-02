@@ -7,6 +7,12 @@ import { fieldEditOverlaySvg } from "@/components/field-edit/field-edit-overlay"
 import { FieldEditCadPanel } from "@/components/field-edit/field-edit-cad-panel";
 import { FieldEditSnapSettings } from "@/components/field-edit/field-edit-snap-settings";
 import {
+  FieldEditMapDraftBar,
+  FieldEditMapToolbars,
+  FieldEditPublishBar,
+  type FieldEditTool,
+} from "@/components/field-edit/field-edit-toolbar";
+import {
   buildSymbolGroups,
   defaultSymbolForKind,
   FieldEditSymbolPicker,
@@ -48,12 +54,6 @@ import {
   type SvgRootTransform,
 } from "@/lib/ocad/svg-coords";
 
-type FieldEditTool =
-  | "select"
-  | "delete"
-  | "addPoint"
-  | "addLine"
-  | "addArea";
 
 type Props = {
   mapSlug: string;
@@ -63,8 +63,10 @@ type Props = {
   initialOps: FieldEditOps;
 };
 
-const HIT_DISTANCE = 35;
-const VERTEX_HIT_DISTANCE = 25;
+const DEFAULT_HIT_DISTANCE = 35;
+const DEFAULT_VERTEX_HIT_DISTANCE = 25;
+const COARSE_HIT_DISTANCE = 50;
+const COARSE_VERTEX_HIT_DISTANCE = 35;
 
 export function FieldEditSessionClient({
   mapSlug,
@@ -75,6 +77,9 @@ export function FieldEditSessionClient({
 }: Props) {
   const router = useRouter();
   const [tool, setTool] = useState<FieldEditTool>("select");
+  const [mapMode, setMapMode] = useState<"draw" | "navigate">("draw");
+  const [hitDistance, setHitDistance] = useState(DEFAULT_HIT_DISTANCE);
+  const [vertexHitDistance, setVertexHitDistance] = useState(DEFAULT_VERTEX_HIT_DISTANCE);
   const [ops, setOps] = useState<FieldEditOps>(() => mergeInitialOps(sessionId, initialOps));
   const [objects, setObjects] = useState<FieldEditObjectEntry[]>([]);
   const [symbolGroups, setSymbolGroups] = useState<SymbolGroups>({
@@ -162,6 +167,7 @@ export function FieldEditSessionClient({
     ocadMapScale,
     onTrackStart: () => {
       setTool("addLine");
+      setMapMode("navigate");
       setDraftPoints([]);
       setSelectedObjectIndex(null);
       setSelectedVertexIndex(null);
@@ -173,6 +179,12 @@ export function FieldEditSessionClient({
     },
     onTrackError: (message) => setError(message),
   });
+
+  useEffect(() => {
+    const coarse = window.matchMedia("(pointer: coarse)").matches;
+    setHitDistance(coarse ? COARSE_HIT_DISTANCE : DEFAULT_HIT_DISTANCE);
+    setVertexHitDistance(coarse ? COARSE_VERTEX_HIT_DISTANCE : DEFAULT_VERTEX_HIT_DISTANCE);
+  }, []);
 
   useEffect(() => {
     fetch(`/api/maps/${mapSlug}/field-edits/${sessionId}/objects`)
@@ -330,7 +342,7 @@ export function FieldEditSessionClient({
             resolveObjectCoordinates(selectedObjectIndex, obj?.v ?? [], ops) ?? [];
           const handleCoords =
             obj?.t === "area" ? verticesForHandles(coords, obj.t) : coords;
-          const vertexIndex = hitTestFieldEditVertex(handleCoords, geo, VERTEX_HIT_DISTANCE);
+          const vertexIndex = hitTestFieldEditVertex(handleCoords, geo, vertexHitDistance);
           if (vertexIndex != null && obj) {
             const startCoords =
               resolveObjectCoordinates(selectedObjectIndex, obj.v, opsRef.current) ??
@@ -346,7 +358,7 @@ export function FieldEditSessionClient({
           }
         }
 
-        const hit = hitTestFieldEditObject(objects, geo, HIT_DISTANCE);
+        const hit = hitTestFieldEditObject(objects, geo, hitDistance);
         if (!hit || ops.deletes.includes(hit.i)) {
           setSelectedObjectIndex(null);
           setSelectedVertexIndex(null);
@@ -360,7 +372,7 @@ export function FieldEditSessionClient({
       }
 
       if (tool === "delete") {
-        const hit = hitTestFieldEditObject(objects, geo, HIT_DISTANCE);
+        const hit = hitTestFieldEditObject(objects, geo, hitDistance);
         if (!hit) {
           setError("Inget objekt hittades — zooma in och försök igen");
           return;
@@ -403,7 +415,7 @@ export function FieldEditSessionClient({
         setInfo(null);
       }
     },
-    [objects, ops, resolveSnapPoint, selectedObjectIndex, symbolNumber, tool, updateOps, gpsTracking],
+    [objects, ops, resolveSnapPoint, selectedObjectIndex, symbolNumber, tool, updateOps, gpsTracking, hitDistance, vertexHitDistance],
   );
 
   const handlePointerMove = useCallback(
@@ -552,8 +564,6 @@ export function FieldEditSessionClient({
     [objects, selectedObjectIndex],
   );
 
-  const counts = useMemo(() => countFieldEditChanges(ops), [ops]);
-
   async function handlePublish() {
     if (!hasFieldEditChanges(ops)) {
       setError("Gör minst en ändring innan du publicerar");
@@ -599,10 +609,16 @@ export function FieldEditSessionClient({
       cancelGpsTracking();
     }
     setTool(next);
+    setMapMode("draw");
     setDraftPoints([]);
     setSelectedVertexIndex(null);
     if (next !== "select") setSelectedObjectIndex(null);
   }
+
+  const handleDrawInterrupt = useCallback(() => {
+    dragVertexRef.current = null;
+    setSnapPreview(null);
+  }, []);
 
   const handleGpsToggle = useCallback(() => {
     toggleGpsTracking();
@@ -616,145 +632,192 @@ export function FieldEditSessionClient({
       return "Klicka ett objekt för att markera det. Dra brytpunkter eller använd CAD-verktygen nedan. Snappning hjälper dig träffa befintliga linjer och hörn.";
     }
     if (tool === "addLine") {
-      return "Klicka punkter längs linjen — snappning mot befintliga objekt kan slås på ovan. Klicka «Klar» när linjen är färdig.";
+      return "Klicka punkter längs linjen — snappning mot befintliga objekt kan slås på nedan. Klicka «Klar» när linjen är färdig.";
     }
     if (tool === "addArea") {
-      return "Klicka hörn runt ytan (minst 3). Snappning mot befintliga objekt kan slås på ovan. Klicka «Klar» när ytan är färdig.";
+      return "Klicka hörn runt ytan (minst 3). Snappning mot befintliga objekt kan slås på nedan. Klicka «Klar» när ytan är färdig.";
     }
     return null;
   }, [gpsTracking, tool]);
 
   const localBackup = loadLocalFieldEditOps(sessionId);
+  const counts = useMemo(() => countFieldEditChanges(ops), [ops]);
+  const countsLabel = `${counts.deletes} raderade · ${counts.modifies} ändrade · ${counts.adds} nya`;
+  const syncLabel = syncing
+    ? "Synkar…"
+    : syncState === "saved"
+      ? "Synkad"
+      : "Sparat lokalt";
 
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-        {(
-          [
-            ["select", "Välj / redigera"],
-            ["delete", "Radera"],
-            ["addPoint", "Ny punkt"],
-            ["addLine", "Ny linje"],
-            ["addArea", "Ny yta"],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            disabled={gpsTracking}
-            onClick={() => switchTool(id)}
-            className={`rounded-lg px-3 py-2 text-sm font-medium ${
-              tool === id
-                ? id === "delete"
-                  ? "bg-red-600 text-white"
-                  : id === "select"
-                    ? "bg-ifk-blue text-white"
-                    : "bg-emerald-600 text-white"
-                : "border border-slate-200 text-slate-700 hover:bg-slate-50"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+  const isDrawInteraction = mapMode === "draw" && !gpsTracking;
+  const showDraftActions =
+    isDrawInteraction && (tool === "addLine" || tool === "addArea");
 
-        <button
-          type="button"
-          onClick={handleGpsToggle}
-          disabled={!canUseGpsTracking && !gpsTracking}
-          title={
-            canUseGpsTracking || gpsTracking
-              ? gpsTracking
-                ? "Sluta spåra"
-                : "GPS-spår"
-              : "GPS-spårning kräver georefererad karta"
-          }
-          className={`rounded-lg px-3 py-2 text-sm font-medium ${
-            gpsTracking
-              ? "bg-amber-600 text-white"
-              : canUseGpsTracking
-                ? "border border-ifk-blue/40 text-ifk-blue hover:bg-ifk-blue/5"
-                : "border border-slate-200 text-slate-400"
-          }`}
-        >
-          {gpsTracking ? "Sluta spåra" : "GPS-spår"}
-        </button>
+  const mapToolbarOverlay = useMemo(
+    () => (
+      <>
+        <FieldEditMapToolbars
+          tool={tool}
+          onToolChange={switchTool}
+          drawDisabled={gpsTracking}
+          mapMode={mapMode}
+          onMapModeChange={setMapMode}
+          gpsTracking={gpsTracking}
+          canUseGpsTracking={canUseGpsTracking}
+          onGpsToggle={handleGpsToggle}
+        />
+        <FieldEditMapDraftBar
+          showDraftActions={showDraftActions}
+          draftPointCount={draftPoints.length}
+          onFinishDraft={finishDraft}
+          onCancelDraft={cancelDraft}
+          countsLabel={countsLabel}
+          syncLabel={syncLabel}
+        />
+      </>
+    ),
+    [
+      tool,
+      gpsTracking,
+      mapMode,
+      canUseGpsTracking,
+      handleGpsToggle,
+      showDraftActions,
+      draftPoints.length,
+      finishDraft,
+      cancelDraft,
+      countsLabel,
+      syncLabel,
+    ],
+  );
 
-        {addKind && (
-          <FieldEditSymbolPicker
-            groups={symbolGroups}
-            kind={addKind}
-            value={symbolNumber}
-            onChange={setSymbolNumber}
-          />
-        )}
-
-        {(tool === "addLine" || tool === "addArea") && (
-          <div className="flex gap-2">
+  const secondaryHeaderContent = (
+    <div className="space-y-2 border-b border-slate-200 bg-slate-50 px-3 py-2 sm:px-4">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600 sm:text-sm">
+        <span>{countsLabel}</span>
+        <span className="hidden sm:inline">·</span>
+        <span>{syncLabel}</span>
+        {showDraftActions && (
+          <div className="hidden gap-2 sm:flex">
             <button
               type="button"
               onClick={finishDraft}
-              className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white"
+              className="min-h-9 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white"
             >
               Klar ({draftPoints.length} pkt)
             </button>
             <button
               type="button"
               onClick={cancelDraft}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700"
+              className="min-h-9 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700"
             >
               Avbryt ritning
             </button>
           </div>
         )}
-
-        <div className="ml-auto flex flex-wrap items-center gap-3 text-sm text-slate-600">
-          <span>
-            {counts.deletes} raderade · {counts.modifies} ändrade · {counts.adds} nya
-          </span>
-          {syncing ? (
-            <span>Synkar…</span>
-          ) : syncState === "saved" ? (
-            <span className="text-emerald-700">Synkad</span>
-          ) : (
-            <span className="text-amber-700">Sparat lokalt</span>
-          )}
-        </div>
       </div>
+      {addKind && (
+        <FieldEditSymbolPicker
+          groups={symbolGroups}
+          kind={addKind}
+          value={symbolNumber}
+          onChange={setSymbolNumber}
+        />
+      )}
+      {gpsTrackingStatus && (
+        <p className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 sm:text-sm">
+          {gpsTrackingStatus}
+          {!gpsTracking && draftPoints.length >= 2 && tool === "addLine" && (
+            <> Välj linjesymbol och klicka «Klar».</>
+          )}
+        </p>
+      )}
+      {toolHint && (
+        <p
+          className={`text-xs sm:text-sm ${
+            isDrawInteraction ? "text-amber-800" : "text-slate-600"
+          }`}
+        >
+          {mapMode === "navigate" && !gpsTracking
+            ? "Navigeringsläge — dra för att panorera och nyp med två fingrar för att zooma. Växla till Rita när du ska redigera."
+            : toolHint}
+        </p>
+      )}
+    </div>
+  );
 
+  return (
+    <div className="flex flex-col gap-3 sm:gap-4">
       {localBackup && syncState !== "saved" && (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
           Ändringar sparas i webbläsaren tills du publicerar. Vid nätverksfel behålls arbetet lokalt.
         </p>
       )}
 
-      <FieldEditSnapSettings settings={editorSettings} onChange={updateEditorSettings} />
+      <DiffMapPanel
+        previewUrl={`/api/maps/${mapSlug}/field-edits/${sessionId}/preview`}
+        title={mapTitle}
+        mapSlug={mapSlug}
+        versionId={sessionId}
+        exportEnabled={false}
+        interactionMode={gpsTracking || mapMode === "navigate" ? "navigate" : "draw"}
+        drawPointerHandlers={isDrawInteraction ? drawPointerHandlers : undefined}
+        onDrawInterrupt={handleDrawInterrupt}
+        renderSvgOverlay={renderSvgOverlay}
+        onOcadCrsReady={setOcadCrs}
+        onOcadMapScale={setOcadMapScale}
+        gpsTrackFollow={gpsTrackFollow}
+        mapToolbarOverlay={mapToolbarOverlay}
+        secondaryHeaderContent={secondaryHeaderContent}
+        viewportClassName="h-[min(82dvh,780px)] min-h-[300px] sm:h-[min(70dvh,560px)] sm:min-h-[280px]"
+      />
+
+      <details className="rounded-xl border border-slate-200 bg-slate-50 sm:hidden">
+        <summary className="cursor-pointer px-3 py-3 text-sm font-medium text-slate-800">
+          Snappning och inställningar
+        </summary>
+        <div className="px-3 pb-3">
+          <FieldEditSnapSettings settings={editorSettings} onChange={updateEditorSettings} />
+        </div>
+      </details>
+      <div className="hidden sm:block">
+        <FieldEditSnapSettings settings={editorSettings} onChange={updateEditorSettings} />
+      </div>
 
       {selectedObject && tool === "select" && !ops.deletes.includes(selectedObject.i) && (
-        <FieldEditCadPanel
-          selectedObject={selectedObject}
-          ops={ops}
-          mapScale={ocadMapScale}
-          editorSettings={editorSettings}
-          onEditorSettingsChange={updateEditorSettings}
-          onApplyCoordinates={(coordinates) => {
-            upsertModify(selectedObject.i, coordinates);
-            setSelectedVertexIndex(null);
-          }}
-          onMessage={setInfo}
-        />
-      )}
-
-      {toolHint && (
-        <p className="text-sm text-slate-600">{toolHint}</p>
-      )}
-
-      {gpsTrackingStatus && (
-        <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-          {gpsTrackingStatus}
-          {!gpsTracking && draftPoints.length >= 2 && tool === "addLine" && (
-            <> Välj linjesymbol och klicka «Klar» för att spara linjen.</>
-          )}
-        </p>
+        <>
+          <details className="rounded-xl border border-ifk-blue/20 bg-ifk-blue/5 sm:hidden">
+            <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-900">
+              CAD-verktyg
+            </summary>
+            <FieldEditCadPanel
+              selectedObject={selectedObject}
+              ops={ops}
+              mapScale={ocadMapScale}
+              editorSettings={editorSettings}
+              onEditorSettingsChange={updateEditorSettings}
+              onApplyCoordinates={(coordinates) => {
+                upsertModify(selectedObject.i, coordinates);
+                setSelectedVertexIndex(null);
+              }}
+              onMessage={setInfo}
+            />
+          </details>
+          <div className="hidden sm:block">
+            <FieldEditCadPanel
+              selectedObject={selectedObject}
+              ops={ops}
+              mapScale={ocadMapScale}
+              editorSettings={editorSettings}
+              onEditorSettingsChange={updateEditorSettings}
+              onApplyCoordinates={(coordinates) => {
+                upsertModify(selectedObject.i, coordinates);
+                setSelectedVertexIndex(null);
+              }}
+              onMessage={setInfo}
+            />
+          </div>
+        </>
       )}
 
       {info && (
@@ -769,46 +832,13 @@ export function FieldEditSessionClient({
         </p>
       )}
 
-      <DiffMapPanel
-        previewUrl={`/api/maps/${mapSlug}/field-edits/${sessionId}/preview`}
-        title={mapTitle}
-        mapSlug={mapSlug}
-        versionId={sessionId}
-        exportEnabled={false}
-        interactionMode={gpsTracking ? "navigate" : "draw"}
-        drawPointerHandlers={drawPointerHandlers}
-        renderSvgOverlay={renderSvgOverlay}
-        onOcadCrsReady={setOcadCrs}
-        onOcadMapScale={setOcadMapScale}
-        gpsTrackFollow={gpsTrackFollow}
+      <FieldEditPublishBar
+        publishAfter={publishAfter}
+        onPublishAfterChange={setPublishAfter}
+        publishing={publishing}
+        onPublish={handlePublish}
+        onCancel={handleCancel}
       />
-
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <label className="flex items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            checked={publishAfter}
-            onChange={(e) => setPublishAfter(e.target.checked)}
-          />
-          Publicera ny version direkt
-        </label>
-        <button
-          type="button"
-          disabled={publishing}
-          onClick={handlePublish}
-          className="rounded-lg bg-ifk-blue px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-        >
-          {publishing ? "Publicerar…" : "Publicera (checka in)"}
-        </button>
-        <button
-          type="button"
-          disabled={publishing}
-          onClick={handleCancel}
-          className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-        >
-          Avbryt
-        </button>
-      </div>
     </div>
   );
 }

@@ -36,16 +36,16 @@ export default async function FieldEditSessionPage({ params }: PageProps) {
   const ops = parseFieldEditOps(checkout.editOpsJson);
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+    <div className="mx-auto max-w-6xl px-2 py-4 sm:px-6 sm:py-12">
       <Link href={`/maps/${slug}`} className="link-muted text-sm">
         ← {map.title}
       </Link>
-      <h1 className="mt-4 text-2xl font-semibold text-slate-900 sm:text-3xl">Fältredigering</h1>
-      <p className="mt-2 text-sm text-slate-600">
+      <h1 className="mt-3 text-xl font-semibold text-slate-900 sm:mt-4 sm:text-3xl">Fältredigering</h1>
+      <p className="mt-2 hidden text-sm text-slate-600 sm:block">
         Klicka på objekt för att radera eller redigera, lägg till nya objekt, eller använd snappning och CAD-verktyg. Publicera skapar en ny version.
       </p>
 
-      <div className="mt-6">
+      <div className="mt-4 sm:mt-6">
         <FieldEditSessionClient
           mapSlug={map.slug}
           mapTitle={map.title}

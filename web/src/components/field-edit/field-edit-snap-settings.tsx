@@ -9,16 +9,17 @@ type Props = {
 
 export function FieldEditSnapSettings({ settings, onChange }: Props) {
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-      <label className="flex items-center gap-2 font-medium text-slate-700">
+    <div className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm sm:flex-row sm:flex-wrap sm:items-center">
+      <label className="flex min-h-11 items-center gap-3 font-medium text-slate-700">
         <input
           type="checkbox"
           checked={settings.snapEnabled}
           onChange={(e) => onChange({ ...settings, snapEnabled: e.target.checked })}
+          className="h-5 w-5"
         />
         Snappa mot objekt
       </label>
-      <label className="flex items-center gap-2 text-slate-600">
+      <label className="flex min-h-11 items-center gap-2 text-slate-600">
         Tolerans
         <input
           type="number"
@@ -32,7 +33,7 @@ export function FieldEditSnapSettings({ settings, onChange }: Props) {
             if (!Number.isFinite(value) || value <= 0) return;
             onChange({ ...settings, snapToleranceM: value });
           }}
-          className="w-16 rounded border border-slate-300 px-2 py-1 text-sm disabled:opacity-50"
+          className="w-20 rounded border border-slate-300 px-2 py-2 text-sm disabled:opacity-50 sm:py-1"
         />
         m
       </label>

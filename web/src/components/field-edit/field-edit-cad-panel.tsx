@@ -98,7 +98,7 @@ export function FieldEditCadPanel({
             );
             applyTool("Förenkla", result.coordinates, result.beforeCount, result.afterCount);
           }}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
+          className="min-h-11 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-50 sm:min-h-0 sm:flex-none sm:py-2"
         >
           Förenkla
         </button>
@@ -109,7 +109,7 @@ export function FieldEditCadPanel({
             const result = smoothPolylineChaikin(editCoords, 2, minPoints);
             applyTool("Mjuka hörn", result.coordinates, result.beforeCount, result.afterCount);
           }}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
+          className="min-h-11 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-50 sm:min-h-0 sm:flex-none sm:py-2"
         >
           Mjuka hörn
         </button>
@@ -120,7 +120,7 @@ export function FieldEditCadPanel({
             const result = bezierSmoothPolyline(editCoords, 8, minPoints);
             applyTool("Bézier-kurva", result.coordinates, result.beforeCount, result.afterCount);
           }}
-          className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
+          className="min-h-11 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-50 sm:min-h-0 sm:flex-none sm:py-2"
         >
           Bézier-kurva
         </button>
