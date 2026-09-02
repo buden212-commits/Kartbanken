@@ -85,8 +85,14 @@ export function FieldEditSessionClient({
   const [syncState, setSyncState] = useState<"idle" | "saved" | "local" | "error">("local");
   const [ocadCrs, setOcadCrs] = useState<OcadCrsInfo | null>(null);
   const [ocadMapScale, setOcadMapScale] = useState(15000);
+  const [symbolPreview, setSymbolPreview] = useState<{ svgInner: string; maskedIndices: number[] }>({
+    svgInner: "",
+    maskedIndices: [],
+  });
   const rootTransformRef = useRef<SvgRootTransform>(IDENTITY_SVG_TRANSFORM);
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previewRequestRef = useRef(0);
   const dragVertexRef = useRef<{
     objectIndex: number;
     vertexIndex: number;
@@ -149,6 +155,61 @@ export function FieldEditSessionClient({
       setSymbolNumber(defaultSymbolForKind(symbolGroups, addKind));
     }
   }, [addKind, symbolGroups]);
+
+  const draftPreview = useMemo(() => {
+    if (symbolNumber === "" || !addKind || addKind === "point") return null;
+    if (addKind === "line" && draftPoints.length >= 2) {
+      return {
+        kind: "line" as const,
+        symbolNumber: Number(symbolNumber),
+        coordinates: draftPoints,
+      };
+    }
+    if (addKind === "area" && draftPoints.length >= 3) {
+      return {
+        kind: "area" as const,
+        symbolNumber: Number(symbolNumber),
+        coordinates: draftPoints,
+      };
+    }
+    return null;
+  }, [addKind, draftPoints, symbolNumber]);
+
+  const draftHasSymbolPreview = draftPreview != null;
+
+  useEffect(() => {
+    if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+    previewTimerRef.current = setTimeout(async () => {
+      const requestId = ++previewRequestRef.current;
+      if (!hasFieldEditChanges(ops) && !draftPreview) {
+        setSymbolPreview({ svgInner: "", maskedIndices: [] });
+        return;
+      }
+      try {
+        const res = await fetch(
+          `/api/maps/${mapSlug}/field-edits/${sessionId}/symbol-preview`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ops, draft: draftPreview }),
+          },
+        );
+        if (!res.ok || previewRequestRef.current !== requestId) return;
+        const data = await res.json();
+        setSymbolPreview({
+          svgInner: typeof data.svgInner === "string" ? data.svgInner : "",
+          maskedIndices: Array.isArray(data.maskedIndices)
+            ? data.maskedIndices.filter((value: unknown) => typeof value === "number")
+            : [],
+        });
+      } catch {
+        // Behåll föregående förhandsvisning vid tillfälliga fel.
+      }
+    }, 400);
+    return () => {
+      if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+    };
+  }, [draftPreview, mapSlug, ops, sessionId]);
 
   const scheduleServerSync = useCallback(
     (nextOps: FieldEditOps) => {
@@ -390,6 +451,9 @@ export function FieldEditSessionClient({
               draftPoints,
               draftKind,
               gpsLivePoints: gpsLiveCoordinates,
+              symbolPreviewInner: symbolPreview.svgInner,
+              maskedObjectIndices: symbolPreview.maskedIndices,
+              draftHasSymbolPreview,
             }),
           }}
         />
@@ -404,6 +468,8 @@ export function FieldEditSessionClient({
       draftPoints,
       draftKind,
       gpsLiveCoordinates,
+      symbolPreview,
+      draftHasSymbolPreview,
     ],
   );
 

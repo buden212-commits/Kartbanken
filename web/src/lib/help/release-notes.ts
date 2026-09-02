@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-02",
+    title: "Fältredigering — riktiga symboler vid ritning",
+    items: [
+      "Nya och ändrade objekt visas med korrekt OCAD-symbol (höjdkurva, stig, myr m.m.) — inte bara tunna streck",
+      "Förhandsvisningen uppdateras medan du ritar eller drar brytpunkter",
+    ],
+  },
+  {
+    date: "2026-09-02",
     title: "Fältredigering — GPS som i kartförslag",
     items: [
       "«Min position» i kartverktygsraden — zoom till skala 1:50 och följ din position (georefererade kartor)",
