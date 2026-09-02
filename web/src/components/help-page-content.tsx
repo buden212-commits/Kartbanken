@@ -333,10 +333,11 @@ export async function HelpPageContent() {
 
           {showAdmin && (
             <>
-              <h3 className="font-medium text-slate-900">Fältredigering (admin)</h3>
+              <h3 className="font-medium text-slate-900">Fältredigering</h3>
               <HelpList
                 items={[
-                  "Knappen «Fältredigering» på områdessidan — endast administratörer",
+                  "Knappen «Fältredigering» på områdessidan — administratörer och användare som fått rättigheten",
+                  "Administratörer tilldelar rättigheten under Admin → Användare → Redigera (kryss «Fältredigering»)",
                   "Rita en polygon (max 1 km²) — bara utcheckat område visas i editorn för bättre prestanda",
                   "Välj / redigera: klicka objekt, dra brytpunkter (höjdkurva, stig, myr m.m.)",
                   "Radera objekt, eller lägg till nya punkter, linjer och ytor med symbol grupperad efter geometri",
@@ -846,6 +847,7 @@ export async function HelpPageContent() {
                 "Avvisa konton som inte ska få tillgång",
                 "Skapa konton manuellt med e-post, namn, lösenord och roll",
                 "Redigera befintliga användare (namn, e-post, roll)",
+                "Fältredigering — ge läsare eller redaktör rätt att redigera kartan i webben (max 1 km²)",
                 "Notis — prenumerera på e-post vid nya versioner och utcheckningshändelser (användare kan också styra detta i Min profil)",
                 "Bifoga .ocd — få kartfilen som bilaga i notiser (kräver Notis; endast redaktör och administratör)",
                 "Senaste inloggning visas i listan",

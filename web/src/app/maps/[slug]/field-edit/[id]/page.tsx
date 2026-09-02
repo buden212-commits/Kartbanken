@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { canFieldEdit } from "@/lib/auth/permissions";
+import { userCanFieldEdit } from "@/lib/auth/permissions";
 import { getCheckoutById } from "@/lib/checkout/repository";
 import { CheckoutMode, CheckoutStatus, parseSelectionJson } from "@/lib/checkout/types";
 import { FieldEditSessionClient } from "@/components/field-edit/field-edit-session-client";
@@ -15,7 +15,7 @@ export default async function FieldEditSessionPage({ params }: PageProps) {
   const session = await auth();
   if (!session?.user?.role) redirect("/login");
 
-  if (!canFieldEdit(session.user.role)) {
+  if (!userCanFieldEdit(session.user)) {
     redirect(`/maps/${slug}`);
   }
 

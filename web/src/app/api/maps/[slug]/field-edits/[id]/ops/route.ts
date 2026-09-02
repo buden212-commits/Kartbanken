@@ -1,5 +1,4 @@
-import { requireSession } from "@/lib/auth/api";
-import { canFieldEdit } from "@/lib/auth/permissions";
+import { requireFieldEdit } from "@/lib/auth/api";
 import { getCheckoutById, serializeCheckoutResponse, updateFieldEditOps } from "@/lib/checkout/repository";
 import { CheckoutMode, CheckoutStatus } from "@/lib/checkout/types";
 import { validateFieldEditOps } from "@/lib/field-edit/apply-ops";
@@ -28,12 +27,8 @@ function emptyOpsFromPartial(record: Record<string, unknown>): FieldEditOps | nu
 }
 
 export async function PATCH(request: Request, { params }: RouteParams) {
-  const session = await requireSession();
+  const session = await requireFieldEdit();
   if (session instanceof NextResponse) return session;
-
-  if (!canFieldEdit(session.user.role)) {
-    return NextResponse.json({ error: "Endast administratörer kan använda fältredigering" }, { status: 403 });
-  }
 
   const { slug, id } = await params;
   const map = await prisma.mapFile.findUnique({ where: { slug }, select: { id: true } });

@@ -1,5 +1,4 @@
-import { requireSession } from "@/lib/auth/api";
-import { canFieldEdit } from "@/lib/auth/permissions";
+import { requireFieldEdit } from "@/lib/auth/api";
 import { cancelCheckout, getCheckoutById, serializeCheckoutResponse } from "@/lib/checkout/repository";
 import { CheckoutMode, CheckoutStatus } from "@/lib/checkout/types";
 import { logAction } from "@/lib/audit";
@@ -24,12 +23,8 @@ async function loadFieldEdit(slug: string, id: string) {
 }
 
 export async function GET(_request: Request, { params }: RouteParams) {
-  const session = await requireSession();
+  const session = await requireFieldEdit();
   if (session instanceof NextResponse) return session;
-
-  if (!canFieldEdit(session.user.role)) {
-    return NextResponse.json({ error: "Endast administratörer kan använda fältredigering" }, { status: 403 });
-  }
 
   const { slug, id } = await params;
   const loaded = await loadFieldEdit(slug, id);
@@ -39,12 +34,8 @@ export async function GET(_request: Request, { params }: RouteParams) {
 }
 
 export async function DELETE(request: Request, { params }: RouteParams) {
-  const session = await requireSession();
+  const session = await requireFieldEdit();
   if (session instanceof NextResponse) return session;
-
-  if (!canFieldEdit(session.user.role)) {
-    return NextResponse.json({ error: "Endast administratörer kan använda fältredigering" }, { status: 403 });
-  }
 
   const { slug, id } = await params;
   const loaded = await loadFieldEdit(slug, id);

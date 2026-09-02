@@ -1,5 +1,4 @@
-import { requireSession } from "@/lib/auth/api";
-import { canFieldEdit } from "@/lib/auth/permissions";
+import { requireFieldEdit } from "@/lib/auth/api";
 import { getCheckoutById } from "@/lib/checkout/repository";
 import { CheckoutMode } from "@/lib/checkout/types";
 import { buildFieldEditPreviewPath } from "@/lib/field-edit/subset-preview";
@@ -38,12 +37,8 @@ async function servePreview(request: Request, storagePath: string): Promise<Next
 }
 
 export async function GET(request: Request, { params }: RouteParams) {
-  const session = await requireSession();
+  const session = await requireFieldEdit();
   if (session instanceof NextResponse) return session;
-
-  if (!canFieldEdit(session.user.role)) {
-    return NextResponse.json({ error: "Endast administratörer" }, { status: 403 });
-  }
 
   const { slug, id } = await params;
   const map = await prisma.mapFile.findUnique({ where: { slug }, select: { id: true } });

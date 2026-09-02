@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-02",
+    title: "Fältredigering — tilldela rättighet",
+    items: [
+      "Administratörer kan ge enskilda läsare och redaktörer rätt att fältredigera (Admin → Användare → Redigera)",
+      "Administratörer har alltid fältredigering; övriga behöver uttrycklig tilldelning",
+    ],
+  },
+  {
+    date: "2026-09-02",
     title: "Fältredigering — riktiga symboler vid ritning",
     items: [
       "Nya och ändrade objekt visas med korrekt OCAD-symbol (höjdkurva, stig, myr m.m.) — inte bara tunna streck",

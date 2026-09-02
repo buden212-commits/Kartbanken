@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { canFieldEdit } from "@/lib/auth/permissions";
+import { userCanFieldEdit } from "@/lib/auth/permissions";
 import { findActiveAreaLocksForMap, getHeadVersionId, serializeCheckoutResponse } from "@/lib/checkout/repository";
 import { FieldEditCreateClient } from "@/components/field-edit/field-edit-create-client";
 import { HelpLinkIcon } from "@/components/help-link-icon";
@@ -16,7 +16,7 @@ export default async function FieldEditCreatePage({ params }: PageProps) {
   const session = await auth();
   if (!session?.user?.role) redirect("/login");
 
-  if (!canFieldEdit(session.user.role)) {
+  if (!userCanFieldEdit(session.user)) {
     redirect(`/maps/${slug}`);
   }
 

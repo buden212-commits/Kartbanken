@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { canAdmin, canCheckout, canCreateCourse, canCreateMapSuggestion, canFieldEdit, canReviewMapSuggestion, canUpload, canViewCheckouts } from "@/lib/auth/permissions";
+import { canAdmin, canCheckout, canCreateCourse, canCreateMapSuggestion, canReviewMapSuggestion, canUpload, canViewCheckouts, userCanFieldEdit } from "@/lib/auth/permissions";
 import { MapTitleEditor } from "@/components/map-title-editor";
 import { findActiveCheckoutsForMap, findCheckoutHistoryForMap, getHeadVersionId, serializeCheckoutResponse } from "@/lib/checkout/repository";
 import { isMapArchived } from "@/lib/maps/archive-map";
@@ -35,7 +35,7 @@ export default async function MapDetailPage({ params }: PageProps) {
   const canCreateCheckout = !!(session && role && canCheckout(role));
   const canSeeCheckouts = !!(session && role && canViewCheckouts(role));
   const isAdmin = !!(session && role && canAdmin(role));
-  const canUseFieldEdit = !!(session && role && canFieldEdit(role));
+  const canUseFieldEdit = !!(session && userCanFieldEdit(session.user));
 
   const map = await prisma.mapFile.findUnique({
     where: { slug },

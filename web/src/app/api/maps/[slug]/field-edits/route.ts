@@ -1,5 +1,4 @@
-import { requireSession } from "@/lib/auth/api";
-import { canFieldEdit } from "@/lib/auth/permissions";
+import { requireFieldEdit } from "@/lib/auth/api";
 import { parseSelectionPayload } from "@/lib/checkout/create-checkout";
 import { detectCheckoutConflicts } from "@/lib/checkout/overlap";
 import {
@@ -30,12 +29,8 @@ export const maxDuration = 300;
 type RouteParams = { params: Promise<{ slug: string }> };
 
 export async function GET(_request: Request, { params }: RouteParams) {
-  const session = await requireSession();
+  const session = await requireFieldEdit();
   if (session instanceof NextResponse) return session;
-
-  if (!canFieldEdit(session.user.role)) {
-    return NextResponse.json({ error: "Endast administratörer kan använda fältredigering" }, { status: 403 });
-  }
 
   const { slug } = await params;
   const map = await prisma.mapFile.findUnique({ where: { slug }, select: { id: true } });
@@ -50,12 +45,8 @@ export async function GET(_request: Request, { params }: RouteParams) {
 }
 
 export async function POST(request: Request, { params }: RouteParams) {
-  const session = await requireSession();
+  const session = await requireFieldEdit();
   if (session instanceof NextResponse) return session;
-
-  if (!canFieldEdit(session.user.role)) {
-    return NextResponse.json({ error: "Endast administratörer kan använda fältredigering" }, { status: 403 });
-  }
 
   const { slug } = await params;
   const map = await prisma.mapFile.findUnique({
