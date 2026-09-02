@@ -8,9 +8,10 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-02",
-    title: "Fältredigering — röd begränsningslinje",
+    title: "Fältredigering — tunnare begränsningslinje och brytpunkter",
     items: [
-      "Utcheckat område markeras med röd begränsningslinje — ingen blå fyllnadsyta i editorn",
+      "Utcheckat område markeras med tunn röd begränsningslinje — utan blå fyllnadsyta",
+      "Brytpunkter vid ritning och redigering är mindre och stör inte kartan",
     ],
   },
   {

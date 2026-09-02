@@ -11,6 +11,14 @@ import {
   type SvgRootTransform,
 } from "@/lib/ocad/svg-coords";
 
+/** Screen pixels (non-scaling-stroke) for checkout boundary outline. */
+const SELECTION_BOUNDARY_STROKE_PX = 2;
+/** SVG user units — vertex/draft handle radius (geo-scaled). */
+const HANDLE_RADIUS = 12;
+const GPS_HANDLE_RADIUS = 10;
+/** Screen pixels (non-scaling-stroke) for handle outline. */
+const HANDLE_STROKE_PX = 2;
+
 function ringToSvgPoints(ring: [number, number][], transform: SvgRootTransform): string {
   return ring
     .map(([x, y]) => {
@@ -25,7 +33,7 @@ export function selectionBoundarySvg(
   transform: SvgRootTransform,
 ): string {
   const strokeAttrs =
-    'fill="none" stroke="#dc2626" stroke-width="40" vector-effect="non-scaling-stroke" pointer-events="none"';
+    `fill="none" stroke="#dc2626" stroke-width="${SELECTION_BOUNDARY_STROKE_PX}" vector-effect="non-scaling-stroke" pointer-events="none"`;
   if (geometry.type === CheckoutSelectionType.BBOX) {
     const [minX, minY, maxX, maxY] = geoBboxToSvgUser(
       [geometry.bbox.minX, geometry.bbox.minY, geometry.bbox.maxX, geometry.bbox.maxY],
@@ -62,7 +70,7 @@ function vertexHandlesSvg(
   coords: [number, number][],
   transform: SvgRootTransform,
   selectedVertex: number | null,
-  handleRadius = 120,
+  handleRadius = HANDLE_RADIUS,
 ): string {
   return coords
     .map(([x, y], index) => {
@@ -70,7 +78,7 @@ function vertexHandlesSvg(
       const fill = selectedVertex === index ? "#2563eb" : "#ffffff";
       const stroke = selectedVertex === index ? "#1d4ed8" : "#64748b";
       const r = selectedVertex === index ? handleRadius * 1.15 : handleRadius;
-      return `<circle cx="${sx}" cy="${sy}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="40" vector-effect="non-scaling-stroke" pointer-events="none" />`;
+      return `<circle cx="${sx}" cy="${sy}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="${HANDLE_STROKE_PX}" vector-effect="non-scaling-stroke" pointer-events="none" />`;
     })
     .join("");
 }
@@ -167,7 +175,7 @@ export function fieldEditOverlaySvg(options: {
 
   if (gpsLivePoints.length >= 1 && !draftHasSymbolPreview) {
     parts.push(lineSvg(gpsLivePoints, transform, "#16a34a", 3));
-    parts.push(vertexHandlesSvg(gpsLivePoints, transform, null, 80));
+    parts.push(vertexHandlesSvg(gpsLivePoints, transform, null, GPS_HANDLE_RADIUS));
   }
 
   return parts.join("");

@@ -56,7 +56,7 @@ type Props = {
 };
 
 const HIT_DISTANCE = 35;
-const VERTEX_HIT_DISTANCE = 120;
+const VERTEX_HIT_DISTANCE = 25;
 
 export function FieldEditSessionClient({
   mapSlug,
