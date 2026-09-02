@@ -8,6 +8,13 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-02",
+    title: "Fältredigering — röd begränsningslinje",
+    items: [
+      "Utcheckat område markeras med röd begränsningslinje — ingen blå fyllnadsyta i editorn",
+    ],
+  },
+  {
+    date: "2026-09-02",
     title: "Fältredigering — tilldela rättighet",
     items: [
       "Administratörer kan ge enskilda läsare och redaktörer rätt att fältredigera (Admin → Användare → Redigera)",

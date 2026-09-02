@@ -24,14 +24,16 @@ export function selectionBoundarySvg(
   geometry: CheckoutSelectionGeometry,
   transform: SvgRootTransform,
 ): string {
+  const strokeAttrs =
+    'fill="none" stroke="#dc2626" stroke-width="40" vector-effect="non-scaling-stroke" pointer-events="none"';
   if (geometry.type === CheckoutSelectionType.BBOX) {
     const [minX, minY, maxX, maxY] = geoBboxToSvgUser(
       [geometry.bbox.minX, geometry.bbox.minY, geometry.bbox.maxX, geometry.bbox.maxY],
       transform,
     );
-    return `<polygon points="${minX},${minY} ${maxX},${minY} ${maxX},${maxY} ${minX},${maxY}" fill="rgba(59,130,246,0.08)" stroke="#2563eb" stroke-width="2" stroke-dasharray="6 4" pointer-events="none" />`;
+    return `<polygon points="${minX},${minY} ${maxX},${minY} ${maxX},${maxY} ${minX},${maxY}" ${strokeAttrs} />`;
   }
-  return `<polygon points="${ringToSvgPoints(geometry.ring, transform)}" fill="rgba(59,130,246,0.08)" stroke="#2563eb" stroke-width="2" stroke-dasharray="6 4" pointer-events="none" />`;
+  return `<polygon points="${ringToSvgPoints(geometry.ring, transform)}" ${strokeAttrs} />`;
 }
 
 function lineSvg(coords: [number, number][], transform: SvgRootTransform, stroke: string, width = 2): string {
