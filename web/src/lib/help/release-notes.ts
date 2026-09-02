@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-02",
+    title: "Fältredigering — snappning och CAD-verktyg",
+    items: [
+      "Snappa mot befintliga objekt med inställbar tolerans (meter) vid ritning och redigering",
+      "CAD-verktyg för valda linjer och ytor: förenkla, mjuka hörn och Bézier-kurva",
+    ],
+  },
+  {
+    date: "2026-09-02",
     title: "Fältredigering — sparade linjer och ytor försvann inte",
     items: [
       "Nya linjer och ytor (t.ex. höjdkurvor) syns kvar på kartan efter «Klar»",

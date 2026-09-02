@@ -341,6 +341,8 @@ export async function HelpPageContent() {
                   "Rita en polygon (max 1 km²) — bara utcheckat område visas i editorn för bättre prestanda",
                   "Utcheckat område markeras med röd begränsningslinje (ingen fyllnadsyta)",
                   "Välj / redigera: klicka objekt, dra brytpunkter (höjdkurva, stig, myr m.m.)",
+                  "Snappa mot objekt: slå på snappning och ange tolerans (meter) — brytpunkter fästs vid linjer, hörn och punktobjekt",
+                  "CAD-verktyg för vald linje eller yta: förenkla (ta bort onödiga punkter), mjuka hörn, Bézier-kurva",
                   "Radera objekt, eller lägg till nya punkter, linjer och ytor med symbol grupperad efter geometri",
                   "Nya och ändrade objekt visas med riktig OCAD-symbol i editorn — inte bara enkla streck",
                   "«Min position» och «GPS-spår» fungerar som i kartförslag på georefererade kartor — spela in stigar med telefonens GPS",

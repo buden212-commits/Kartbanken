@@ -2,8 +2,10 @@ import {
   CheckoutSelectionType,
   type CheckoutSelectionGeometry,
 } from "@/lib/checkout/types";
+import type { SnapResult } from "@/lib/field-edit/snap";
 import type { FieldEditObjectEntry } from "@/lib/field-edit/object-index";
 import type { FieldEditOps } from "@/lib/field-edit/types";
+import { resolveObjectCoordinates } from "@/lib/field-edit/types";
 import { verticesForHandles } from "@/lib/field-edit/vertices";
 import {
   geoBboxToSvgUser,
@@ -94,6 +96,16 @@ function maskObjectSvg(obj: FieldEditObjectEntry, transform: SvgRootTransform): 
   return maskPointSvg(obj.c, transform);
 }
 
+function snapIndicatorSvg(snap: SnapResult, transform: SvgRootTransform): string {
+  const [x, y] = geoToSvgUserPoint(snap.point, transform);
+  const color = snap.kind === "vertex" ? "#2563eb" : snap.kind === "segment" ? "#7c3aed" : "#0891b2";
+  return `<g pointer-events="none">
+    <circle cx="${x}" cy="${y}" r="14" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke" />
+    <line x1="${x - 10}" y1="${y}" x2="${x + 10}" y2="${y}" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke" />
+    <line x1="${x}" y1="${y - 10}" x2="${x}" y2="${y + 10}" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke" />
+  </g>`;
+}
+
 export function fieldEditOverlaySvg(options: {
   transform: SvgRootTransform;
   selectionGeometry: CheckoutSelectionGeometry;
@@ -107,6 +119,7 @@ export function fieldEditOverlaySvg(options: {
   symbolPreviewInner?: string;
   maskedObjectIndices?: number[];
   draftHasSymbolPreview?: boolean;
+  snapPreview?: SnapResult | null;
 }): string {
   const {
     transform,
@@ -121,6 +134,7 @@ export function fieldEditOverlaySvg(options: {
     symbolPreviewInner = "",
     maskedObjectIndices = [],
     draftHasSymbolPreview = false,
+    snapPreview = null,
   } = options;
 
   const masked = new Set(maskedObjectIndices);
@@ -141,20 +155,13 @@ export function fieldEditOverlaySvg(options: {
   for (const obj of objects) {
     if (masked.has(obj.i)) continue;
     if (selectedObjectIndex !== obj.i) continue;
-    const coords = obj.v;
-    if (coords.length === 0) continue;
+    const coords = resolveObjectCoordinates(obj.i, obj.v, ops);
+    if (!coords || coords.length === 0) continue;
     const handleCoords = obj.t === "area" ? verticesForHandles(coords, obj.t) : coords;
     parts.push(vertexHandlesSvg(handleCoords, transform, selectedVertexIndex));
   }
 
-  for (const modify of ops.modifies) {
-    if (selectedObjectIndex !== modify.objectIndex) continue;
-    const handleCoords =
-      modify.geometryKind === "area"
-        ? verticesForHandles(modify.coordinates, "area")
-        : modify.coordinates;
-    parts.push(vertexHandlesSvg(handleCoords, transform, selectedVertexIndex));
-  }
+  // modifies handles rendered above via resolveObjectCoordinates
 
   if (!draftHasSymbolPreview && draftKind === "line" && draftPoints.length >= 1) {
     parts.push(lineSvg(draftPoints, transform, "#16a34a", 2));
@@ -176,6 +183,10 @@ export function fieldEditOverlaySvg(options: {
   if (gpsLivePoints.length >= 1 && !draftHasSymbolPreview) {
     parts.push(lineSvg(gpsLivePoints, transform, "#16a34a", 3));
     parts.push(vertexHandlesSvg(gpsLivePoints, transform, null, GPS_HANDLE_RADIUS));
+  }
+
+  if (snapPreview) {
+    parts.push(snapIndicatorSvg(snapPreview, transform));
   }
 
   return parts.join("");

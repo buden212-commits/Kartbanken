@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DiffMapPanel, type MapDrawPointerHandlers } from "@/components/diff-map-panel";
 import { fieldEditOverlaySvg } from "@/components/field-edit/field-edit-overlay";
+import { FieldEditCadPanel } from "@/components/field-edit/field-edit-cad-panel";
+import { FieldEditSnapSettings } from "@/components/field-edit/field-edit-snap-settings";
 import {
   buildSymbolGroups,
   defaultSymbolForKind,
@@ -19,7 +21,12 @@ import {
   mergeInitialOps,
   saveLocalFieldEditOps,
 } from "@/lib/field-edit/local-storage";
-import { applyVertexMove, verticesForHandles } from "@/lib/field-edit/vertices";
+import {
+  loadFieldEditEditorSettings,
+  saveFieldEditEditorSettings,
+  type FieldEditEditorSettings,
+} from "@/lib/field-edit/editor-settings";
+import { snapGeoPoint, type SnapResult } from "@/lib/field-edit/snap";
 import { useGpsTrackRecording } from "@/lib/gps/use-gps-track-recording";
 import {
   countFieldEditChanges,
@@ -29,7 +36,8 @@ import {
   type FieldEditModify,
   type FieldEditOps,
 } from "@/lib/field-edit/types";
-import type { OcadCrsInfo } from "@/lib/ocad/crs";
+import { applyVertexMove, verticesForHandles } from "@/lib/field-edit/vertices";
+import { metersToMapUnits, type OcadCrsInfo } from "@/lib/ocad/crs";
 import { screenToSvgPoint } from "@/lib/ocad/map-hit-test";
 import { parseOcadLayersFromSvg } from "@/lib/ocad/svg-utils";
 import { fetchPreviewText } from "@/lib/ocad/preview-fetch";
@@ -82,6 +90,11 @@ export function FieldEditSessionClient({
   const [publishing, setPublishing] = useState(false);
   const [publishAfter, setPublishAfter] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+  const [editorSettings, setEditorSettings] = useState<FieldEditEditorSettings>(() =>
+    loadFieldEditEditorSettings(),
+  );
+  const [snapPreview, setSnapPreview] = useState<SnapResult | null>(null);
   const [syncState, setSyncState] = useState<"idle" | "saved" | "local" | "error">("local");
   const [ocadCrs, setOcadCrs] = useState<OcadCrsInfo | null>(null);
   const [ocadMapScale, setOcadMapScale] = useState(15000);
@@ -101,6 +114,34 @@ export function FieldEditSessionClient({
   } | null>(null);
   const opsRef = useRef(ops);
   opsRef.current = ops;
+  const editorSettingsRef = useRef(editorSettings);
+  editorSettingsRef.current = editorSettings;
+
+  const updateEditorSettings = useCallback((next: FieldEditEditorSettings) => {
+    setEditorSettings(next);
+    saveFieldEditEditorSettings(next);
+  }, []);
+
+  const resolveSnapPoint = useCallback(
+    (
+      geo: [number, number],
+      excludeObjectIndex: number | null = null,
+    ): { point: [number, number]; snap: SnapResult | null } => {
+      const settings = editorSettingsRef.current;
+      if (!settings.snapEnabled) {
+        return { point: geo, snap: null };
+      }
+      const toleranceMapUnits = metersToMapUnits(settings.snapToleranceM, ocadMapScale);
+      const snap = snapGeoPoint(geo, {
+        objects,
+        ops: opsRef.current,
+        toleranceMapUnits,
+        excludeObjectIndex,
+      });
+      return { point: snap?.point ?? geo, snap };
+    },
+    [objects, ocadMapScale],
+  );
 
   const addKind: FieldEditGeometryKind | null =
     tool === "addPoint" ? "point" : tool === "addLine" ? "line" : tool === "addArea" ? "area" : null;
@@ -276,7 +317,11 @@ export function FieldEditSessionClient({
       if (gpsTracking) return;
       const pt = screenToSvgPoint(svg, e.clientX, e.clientY);
       if (!pt) return;
-      const geo = svgUserToGeoPoint(pt, rootTransformRef.current);
+      const rawGeo = svgUserToGeoPoint(pt, rootTransformRef.current);
+      const excludeIndex =
+        tool === "select" && selectedObjectIndex != null ? selectedObjectIndex : null;
+      const { point: geo, snap } = resolveSnapPoint(rawGeo, excludeIndex);
+      setSnapPreview(snap);
 
       if (tool === "select") {
         if (selectedObjectIndex != null) {
@@ -310,6 +355,7 @@ export function FieldEditSessionClient({
         setSelectedObjectIndex(hit.i);
         setSelectedVertexIndex(null);
         setError(null);
+        setInfo(null);
         return;
       }
 
@@ -347,37 +393,60 @@ export function FieldEditSessionClient({
           ],
         }));
         setError(null);
+        setInfo(null);
         return;
       }
 
       if (tool === "addLine" || tool === "addArea") {
         setDraftPoints((prev) => [...prev, geo]);
         setError(null);
+        setInfo(null);
       }
     },
-    [objects, ops, selectedObjectIndex, symbolNumber, tool, updateOps, gpsTracking],
+    [objects, ops, resolveSnapPoint, selectedObjectIndex, symbolNumber, tool, updateOps, gpsTracking],
   );
 
   const handlePointerMove = useCallback(
     (_e: React.PointerEvent, svg: SVGSVGElement) => {
-      const drag = dragVertexRef.current;
-      if (!drag || tool !== "select") return;
       const pt = screenToSvgPoint(svg, _e.clientX, _e.clientY);
       if (!pt) return;
-      const geo = svgUserToGeoPoint(pt, rootTransformRef.current);
-      const next = applyVertexMove(
-        drag.startCoords,
-        drag.objectType,
-        drag.vertexIndex,
-        geo,
-      );
-      upsertModify(drag.objectIndex, next);
+      const rawGeo = svgUserToGeoPoint(pt, rootTransformRef.current);
+
+      const drag = dragVertexRef.current;
+      if (drag && tool === "select") {
+        const { point: geo } = resolveSnapPoint(rawGeo, drag.objectIndex);
+        const next = applyVertexMove(
+          drag.startCoords,
+          drag.objectType,
+          drag.vertexIndex,
+          geo,
+        );
+        upsertModify(drag.objectIndex, next);
+        return;
+      }
+
+      const shouldPreviewSnap =
+        editorSettings.snapEnabled &&
+        (tool === "addLine" ||
+          tool === "addArea" ||
+          tool === "addPoint" ||
+          (tool === "select" && selectedObjectIndex != null));
+      if (!shouldPreviewSnap) {
+        setSnapPreview(null);
+        return;
+      }
+
+      const excludeIndex =
+        tool === "select" && selectedObjectIndex != null ? selectedObjectIndex : null;
+      const { snap } = resolveSnapPoint(rawGeo, excludeIndex);
+      setSnapPreview(snap);
     },
-    [tool, upsertModify],
+    [editorSettings.snapEnabled, resolveSnapPoint, selectedObjectIndex, tool, upsertModify],
   );
 
   const handlePointerUp = useCallback(() => {
     dragVertexRef.current = null;
+    setSnapPreview(null);
   }, []);
 
   const finishDraft = useCallback(() => {
@@ -454,6 +523,7 @@ export function FieldEditSessionClient({
               symbolPreviewInner: symbolPreview.svgInner,
               maskedObjectIndices: symbolPreview.maskedIndices,
               draftHasSymbolPreview,
+              snapPreview,
             }),
           }}
         />
@@ -470,7 +540,16 @@ export function FieldEditSessionClient({
       gpsLiveCoordinates,
       symbolPreview,
       draftHasSymbolPreview,
+      snapPreview,
     ],
+  );
+
+  const selectedObject = useMemo(
+    () =>
+      selectedObjectIndex != null
+        ? objects.find((entry) => entry.i === selectedObjectIndex) ?? null
+        : null,
+    [objects, selectedObjectIndex],
   );
 
   const counts = useMemo(() => countFieldEditChanges(ops), [ops]);
@@ -534,13 +613,13 @@ export function FieldEditSessionClient({
       return `GPS-spårning — gå längs spåret du vill rita. Minst ${GPS_TRACK_MIN_DISTANCE_M} m mellan punkter. Klicka «Sluta spåra» när du är klar, välj linjesymbol och klicka «Klar».`;
     }
     if (tool === "select") {
-      return "Klicka ett objekt för att markera det. Dra en brytpunkt för att flytta, förlänga eller forma om hela objektet.";
+      return "Klicka ett objekt för att markera det. Dra brytpunkter eller använd CAD-verktygen nedan. Snappning hjälper dig träffa befintliga linjer och hörn.";
     }
     if (tool === "addLine") {
-      return "Klicka punkter längs linjen, använd GPS-spår, eller kombinera — klicka «Klar» när linjen är färdig.";
+      return "Klicka punkter längs linjen — snappning mot befintliga objekt kan slås på ovan. Klicka «Klar» när linjen är färdig.";
     }
     if (tool === "addArea") {
-      return "Klicka hörn runt ytan (minst 3) och klicka «Klar» när ytan är färdig.";
+      return "Klicka hörn runt ytan (minst 3). Snappning mot befintliga objekt kan slås på ovan. Klicka «Klar» när ytan är färdig.";
     }
     return null;
   }, [gpsTracking, tool]);
@@ -648,6 +727,23 @@ export function FieldEditSessionClient({
         </p>
       )}
 
+      <FieldEditSnapSettings settings={editorSettings} onChange={updateEditorSettings} />
+
+      {selectedObject && tool === "select" && !ops.deletes.includes(selectedObject.i) && (
+        <FieldEditCadPanel
+          selectedObject={selectedObject}
+          ops={ops}
+          mapScale={ocadMapScale}
+          editorSettings={editorSettings}
+          onEditorSettingsChange={updateEditorSettings}
+          onApplyCoordinates={(coordinates) => {
+            upsertModify(selectedObject.i, coordinates);
+            setSelectedVertexIndex(null);
+          }}
+          onMessage={setInfo}
+        />
+      )}
+
       {toolHint && (
         <p className="text-sm text-slate-600">{toolHint}</p>
       )}
@@ -658,6 +754,12 @@ export function FieldEditSessionClient({
           {!gpsTracking && draftPoints.length >= 2 && tool === "addLine" && (
             <> Välj linjesymbol och klicka «Klar» för att spara linjen.</>
           )}
+        </p>
+      )}
+
+      {info && (
+        <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+          {info}
         </p>
       )}
 

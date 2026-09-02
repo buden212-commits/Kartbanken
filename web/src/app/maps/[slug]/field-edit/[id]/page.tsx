@@ -42,7 +42,7 @@ export default async function FieldEditSessionPage({ params }: PageProps) {
       </Link>
       <h1 className="mt-4 text-2xl font-semibold text-slate-900 sm:text-3xl">Fältredigering</h1>
       <p className="mt-2 text-sm text-slate-600">
-        Klicka på objekt för att radera, eller lägg till nya punkter. Publicera skapar en ny version.
+        Klicka på objekt för att radera eller redigera, lägg till nya objekt, eller använd snappning och CAD-verktyg. Publicera skapar en ny version.
       </p>
 
       <div className="mt-6">
