@@ -97,7 +97,7 @@ function buildMarked(): Marked {
         return `<${tag} class="${listClass} my-2 pl-5">${body}</${tag}>\n`;
       },
       blockquote({ tokens }: Tokens.Blockquote) {
-        const body = this.parser.parseInline(tokens);
+        const body = this.parser.parse(tokens);
         return `<blockquote class="my-3 border-l-4 border-slate-300 bg-slate-50 px-3 py-2 text-slate-600">${body}</blockquote>\n`;
       },
       hr() {
