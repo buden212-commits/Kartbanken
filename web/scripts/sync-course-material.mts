@@ -3,7 +3,7 @@
  *
  *   npm run sync:course-material
  */
-import { copyFile, mkdir, readdir, readFile, writeFile } from "fs/promises";
+import { access, copyFile, mkdir, readdir, readFile, writeFile } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -18,6 +18,15 @@ const sourceImages = path.join(docsDir, "bilder");
 const destImages = path.join(webDir, "public/kursmaterial/bilder");
 const sourcePdf = path.join(docsDir, "sjalvstudier-kursmaterial.pdf");
 const destPdf = path.join(webDir, "public/kursmaterial/sjalvstudier-kursmaterial.pdf");
+
+async function exists(file: string): Promise<boolean> {
+  try {
+    await access(file);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 async function copyImages(): Promise<number> {
   await mkdir(destImages, { recursive: true });
@@ -35,6 +44,16 @@ async function copyImages(): Promise<number> {
 }
 
 async function main(): Promise<void> {
+  if (!(await exists(sourceMd))) {
+    if (!(await exists(destMd))) {
+      throw new Error(
+        "Kursmaterial saknas — kör npm run sync:course-material lokalt från repo-roten (kräver docs/).",
+      );
+    }
+    console.log("Hoppar över sync — docs/ saknas (Vercel), använder committade filer i web/.");
+    return;
+  }
+
   const markdown = await readFile(sourceMd, "utf-8");
   await writeFile(destMd, markdown, "utf-8");
 
