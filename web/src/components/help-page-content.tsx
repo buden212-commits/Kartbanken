@@ -185,7 +185,7 @@ export async function HelpPageContent() {
               "Område — startsidan med alla kartområden",
               "Visste du att… — dagens tips om en funktion du kanske inte känner till (länk till hjälpen)",
               "Verifiera — tillfällig jämförelse utan uppladdning",
-              "Hjälp — översikt, guide, buggar och förbättringsförslag (/hjalp)",
+              "Hjälp — översikt, guide, självstudier, buggar och förbättringsförslag (/hjalp)",
               "Admin — användare, lagring, loggning och inställningar (endast administratörer)",
             ]}
           />

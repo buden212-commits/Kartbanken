@@ -7,6 +7,14 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-09-02",
+    title: "Självstudier i Hjälp",
+    items: [
+      "Kursmaterialet med övningar och skärmdumpar finns nu under Hjälp → Självstudier, direkt efter guiden",
+      "Samma innehåll kan laddas ner som PDF från sidan",
+    ],
+  },
+  {
     date: "2026-09-01",
     title: "Jämför versioner — mycket snabbare och blir klar",
     items: [
