@@ -94,7 +94,7 @@ async function createUser(formData: FormData) {
 
   const passwordHash = await hashPassword(password);
 
-  await prisma.user.create({
+  const created = await prisma.user.create({
     data: {
       name,
       email,
@@ -104,6 +104,8 @@ async function createUser(formData: FormData) {
       approvedById: session.user.id,
     },
   });
+
+  await logAction(session.user.id, "USER_CREATED", "User", created.id, { email, role });
 
   revalidatePath("/admin/users");
 }
@@ -173,18 +175,19 @@ async function rejectUser(formData: FormData) {
 
 async function deleteUser(formData: FormData) {
   "use server";
-  await requireAdmin();
+  const session = await requireAdmin();
 
   const userId = formData.get("userId")?.toString();
   if (!userId) return;
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, role: true },
+    select: { id: true, role: true, email: true },
   });
   if (!user || user.role !== Role.PENDING) return;
 
   await prisma.user.delete({ where: { id: userId } });
+  await logAction(session.user.id, "USER_DELETED", "User", userId, { email: user.email });
 
   revalidatePath("/admin/users");
 }
@@ -193,7 +196,7 @@ async function updateUserNotificationPreferences(
   formData: FormData,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   "use server";
-  await requireAdmin();
+  const session = await requireAdmin();
 
   const userId = formData.get("userId")?.toString();
   const receiveNotifications = formData.get("receiveNotifications") === "true";
@@ -214,6 +217,11 @@ async function updateUserNotificationPreferences(
       error: err instanceof Error ? err.message : "Kunde inte uppdatera notisinställningar",
     };
   }
+
+  await logAction(session.user.id, "USER_NOTIFICATIONS_UPDATED", "User", userId, {
+    receiveNotifications,
+    receiveOcdAttachment,
+  });
 
   revalidatePath("/admin/users");
   return { ok: true };

@@ -1,4 +1,5 @@
 import { requestPasswordReset } from "@/lib/auth/password-reset";
+import { clientIpFromRequest, rateLimit } from "@/lib/security/rate-limit";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -9,16 +10,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Ogiltig begäran" }, { status: 400 });
   }
 
-  const email = body.email?.trim();
+  const email = body.email?.trim().toLowerCase();
   if (!email) {
     return NextResponse.json({ error: "Ange e-postadress." }, { status: 400 });
+  }
+
+  const ip = clientIpFromRequest(request);
+  const byIp = rateLimit(`forgot-ip:${ip}`, { limit: 10, windowMs: 60 * 60 * 1000 });
+  const byEmail = rateLimit(`forgot-email:${email}`, { limit: 3, windowMs: 60 * 60 * 1000 });
+  if (!byIp.ok || !byEmail.ok) {
+    return NextResponse.json(
+      { error: "För många försök. Försök igen senare." },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(Math.max(byIp.retryAfterSec, byEmail.retryAfterSec)),
+        },
+      },
+    );
   }
 
   try {
     const result = await requestPasswordReset(email);
     return NextResponse.json(result);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Kunde inte skicka återställningsmail";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("Password reset failed:", error);
+    return NextResponse.json(
+      { error: "Kunde inte skicka återställningsmail" },
+      { status: 500 },
+    );
   }
 }

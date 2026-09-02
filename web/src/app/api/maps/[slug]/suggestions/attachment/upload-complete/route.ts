@@ -2,6 +2,10 @@ import { requireSession } from "@/lib/auth/api";
 import { assertSuggestionCreateAccess } from "@/lib/suggestion/access";
 import { prisma } from "@/lib/prisma";
 import { fileExists } from "@/lib/storage";
+import {
+  blobRefToPathname,
+  isSuggestionAttachmentPath,
+} from "@/lib/storage/blob-path-security";
 import { NextResponse } from "next/server";
 
 type RouteParams = { params: Promise<{ slug: string }> };
@@ -33,9 +37,8 @@ export async function POST(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "blobUrl saknas" }, { status: 400 });
   }
 
-  const attachmentPath = body.blobUrl.trim();
-  const prefix = `maps/${map.id}/suggestion-attachments/`;
-  if (!attachmentPath.includes(prefix) && !attachmentPath.includes("suggestion-attachments")) {
+  const attachmentPath = blobRefToPathname(body.blobUrl);
+  if (!isSuggestionAttachmentPath(attachmentPath, map.id)) {
     return NextResponse.json({ error: "Ogiltig bilagesökväg" }, { status: 400 });
   }
 

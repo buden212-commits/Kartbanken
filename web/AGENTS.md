@@ -17,3 +17,10 @@ Kontroller:
 - **Deploy** — `npm run deploy` kör `check-help-deploy.mts` före Vercel; Vercel-build kör samma check via `buildCommand`
 
 Använd alltid `npm run deploy` i stället för `npx vercel deploy` direkt.
+
+## Produktiondeploy
+
+- `npm run deploy:prod` i `web/` (kräver miljövariabel `VERCEL_TOKEN`)
+- Skapa token: https://vercel.com/account/tokens
+- Spara som Cursor Secret `VERCEL_TOKEN` och som GitHub Actions secret med samma namn
+- Push till `main` kör GitHub Action «Deploy production»

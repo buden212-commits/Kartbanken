@@ -421,7 +421,7 @@ export async function generateOnDemandTile(params: {
       .toBuffer();
   }
 
-  svg = await generateOcadSvgFiltered(ocdBuffer, indices, bounds, ocadFile);
+  svg = await generateOcadSvgFiltered(ocdBuffer, indices, bounds);
   const webp = await rasterizeSvgRegion(svg, bounds);
   await uploadTile(mapFileId, versionNumber, z, x, y, webp);
   return webp;

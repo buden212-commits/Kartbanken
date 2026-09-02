@@ -40,6 +40,10 @@ export type CheckoutSelectionGeometry =
 export type CheckoutSelection = {
   geometry: CheckoutSelectionGeometry;
   objectIds: string[];
+  /** True when checkout was created from an imported partial map (no prior checkout). */
+  importPartial?: boolean;
+  /** Unpadded utbredning för den importerade filen (crop/diff). */
+  importExtent?: Bbox;
 };
 
 export type CheckoutSelectionInput = {
@@ -67,6 +71,25 @@ export type CheckoutOverlapConflict = {
   message: string;
 };
 
+export function parseBbox(value: unknown): Bbox | null {
+  if (!value || typeof value !== "object") return null;
+  const bbox = value as Record<string, unknown>;
+  const minX = Number(bbox.minX);
+  const minY = Number(bbox.minY);
+  const maxX = Number(bbox.maxX);
+  const maxY = Number(bbox.maxY);
+  if (![minX, minY, maxX, maxY].every(Number.isFinite)) return null;
+  return { minX, minY, maxX, maxY };
+}
+
+function importFields(record: Record<string, unknown>): Pick<CheckoutSelection, "importPartial" | "importExtent"> {
+  const importExtent = record.importPartial === true ? parseBbox(record.importExtent) ?? undefined : undefined;
+  return {
+    importPartial: record.importPartial === true,
+    ...(importExtent ? { importExtent } : {}),
+  };
+}
+
 export function parseSelectionJson(raw: string): CheckoutSelection {
   const parsed = JSON.parse(raw) as unknown;
   if (!parsed || typeof parsed !== "object") {
@@ -85,19 +108,15 @@ export function parseSelectionJson(raw: string): CheckoutSelection {
 
   const geom = geometry as Record<string, unknown>;
   if (geom.type === CheckoutSelectionType.BBOX) {
-    const bbox = geom.bbox as Record<string, unknown> | undefined;
+    const bbox = parseBbox(geom.bbox);
     if (!bbox) throw new Error("BBOX saknar bbox");
     return {
       geometry: {
         type: CheckoutSelectionType.BBOX,
-        bbox: {
-          minX: Number(bbox.minX),
-          minY: Number(bbox.minY),
-          maxX: Number(bbox.maxX),
-          maxY: Number(bbox.maxY),
-        },
+        bbox,
       },
       objectIds,
+      ...importFields(record),
     };
   }
 
@@ -115,6 +134,7 @@ export function parseSelectionJson(raw: string): CheckoutSelection {
     return {
       geometry: { type: CheckoutSelectionType.POLYGON, ring: normalized },
       objectIds,
+      ...importFields(record),
     };
   }
 

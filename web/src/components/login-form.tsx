@@ -5,6 +5,7 @@ import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ForgotPasswordForm } from "@/components/forgot-password-form";
 import { getLoginBlockReason } from "@/lib/auth/login-status";
+import { safeCallbackPath } from "@/lib/security/safe-callback-url";
 
 type LoginView = "login" | "forgot";
 
@@ -52,7 +53,7 @@ export function LoginForm() {
       return;
     }
 
-    const callbackUrl = searchParams.get("callbackUrl") ?? "/";
+    const callbackUrl = safeCallbackPath(searchParams.get("callbackUrl"));
     router.push(callbackUrl);
     router.refresh();
   }

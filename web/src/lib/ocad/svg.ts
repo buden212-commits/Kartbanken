@@ -319,24 +319,17 @@ export async function generateOcadSvgLayered(buffer: Buffer): Promise<{
 
   const crs = crsFromOcad(ocadFile);
   const kartramAttr = kartramAttributeForOcad(ocadFile);
-  // Attributes must be space-separated; strict XML parsers (libxml via sharp)
-  // reject the tag otherwise, even though browsers accept it.
-  const rootAttributes = [
-    `xmlns="http://www.w3.org/2000/svg"`,
+  const svg = [
+    `<svg xmlns="http://www.w3.org/2000/svg"`,
     `viewBox="${viewBox}"`,
-    `width="100%"`,
-    `height="100%"`,
+    `width="100%" height="100%"`,
     `preserveAspectRatio="xMidYMid meet"`,
     `fill="transparent"`,
     `data-ocad-scale="${crs.scale}"`,
     `data-ocad-version="${ocadFile.header.version}"`,
     `data-ocad-crs="${escapeXmlAttr(serializeOcadCrs(crs))}"`,
     `data-ocad-layers-version="${OCAD_LAYERS_FORMAT_VERSION}"`,
-    `data-ocad-layers="${layersJson}"`,
-  ].join(" ");
-
-  const svg = [
-    `<svg ${rootAttributes}${kartramAttr}>`,
+    `data-ocad-layers="${layersJson}"${kartramAttr}>`,
     defsMarkup ? `<defs>${defsMarkup}</defs>` : "",
     `<g transform="${rootTransform}">`,
     layerMarkupParts.join(""),
@@ -422,12 +415,8 @@ export async function generateOcadSvgFiltered(
   buffer: Buffer,
   objectIndices: Set<number>,
   viewBounds: SvgBounds,
-  /** Pass an already parsed file to avoid re-reading large .ocd buffers. */
-  parsedOcadFile?: unknown,
 ): Promise<string> {
-  const ocadFile =
-    (parsedOcadFile as OcadFile | undefined) ??
-    ((await readOcad(buffer, { quietWarnings: true })) as OcadFile);
+  const ocadFile = (await readOcad(buffer, { quietWarnings: true })) as OcadFile;
   const filtered = filterObjectsByIndex(ocadFile, objectIndices);
   const document = new DOMImplementation().createDocument(null, null, null);
   const svgElement = ocadToSvg(ocadFile, { document, objects: filtered }) as Element;
@@ -439,18 +428,32 @@ export function buildPreviewSvgPath(mapFileId: string, versionNumber: number): s
   return `maps/${mapFileId}/v${versionNumber}/preview.svg`;
 }
 
-/**
- * Store a flat (non-layered) preview SVG.
- * Layered generation runs ocadToSvg many times and OOMs on Vercel for ~20 MB maps.
- * Checkout and map view work with flat SVG; layers can be upgraded later when memory allows.
- */
 export async function generateAndStorePreviewSvg(
   buffer: Buffer,
   storagePath: string,
 ): Promise<SvgBounds | null> {
-  const ocadFile = (await readOcad(buffer, { quietWarnings: true })) as OcadFile;
-  const bounds = boundsFromOcad(ocadFile);
-  const svg = await generateOcadSvgFlat(buffer, ocadFile, bounds);
-  await uploadFile(storagePath, Buffer.from(svg, "utf-8"));
-  return bounds;
+  // Stora kartor (t.ex. Mora Väst ~20 MB OCD → ~30 MB SVG): använd platt SVG.
+  // Layered-render (per symbol) kan OOM:a i Vercel after()/preview och lämna versionen i PROCESSING.
+  const preferFlat = buffer.length >= 15_000_000;
+
+  if (preferFlat) {
+    const ocadFile = (await readOcad(buffer, { quietWarnings: true })) as OcadFile;
+    const bounds = boundsFromOcad(ocadFile);
+    const svg = await generateOcadSvgFlat(buffer, ocadFile, bounds);
+    await uploadFile(storagePath, Buffer.from(svg, "utf-8"));
+    return bounds;
+  }
+
+  try {
+    const { svg, bounds } = await generateOcadSvgLayered(buffer);
+    await uploadFile(storagePath, Buffer.from(svg, "utf-8"));
+    return bounds;
+  } catch (err) {
+    console.error("Layered SVG-generering misslyckades, använder platt SVG:", err);
+    const ocadFile = (await readOcad(buffer, { quietWarnings: true })) as OcadFile;
+    const bounds = boundsFromOcad(ocadFile);
+    const svg = await generateOcadSvgFlat(buffer, ocadFile, bounds);
+    await uploadFile(storagePath, Buffer.from(svg, "utf-8"));
+    return bounds;
+  }
 }

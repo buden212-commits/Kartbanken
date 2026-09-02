@@ -50,7 +50,6 @@ export function FullscreenMapViewer({
           title="Hela kartan"
           mapSlug={mapSlug}
           versionId={versionId}
-          basemap="tiles"
           exportEnabled
           fullscreen
         />

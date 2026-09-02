@@ -47,7 +47,7 @@ export function ChangePasswordForm({
         throw new Error(data.error ?? "Kunde inte byta lösenord");
       }
 
-      await update({ user: { mustChangePassword: false } });
+      await update();
       onSuccess?.();
       router.refresh();
       if (!onSuccess) {

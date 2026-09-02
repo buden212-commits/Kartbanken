@@ -1,5 +1,7 @@
 import { logAction } from "@/lib/audit";
 import { requireAdmin, requireSession } from "@/lib/auth/api";
+import { canAdmin } from "@/lib/auth/permissions";
+import { mapListWhereForRole, versionVisibilityFilter } from "@/lib/maps/version-query";
 import { prisma } from "@/lib/prisma";
 import { slugify, uniqueSlug } from "@/lib/slug";
 import { NextResponse } from "next/server";
@@ -8,10 +10,13 @@ export async function GET() {
   const session = await requireSession();
   if (session instanceof NextResponse) return session;
 
+  const isAdmin = canAdmin(session.user.role);
   const maps = await prisma.mapFile.findMany({
+    where: mapListWhereForRole(session.user.role, isAdmin),
     orderBy: { title: "asc" },
     include: {
       versions: {
+        where: versionVisibilityFilter(session.user.role),
         orderBy: { versionNumber: "desc" },
         take: 1,
         include: {
@@ -34,7 +39,11 @@ export async function GET() {
       }
 
       const recommended = await prisma.mapVersion.findFirst({
-        where: { mapFileId: map.id, isRecommended: true },
+        where: {
+          mapFileId: map.id,
+          isRecommended: true,
+          ...versionVisibilityFilter(session.user.role),
+        },
         orderBy: { versionNumber: "desc" },
       });
 

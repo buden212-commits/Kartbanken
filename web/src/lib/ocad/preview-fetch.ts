@@ -1,6 +1,17 @@
 const previewCache = new Map<string, string>();
+const inflight = new Map<string, Promise<string>>();
 
 const RETRY_DELAYS_MS = [0, 750, 2000];
+
+class PreviewHttpError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "PreviewHttpError";
+    this.status = status;
+  }
+}
 
 function toLoadError(err: unknown): Error {
   if (err instanceof DOMException && err.name === "AbortError") {
@@ -18,46 +29,129 @@ function toLoadError(err: unknown): Error {
 export function clearPreviewCache(url?: string): void {
   if (url) {
     previewCache.delete(url);
+    inflight.delete(url);
     return;
   }
   previewCache.clear();
+  inflight.clear();
+}
+
+function abortError(): Error {
+  return toLoadError(new DOMException("Aborted", "AbortError"));
+}
+
+function withDirectParam(url: string): string {
+  const parsed = new URL(
+    url,
+    typeof window !== "undefined" ? window.location.origin : "http://localhost",
+  );
+  parsed.searchParams.set("direct", "1");
+  return `${parsed.pathname}${parsed.search}`;
+}
+
+async function readSvgBody(response: Response, signal?: AbortSignal): Promise<string> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    const payload = (await response.json()) as { url?: string; error?: string };
+    if (!payload.url) {
+      throw new PreviewHttpError(
+        payload.error ?? "Kartbilden saknar nedladdningsadress",
+        response.status,
+      );
+    }
+    const direct = await fetch(payload.url, { signal });
+    if (!direct.ok) {
+      throw new PreviewHttpError(`Kunde inte ladda kartbild (${direct.status})`, direct.status);
+    }
+    return direct.text();
+  }
+  return response.text();
+}
+
+async function fetchPreviewFromNetwork(
+  url: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  let lastError: unknown;
+  const requestUrl = withDirectParam(url);
+
+  for (let attempt = 0; attempt < RETRY_DELAYS_MS.length; attempt++) {
+    if (signal?.aborted) throw abortError();
+    if (attempt > 0) {
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
+    }
+
+    try {
+      const response = await fetch(requestUrl, {
+        credentials: "same-origin",
+        signal,
+        headers: {
+          Accept: "application/json, image/svg+xml, text/plain;q=0.9,*/*;q=0.8",
+        },
+      });
+      if (!response.ok) {
+        const serverMessage = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        throw new PreviewHttpError(
+          serverMessage?.error ?? `Kunde inte ladda kartbild (${response.status})`,
+          response.status,
+        );
+      }
+      const text = await readSvgBody(response, signal);
+      previewCache.set(url, text);
+      return text;
+    } catch (err) {
+      if (signal?.aborted) throw abortError();
+      // HTTP-fel (404/500) ska inte retrys:s — det förlänger bara en gateway-timeout.
+      if (err instanceof PreviewHttpError) throw err;
+      lastError = err;
+    }
+  }
+
+  throw toLoadError(lastError);
 }
 
 export async function fetchPreviewText(
   url: string,
   options?: { signal?: AbortSignal; bypassCache?: boolean },
 ): Promise<string> {
+  if (options?.signal?.aborted) {
+    throw abortError();
+  }
+
   if (!options?.bypassCache) {
     const cached = previewCache.get(url);
     if (cached) return cached;
   }
 
-  let lastError: unknown;
-  for (let attempt = 0; attempt < RETRY_DELAYS_MS.length; attempt++) {
-    if (attempt > 0) {
-      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
-    }
-
-    try {
-      const response = await fetch(url, {
-        signal: options?.signal,
-        credentials: "same-origin",
-      });
-
-      if (!response.ok) {
-        throw new Error(`Kunde inte ladda kartbild (${response.status})`);
-      }
-
-      const text = await response.text();
-      previewCache.set(url, text);
-      return text;
-    } catch (err) {
-      if (options?.signal?.aborted) {
-        throw toLoadError(err);
-      }
-      lastError = err;
-    }
+  let pending = inflight.get(url);
+  if (!pending) {
+    pending = fetchPreviewFromNetwork(url, options?.signal).finally(() => {
+      inflight.delete(url);
+    });
+    inflight.set(url, pending);
   }
 
-  throw toLoadError(lastError);
+  if (!options?.signal) {
+    return pending;
+  }
+
+  return new Promise<string>((resolve, reject) => {
+    const onAbort = () => reject(abortError());
+    options.signal!.addEventListener("abort", onAbort, { once: true });
+    pending!
+      .then((text) => {
+        options.signal!.removeEventListener("abort", onAbort);
+        if (options.signal!.aborted) {
+          reject(abortError());
+          return;
+        }
+        resolve(text);
+      })
+      .catch((err) => {
+        options.signal!.removeEventListener("abort", onAbort);
+        reject(err);
+      });
+  });
 }

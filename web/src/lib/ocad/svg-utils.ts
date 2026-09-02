@@ -1,6 +1,7 @@
 import { parseOcadCrsFromSvg, type OcadCrsInfo } from "./crs";
 import { parseSvgRootTransform, type SvgRootTransform } from "./svg-coords";
 import type { OcadMapLayer } from "./layers";
+import { sanitizeSvgMarkup } from "@/lib/security/svg-sanitize";
 
 export type { OcadMapLayer };
 
@@ -74,15 +75,16 @@ export function extractSvgInner(svgText: string): {
   ocadLayers: OcadMapLayer[];
   rootTransform: SvgRootTransform;
 } {
-  const viewBoxMatch = svgText.match(/viewBox=["']([^"']+)["']/);
+  const safe = sanitizeSvgMarkup(svgText);
+  const viewBoxMatch = safe.match(/viewBox=["']([^"']+)["']/);
   const viewBox = viewBoxMatch?.[1] ?? null;
-  const fillMatch = svgText.match(/<svg[^>]*\bfill=["']([^"']+)["']/i);
+  const fillMatch = safe.match(/<svg[^>]*\bfill=["']([^"']+)["']/i);
   const fill = fillMatch?.[1] ?? null;
-  const ocadMapScale = parseOcadMapScale(svgText);
-  const ocadFileVersion = parseOcadFileVersion(svgText);
-  const ocadCrs = parseOcadCrsFromSvg(svgText);
-  const ocadLayers = parseOcadLayersFromSvg(svgText);
-  const inner = svgText
+  const ocadMapScale = parseOcadMapScale(safe);
+  const ocadFileVersion = parseOcadFileVersion(safe);
+  const ocadCrs = parseOcadCrsFromSvg(safe);
+  const ocadLayers = parseOcadLayersFromSvg(safe);
+  const inner = safe
     .replace(/<\?xml[^?]*\?>/i, "")
     .replace(/<svg[^>]*>/i, "")
     .replace(/<\/svg>\s*$/i, "");

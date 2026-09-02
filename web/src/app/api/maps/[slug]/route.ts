@@ -1,7 +1,9 @@
 import { logAction } from "@/lib/audit";
 import { requireAdmin, requireSession } from "@/lib/auth/api";
+import { canAdmin } from "@/lib/auth/permissions";
 import { setMapArchived } from "@/lib/maps/archive-map";
 import { deleteMapFile } from "@/lib/maps/delete-map";
+import { versionVisibilityFilter } from "@/lib/maps/version-query";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -12,17 +14,23 @@ export async function GET(_request: Request, { params }: RouteParams) {
   if (session instanceof NextResponse) return session;
 
   const { slug } = await params;
+  const isAdminUser = canAdmin(session.user.role);
 
   const map = await prisma.mapFile.findUnique({
     where: { slug },
     include: {
       versions: {
+        where: versionVisibilityFilter(session.user.role),
         orderBy: { versionNumber: "desc" },
       },
     },
   });
 
   if (!map) {
+    return NextResponse.json({ error: "Kartfil hittades inte" }, { status: 404 });
+  }
+
+  if (map.archivedAt && !isAdminUser) {
     return NextResponse.json({ error: "Kartfil hittades inte" }, { status: 404 });
   }
 

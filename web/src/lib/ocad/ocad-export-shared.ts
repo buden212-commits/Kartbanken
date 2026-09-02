@@ -17,6 +17,8 @@ export type CropBbox = {
 export type CropOcadOptions = {
   bbox: CropBbox;
   targetVersion: OcadExportVersion;
+  /** Tillåt tom crop (alla objekt soft-delete). Används vid import av delkarta i tomt område. */
+  allowEmpty?: boolean;
 };
 
 export type CropOcadResult = {
@@ -25,6 +27,8 @@ export type CropOcadResult = {
   targetVersion: number;
   keptObjects: number;
   removedObjects: number;
+  /** Object index values kept by the binary crop (same numbering as GeoJSON objectIndex). */
+  keptObjectIndices: number[];
   versionWarning?: string;
 };
 

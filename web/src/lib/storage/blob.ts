@@ -1,4 +1,5 @@
-import { del, get, head, put, type PutBlobResult } from "@vercel/blob";
+import { del, get, head, issueSignedToken, presignUrl, put, type PutBlobResult } from "@vercel/blob";
+import { blobRefToPathname } from "./blob-path-security";
 
 function getToken(): string | undefined {
   return process.env.BLOB_READ_WRITE_TOKEN;
@@ -43,6 +44,38 @@ export async function uploadFile(
     contentType: contentTypeForPath(storagePath),
     multipart: toPutBody(data).length > 20 * 1024 * 1024,
   });
+}
+
+export async function openStoredFileStream(storageRef: string): Promise<{
+  stream: ReadableStream<Uint8Array>;
+  size?: number;
+  contentType?: string;
+}> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      const target = isBlobUrl(storageRef)
+        ? storageRef
+        : await resolvePathnameToUrl(storageRef);
+      const result = await get(target, blobPrivateOptions());
+      if (result?.statusCode === 200 && result.stream) {
+        return {
+          stream: result.stream,
+          size: result.blob.size,
+          contentType: result.blob.contentType,
+        };
+      }
+      lastError = new Error(`Blob get status ${result?.statusCode ?? "null"}`);
+    } catch (err) {
+      lastError = err;
+    }
+
+    if (attempt < 3) await sleep(400 * (attempt + 1));
+  }
+
+  console.error("openStoredFileStream failed:", storageRef, lastError);
+  throw new Error(`Fil saknas i Blob: ${storageRef}`);
 }
 
 export async function readStoredFile(storageRef: string): Promise<Buffer> {
@@ -99,6 +132,27 @@ export async function fileExists(storageRef: string): Promise<boolean> {
       return false;
     }
   }
+}
+
+export async function createPresignedGetUrl(
+  storageRef: string,
+  options?: { expiresInMs?: number },
+): Promise<string> {
+  const pathname = blobRefToPathname(storageRef);
+  const validUntil = Date.now() + (options?.expiresInMs ?? 15 * 60 * 1000);
+  const signedToken = await issueSignedToken({
+    ...blobHeadOptions(),
+    pathname,
+    operations: ["get"],
+    validUntil,
+  });
+  const { presignedUrl } = await presignUrl(signedToken, {
+    operation: "get",
+    pathname,
+    access: "private",
+    validUntil,
+  });
+  return presignedUrl;
 }
 
 export function supportsClientUploads(): boolean {

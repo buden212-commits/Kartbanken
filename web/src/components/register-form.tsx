@@ -9,6 +9,7 @@ const errorMessages: Record<Exclude<RegisterResult, { ok: true }>["error"], stri
   password_too_short: "Lösenordet måste vara minst 8 tecken.",
   invalid_email: "Ange en giltig e-postadress.",
   missing_name: "Ange ditt namn.",
+  rate_limited: "För många registreringsförsök. Försök igen senare.",
 };
 
 export function RegisterForm() {

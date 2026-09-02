@@ -5,35 +5,43 @@ import {
 } from "@/lib/maps/version-lookup";
 import {
   buildPreviewSvgPath,
-  ensureSvgMetadata,
   generateAndStorePreviewSvg,
-  generateOcadSvgLayered,
-  svgBufferHasLayers,
-  svgBufferHasMetadata,
 } from "@/lib/ocad/svg";
 import { prisma } from "@/lib/prisma";
-import { fileExists, readStoredFile, uploadFile } from "@/lib/storage";
+import { fileExists, readStoredFile } from "@/lib/storage";
+import {
+  serveStoredFile,
+  serveStoredFileAsDirectUrl,
+} from "@/lib/storage/stream-response";
+import { SVG_RESPONSE_SECURITY_HEADERS } from "@/lib/security/svg-sanitize";
 import { NextResponse } from "next/server";
 
 export const maxDuration = 300;
 
-/** Skip in-request layered upgrade above this size — OOMs on Vercel (~2 GB). */
-const LAYER_UPGRADE_MAX_OCD_BYTES = 8 * 1024 * 1024;
-const LAYER_UPGRADE_MAX_SVG_BYTES = 12 * 1024 * 1024;
-
 type RouteParams = { params: Promise<{ slug: string; id: string }> };
 
-async function readPreviewOrNull(storagePath: string): Promise<Buffer | null> {
-  try {
-    if (!(await fileExists(storagePath))) return null;
-    return await readStoredFile(storagePath);
-  } catch (err) {
-    console.warn("Preview SVG kunde inte läsas, regenererar:", storagePath, err);
-    return null;
+const PREVIEW_HEADERS = {
+  ...SVG_RESPONSE_SECURITY_HEADERS,
+  "Cache-Control": "private, max-age=3600",
+};
+
+async function servePreview(request: Request, storagePath: string): Promise<NextResponse> {
+  const url = new URL(request.url);
+  const wantsDirect =
+    url.searchParams.get("direct") === "1" ||
+    (request.headers.get("accept") ?? "").includes("application/json");
+
+  if (wantsDirect) {
+    const direct = await serveStoredFileAsDirectUrl(storagePath);
+    if (direct) return direct;
+    // Fallback: strömma utan Content-Length (redirect kan strula med CORS i fetch).
+    return serveStoredFile(storagePath, PREVIEW_HEADERS, { preferRedirect: false });
   }
+
+  return serveStoredFile(storagePath, PREVIEW_HEADERS, { preferRedirect: true });
 }
 
-export async function GET(_request: Request, { params }: RouteParams) {
+export async function GET(request: Request, { params }: RouteParams) {
   const session = await requireSession();
   if (session instanceof NextResponse) return session;
 
@@ -52,84 +60,38 @@ export async function GET(_request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Version hittades inte" }, { status: 404 });
   }
 
-  let previewSvgPath = version.previewSvgPath;
-  let svgBuffer = previewSvgPath ? await readPreviewOrNull(previewSvgPath) : null;
+  const cachedOnly = new URL(request.url).searchParams.get("cached") === "1";
 
-  if (!svgBuffer) {
-    previewSvgPath = buildPreviewSvgPath(version.mapFileId, version.versionNumber);
+  let previewSvgPath = version.previewSvgPath;
+  if (previewSvgPath && (await fileExists(previewSvgPath))) {
     try {
-      const buffer = await readStoredFile(version.storagePath);
-      await generateAndStorePreviewSvg(buffer, previewSvgPath);
-      svgBuffer = await readStoredFile(previewSvgPath);
-      await prisma.mapVersion.update({
-        where: { id: version.id },
-        data: { previewSvgPath },
-      });
+      return await servePreview(request, previewSvgPath);
     } catch (err) {
-      console.error("Preview SVG generation failed:", err);
-      return NextResponse.json(
-        { error: "Kunde inte generera kartpreview" },
-        { status: 500 },
-      );
+      console.warn("Preview SVG kunde inte levereras:", previewSvgPath, err);
     }
   }
 
+  if (cachedOnly) {
+    return NextResponse.json(
+      { error: "Kartbilden är inte redo ännu. Öppna området så kartan hinner laddas, och försök igen." },
+      { status: 404 },
+    );
+  }
+
+  previewSvgPath = buildPreviewSvgPath(version.mapFileId, version.versionNumber);
   try {
-    const needsLayerUpgrade = !svgBufferHasLayers(svgBuffer);
-    const needsMetadata = !svgBufferHasMetadata(svgBuffer);
-
-    if (needsMetadata && !needsLayerUpgrade) {
-      try {
-        const ocdBuffer = await readStoredFile(version.storagePath);
-        const { buffer, changed } = await ensureSvgMetadata(svgBuffer, ocdBuffer);
-        if (changed) {
-          await uploadFile(previewSvgPath!, buffer);
-        }
-        svgBuffer = buffer;
-      } catch (err) {
-        console.warn("SVG metadata-uppgradering misslyckades, serverar befintlig preview:", err);
-      }
-    } else if (needsLayerUpgrade) {
-      const svgTooLarge = svgBuffer.byteLength > LAYER_UPGRADE_MAX_SVG_BYTES;
-      if (svgTooLarge) {
-        console.warn(
-          "Hoppar över lager-uppgradering — preview-SVG för stor:",
-          previewSvgPath,
-          svgBuffer.byteLength,
-        );
-      } else {
-        try {
-          const ocdBuffer = await readStoredFile(version.storagePath);
-          if (ocdBuffer.byteLength > LAYER_UPGRADE_MAX_OCD_BYTES) {
-            console.warn(
-              "Hoppar över lager-uppgradering — OCD för stor:",
-              version.storagePath,
-              ocdBuffer.byteLength,
-            );
-          } else {
-            const { svg } = await generateOcadSvgLayered(ocdBuffer);
-            svgBuffer = Buffer.from(svg, "utf-8");
-            await uploadFile(previewSvgPath!, svgBuffer);
-          }
-        } catch (err) {
-          console.warn(
-            "Lager-uppgradering misslyckades, serverar flat preview:",
-            previewSvgPath,
-            err,
-          );
-        }
-      }
-    }
-
-    return new NextResponse(new Uint8Array(svgBuffer), {
-      headers: {
-        "Content-Type": "image/svg+xml; charset=utf-8",
-        "Cache-Control": "private, max-age=3600",
-        "Content-Length": String(svgBuffer.byteLength),
-      },
+    const buffer = await readStoredFile(version.storagePath);
+    await generateAndStorePreviewSvg(buffer, previewSvgPath);
+    await prisma.mapVersion.update({
+      where: { id: version.id },
+      data: { previewSvgPath },
     });
+    return await servePreview(request, previewSvgPath);
   } catch (err) {
-    console.error("Preview read failed:", err);
-    return NextResponse.json({ error: "Preview saknas" }, { status: 404 });
+    console.error("Preview SVG generation failed:", err);
+    return NextResponse.json(
+      { error: "Kunde inte generera kartpreview" },
+      { status: 500 },
+    );
   }
 }

@@ -1,12 +1,15 @@
-import { mkdir, readFile, unlink, writeFile } from "fs/promises";
+import { createReadStream } from "fs";
+import { mkdir, readFile, stat, unlink, writeFile } from "fs/promises";
 import path from "path";
+import { Readable } from "stream";
 
 const STORAGE_ROOT = process.env.STORAGE_ROOT ?? path.join(process.cwd(), "storage");
 
 function resolvePath(storagePath: string): string {
-  const full = path.resolve(STORAGE_ROOT, storagePath);
   const root = path.resolve(STORAGE_ROOT);
-  if (!full.startsWith(root)) {
+  const full = path.resolve(root, storagePath);
+  const relative = path.relative(root, full);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
     throw new Error("Ogiltig lagringssökväg");
   }
   return full;
@@ -25,6 +28,18 @@ export async function readStoredFile(storagePath: string): Promise<Buffer> {
   return readFile(resolvePath(storagePath));
 }
 
+export async function openStoredFileStream(storagePath: string): Promise<{
+  stream: ReadableStream<Uint8Array>;
+  size: number;
+}> {
+  const fullPath = resolvePath(storagePath);
+  const info = await stat(fullPath);
+  return {
+    stream: Readable.toWeb(createReadStream(fullPath)) as ReadableStream<Uint8Array>,
+    size: info.size,
+  };
+}
+
 export async function deleteFile(storagePath: string): Promise<void> {
   try {
     await unlink(resolvePath(storagePath));
@@ -35,7 +50,7 @@ export async function deleteFile(storagePath: string): Promise<void> {
 
 export async function fileExists(storagePath: string): Promise<boolean> {
   try {
-    await readFile(resolvePath(storagePath));
+    await stat(resolvePath(storagePath));
     return true;
   } catch {
     return false;

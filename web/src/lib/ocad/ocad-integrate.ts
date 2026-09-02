@@ -55,12 +55,17 @@ const OBJECT_INDEX_POS_OFFSET = 16;
 const OBJECT_INDEX_LEN_OFFSET = 20;
 const OBJECT_INDEX_SYM_OFFSET = 24;
 const OBJECT_INDEX_OBJTYPE_OFFSET = 28;
+const OBJECT_INDEX_ENCRYPTED_OFFSET = 29;
 const OBJECT_INDEX_STATUS_OFFSET = 30;
+const OBJECT_INDEX_VIEWTYPE_OFFSET = 31;
+const OBJECT_INDEX_COLOR_OFFSET = 32;
 
 export type NewObjectSpec = {
   objectBytes: Buffer;
   sym: number;
   objType: number;
+  /** Object index Color (SmallInt). Must be a valid color number — 0 crashes OCAD redraw on many maps. */
+  color: number;
   len: number;
   rc: { minX: number; minY: number; maxX: number; maxY: number };
 };
@@ -254,6 +259,138 @@ function findLastIndexBlockStart(buffer: Buffer): number {
   return last;
 }
 
+const INDEX_BLOCK_BYTES =
+  OBJECT_INDEX_BLOCK_HEADER_SIZE + OBJECT_INDEX_ENTRY_SIZE * OBJECT_INDEX_ENTRIES_PER_BLOCK;
+
+function collectFreeIndexSlots(buffer: Buffer, limit: number): IndexSlot[] {
+  const slots: IndexSlot[] = [];
+  if (limit <= 0) return slots;
+  iterateAllIndexSlots(buffer, (slot) => {
+    if (slots.length >= limit) return;
+    if (isFreeIndexSlot(buffer, slot.entryOffset)) {
+      slots.push(slot);
+    }
+  });
+  return slots;
+}
+
+function copyObjectBytes(source: Buffer, entry: ObjectIndexEntryInfo): Buffer | null {
+  const size = measureObjectByteSize(source, entry);
+  if (size <= 0 || entry.pos <= 0 || entry.pos + size > source.length) {
+    return null;
+  }
+  return Buffer.from(source.subarray(entry.pos, entry.pos + size));
+}
+
+/**
+ * Appends objects from checkin into head by copying raw object bytes and
+ * registering them in head's object index (reusing deleted slots or new blocks).
+ *
+ * Uses a single buffer allocation instead of copying the whole file per object
+ * (critical for large maps with hundreds of additions).
+ */
+export function appendObjectsFromCheckin(
+  headBuffer: Buffer,
+  checkinBuffer: Buffer,
+  checkinObjectIndices: number[],
+): AppendObjectsResult {
+  type Prepared = {
+    checkinIndex: number;
+    objectBytes: Buffer;
+    checkinEntry: ObjectIndexEntryInfo;
+  };
+
+  const prepared: Prepared[] = [];
+  const failed: AppendObjectFailure[] = [];
+  const indexMap: Record<number, number> = {};
+
+  for (const checkinIndex of checkinObjectIndices) {
+    const checkinEntry = readObjectIndexEntry(checkinBuffer, checkinIndex);
+    if (!checkinEntry) {
+      failed.push({
+        checkinObjectIndex: checkinIndex,
+        reason: "Objektet saknas i checkin-filens index.",
+      });
+      continue;
+    }
+
+    if (checkinEntry.status <= 0 || checkinEntry.status >= 3) {
+      failed.push({
+        checkinObjectIndex: checkinIndex,
+        reason: "Objektet är markerat som borttaget i checkin-filen.",
+      });
+      continue;
+    }
+
+    const objectBytes = copyObjectBytes(checkinBuffer, checkinEntry);
+    if (!objectBytes) {
+      failed.push({
+        checkinObjectIndex: checkinIndex,
+        reason: "Kunde inte läsa objektets rådata från checkin-filen.",
+      });
+      continue;
+    }
+
+    prepared.push({ checkinIndex, objectBytes, checkinEntry });
+  }
+
+  if (prepared.length === 0) {
+    return { buffer: headBuffer, appended: 0, failed, indexMap };
+  }
+
+  const freeInHead = collectFreeIndexSlots(headBuffer, prepared.length);
+  const extraSlotsNeeded = Math.max(0, prepared.length - freeInHead.length);
+  const newBlocks = Math.ceil(extraSlotsNeeded / OBJECT_INDEX_ENTRIES_PER_BLOCK);
+  const objectsBytes = prepared.reduce((sum, item) => sum + item.objectBytes.length, 0);
+  const indexExtra = newBlocks * INDEX_BLOCK_BYTES;
+  const headLen = headBuffer.length;
+
+  const buffer = Buffer.alloc(headLen + indexExtra + objectsBytes);
+  headBuffer.copy(buffer, 0, 0, headLen);
+
+  if (newBlocks > 0) {
+    let lastBlockStart = findLastIndexBlockStart(buffer);
+    for (let i = 0; i < newBlocks; i++) {
+      const newBlockStart = headLen + i * INDEX_BLOCK_BYTES;
+      buffer.writeInt32LE(newBlockStart, lastBlockStart);
+      // New block body is already zero-filled (free slots).
+      lastBlockStart = newBlockStart;
+    }
+  }
+
+  const slots = collectFreeIndexSlots(buffer, prepared.length);
+  if (slots.length < prepared.length) {
+    throw new Error(
+      `Kunde inte allokera indexplatser för tillagda objekt (behöver ${prepared.length}, fick ${slots.length}).`,
+    );
+  }
+
+  let writePos = headLen + indexExtra;
+  let appended = 0;
+
+  for (let i = 0; i < prepared.length; i++) {
+    const item = prepared[i]!;
+    const slot = slots[i]!;
+    const newPos = writePos;
+    item.objectBytes.copy(buffer, writePos);
+    writePos += item.objectBytes.length;
+
+    checkinBuffer.copy(
+      buffer,
+      slot.entryOffset,
+      item.checkinEntry.entryOffset,
+      item.checkinEntry.entryOffset + OBJECT_INDEX_ENTRY_SIZE,
+    );
+    buffer.writeInt32LE(newPos, slot.entryOffset + OBJECT_INDEX_POS_OFFSET);
+    buffer.writeUInt8(1, slot.entryOffset + OBJECT_INDEX_STATUS_OFFSET);
+
+    indexMap[item.checkinIndex] = slot.objectIndex;
+    appended++;
+  }
+
+  return { buffer, appended, failed, indexMap };
+}
+
 function appendObjectIndexBlock(buffer: Buffer): { buffer: Buffer; slot: IndexSlot } {
   const lastBlockStart = findLastIndexBlockStart(buffer);
   const newBlockStart = buffer.length;
@@ -261,9 +398,7 @@ function appendObjectIndexBlock(buffer: Buffer): { buffer: Buffer; slot: IndexSl
   const linked = Buffer.from(buffer);
   linked.writeInt32LE(newBlockStart, lastBlockStart);
 
-  const emptyBlock = Buffer.alloc(
-    OBJECT_INDEX_BLOCK_HEADER_SIZE + OBJECT_INDEX_ENTRY_SIZE * OBJECT_INDEX_ENTRIES_PER_BLOCK,
-  );
+  const emptyBlock = Buffer.alloc(INDEX_BLOCK_BYTES);
   const extended = Buffer.concat([linked, emptyBlock]);
 
   const reader = new BufferReader(extended);
@@ -298,91 +433,7 @@ function allocateIndexSlot(buffer: Buffer): { buffer: Buffer; slot: IndexSlot } 
     return { buffer, slot: free };
   }
   const appended = appendObjectIndexBlock(buffer);
-  return { buffer: Buffer.from(appended.buffer), slot: appended.slot };
-}
-
-function copyObjectBytes(source: Buffer, entry: ObjectIndexEntryInfo): Buffer | null {
-  const size = measureObjectByteSize(source, entry);
-  if (size <= 0 || entry.pos <= 0 || entry.pos + size > source.length) {
-    return null;
-  }
-  return Buffer.from(source.subarray(entry.pos, entry.pos + size));
-}
-
-/**
- * Appends objects from checkin into head by copying raw object bytes and
- * registering them in head's object index (reusing deleted slots or new blocks).
- */
-export function appendObjectsFromCheckin(
-  headBuffer: Buffer,
-  checkinBuffer: Buffer,
-  checkinObjectIndices: number[],
-): AppendObjectsResult {
-  let buffer = Buffer.from(headBuffer);
-  const failed: AppendObjectFailure[] = [];
-  const indexMap: Record<number, number> = {};
-  let appended = 0;
-
-  for (const checkinIndex of checkinObjectIndices) {
-    const checkinEntry = readObjectIndexEntry(checkinBuffer, checkinIndex);
-    if (!checkinEntry) {
-      failed.push({
-        checkinObjectIndex: checkinIndex,
-        reason: "Objektet saknas i checkin-filens index.",
-      });
-      continue;
-    }
-
-    if (checkinEntry.status <= 0 || checkinEntry.status >= 3) {
-      failed.push({
-        checkinObjectIndex: checkinIndex,
-        reason: "Objektet är markerat som borttaget i checkin-filen.",
-      });
-      continue;
-    }
-
-    const objectBytes = copyObjectBytes(checkinBuffer, checkinEntry);
-    if (!objectBytes) {
-      failed.push({
-        checkinObjectIndex: checkinIndex,
-        reason: "Kunde inte läsa objektets rådata från checkin-filen.",
-      });
-      continue;
-    }
-
-    const allocated = allocateIndexSlot(buffer);
-    buffer = Buffer.from(allocated.buffer);
-    const slot = allocated.slot;
-
-    const newPos = buffer.length;
-    buffer = Buffer.concat([buffer, objectBytes]);
-
-    const sourceEntryBytes = checkinBuffer.subarray(
-      checkinEntry.entryOffset,
-      checkinEntry.entryOffset + OBJECT_INDEX_ENTRY_SIZE,
-    );
-    sourceEntryBytes.copy(buffer, slot.entryOffset);
-    buffer.writeInt32LE(newPos, slot.entryOffset + OBJECT_INDEX_POS_OFFSET);
-    buffer.writeUInt8(1, slot.entryOffset + OBJECT_INDEX_STATUS_OFFSET);
-
-    indexMap[checkinIndex] = slot.objectIndex;
-    appended++;
-  }
-
-  return { buffer, appended, failed, indexMap };
-}
-
-function findIndexEntryTemplateOffset(buffer: Buffer): number | null {
-  let templateOffset: number | null = null;
-  iterateAllIndexSlots(buffer, (slot) => {
-    if (templateOffset != null) return;
-    const status = buffer.readUInt8(slot.entryOffset + OBJECT_INDEX_STATUS_OFFSET);
-    const pos = buffer.readInt32LE(slot.entryOffset + OBJECT_INDEX_POS_OFFSET);
-    if (status > 0 && status < 3 && pos > 0) {
-      templateOffset = slot.entryOffset;
-    }
-  });
-  return templateOffset;
+  return { buffer: appended.buffer, slot: appended.slot };
 }
 
 function writeObjectIndexRc(
@@ -398,6 +449,14 @@ function writeObjectIndexRc(
   buffer.writeInt32LE(maxYEnc, entryOffset + 12);
 }
 
+function normalizeIndexColor(color: number): number {
+  if (!Number.isFinite(color)) return 1;
+  const rounded = Math.round(color);
+  // SmallInt range; 0 is invalid on typical ISOM palettes (colors start at 1).
+  if (rounded === 0) return 1;
+  return Math.max(-32768, Math.min(32767, rounded));
+}
+
 /** Appends newly serialized object bytes and registers them in the object index. */
 export function appendNewObjects(
   headBuffer: Buffer,
@@ -408,7 +467,6 @@ export function appendNewObjects(
   }
 
   let buffer = Buffer.from(headBuffer);
-  const templateEntryOffset = findIndexEntryTemplateOffset(buffer);
   const objectIndices: number[] = [];
   let appended = 0;
 
@@ -420,23 +478,21 @@ export function appendNewObjects(
     const newPos = buffer.length;
     buffer = Buffer.concat([buffer, spec.objectBytes]);
 
-    if (templateEntryOffset != null) {
-      buffer.copy(
-        buffer,
-        slot.entryOffset,
-        templateEntryOffset,
-        templateEntryOffset + OBJECT_INDEX_ENTRY_SIZE,
-      );
-    } else {
-      buffer.fill(0, slot.entryOffset, slot.entryOffset + OBJECT_INDEX_ENTRY_SIZE);
-    }
-
+    // Skriv hela indexposten explicit — efter soft-delete finns inga aktiva
+    // mallposter, och Color=0 (nollfyllning) gör att OCAD kraschar i redraw.
+    buffer.fill(0, slot.entryOffset, slot.entryOffset + OBJECT_INDEX_ENTRY_SIZE);
     writeObjectIndexRc(buffer, slot.entryOffset, spec.rc);
     buffer.writeInt32LE(newPos, slot.entryOffset + OBJECT_INDEX_POS_OFFSET);
     buffer.writeInt32LE(spec.len, slot.entryOffset + OBJECT_INDEX_LEN_OFFSET);
     buffer.writeInt32LE(spec.sym, slot.entryOffset + OBJECT_INDEX_SYM_OFFSET);
     buffer.writeUInt8(spec.objType, slot.entryOffset + OBJECT_INDEX_OBJTYPE_OFFSET);
+    buffer.writeUInt8(0, slot.entryOffset + OBJECT_INDEX_ENCRYPTED_OFFSET);
     buffer.writeUInt8(1, slot.entryOffset + OBJECT_INDEX_STATUS_OFFSET);
+    buffer.writeUInt8(0, slot.entryOffset + OBJECT_INDEX_VIEWTYPE_OFFSET);
+    buffer.writeInt16LE(
+      normalizeIndexColor(spec.color),
+      slot.entryOffset + OBJECT_INDEX_COLOR_OFFSET,
+    );
 
     objectIndices.push(slot.objectIndex);
     appended++;
@@ -455,4 +511,28 @@ export function readActiveObjectIndices(buffer: Buffer): Set<number> {
     }
   });
   return indices;
+}
+
+/**
+ * Lightweight structural check (header + object index). Avoids full GeoJSON parse,
+ * which OOMs on large maps like Mora Väst during admin integration.
+ */
+export function validateOcadBufferStructure(buffer: Buffer): {
+  version: number;
+  activeObjects: number;
+  bytes: number;
+} {
+  if (!buffer?.byteLength) {
+    throw new Error("Tom OCAD-buffer efter sammanslagning");
+  }
+  const header = readHeader(buffer);
+  if (!header.objectIndexBlock || header.objectIndexBlock <= 0) {
+    throw new Error("OCAD-filen saknar objektindex efter sammanslagning");
+  }
+  const activeObjects = readActiveObjectIndices(buffer).size;
+  return {
+    version: header.version,
+    activeObjects,
+    bytes: buffer.byteLength,
+  };
 }

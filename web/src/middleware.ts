@@ -15,6 +15,11 @@ export default auth((req) => {
     return NextResponse.next();
   }
 
+  // Vercel Cron anropar med Bearer CRON_SECRET — ingen session-cookie.
+  if (pathname.startsWith("/api/cron/")) {
+    return NextResponse.next();
+  }
+
   if (isChangePasswordPage) {
     if (!session) {
       return NextResponse.redirect(new URL("/login", req.url));

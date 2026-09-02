@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CompareProcessingPanel } from "@/components/compare-processing-panel";
 import { DiffViewClient, type DiffSummary, type LayerPaths } from "@/components/diff-view-client";
 import { VerifyCompareForm } from "@/components/verify-compare-form";
 import type { OcadObjectChange } from "@/lib/ocad/diff-types";
+
+const SLOW_PROCESSING_MS = 3 * 60 * 1000;
+const STUCK_PROCESSING_MS = 8 * 60 * 1000;
 
 type VerifyCompareResponse =
   | {
@@ -87,6 +89,10 @@ export function VerifyCompareClient() {
     setProcessingElapsedMs(0);
   }
 
+  const processingMinutes = Math.floor(processingElapsedMs / 60_000);
+  const isSlowProcessing = processingElapsedMs >= SLOW_PROCESSING_MS;
+  const isStuckProcessing = processingElapsedMs >= STUCK_PROCESSING_MS;
+
   if (!jobId) {
     return <VerifyCompareForm onJobCreated={setJobId} />;
   }
@@ -108,7 +114,12 @@ export function VerifyCompareClient() {
 
       {loading && !data && (
         <div className="card text-center">
-          <p className="text-slate-700">Laddar jämförelse…</p>
+          <div
+            className="mx-auto h-9 w-9 animate-spin rounded-full border-2 border-slate-300 border-t-ifk-blue"
+            role="status"
+            aria-label="Arbetar"
+          />
+          <p className="mt-4 text-slate-700">Laddar jämförelse…</p>
           <p className="mt-2 text-sm text-slate-500">
             Stora kartfiler kan ta upp till en minut att parsa.
           </p>
@@ -116,14 +127,48 @@ export function VerifyCompareClient() {
       )}
 
       {data?.status === "processing" && (
-        <CompareProcessingPanel
-          title={`Jämför ${data.fileNameA} → ${data.fileNameB}…`}
-          elapsedMs={processingElapsedMs}
-          onRetry={() => {
-            setLoading(true);
-            void fetchCompare();
-          }}
-        />
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-8 text-center">
+          <div
+            className="mx-auto h-9 w-9 animate-spin rounded-full border-2 border-amber-300 border-t-amber-700"
+            role="status"
+            aria-label="Arbetar"
+          />
+          <p className="mt-4 font-medium text-amber-800">
+            Jämför {data.fileNameA} → {data.fileNameB}…
+          </p>
+          <p className="mt-2 text-sm text-slate-600">
+            Parsar OCAD-filer, beräknar diff och skapar kartlager. Sidan uppdateras automatiskt.
+          </p>
+          {processingMinutes > 0 && (
+            <p className="mt-2 text-xs text-slate-500">
+              Pågått i {processingMinutes} {processingMinutes === 1 ? "minut" : "minuter"}…
+            </p>
+          )}
+          {isSlowProcessing && !isStuckProcessing && (
+            <p className="mt-3 text-sm text-amber-900">
+              Det tar längre tid än vanligt. Stora kartfiler kan behöva några minuter — vi försöker
+              igen automatiskt.
+            </p>
+          )}
+          {isStuckProcessing && (
+            <div className="mt-4 space-y-3">
+              <p className="text-sm text-amber-900">
+                Jämförelsen verkar ha fastnat. Prova att starta om den — vi triggar om
+                bearbetningen vid varje uppdatering.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setLoading(true);
+                  void fetchCompare();
+                }}
+                className="rounded-lg border border-amber-300 px-4 py-2 text-sm text-amber-900 transition hover:bg-amber-100"
+              >
+                Uppdatera / försök igen
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
       {data?.status === "error" && (

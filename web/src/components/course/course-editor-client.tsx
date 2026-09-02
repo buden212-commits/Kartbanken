@@ -1131,7 +1131,6 @@ export function CourseEditorClient({
             title="Lägg bana"
             mapSlug={mapSlug}
             versionId={headVersionId}
-            basemap="tiles"
             fullscreen
             exportEnabled={false}
             showLayerPanel={false}

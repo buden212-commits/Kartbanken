@@ -101,29 +101,14 @@ export async function generateDiffLayerSvgsFromIndices(
   const viewBounds = boundsFromOcadFile(ocadFileB);
 
   // Renderingarna delar parsad fil och körs efter varandra för att hålla minnestoppen nere.
-  const addedSvg = await generateOcadSvgFiltered(
-    bufferB,
-    indices.added,
-    viewBounds,
-    ocadFileB,
-  );
+  const addedSvg = await generateOcadSvgFiltered(bufferB, indices.added, viewBounds);
   await uploadFile(storagePaths.added, Buffer.from(addedSvg, "utf-8"));
 
-  const modifiedSvg = await generateOcadSvgFiltered(
-    bufferB,
-    indices.modified,
-    viewBounds,
-    ocadFileB,
-  );
+  const modifiedSvg = await generateOcadSvgFiltered(bufferB, indices.modified, viewBounds);
   await uploadFile(storagePaths.modified, Buffer.from(modifiedSvg, "utf-8"));
 
   const ocadFileA = await readOcad(bufferA, { quietWarnings: true });
-  const removedSvg = await generateOcadSvgFiltered(
-    bufferA,
-    indices.removed,
-    viewBounds,
-    ocadFileA,
-  );
+  const removedSvg = await generateOcadSvgFiltered(bufferA, indices.removed, viewBounds);
   await uploadFile(storagePaths.removed, Buffer.from(removedSvg, "utf-8"));
 
   return { ...storagePaths, bounds: viewBounds };

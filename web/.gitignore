@@ -41,12 +41,12 @@ yarn-error.log*
 # uploaded map files (local dev storage)
 /storage/
 
-# vercel
-.vercel
+# vercel — länka projekt-id men inte lokal auth
+.vercel/*
+!.vercel/project.json
 
 # typescript
 *.tsbuildinfo
 next-env.d.ts
 
-.vercel
 .env*

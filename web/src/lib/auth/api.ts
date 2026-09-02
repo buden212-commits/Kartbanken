@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { canAdmin, canDownload, canUpload, isApproved } from "@/lib/auth/permissions";
 import type { Role as RoleType } from "@/lib/roles";
+import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
 export type AuthSession = {
@@ -9,15 +10,44 @@ export type AuthSession = {
     email: string;
     name?: string | null;
     role: RoleType;
+    mustChangePassword?: boolean;
   };
 };
 
-export async function requireSession(): Promise<AuthSession | NextResponse> {
+async function sessionFromDb(): Promise<AuthSession | NextResponse> {
   const session = await auth();
-  if (!session?.user?.id || !isApproved(session.user.role)) {
+  if (!session?.user?.id) {
     return NextResponse.json({ error: "Obehörig" }, { status: 401 });
   }
-  return session as AuthSession;
+
+  const dbUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      mustChangePassword: true,
+    },
+  });
+
+  if (!dbUser || !isApproved(dbUser.role as RoleType)) {
+    return NextResponse.json({ error: "Obehörig" }, { status: 401 });
+  }
+
+  return {
+    user: {
+      id: dbUser.id,
+      email: dbUser.email,
+      name: dbUser.name,
+      role: dbUser.role as RoleType,
+      mustChangePassword: dbUser.mustChangePassword,
+    },
+  };
+}
+
+export async function requireSession(): Promise<AuthSession | NextResponse> {
+  return sessionFromDb();
 }
 
 export async function requireAdmin(): Promise<AuthSession | NextResponse> {

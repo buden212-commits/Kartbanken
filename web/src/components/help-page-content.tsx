@@ -12,6 +12,7 @@ import {
   checkoutSteps,
   compareFlow,
   courseFlow,
+  importPartialFlow,
   loginFlow,
   mapViewExport,
   notificationFlow,
@@ -123,6 +124,10 @@ export async function HelpPageContent() {
             <li>Redigera i OCAD och checka in filen.</li>
             <li>Granska diff, bekräfta och låt administratör integrera ändringarna.</li>
           </ol>
+          <p className="mt-4">
+            Har du redan en del-.ocd som aldrig checkades ut här: använd «Importera delkarta» på
+            områdessidan. Guiden skapar utcheckningen i efterhand.
+          </p>
           <p className="mt-4">Banplanering:</p>
           <ol className="list-decimal space-y-2 pl-5">
             <li>Öppna Lägg bana på områdessidan.</li>
@@ -214,7 +219,8 @@ export async function HelpPageContent() {
                   <td className="px-4 py-3 font-medium">Redaktör</td>
                   <td className="px-4 py-3">
                     Allt läsare kan, plus ladda upp versioner, publicera/avpublicera, se
-                    opublicerade versioner och checka ut/in områden för OCAD-redigering
+                    opublicerade versioner, checka ut/in områden och importera en delkarta som
+                    aldrig checkades ut här
                   </td>
                 </tr>
                 <tr>
@@ -339,6 +345,21 @@ export async function HelpPageContent() {
                   "Överlappande utcheckningar blockeras — vänta tills ett område frigörs",
                 ]}
               />
+
+              <h3 className="font-medium text-slate-900">Importera delkarta (utan föregående utcheckning)</h3>
+              <HelpList
+                items={[
+                  "Öppna området och klicka «Importera delkarta» (bredvid Checka ut område)",
+                  "Ladda upp den redigerade .ocd-filen — guiden jämför mot aktuell kartversion",
+                  "Steg 2: kontrollera att symbolnumren finns i den stora kartan — saknade symboler stoppar import",
+                  "Steg 3: blå ram på kartan visar delkartans utbredning (inzoomad). Samma kartbild som på området används — även stora filer som Mora Väst. Om den inte syns: öppna området så kartan hinner laddas, gå tillbaka och försök igen",
+                  "Steg 4: orange/röda kantobjekt; växla mellan hela kartan och bara berörda objekt, och visa även vad som raderas i originalet respektive nya/ersatta objekt",
+                  "Steg 5: se tillagda, borttagna och ändrade objekt i området — samma kartväxling och lagerfilter som i steget Kanter",
+                  "Steg 6: bekräfta — systemet skapar en utcheckning i efterhand och checkar in filen",
+                  "Därefter granskar du diffen som vid vanlig incheckning; admin integrerar till en ny version",
+                ]}
+              />
+              <HelpProcessDiagram title="Steg för steg — importera delkarta" chart={importPartialFlow} />
 
               <h3 className="font-medium text-slate-900">Checka in och integrera</h3>
               <HelpList
@@ -525,8 +546,9 @@ export async function HelpPageContent() {
             items={[
               "Öppna en publicerad version via Visa karta och klicka Föreslå ändring",
               "Välj ritverktyg som ikoner till höger på kartan: punkt, rektangel, polygon, linje eller «Radera objektet» (rött X — pekar ut var något ska tas bort; beskriv vad i kommentaren)",
+              "«Min position» zooma till skala 1:50 och panorera till dig var 10:e sekund tills du stoppar GPS",
               "«GPS-spår» finns som ikon i ritverktygsraden till höger (mellan linje och radera) — spelar in en linje med telefonens GPS (kräver georefererad karta)",
-              "Under spårning zoomas kartan till skala 1:100 och följer din position var 10:e sekund",
+              "Under spårning zoomas kartan till skala 1:50 och följer din position var 10:e sekund",
               "GPS-spår filtreras (minst ca 4 m mellan punkter) och förenklas automatiskt innan linjen sparas",
               "Orimliga GPS-hopp filtreras bort och accepterade punkter utjämnas vid sämre mottagning — antal filtrerade hopp visas efter «Sluta spåra»",
               "Kartan startar i «Navigera» — välj ett ritverktyg till höger för att aktivera «Rita» och börja markera",
@@ -537,7 +559,7 @@ export async function HelpPageContent() {
               "Lägg till flera markeringar innan du skickar in",
               "Klicka «Skicka in kartförslag» på kartan när du är klar — längst ned på mobil, uppe till höger på större skärm — då fyller du i kategori, platsnoggrannhet och beskrivning i dialogen («Tillbaka» finns överst till höger och längst ned)",
               "Beskrivningen förfylls med en rad per markering (punkt, linje eller yta) — skriv vidare på varje rad",
-              "Välj aktiv markering och tryck på symbolnamn under beskrivningen — raden behålls (t.ex. «1. Punkt — Sten»); sökfältet ligger överst, listan är vertikal, sorterad efter hur ofta symbolen används på kartan, filtreras efter punkt/linje/yta (vid «Punkt (radera)» visas alla typer) och grupperas under kartlager («Visa alla» vid många symboler)",
+              "Öppna «Infoga symbol för markering» under beskrivningen (ihopfälld som standard) — välj aktiv markering och symbolnamn; raden behålls (t.ex. «1. Punkt — Sten»); sökfältet ligger överst, listan är vertikal, sorterad efter hur ofta symbolen används på kartan, filtreras efter punkt/linje/yta (vid «Punkt (radera)» visas alla typer) och grupperas under kartlager («Visa alla» vid många symboler)",
               "«Tala» vid beskrivningen (i webbläsare som stödjer det) låter dig säga ett symbolnamn — det matchas mot kartans symboler och infogas på aktiv markering; «Rensa» tömmer beskrivningsrutan",
               "I dialogen: «Ta foto» öppnar kameran på mobil (direktfoto), «Välj bild» plockar från albumet",
               "Skicka-sektionen ovanför kartan visar antal tillagda ändringar innan du skickar",
@@ -670,7 +692,8 @@ export async function HelpPageContent() {
           <p>
             <strong>Visa karta</strong> öppnar en interaktiv kartvy med zoom och panorering. Kartan
             autoanpassas till hela kartans utbredning vid öppning (<strong>Hela kartan</strong>).
-            Du kan klicka på objekt i jämförelsevyer för att se detaljer.
+            Du kan klicka på objekt i jämförelsevyer för att se detaljer. Stora filer (t.ex. Mora
+            Väst) kan ta 5–10 sekunder att visa första gången.
           </p>
 
           <h3 className="font-medium text-slate-900">Zoom och navigering</h3>
@@ -679,7 +702,7 @@ export async function HelpPageContent() {
               "Knapparna + och − zoomar in respektive ut med 50 % per klick",
               "Mushjul zoomar också i 50 %-steg",
               "Skalan i verktygsraden visar nominal kartskala (t.ex. 1:15 000 vid «Hela kartan») — zoom in ger finare skala (t.ex. 1:7 500)",
-              "Max inzoom motsvarar skala 1:100 (kartfilens skala delat med zoomnivån)",
+              "Max inzoom motsvarar skala 1:50 (kartfilens skala delat med zoomnivån)",
               "Hela kartan — återställer vyn så att hela kartan syns",
               "Dra i kartan för att panorera",
             ]}
@@ -698,11 +721,14 @@ export async function HelpPageContent() {
 
           <h3 className="font-medium text-slate-900">Min position (GPS)</h3>
           <p>
-            I kartvyn finns knappen <strong>Min position</strong> om kartan är georefererad och din
-            enhet stödjer GPS. Ett fast sikte (crosshair) visar var du befinner dig på kartan —
-            siktet behåller samma storlek på skärmen oavsett zoomnivå. Statusraden visar
-            positionsnoggrannhet. Använd <strong>Panorera hit</strong> för att centrera kartan på
-            din position, eller <strong>Stoppa GPS</strong> när du är klar.
+            I kartvyn (även under «Föreslå kartändringar») finns knappen{" "}
+            <strong>Min position</strong> om kartan är georefererad och din enhet stödjer GPS. Ett
+            fast sikte (crosshair) visar var du befinner dig — siktet behåller samma storlek på
+            skärmen oavsett zoomnivå. När GPS är på zoomas kartan till skala 1:50 och panoreras till
+            din position var 10:e sekund tills du trycker <strong>Stoppa GPS</strong>. Statusraden
+            visar positionsnoggrannhet; vid sämre mottagning (över ca 20 m) visas{" "}
+            <strong>Osäker</strong> i rött och GPS-markeringen blir röd.{" "}
+            <strong>Panorera hit</strong> centrerar manuellt i samma skala.
           </p>
           <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-700">
             GPS kräver georefererad karta och fungerar bäst utomhus med bra mottagning. Om kartan
@@ -736,6 +762,7 @@ export async function HelpPageContent() {
               "Kryssruta «Exportera endast kartförslag»: PDF och GeoTIFF ritar förslagen ovanpå kartan; OCD exporterar enbart markeringarna (inte grundkartan)",
               "GeoTIFF sparas med kartans projicerade koordinatsystem (EPSG) — kräver georefererad karta",
               "OCD med kartförslag: välj symbol för punkt, linje och yta i dialogen — exportfilen innehåller bara förslagens objekt med kartans befintliga symboler (OCAD 12/2018), inte grundkartan",
+              "Exporterad OCD-fil ska öppnas normalt i OCAD; om du får internt fel vid öppning, exportera igen efter senaste uppdateringen",
               "Dra exportramen på kartan till önskat utsnitt innan du exporterar",
             ]}
           />
@@ -780,6 +807,13 @@ export async function HelpPageContent() {
             <p>
               På <Link href="/admin/checkouts" className="link-primary">/admin/checkouts</Link>{" "}
               ser du utcheckningar som väntar på admin-integration efter att redaktören bekräftat diff.
+            </p>
+            <p className="mt-2">
+              Om <strong>Bekräfta och integrera</strong> misslyckas visar felrutan vilket steg som
+              stoppade (t.ex. ladda filer, applicera ändringar, validera, ladda upp) plus tips.
+              Kopiera gärna utchecknings-id från felrutan vid felsökning. Stora kartor kan ta längre
+              tid — vänta tills sidan svarar. Om fel visas: ladda om sidan; ibland är integrationen
+              redan klar trots felmeddelandet.
             </p>
 
             <h3 className="font-medium text-slate-900">Användarhantering</h3>
@@ -881,6 +915,8 @@ export async function HelpPageContent() {
                 Kontot kan vänta på godkännande eller ha avvisats. Skapa konto om du saknar konto
                 och kontakta klubbens administratör. Godkända konton kan logga in direkt. Har du
                 glömt lösenordet, använd <strong>Glömt lösenord?</strong> på inloggningssidan.
+                Efter många misslyckade försök kan inloggning tillfälligt blockeras — vänta en
+                stund och försök igen.
               </p>
             </div>
             <div>
@@ -911,6 +947,40 @@ export async function HelpPageContent() {
                 redigera i OCAD och checka in ändringarna för granskning. Andra ser ditt område som
                 en färgad överlagring på kartan. Efter diff-granskning bekräftar du integrationen,
                 och en administratör slår ihop ändringarna i en ny kartversion.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-slate-900">Jag har en .ocd som aldrig checkades ut här</h3>
+              <p className="mt-1">
+                Använd <strong>Importera delkarta</strong> på områdessidan. Guiden matchar symboler,
+                visar läge och kanter och skapar sedan en utcheckning i efterhand. Objekt som går
+                över kanten raderas inte automatiskt. Därefter granskar du diffen som vid vanlig
+                incheckning, och admin integrerar.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-slate-900">Kartbilden i Importera delkarta laddas inte</h3>
+              <p className="mt-1">
+                Guiden visar samma karta som områdessidan (inte som en nedladdad bild — det fungerar
+                inte för stora filer som Mora Väst). Öppna området så kartan hinner laddas, gå
+                tillbaka till guiden och klicka «Försök igen» om den inte syns.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-slate-900">Bekräfta i Importera delkarta fastnar eller ger fel</h3>
+              <p className="mt-1">
+                På stora områden kan «Skapa utcheckning och checka in» ta längre tid. Vänta tills
+                sidan öppnar utcheckningen. Om något går fel: försök igen från steget «Bekräfta»
+                (eller kör om guiden om kartan fått en ny version under tiden).
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-slate-900">En stor karta går inte att öppna</h3>
+              <p className="mt-1">
+                Efter uppladdning av stora .ocd-filer (t.ex. Mora Väst) kan det stå «Parsar…» en
+                stund. Om kartan fortfarande saknas: ladda om sidan. Kartbilden skapas automatiskt
+                — öppna området eller «Visa karta» och vänta tills den ritas. Ladda ner via «Ladda
+                ner» om du vill öppna filen i OCAD.
               </p>
             </div>
             <div>
@@ -960,8 +1030,9 @@ export async function HelpPageContent() {
             <div>
               <h3 className="font-medium text-slate-900">Jämförelsen tar lång tid</h3>
               <p className="mt-1">
-                Det är normalt för stora kartor. Sidan uppdateras automatiskt när parsning och diff
-                är klar.
+                Det är normalt för stora kartor. En spinner visar aktuellt steg (ladda filer, parsa,
+                beräkna diff) och förfluten tid. Sidan uppdateras automatiskt. Om det verkar ha
+                fastnat: använd «Starta om jämförelse».
               </p>
             </div>
             <div>

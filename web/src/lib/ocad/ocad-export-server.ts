@@ -127,6 +127,7 @@ export function cropOcadBuffer(buffer: Buffer, options: CropOcadOptions): CropOc
   const output = Buffer.from(buffer);
   let keptObjects = 0;
   let removedObjects = 0;
+  const keptObjectIndices: number[] = [];
 
   let objectIndexOffset = header.objectIndexBlock;
   let startIndex = 0;
@@ -144,9 +145,11 @@ export function cropOcadBuffer(buffer: Buffer, options: CropOcadOptions): CropOc
       const entryOffset =
         blockStart + OBJECT_INDEX_BLOCK_HEADER_SIZE + i * OBJECT_INDEX_ENTRY_SIZE;
       const statusOffset = entryOffset + OBJECT_INDEX_STATUS_OFFSET;
+      const objectIndex = startIndex + i;
 
       if (rectIntersectsBbox(entry.rc, options.bbox)) {
         keptObjects++;
+        keptObjectIndices.push(objectIndex);
       } else {
         output.writeUInt8(0, statusOffset);
         removedObjects++;
@@ -157,7 +160,7 @@ export function cropOcadBuffer(buffer: Buffer, options: CropOcadOptions): CropOc
     objectIndexOffset = block.nextObjectIndexBlock;
   }
 
-  if (keptObjects === 0) {
+  if (keptObjects === 0 && !options.allowEmpty) {
     throw new Error("Inga objekt i exportområdet. Flytta ramen och försök igen.");
   }
 
@@ -173,6 +176,7 @@ export function cropOcadBuffer(buffer: Buffer, options: CropOcadOptions): CropOc
     targetVersion,
     keptObjects,
     removedObjects,
+    keptObjectIndices,
     versionWarning: buildVersionWarning(sourceVersion, targetVersion),
   };
 }

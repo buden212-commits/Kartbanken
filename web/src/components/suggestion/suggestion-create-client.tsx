@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   memo,
   useCallback,
@@ -12,7 +11,7 @@ import {
   type MutableRefObject,
 } from "react";
 import { DiffMapPanel, type MapDrawPointerHandlers } from "@/components/diff-map-panel";
-import { HelpLinkIcon, HelpSectionHeading } from "@/components/help-link-icon";
+import { HelpLinkIcon } from "@/components/help-link-icon";
 import { isGeoreferencedCrs, wgs84ToMapCoord, type OcadCrsInfo } from "@/lib/ocad/crs";
 import { screenToSvgPoint } from "@/lib/ocad/map-hit-test";
 import {
@@ -37,24 +36,12 @@ import {
   processGpsTrack,
   type GpsTrackSample,
 } from "@/lib/suggestion/gps-track";
-import {
-  SuggestionLocationConfidenceField,
-} from "@/components/suggestion/suggestion-location-confidence-field";
-import { SuggestionCommentField } from "@/components/suggestion/suggestion-comment-field";
-import {
-  buildSuggestionCommentTemplate,
-  suggestionMarkingGeometryLabel,
-} from "@/lib/suggestion/suggestion-comment-template";
+import { SuggestionSubmitDialog } from "@/components/suggestion/suggestion-submit-dialog";
 import type { OcadMapLayer } from "@/lib/ocad/layers";
 import {
-  DEFAULT_SUGGESTION_LOCATION_CONFIDENCE,
   MAX_SUGGESTION_GEOMETRIES,
-  SUGGESTION_CATEGORY_LABELS,
-  type SuggestionCategoryValue,
   type SuggestionGeometry,
-  type SuggestionLocationConfidenceValue,
 } from "@/lib/suggestion/types";
-import { uploadSuggestionAttachment } from "@/lib/upload-client";
 import {
   SuggestionMapActionToolbar,
   SuggestionMapRightToolbars,
@@ -150,7 +137,6 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
       title="Markera plats"
       mapSlug={mapSlug}
       versionId={versionId}
-      basemap="tiles"
       exportEnabled={false}
       interactionMode={mapMode}
       drawPointerHandlers={mapMode === "draw" ? drawPointerHandlers : undefined}
@@ -193,7 +179,6 @@ export function SuggestionCreateClient({
   versionId,
   versionNumber,
 }: Props) {
-  const router = useRouter();
   const rootTransformRef = useRef<SvgRootTransform>(IDENTITY_SVG_TRANSFORM);
   const dragRef = useRef<{ start: [number, number]; current: [number, number] } | null>(null);
   const gpsWatchIdRef = useRef<number | null>(null);
@@ -203,8 +188,6 @@ export function SuggestionCreateClient({
   const gpsLastAccuracyRef = useRef<number | null>(null);
   const gpsUiUpdateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const gpsLineRenderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
-  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const [tool, setTool] = useState<DrawTool>("pin");
   const [mapMode, setMapMode] = useState<"draw" | "navigate">("navigate");
@@ -228,29 +211,8 @@ export function SuggestionCreateClient({
   const [draftBbox, setDraftBbox] = useState<SuggestionGeometry | null>(null);
   const [polygonPoints, setPolygonPoints] = useState<[number, number][]>([]);
   const [linePoints, setLinePoints] = useState<[number, number][]>([]);
-  const [category, setCategory] = useState<SuggestionCategoryValue>("FEL_I_TERRANG");
-  const [locationConfidence, setLocationConfidence] = useState<SuggestionLocationConfidenceValue>(
-    DEFAULT_SUGGESTION_LOCATION_CONFIDENCE,
-  );
-  const [title, setTitle] = useState("");
-  const [comment, setComment] = useState("");
-  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
-  const [attachmentPreview, setAttachmentPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
-
-  const clearFormFields = useCallback(() => {
-    setCategory("FEL_I_TERRANG");
-    setLocationConfidence(DEFAULT_SUGGESTION_LOCATION_CONFIDENCE);
-    setTitle("");
-    setComment("");
-    setAttachmentFile(null);
-    setAttachmentPreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
-    });
-  }, []);
 
   const resetDraft = useCallback(() => {
     setDraftBbox(null);
@@ -658,19 +620,22 @@ export function SuggestionCreateClient({
   const canAddMarking = finalizableGeometry !== null;
   const totalMarkingCount = markings.length + (finalizableGeometry ? 1 : 0);
 
-  function handleToolChange(next: DrawTool) {
-    if (gpsTracking) {
-      cancelGpsTracking();
-    }
-    setTool(next);
-    setMapMode("draw");
-    setGeometry(null);
-    resetDraft();
-    setGpsTrackSummary(null);
-    setError(null);
-  }
+  const handleToolChange = useCallback(
+    (next: DrawTool) => {
+      if (gpsTracking) {
+        cancelGpsTracking();
+      }
+      setTool(next);
+      setMapMode("draw");
+      setGeometry(null);
+      resetDraft();
+      setGpsTrackSummary(null);
+      setError(null);
+    },
+    [cancelGpsTracking, gpsTracking, resetDraft],
+  );
 
-  function handleAddMarking() {
+  const handleAddMarking = useCallback(() => {
     const toAdd = finalizableGeometry;
     if (!toAdd) return;
     if (markings.length >= MAX_SUGGESTION_GEOMETRIES) {
@@ -682,38 +647,24 @@ export function SuggestionCreateClient({
     resetDraft();
     setGpsTrackSummary(null);
     setError(null);
-  }
+  }, [finalizableGeometry, markings.length, resetDraft]);
 
-  function handleRemoveMarking(index: number) {
+  const handleRemoveMarking = useCallback((index: number) => {
     setMarkings((prev) => prev.filter((_, i) => i !== index));
-  }
+  }, []);
 
-  function handleClearAll() {
+  const handleClearAll = useCallback(() => {
     if (gpsTracking) {
       cancelGpsTracking();
     }
     setMarkings([]);
     setGeometry(null);
     setGpsTrackSummary(null);
-    clearFormFields();
     resetDraft();
     setError(null);
-  }
+  }, [cancelGpsTracking, gpsTracking, resetDraft]);
 
-  function applyAttachmentFile(file: File | null) {
-    setAttachmentFile(file);
-    setAttachmentPreview((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return file ? URL.createObjectURL(file) : null;
-    });
-  }
-
-  function handleAttachmentChange(e: React.ChangeEvent<HTMLInputElement>) {
-    applyAttachmentFile(e.target.files?.[0] ?? null);
-    e.target.value = "";
-  }
-
-  function handleOpenSubmitDialog() {
+  const handleOpenSubmitDialog = useCallback(() => {
     if (markings.length < 1) {
       if (geometry || finalizableGeometry) {
         setError("Klicka «Lägg till ändring» innan du skickar, eller rensa den aktuella ritningen");
@@ -723,61 +674,49 @@ export function SuggestionCreateClient({
       return;
     }
     setError(null);
-    if (!comment.trim()) {
-      setComment(buildSuggestionCommentTemplate(markings));
-    }
     setSubmitDialogOpen(true);
-  }
+  }, [finalizableGeometry, geometry, markings.length]);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (markings.length < 1) {
-      setError("Lägg till minst en markering på kartan");
-      return;
-    }
-    const submissionComment = comment.trim();
-    if (submissionComment.length < 2) {
-      setError("Beskrivning krävs (minst 2 tecken)");
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      let attachmentPath: string | undefined;
-      if (attachmentFile) {
-        const uploadRes = await uploadSuggestionAttachment(mapSlug, attachmentFile);
-        const uploadData = (await uploadRes.json()) as { error?: string; attachmentPath?: string };
-        if (!uploadRes.ok) {
-          throw new Error(uploadData.error ?? "Kunde inte ladda upp bilden");
-        }
-        attachmentPath = uploadData.attachmentPath;
-      }
+  const handleCloseSubmitDialog = useCallback(() => {
+    setSubmitDialogOpen(false);
+  }, []);
 
-      const res = await fetch(`/api/maps/${mapSlug}/suggestions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mapVersionId: versionId,
-          category,
-          locationConfidence,
-          title: title.trim() || undefined,
-          comment: submissionComment,
-          geometries: markings,
-          attachmentPath,
-        }),
-      });
-      const data = (await res.json()) as { error?: string; id?: string };
-      if (!res.ok) {
-        throw new Error(data.error ?? "Kunde inte spara kartförslaget");
-      }
-      router.push(`/maps/${mapSlug}/suggestions/${data.id}`);
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Kunde inte spara kartförslaget");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const mapToolbarOverlay = useMemo(
+    () => (
+      <>
+        <SuggestionMapActionToolbar
+          canAddMarking={canAddMarking}
+          markingCount={markings.length}
+          onAddMarking={handleAddMarking}
+          onClear={handleClearAll}
+          onSubmit={handleOpenSubmitDialog}
+        />
+        <SuggestionMapRightToolbars
+          tool={tool}
+          onToolChange={handleToolChange}
+          drawDisabled={gpsTracking}
+          mapMode={mapMode}
+          onMapModeChange={setMapMode}
+          gpsTracking={gpsTracking}
+          canUseGpsTracking={canUseGpsTracking}
+          onGpsTrackingToggle={handleGpsTrackingToggle}
+        />
+      </>
+    ),
+    [
+      canAddMarking,
+      canUseGpsTracking,
+      gpsTracking,
+      handleAddMarking,
+      handleClearAll,
+      handleGpsTrackingToggle,
+      handleOpenSubmitDialog,
+      handleToolChange,
+      mapMode,
+      markings.length,
+      tool,
+    ],
+  );
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
@@ -815,27 +754,7 @@ export function SuggestionCreateClient({
           onOcadLayersReady={handleOcadLayersReady}
           gpsTrackingStatus={gpsTrackingStatus}
           gpsTrackFollow={gpsTrackFollow}
-          mapToolbarOverlay={
-            <>
-              <SuggestionMapActionToolbar
-                canAddMarking={canAddMarking}
-                markingCount={markings.length}
-                onAddMarking={handleAddMarking}
-                onClear={handleClearAll}
-                onSubmit={handleOpenSubmitDialog}
-              />
-              <SuggestionMapRightToolbars
-                tool={tool}
-                onToolChange={handleToolChange}
-                drawDisabled={gpsTracking}
-                mapMode={mapMode}
-                onMapModeChange={setMapMode}
-                gpsTracking={gpsTracking}
-                canUseGpsTracking={canUseGpsTracking}
-                onGpsTrackingToggle={handleGpsTrackingToggle}
-              />
-            </>
-          }
+          mapToolbarOverlay={mapToolbarOverlay}
         />
       </div>
 
@@ -846,179 +765,14 @@ export function SuggestionCreateClient({
       )}
 
       {submitDialogOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4">
-          <form
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="suggestion-submit-dialog-title"
-            onSubmit={(e) => void handleSubmit(e)}
-            className="max-h-[90vh] w-full overflow-y-auto rounded-t-xl bg-white p-5 shadow-lg sm:max-w-lg sm:rounded-xl"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <HelpSectionHeading section="kartforslag" id="suggestion-submit-dialog-title">
-                Skicka in kartförslag
-              </HelpSectionHeading>
-              <button
-                type="button"
-                disabled={loading}
-                onClick={() => {
-                  setSubmitDialogOpen(false);
-                  setError(null);
-                }}
-                className="shrink-0 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-              >
-                Tillbaka
-              </button>
-            </div>
-            <p className="mt-1 text-sm text-slate-600">
-              Fyll i uppgifterna nedan och skicka in {markings.length}{" "}
-              {markings.length === 1 ? "ändring" : "ändringar"} tillsammans.
-            </p>
-            <ul className="mt-3 space-y-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-              {markings.map((marking, index) => (
-                <li
-                  key={index}
-                  className="flex items-center justify-between gap-2 text-sm text-slate-600"
-                >
-                  <span>
-                    {index + 1}. {suggestionMarkingGeometryLabel(marking)}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveMarking(index)}
-                    className="text-red-600 hover:underline"
-                  >
-                    Ta bort
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <fieldset className="mt-4 space-y-4">
-              <div>
-                <label htmlFor="category" className="form-label">
-                  Kategori
-                </label>
-                <select
-                  id="category"
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value as SuggestionCategoryValue)}
-                  className="form-input"
-                >
-                  {Object.entries(SUGGESTION_CATEGORY_LABELS).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <SuggestionLocationConfidenceField
-                name="Hur säker är du på platsen på kartan?"
-                value={locationConfidence}
-                onChange={setLocationConfidence}
-                idPrefix="submit-location-confidence"
-              />
-              <div>
-                <label htmlFor="title" className="form-label">
-                  Rubrik (valfritt)
-                </label>
-                <input
-                  id="title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  maxLength={120}
-                  className="form-input"
-                  placeholder="Kort sammanfattning"
-                />
-              </div>
-              <SuggestionCommentField
-                value={comment}
-                onChange={setComment}
-                ocadLayers={ocadLayers}
-                markings={markings}
-                disabled={loading}
-              />
-              <div>
-                <p className="form-label">Foto (valfritt)</p>
-                <div className="mt-1 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => cameraInputRef.current?.click()}
-                    className="min-h-10 rounded-lg border border-ifk-blue px-3 py-2 text-sm font-medium text-ifk-blue hover:bg-ifk-blue/5"
-                  >
-                    Ta foto
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => galleryInputRef.current?.click()}
-                    className="min-h-10 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                  >
-                    Välj bild
-                  </button>
-                  {attachmentFile && (
-                    <button
-                      type="button"
-                      onClick={() => applyAttachmentFile(null)}
-                      className="min-h-10 rounded-lg border border-slate-300 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
-                    >
-                      Ta bort foto
-                    </button>
-                  )}
-                </div>
-                <input
-                  ref={cameraInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={handleAttachmentChange}
-                  className="sr-only"
-                  aria-hidden
-                  tabIndex={-1}
-                />
-                <input
-                  ref={galleryInputRef}
-                  id="attachment"
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,image/*"
-                  onChange={handleAttachmentChange}
-                  className="sr-only"
-                  aria-hidden
-                  tabIndex={-1}
-                />
-                {attachmentFile && (
-                  <p className="mt-2 text-xs text-slate-500">{attachmentFile.name}</p>
-                )}
-                {attachmentPreview && (
-                  <img
-                    src={attachmentPreview}
-                    alt="Förhandsvisning av bilaga"
-                    className="mt-2 max-h-48 rounded-lg border border-slate-200 object-contain"
-                  />
-                )}
-              </div>
-            </fieldset>
-            {error && (
-              <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-                {error}
-              </p>
-            )}
-            <div className="mt-5 flex flex-wrap justify-end gap-2">
-              <button
-                type="button"
-                disabled={loading}
-                onClick={() => {
-                  setSubmitDialogOpen(false);
-                  setError(null);
-                }}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-              >
-                Tillbaka
-              </button>
-              <button type="submit" disabled={loading} className="btn-primary">
-                {loading ? "Sparar…" : `Skicka in kartförslag (${markings.length} st)`}
-              </button>
-            </div>
-          </form>
-        </div>
+        <SuggestionSubmitDialog
+          mapSlug={mapSlug}
+          versionId={versionId}
+          markings={markings}
+          ocadLayers={ocadLayers}
+          onClose={handleCloseSubmitDialog}
+          onRemoveMarking={handleRemoveMarking}
+        />
       )}
     </div>
   );

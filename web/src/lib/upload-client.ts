@@ -297,3 +297,50 @@ export async function uploadSuggestionAttachment(
 
   return res;
 }
+
+export async function uploadImportPartial(mapSlug: string, file: File): Promise<Response> {
+  if (file.size > BODY_LIMIT_BYTES) {
+    return uploadImportPartialViaBlob(mapSlug, file);
+  }
+
+  const res = await uploadViaFormData(`/api/maps/${mapSlug}/import-partial`, { file });
+  if (res.status === 413) {
+    const data = (await res.clone().json().catch(() => ({}))) as {
+      clientUploadRequired?: boolean;
+    };
+    if (data.clientUploadRequired) {
+      return uploadImportPartialViaBlob(mapSlug, file);
+    }
+  }
+  return res;
+}
+
+async function uploadImportPartialViaBlob(mapSlug: string, file: File): Promise<Response> {
+  const initRes = await fetch(`/api/maps/${mapSlug}/import-partial`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ filename: file.name, size: file.size }),
+  });
+
+  if (initRes.status === 400) {
+    return uploadViaFormData(`/api/maps/${mapSlug}/import-partial`, { file });
+  }
+  if (!initRes.ok) return initRes;
+
+  const init = (await initRes.json()) as { jobId: string; storagePath: string };
+  await upload(init.storagePath, file, {
+    access: "private",
+    handleUploadUrl: BLOB_UPLOAD_ROUTE,
+    clientPayload: JSON.stringify({
+      kind: "importPartial",
+      jobId: init.jobId,
+      slug: mapSlug,
+    }),
+  });
+
+  return fetch(`/api/maps/${mapSlug}/import-partial`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jobId: init.jobId }),
+  });
+}

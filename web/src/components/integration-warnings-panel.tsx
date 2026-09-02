@@ -99,7 +99,6 @@ export function IntegrationWarningsPanel({
             title="Felobjekt"
             mapSlug={mapSlug!}
             versionId={headVersionId!}
-            basemap="tiles"
             exportEnabled={false}
             focusTarget={focusTarget}
             selectedChange={selectedChange}

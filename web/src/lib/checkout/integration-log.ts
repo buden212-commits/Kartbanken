@@ -1,4 +1,11 @@
 import type { OcadObjectChange } from "@/lib/ocad/diff-types";
+import {
+  IntegrationError,
+  integrationStepLabel,
+  type IntegrationStep,
+} from "@/lib/checkout/integration-error";
+
+export type { IntegrationStep } from "@/lib/checkout/integration-error";
 
 export type IntegrationLogContext = {
   checkoutId: string;
@@ -7,17 +14,6 @@ export type IntegrationLogContext = {
   headVersionNumber?: number;
   checkinPath?: string;
 };
-
-export type IntegrationStep =
-  | "start"
-  | "resolve_diff"
-  | "load_files"
-  | "apply_changes"
-  | "validate_output"
-  | "upload"
-  | "persist"
-  | "post_process";
-
 function summarizeChanges(changes: OcadObjectChange[] | undefined): {
   added: number;
   removed: number;
@@ -91,6 +87,10 @@ export function logIntegrationError(
 ): void {
   const message = err instanceof Error ? err.message : String(err);
   const stack = err instanceof Error ? err.stack : undefined;
+  const integration =
+    err instanceof IntegrationError
+      ? { hint: err.hint, details: err.details, errorStep: err.step }
+      : {};
 
   console.error("[checkout-integration]", {
     step,
@@ -100,13 +100,44 @@ export function logIntegrationError(
     headVersionNumber: ctx.headVersionNumber,
     error: message,
     stack,
+    ...integration,
     ...detail,
   });
 }
 
 export function integrationErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof IntegrationError) {
+    const parts = [
+      `${integrationStepLabel(err.step)}: ${err.message.trim() || fallback}`,
+    ];
+    if (err.hint?.trim()) parts.push(err.hint.trim());
+    return parts.join(" — ");
+  }
   if (err instanceof Error && err.message.trim()) {
     return err.message;
   }
   return fallback;
+}
+
+export function integrationErrorPayload(
+  err: unknown,
+  fallback: string,
+): {
+  error: string;
+  step?: IntegrationStep;
+  stepLabel?: string;
+  hint?: string;
+  details?: Record<string, unknown>;
+} {
+  const error = integrationErrorMessage(err, fallback);
+  if (err instanceof IntegrationError) {
+    return {
+      error,
+      step: err.step,
+      stepLabel: integrationStepLabel(err.step),
+      hint: err.hint,
+      details: err.details,
+    };
+  }
+  return { error };
 }

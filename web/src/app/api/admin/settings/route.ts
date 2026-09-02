@@ -1,3 +1,4 @@
+import { logAction } from "@/lib/audit";
 import { requireAdmin } from "@/lib/auth/api";
 import { resetEmailTransport } from "@/lib/email";
 import {
@@ -86,10 +87,19 @@ export async function PUT(request: Request) {
 
     resetEmailTransport();
 
+    await logAction(session.user.id, "SETTINGS_UPDATED", "AppSettings", "smtp", {
+      enabled,
+      smtpHost: body.smtpHost?.trim() || "smtp.gmail.com",
+      smtpPort,
+      smtpUser: body.smtpUser?.trim() || "",
+      passwordChanged: shouldUpdateSmtpPassword(body.smtpPass),
+      checkoutReminderDays,
+      checkoutReminderRepeatDays,
+    });
+
     return NextResponse.json(settings);
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Kunde inte spara inställningarna";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("Settings update failed:", error);
+    return NextResponse.json({ error: "Kunde inte spara inställningarna" }, { status: 500 });
   }
 }

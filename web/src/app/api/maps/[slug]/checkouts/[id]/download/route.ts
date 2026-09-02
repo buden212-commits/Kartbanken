@@ -8,7 +8,8 @@ import { getCheckoutById } from "@/lib/checkout/repository";
 import { ocadExportVersionLabel, parseOcadExportVersion } from "@/lib/ocad/ocad-export-shared";
 import type { OcadExportVersion } from "@/lib/ocad/ocad-export-shared";
 import { prisma } from "@/lib/prisma";
-import { readStoredFile } from "@/lib/storage";
+import { fileExists } from "@/lib/storage";
+import { serveStoredFile } from "@/lib/storage/stream-response";
 import { NextResponse } from "next/server";
 
 type RouteParams = { params: Promise<{ slug: string; id: string }> };
@@ -40,8 +41,11 @@ export async function GET(_request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Subset-fil saknas" }, { status: 404 });
   }
 
+  if (!(await fileExists(checkout.exportStoragePath))) {
+    return NextResponse.json({ error: "Subset-fil saknas" }, { status: 404 });
+  }
+
   try {
-    const buffer = await readStoredFile(checkout.exportStoragePath);
     const version = parseOcadExportVersion(checkout.exportOcadVersion) ?? (12 as OcadExportVersion);
     const fileName = `${map.title.replace(/\s+/g, "-")}-utcheckning-v${version}-${id.slice(0, 8)}.ocd`;
 
@@ -52,13 +56,14 @@ export async function GET(_request: Request, { params }: RouteParams) {
       ocadVersionLabel: ocadExportVersionLabel(version),
     });
 
-    return new NextResponse(new Uint8Array(buffer), {
-      headers: {
+    return await serveStoredFile(
+      checkout.exportStoragePath,
+      {
         "Content-Type": "application/octet-stream",
         "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"`,
-        "Content-Length": String(buffer.byteLength),
       },
-    });
+      { preferRedirect: true },
+    );
   } catch (err) {
     console.error("Checkout download failed:", err);
     return NextResponse.json({ error: "Nedladdning misslyckades" }, { status: 500 });
