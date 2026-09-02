@@ -8,6 +8,13 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-02",
+    title: "Självstudier — snyggare listor",
+    items: [
+      "Checklistor och punktlistor i kursmaterialet bryts inte längre konstigt på två rader",
+    ],
+  },
+  {
+    date: "2026-09-02",
     title: "Självstudier i Hjälp — fix",
     items: [
       "Hjälp → Självstudier kraschade vid visning av kursmaterialet — sidan laddas nu korrekt",

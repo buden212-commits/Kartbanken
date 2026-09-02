@@ -89,9 +89,10 @@ function buildMarked(): Marked {
           .map((item) => {
             const checkbox =
               item.task && item.checked !== undefined
-                ? `<span class="mr-1">${item.checked ? "☑" : "☐"}</span>`
+                ? `<span class="mr-1.5 shrink-0">${item.checked ? "☑" : "☐"}</span>`
                 : "";
-            return `<li class="my-1">${checkbox}${this.parser.parse(item.tokens)}</li>`;
+            const content = this.parser.parseInline(item.tokens);
+            return `<li class="my-1.5">${checkbox}${content}</li>`;
           })
           .join("");
         return `<${tag} class="${listClass} my-2 pl-5">${body}</${tag}>\n`;
