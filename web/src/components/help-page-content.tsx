@@ -339,6 +339,7 @@ export async function HelpPageContent() {
                   "Knappen «Fältredigering» på områdessidan — administratörer och användare som fått rättigheten",
                   "Administratörer tilldelar rättigheten under Admin → Användare → Redigera (kryss «Fältredigering»)",
                   "Rita en polygon (max 1 km²) — bara utcheckat område visas i editorn för bättre prestanda",
+                  "Utcheckat område markeras med röd begränsningslinje (ingen fyllnadsyta)",
                   "Välj / redigera: klicka objekt, dra brytpunkter (höjdkurva, stig, myr m.m.)",
                   "Radera objekt, eller lägg till nya punkter, linjer och ytor med symbol grupperad efter geometri",
                   "Nya och ändrade objekt visas med riktig OCAD-symbol i editorn — inte bara enkla streck",
