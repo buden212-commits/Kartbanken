@@ -132,6 +132,18 @@ export function formatAuditActivity(action: string, metadataRaw: string | null):
       const ref = mapRef(metadata);
       return ref ? `Utcheckning avbruten — ${ref}` : "Utcheckning avbruten";
     }
+    case "FIELD_EDIT_CREATED": {
+      const ref = mapRef(metadata);
+      return ref ? `Fältredigering startad — ${ref}` : "Fältredigering startad";
+    }
+    case "FIELD_EDIT_PUBLISHED": {
+      const ref = mapRef(metadata);
+      return ref ? `Fältredigering publicerad — ${ref}` : "Fältredigering publicerad";
+    }
+    case "FIELD_EDIT_CANCELLED": {
+      const ref = mapRef(metadata);
+      return ref ? `Fältredigering avbruten — ${ref}` : "Fältredigering avbruten";
+    }
     case "CHECKOUT_REMINDER_SENT": {
       const ref = mapRef(metadata);
       const days = metaString(metadata, "days");

@@ -6,6 +6,8 @@ export type MapHitIndexEntry = {
   b: [number, number, number, number];
   s: number;
   t: OcadObjectType;
+  /** OCAD object index — only when index is built for field edit. */
+  i?: number;
 };
 
 function distance2d(a: [number, number], b: [number, number]): number {

@@ -1,3 +1,10 @@
+export const CheckoutMode = {
+  OCAD_DESKTOP: "OCAD_DESKTOP",
+  FIELD_EDIT: "FIELD_EDIT",
+} as const;
+
+export type CheckoutMode = (typeof CheckoutMode)[keyof typeof CheckoutMode];
+
 export const CheckoutStatus = {
   ACTIVE: "ACTIVE",
   CHECKED_IN: "CHECKED_IN",

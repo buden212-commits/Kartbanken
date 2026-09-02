@@ -8,6 +8,15 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-02",
+    title: "Fältredigering (admin)",
+    items: [
+      "Administratörer kan checka ut max 1 km² och redigera kartan direkt i webben — radera objekt och lägg till punkter",
+      "Helt separerat från «Föreslå ändring» och vanlig OCAD-utcheckning",
+      "Publicering skapar en ny kartversion direkt, med val att publicera direkt",
+    ],
+  },
+  {
+    date: "2026-09-02",
     title: "Självstudier — snyggare listor",
     items: [
       "Checklistor och punktlistor i kursmaterialet bryts inte längre konstigt på två rader",

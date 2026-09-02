@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { canAdmin, canCheckout, canCreateCourse, canCreateMapSuggestion, canReviewMapSuggestion, canUpload, canViewCheckouts } from "@/lib/auth/permissions";
+import { canAdmin, canCheckout, canCreateCourse, canCreateMapSuggestion, canFieldEdit, canReviewMapSuggestion, canUpload, canViewCheckouts } from "@/lib/auth/permissions";
 import { MapTitleEditor } from "@/components/map-title-editor";
 import { findActiveCheckoutsForMap, findCheckoutHistoryForMap, getHeadVersionId, serializeCheckoutResponse } from "@/lib/checkout/repository";
 import { isMapArchived } from "@/lib/maps/archive-map";
@@ -35,6 +35,7 @@ export default async function MapDetailPage({ params }: PageProps) {
   const canCreateCheckout = !!(session && role && canCheckout(role));
   const canSeeCheckouts = !!(session && role && canViewCheckouts(role));
   const isAdmin = !!(session && role && canAdmin(role));
+  const canUseFieldEdit = !!(session && role && canFieldEdit(role));
 
   const map = await prisma.mapFile.findUnique({
     where: { slug },
@@ -166,6 +167,14 @@ export default async function MapDetailPage({ params }: PageProps) {
                 Lägg bana
               </span>
             )
+          )}
+          {canUseFieldEdit && !mapArchived && headVersionId && (
+            <Link
+              href={`/maps/${map.slug}/field-edit`}
+              className="rounded-lg border border-violet-300 bg-violet-50 px-4 py-2 text-sm font-medium text-violet-900 transition hover:border-violet-400"
+            >
+              Fältredigering
+            </Link>
           )}
           {latestPublishedVersion && role && canCreateMapSuggestion(role) && !mapArchived && (
             <Link

@@ -16,19 +16,22 @@ function isSuggestibleFeature(obj: NormalizedOcadObject): boolean {
 
 export function buildMapHitIndex(
   objects: NormalizedOcadObject[],
+  options?: { includeObjectIndex?: boolean },
 ): MapHitIndexEntry[] {
   return objects.filter(isSuggestibleFeature).map((obj) => ({
     c: obj.centroid,
     b: obj.bbox,
     s: obj.symbolNumber,
     t: obj.type,
+    ...(options?.includeObjectIndex ? { i: obj.objectIndex } : {}),
   }));
 }
 
 export async function loadMapHitIndexFromOcd(
   buffer: Buffer,
   fileName: string,
+  options?: { includeObjectIndex?: boolean },
 ): Promise<MapHitIndexEntry[]> {
   const parsed = await parseOcadBuffer(buffer, fileName);
-  return buildMapHitIndex(parsed.objects);
+  return buildMapHitIndex(parsed.objects, options);
 }

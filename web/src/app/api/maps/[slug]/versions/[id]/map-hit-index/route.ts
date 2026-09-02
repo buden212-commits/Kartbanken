@@ -12,12 +12,14 @@ export const maxDuration = 300;
 
 type RouteParams = { params: Promise<{ slug: string; id: string }> };
 
-/** Lightweight spatial index for map feature snap (banläggning Klipp). */
-export async function GET(_request: Request, { params }: RouteParams) {
+/** Lightweight spatial index for map feature snap (banläggning Klipp / fältredigering). */
+export async function GET(request: Request, { params }: RouteParams) {
   const session = await requireSession();
   if (session instanceof NextResponse) return session;
 
   const { slug, id } = await params;
+  const url = new URL(request.url);
+  const includeObjectIndex = url.searchParams.get("objectIndex") === "1";
   const lookup = await getMapVersionOr404(slug, id);
   if (lookup instanceof NextResponse) return lookup;
 
@@ -38,6 +40,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
     const index = await loadMapHitIndexFromOcd(
       buffer,
       version.originalFilename,
+      { includeObjectIndex },
     );
     return NextResponse.json(
       { index, count: index.length },

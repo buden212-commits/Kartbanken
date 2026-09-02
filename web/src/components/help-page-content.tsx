@@ -331,6 +331,21 @@ export async function HelpPageContent() {
             överlagringar med vem som checkat ut och när.
           </p>
 
+          {showAdmin && (
+            <>
+              <h3 className="font-medium text-slate-900">Fältredigering (admin)</h3>
+              <HelpList
+                items={[
+                  "Knappen «Fältredigering» på områdessidan — endast administratörer",
+                  "Rita ett område på kartan (max 1 km²) och redigera direkt i webben",
+                  "Radera befintliga kartobjekt genom att klicka på dem, eller lägg till nya punkter med vald symbol",
+                  "Helt separerat från «Föreslå ändring» och vanlig OCAD-utcheckning",
+                  "Publicera skapar en ny kartversion direkt — utan .ocd-fil eller incheckning",
+                ]}
+              />
+            </>
+          )}
+
           {showEditor ? (
             <>
               <h3 className="font-medium text-slate-900">Checka ut område</h3>

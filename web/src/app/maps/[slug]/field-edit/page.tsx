@@ -1,28 +1,27 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { canCheckout } from "@/lib/auth/permissions";
-import { findActiveAreaLocksForMap, getHeadVersionId } from "@/lib/checkout/repository";
-import { serializeCheckoutResponse } from "@/lib/checkout/repository";
-import { CheckoutPageClient } from "@/components/checkout-page-client";
+import { canFieldEdit } from "@/lib/auth/permissions";
+import { findActiveAreaLocksForMap, getHeadVersionId, serializeCheckoutResponse } from "@/lib/checkout/repository";
+import { FieldEditCreateClient } from "@/components/field-edit/field-edit-create-client";
 import { HelpLinkIcon } from "@/components/help-link-icon";
-import { readOcadHeaderVersion } from "@/lib/ocad/ocad-export-server";
+import { readMapScaleFromBuffer } from "@/lib/field-edit/scale";
 import { prisma } from "@/lib/prisma";
 import { readStoredFile } from "@/lib/storage";
 
 type PageProps = { params: Promise<{ slug: string }> };
 
-export default async function CheckoutCreatePage({ params }: PageProps) {
+export default async function FieldEditCreatePage({ params }: PageProps) {
   const { slug } = await params;
   const session = await auth();
   if (!session?.user?.role) redirect("/login");
 
-  if (!canCheckout(session.user.role)) {
+  if (!canFieldEdit(session.user.role)) {
     redirect(`/maps/${slug}`);
   }
 
   const map = await prisma.mapFile.findUnique({ where: { slug } });
-  if (!map) notFound();
+  if (!map || map.archivedAt) notFound();
 
   const headVersionId = await getHeadVersionId(map.id);
   if (!headVersionId) notFound();
@@ -32,17 +31,17 @@ export default async function CheckoutCreatePage({ params }: PageProps) {
     select: { storagePath: true },
   });
 
-  let sourceOcadVersion = 12;
+  let mapScale = 15000;
   if (headVersion) {
     try {
       const buffer = await readStoredFile(headVersion.storagePath);
-      sourceOcadVersion = readOcadHeaderVersion(buffer);
+      mapScale = await readMapScaleFromBuffer(buffer);
     } catch {
-      sourceOcadVersion = 12;
+      mapScale = 15000;
     }
   }
 
-  const checkouts = await findActiveAreaLocksForMap(map.id);
+  const locks = await findActiveAreaLocksForMap(map.id);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
@@ -50,20 +49,23 @@ export default async function CheckoutCreatePage({ params }: PageProps) {
         ← {map.title}
       </Link>
       <div className="mt-4 flex items-start justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">Checka ut område</h1>
-        <HelpLinkIcon section="checkout" className="mt-1 shrink-0" />
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">Fältredigering</h1>
+          <p className="mt-2 text-sm text-slate-600">
+            Admin: rita ett område (max 1 km²) och redigera kartan direkt i webben — separat från
+            kartförslag och OCAD-utcheckning.
+          </p>
+        </div>
+        <HelpLinkIcon section="admin" className="mt-1 shrink-0" />
       </div>
-      <p className="mt-2 text-sm text-slate-600">
-        Rita ett område på kartan. Befintliga utcheckningar visas som färgade ytor.
-      </p>
 
       <div className="mt-6">
-        <CheckoutPageClient
+        <FieldEditCreateClient
           mapSlug={map.slug}
           mapTitle={map.title}
           headVersionId={headVersionId}
-          sourceOcadVersion={sourceOcadVersion}
-          existingCheckouts={checkouts.map(serializeCheckoutResponse)}
+          mapScale={mapScale}
+          existingLocks={locks.map(serializeCheckoutResponse)}
         />
       </div>
     </div>

@@ -46,6 +46,11 @@ export function canAdminConfirmIntegration(role: RoleType): boolean {
   return role === Role.ADMIN;
 }
 
+/** Admin-only in-browser field editing (OCAD light). */
+export function canFieldEdit(role: RoleType): boolean {
+  return role === Role.ADMIN;
+}
+
 /** All approved users (Reader+) can create courses (COURSE-16). */
 export function canCreateCourse(role: RoleType): boolean {
   return canDownload(role);

@@ -1,13 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import {
-  CheckoutStatus,
-  LOCKING_CHECKOUT_STATUSES,
-  parseSelectionJson,
-  serializeSelection,
-  type CheckoutSelection,
-  type CheckoutSelectionType,
-  type ExistingCheckoutForOverlap,
-} from "./types";
+import { CheckoutMode, CheckoutStatus, LOCKING_CHECKOUT_STATUSES, parseSelectionJson, serializeSelection, type CheckoutSelection, type CheckoutSelectionType, type ExistingCheckoutForOverlap } from "./types";
+import { parseFieldEditOps } from "@/lib/field-edit/types";
 
 const checkoutWithUserSelect = {
   id: true,
@@ -31,6 +24,8 @@ const checkoutWithUserSelect = {
   integrationComment: true,
   reminderSentAt: true,
   exportOcadVersion: true,
+  mode: true,
+  editOpsJson: true,
   createdAt: true,
   updatedAt: true,
   user: {
@@ -54,6 +49,31 @@ export async function getHeadVersionId(mapFileId: string): Promise<string | null
 }
 
 export async function findActiveCheckoutsForMap(mapFileId: string) {
+  return prisma.mapCheckout.findMany({
+    where: {
+      mapFileId,
+      status: { in: LOCKING_CHECKOUT_STATUSES },
+      mode: CheckoutMode.OCAD_DESKTOP,
+    },
+    select: checkoutWithUserSelect,
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+export async function findActiveFieldEditsForMap(mapFileId: string) {
+  return prisma.mapCheckout.findMany({
+    where: {
+      mapFileId,
+      mode: CheckoutMode.FIELD_EDIT,
+      status: CheckoutStatus.ACTIVE,
+    },
+    select: checkoutWithUserSelect,
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+/** All area-locking sessions (desktop checkout + field edit) for overlap checks. */
+export async function findActiveAreaLocksForMap(mapFileId: string) {
   return prisma.mapCheckout.findMany({
     where: {
       mapFileId,
@@ -91,7 +111,7 @@ export function toOverlapCandidate(
 }
 
 export async function findActiveOverlapCandidates(mapFileId: string): Promise<ExistingCheckoutForOverlap[]> {
-  const rows = await findActiveCheckoutsForMap(mapFileId);
+  const rows = await findActiveAreaLocksForMap(mapFileId);
   return rows.map(toOverlapCandidate);
 }
 
@@ -110,6 +130,8 @@ export type CreateCheckoutInput = {
   selection: CheckoutSelection;
   exportStoragePath?: string | null;
   exportOcadVersion?: number;
+  mode?: CheckoutMode;
+  editOpsJson?: string | null;
 };
 
 export async function createCheckout(input: CreateCheckoutInput) {
@@ -123,6 +145,8 @@ export async function createCheckout(input: CreateCheckoutInput) {
       selectionJson: serializeSelection(input.selection),
       exportStoragePath: input.exportStoragePath ?? null,
       exportOcadVersion: input.exportOcadVersion ?? 12,
+      mode: input.mode ?? CheckoutMode.OCAD_DESKTOP,
+      editOpsJson: input.editOpsJson ?? null,
     },
     select: checkoutWithUserSelect,
   });
@@ -167,10 +191,19 @@ export async function confirmCheckoutByUser(checkoutId: string) {
   });
 }
 
+export async function updateFieldEditOps(checkoutId: string, editOpsJson: string) {
+  return prisma.mapCheckout.update({
+    where: { id: checkoutId },
+    data: { editOpsJson, updatedAt: new Date() },
+    select: checkoutWithUserSelect,
+  });
+}
+
 export async function findCheckoutHistoryForMap(mapFileId: string, limit = 20) {
   return prisma.mapCheckout.findMany({
     where: {
       mapFileId,
+      mode: CheckoutMode.OCAD_DESKTOP,
       status: { in: [CheckoutStatus.INTEGRATED, CheckoutStatus.CANCELLED] },
     },
     select: checkoutWithUserSelect,
@@ -294,6 +327,8 @@ export function serializeCheckoutResponse(
     integrationComment: checkout.integrationComment,
     reminderSentAt: checkout.reminderSentAt?.toISOString() ?? null,
     exportOcadVersion: checkout.exportOcadVersion,
+    mode: checkout.mode,
+    editOps: parseFieldEditOps(checkout.editOpsJson),
     createdAt: checkout.createdAt.toISOString(),
     updatedAt: checkout.updatedAt.toISOString(),
     user: {

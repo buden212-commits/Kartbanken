@@ -107,7 +107,6 @@ export async function generateDiffLayerSvgsFromIndices(
   const modifiedSvg = await generateOcadSvgFiltered(bufferB, indices.modified, viewBounds);
   await uploadFile(storagePaths.modified, Buffer.from(modifiedSvg, "utf-8"));
 
-  const ocadFileA = await readOcad(bufferA, { quietWarnings: true });
   const removedSvg = await generateOcadSvgFiltered(bufferA, indices.removed, viewBounds);
   await uploadFile(storagePaths.removed, Buffer.from(removedSvg, "utf-8"));
 
