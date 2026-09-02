@@ -55,17 +55,18 @@ function lineSvg(coords: [number, number][], transform: SvgRootTransform, stroke
 function maskLineSvg(coords: [number, number][], transform: SvgRootTransform): string {
   if (coords.length < 2) return "";
   const points = ringToSvgPoints(coords, transform);
-  return `<polyline points="${points}" fill="none" stroke="#ffffff" stroke-width="120" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" pointer-events="none" />`;
+  // Map-unit stroke — covers symbol width without a screen-pixel blob at high zoom.
+  return `<polyline points="${points}" fill="none" stroke="#ffffff" stroke-width="40" stroke-linecap="round" stroke-linejoin="round" pointer-events="none" />`;
 }
 
 function maskAreaSvg(ring: [number, number][], transform: SvgRootTransform): string {
   if (ring.length < 3) return "";
-  return `<polygon points="${ringToSvgPoints(ring, transform)}" fill="#ffffff" stroke="#ffffff" stroke-width="40" vector-effect="non-scaling-stroke" pointer-events="none" />`;
+  return `<polygon points="${ringToSvgPoints(ring, transform)}" fill="#ffffff" stroke="#ffffff" stroke-width="20" pointer-events="none" />`;
 }
 
 function maskPointSvg(point: [number, number], transform: SvgRootTransform): string {
   const [x, y] = geoToSvgUserPoint(point, transform);
-  return `<circle cx="${x}" cy="${y}" r="80" fill="#ffffff" stroke="#ffffff" stroke-width="20" vector-effect="non-scaling-stroke" pointer-events="none" />`;
+  return `<circle cx="${x}" cy="${y}" r="30" fill="#ffffff" stroke="#ffffff" stroke-width="8" pointer-events="none" />`;
 }
 
 function vertexHandlesSvg(
@@ -153,15 +154,12 @@ export function fieldEditOverlaySvg(options: {
   }
 
   for (const obj of objects) {
-    if (masked.has(obj.i)) continue;
     if (selectedObjectIndex !== obj.i) continue;
     const coords = resolveObjectCoordinates(obj.i, obj.v, ops);
     if (!coords || coords.length === 0) continue;
     const handleCoords = obj.t === "area" ? verticesForHandles(coords, obj.t) : coords;
     parts.push(vertexHandlesSvg(handleCoords, transform, selectedVertexIndex));
   }
-
-  // modifies handles rendered above via resolveObjectCoordinates
 
   if (!draftHasSymbolPreview && draftKind === "line" && draftPoints.length >= 1) {
     parts.push(lineSvg(draftPoints, transform, "#16a34a", 2));

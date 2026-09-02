@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-02",
+    title: "Fältredigering — fix vit mask vid CAD-verktyg",
+    items: [
+      "Vit mask runt objekt efter t.ex. Bézier-kurva är borta — linjen syns korrekt igen",
+      "Brytpunkter visas kvar på valda objekt även efter geometriändring",
+    ],
+  },
+  {
+    date: "2026-09-02",
     title: "Fältredigering — mobilanpassad editor",
     items: [
       "Verktyg och kartläge (Rita / Navigera) som flytande ikoner på kartan — större kartyta på telefon",
