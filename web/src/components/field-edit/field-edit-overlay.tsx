@@ -5,6 +5,7 @@ import {
 import type { FieldEditObjectEntry } from "@/lib/field-edit/object-index";
 import type { FieldEditAdd, FieldEditOps } from "@/lib/field-edit/types";
 import { resolveObjectCoordinates } from "@/lib/field-edit/types";
+import { closedRing, verticesForHandles } from "@/lib/field-edit/vertices";
 import {
   geoBboxToSvgUser,
   geoToSvgUserPoint,
@@ -41,21 +42,24 @@ function lineSvg(coords: [number, number][], transform: SvgRootTransform, stroke
 }
 
 function areaSvg(ring: [number, number][], transform: SvgRootTransform, fill: string, stroke: string): string {
-  if (ring.length < 3) return "";
-  return `<polygon points="${ringToSvgPoints(ring, transform)}" fill="${fill}" stroke="${stroke}" stroke-width="2" pointer-events="none" />`;
+  const closed = ring.length >= 3 ? ring : ring;
+  if (closed.length < 3) return "";
+  return `<polygon points="${ringToSvgPoints(closed, transform)}" fill="${fill}" stroke="${stroke}" stroke-width="40" vector-effect="non-scaling-stroke" pointer-events="none" />`;
 }
 
 function vertexHandlesSvg(
   coords: [number, number][],
   transform: SvgRootTransform,
   selectedVertex: number | null,
+  handleRadius = 120,
 ): string {
   return coords
     .map(([x, y], index) => {
       const [sx, sy] = geoToSvgUserPoint([x, y], transform);
       const fill = selectedVertex === index ? "#2563eb" : "#ffffff";
       const stroke = selectedVertex === index ? "#1d4ed8" : "#64748b";
-      return `<circle cx="${sx}" cy="${sy}" r="6" fill="${fill}" stroke="${stroke}" stroke-width="2" pointer-events="none" />`;
+      const r = selectedVertex === index ? handleRadius * 1.15 : handleRadius;
+      return `<circle cx="${sx}" cy="${sy}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="40" vector-effect="non-scaling-stroke" pointer-events="none" />`;
     })
     .join("");
 }
@@ -111,7 +115,7 @@ export function fieldEditOverlaySvg(options: {
     } else if (obj.t === "area") {
       parts.push(
         areaSvg(
-          coords,
+          closedRing(coords),
           transform,
           isSelected ? "rgba(37,99,235,0.2)" : "rgba(37,99,235,0.08)",
           isSelected ? "#2563eb" : "#93c5fd",
@@ -125,7 +129,8 @@ export function fieldEditOverlaySvg(options: {
     }
 
     if (isSelected && coords.length > 0) {
-      parts.push(vertexHandlesSvg(coords, transform, selectedVertexIndex));
+      const handleCoords = obj.t === "area" ? verticesForHandles(coords, obj.t) : coords;
+      parts.push(vertexHandlesSvg(handleCoords, transform, selectedVertexIndex));
     }
   }
 

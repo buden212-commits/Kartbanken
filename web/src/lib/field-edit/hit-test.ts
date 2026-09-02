@@ -1,4 +1,5 @@
 import { pointInPolygon } from "@/lib/checkout/overlap";
+import { closedRing } from "@/lib/field-edit/vertices";
 import type { FieldEditObjectEntry } from "./object-index";
 
 function distance2d(a: [number, number], b: [number, number]): number {
@@ -29,11 +30,7 @@ function minDistanceToPolyline(p: [number, number], vertices: [number, number][]
 }
 
 function ringForAreaHit(vertices: [number, number][]): [number, number][] {
-  if (vertices.length < 3) return vertices;
-  const first = vertices[0]!;
-  const last = vertices[vertices.length - 1]!;
-  if (first[0] === last[0] && first[1] === last[1]) return vertices;
-  return [...vertices, first];
+  return closedRing(vertices);
 }
 
 function hitDistance(entry: FieldEditObjectEntry, point: [number, number]): number {
@@ -54,6 +51,20 @@ function hitDistance(entry: FieldEditObjectEntry, point: [number, number]): numb
   return distance2d(point, entry.c);
 }
 
+function typePriority(type: FieldEditObjectEntry["t"]): number {
+  switch (type) {
+    case "area":
+      return 3;
+    case "line":
+      return 2;
+    case "point":
+    case "text":
+      return 1;
+    default:
+      return 0;
+  }
+}
+
 export function hitTestFieldEditObject(
   index: FieldEditObjectEntry[],
   point: [number, number],
@@ -61,10 +72,16 @@ export function hitTestFieldEditObject(
 ): FieldEditObjectEntry | null {
   let best: FieldEditObjectEntry | null = null;
   let bestDist = maxDistance;
+  let bestPriority = -1;
   for (const entry of index) {
     const dist = hitDistance(entry, point);
-    if (dist <= bestDist) {
+    const priority = typePriority(entry.t);
+    if (
+      dist < bestDist ||
+      (dist <= bestDist && priority > bestPriority)
+    ) {
       bestDist = dist;
+      bestPriority = priority;
       best = entry;
     }
   }

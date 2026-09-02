@@ -1,5 +1,6 @@
 import { filterObjectsInSelection } from "@/lib/checkout/selection-objects";
 import { parseSelectionJson, type CheckoutSelectionGeometry } from "@/lib/checkout/types";
+import { closedRing } from "@/lib/field-edit/vertices";
 import type { NormalizedOcadObject, OcadObjectType } from "@/lib/ocad/types";
 
 export type FieldEditObjectEntry = {
@@ -13,7 +14,9 @@ export type FieldEditObjectEntry = {
 
 function verticesFromObject(obj: NormalizedOcadObject): [number, number][] {
   if (obj.vertices && obj.vertices.length > 0) {
-    return obj.vertices.map(([x, y]) => [x, y] as [number, number]);
+    const verts = obj.vertices.map(([x, y]) => [x, y] as [number, number]);
+    if (obj.type === "area") return closedRing(verts);
+    return verts;
   }
   if (obj.type === "point" || obj.type === "text") {
     return [obj.centroid];

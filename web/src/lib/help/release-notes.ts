@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-02",
+    title: "Fältredigering — ytor och brytpunkter",
+    items: [
+      "Ytor (t.ex. sankmarker) går att markera genom att klicka inuti ytan",
+      "Brytpunkter syns tydligt när ett objekt är valt — dra dem för att forma om linjer och ytor",
+    ],
+  },
+  {
+    date: "2026-09-02",
     title: "Fältredigering — full redigering i fält",
     items: [
       "Polygon-utcheckning (max 1 km²) — bara det området visas i editorn",

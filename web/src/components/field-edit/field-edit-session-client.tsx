@@ -19,6 +19,7 @@ import {
   mergeInitialOps,
   saveLocalFieldEditOps,
 } from "@/lib/field-edit/local-storage";
+import { applyVertexMove, verticesForHandles } from "@/lib/field-edit/vertices";
 import {
   countFieldEditChanges,
   hasFieldEditChanges,
@@ -51,8 +52,8 @@ type Props = {
   initialOps: FieldEditOps;
 };
 
-const HIT_DISTANCE = 22;
-const VERTEX_HIT_DISTANCE = 18;
+const HIT_DISTANCE = 35;
+const VERTEX_HIT_DISTANCE = 120;
 
 export function FieldEditSessionClient({
   mapSlug,
@@ -85,6 +86,7 @@ export function FieldEditSessionClient({
     objectIndex: number;
     vertexIndex: number;
     startCoords: [number, number][];
+    objectType: FieldEditObjectEntry["t"];
   } | null>(null);
   const opsRef = useRef(ops);
   opsRef.current = ops;
@@ -186,23 +188,21 @@ export function FieldEditSessionClient({
 
       if (tool === "select") {
         if (selectedObjectIndex != null) {
+          const obj = objects.find((o) => o.i === selectedObjectIndex);
           const coords =
-            resolveObjectCoordinates(
-              selectedObjectIndex,
-              objects.find((o) => o.i === selectedObjectIndex)?.v ?? [],
-              ops,
-            ) ?? [];
-          const vertexIndex = hitTestFieldEditVertex(coords, geo, VERTEX_HIT_DISTANCE);
-          if (vertexIndex != null) {
-            const obj = objects.find((o) => o.i === selectedObjectIndex);
+            resolveObjectCoordinates(selectedObjectIndex, obj?.v ?? [], ops) ?? [];
+          const handleCoords =
+            obj?.t === "area" ? verticesForHandles(coords, obj.t) : coords;
+          const vertexIndex = hitTestFieldEditVertex(handleCoords, geo, VERTEX_HIT_DISTANCE);
+          if (vertexIndex != null && obj) {
             const startCoords =
-              resolveObjectCoordinates(selectedObjectIndex, obj?.v ?? [], opsRef.current) ??
-              obj?.v.map(([x, y]) => [x, y] as [number, number]) ??
-              [];
+              resolveObjectCoordinates(selectedObjectIndex, obj.v, opsRef.current) ??
+              obj.v.map(([x, y]) => [x, y] as [number, number]);
             dragVertexRef.current = {
               objectIndex: selectedObjectIndex,
               vertexIndex,
               startCoords: startCoords.map(([x, y]) => [x, y] as [number, number]),
+              objectType: obj.t,
             };
             setSelectedVertexIndex(vertexIndex);
             return;
@@ -273,12 +273,15 @@ export function FieldEditSessionClient({
       const pt = screenToSvgPoint(svg, _e.clientX, _e.clientY);
       if (!pt) return;
       const geo = svgUserToGeoPoint(pt, rootTransformRef.current);
-      const next = drag.startCoords.map(([x, y], index) =>
-        index === drag.vertexIndex ? ([geo[0], geo[1]] as [number, number]) : ([x, y] as [number, number]),
+      const next = applyVertexMove(
+        drag.startCoords,
+        drag.objectType,
+        drag.vertexIndex,
+        geo,
       );
       upsertModify(drag.objectIndex, next);
     },
-    [objects, tool, upsertModify],
+    [tool, upsertModify],
   );
 
   const handlePointerUp = useCallback(() => {
