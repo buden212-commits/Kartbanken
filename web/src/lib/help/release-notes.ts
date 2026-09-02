@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-02",
+    title: "Fältredigering — GPS som i kartförslag",
+    items: [
+      "«Min position» i kartverktygsraden — zoom till skala 1:50 och följ din position (georefererade kartor)",
+      "«GPS-spår» spelar in linjer med samma filtrering och förenkling som i «Föreslå ändring»",
+    ],
+  },
+  {
+    date: "2026-09-02",
     title: "Fältredigering — ytor och brytpunkter",
     items: [
       "Ytor (t.ex. sankmarker) går att markera genom att klicka inuti ytan",

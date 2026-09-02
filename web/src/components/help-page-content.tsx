@@ -340,6 +340,7 @@ export async function HelpPageContent() {
                   "Rita en polygon (max 1 km²) — bara utcheckat område visas i editorn för bättre prestanda",
                   "Välj / redigera: klicka objekt, dra brytpunkter (höjdkurva, stig, myr m.m.)",
                   "Radera objekt, eller lägg till nya punkter, linjer och ytor med symbol grupperad efter geometri",
+                  "«Min position» och «GPS-spår» fungerar som i kartförslag på georefererade kartor — spela in stigar med telefonens GPS",
                   "Helt separerat från «Föreslå ändring» och vanlig OCAD-utcheckning",
                   "Ändringar sparas lokalt i webbläsaren tills du publicerar (checkar in)",
                 ]}

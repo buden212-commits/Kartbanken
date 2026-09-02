@@ -20,6 +20,7 @@ import {
   saveLocalFieldEditOps,
 } from "@/lib/field-edit/local-storage";
 import { applyVertexMove, verticesForHandles } from "@/lib/field-edit/vertices";
+import { useGpsTrackRecording } from "@/lib/gps/use-gps-track-recording";
 import {
   countFieldEditChanges,
   hasFieldEditChanges,
@@ -28,9 +29,11 @@ import {
   type FieldEditModify,
   type FieldEditOps,
 } from "@/lib/field-edit/types";
+import type { OcadCrsInfo } from "@/lib/ocad/crs";
 import { screenToSvgPoint } from "@/lib/ocad/map-hit-test";
 import { parseOcadLayersFromSvg } from "@/lib/ocad/svg-utils";
 import { fetchPreviewText } from "@/lib/ocad/preview-fetch";
+import { GPS_TRACK_MIN_DISTANCE_M } from "@/lib/suggestion/gps-track";
 import {
   IDENTITY_SVG_TRANSFORM,
   svgUserToGeoPoint,
@@ -80,6 +83,8 @@ export function FieldEditSessionClient({
   const [publishAfter, setPublishAfter] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [syncState, setSyncState] = useState<"idle" | "saved" | "local" | "error">("local");
+  const [ocadCrs, setOcadCrs] = useState<OcadCrsInfo | null>(null);
+  const [ocadMapScale, setOcadMapScale] = useState(15000);
   const rootTransformRef = useRef<SvgRootTransform>(IDENTITY_SVG_TRANSFORM);
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragVertexRef = useRef<{
@@ -96,6 +101,31 @@ export function FieldEditSessionClient({
 
   const draftKind: "line" | "area" | null =
     tool === "addLine" ? "line" : tool === "addArea" ? "area" : null;
+
+  const {
+    gpsTracking,
+    gpsTrackFollow,
+    gpsLiveCoordinates,
+    gpsTrackingStatus,
+    canUseGpsTracking,
+    toggleGpsTracking,
+    cancelGpsTracking,
+  } = useGpsTrackRecording({
+    ocadCrs,
+    ocadMapScale,
+    onTrackStart: () => {
+      setTool("addLine");
+      setDraftPoints([]);
+      setSelectedObjectIndex(null);
+      setSelectedVertexIndex(null);
+      setError(null);
+    },
+    onTrackComplete: (coordinates) => {
+      setDraftPoints(coordinates);
+      setError(null);
+    },
+    onTrackError: (message) => setError(message),
+  });
 
   useEffect(() => {
     fetch(`/api/maps/${mapSlug}/field-edits/${sessionId}/objects`)
@@ -182,6 +212,7 @@ export function FieldEditSessionClient({
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent, svg: SVGSVGElement) => {
+      if (gpsTracking) return;
       const pt = screenToSvgPoint(svg, e.clientX, e.clientY);
       if (!pt) return;
       const geo = svgUserToGeoPoint(pt, rootTransformRef.current);
@@ -263,7 +294,7 @@ export function FieldEditSessionClient({
         setError(null);
       }
     },
-    [objects, ops, selectedObjectIndex, symbolNumber, tool, updateOps],
+    [objects, ops, selectedObjectIndex, symbolNumber, tool, updateOps, gpsTracking],
   );
 
   const handlePointerMove = useCallback(
@@ -358,6 +389,7 @@ export function FieldEditSessionClient({
               selectedVertexIndex,
               draftPoints,
               draftKind,
+              gpsLivePoints: gpsLiveCoordinates,
             }),
           }}
         />
@@ -371,6 +403,7 @@ export function FieldEditSessionClient({
       selectedVertexIndex,
       draftPoints,
       draftKind,
+      gpsLiveCoordinates,
     ],
   );
 
@@ -417,11 +450,34 @@ export function FieldEditSessionClient({
   }
 
   function switchTool(next: FieldEditTool) {
+    if (gpsTracking) {
+      cancelGpsTracking();
+    }
     setTool(next);
     setDraftPoints([]);
     setSelectedVertexIndex(null);
     if (next !== "select") setSelectedObjectIndex(null);
   }
+
+  const handleGpsToggle = useCallback(() => {
+    toggleGpsTracking();
+  }, [toggleGpsTracking]);
+
+  const toolHint = useMemo(() => {
+    if (gpsTracking) {
+      return `GPS-spårning — gå längs spåret du vill rita. Minst ${GPS_TRACK_MIN_DISTANCE_M} m mellan punkter. Klicka «Sluta spåra» när du är klar, välj linjesymbol och klicka «Klar».`;
+    }
+    if (tool === "select") {
+      return "Klicka ett objekt för att markera det. Dra en brytpunkt för att flytta, förlänga eller forma om hela objektet.";
+    }
+    if (tool === "addLine") {
+      return "Klicka punkter längs linjen, använd GPS-spår, eller kombinera — klicka «Klar» när linjen är färdig.";
+    }
+    if (tool === "addArea") {
+      return "Klicka hörn runt ytan (minst 3) och klicka «Klar» när ytan är färdig.";
+    }
+    return null;
+  }, [gpsTracking, tool]);
 
   const localBackup = loadLocalFieldEditOps(sessionId);
 
@@ -440,6 +496,7 @@ export function FieldEditSessionClient({
           <button
             key={id}
             type="button"
+            disabled={gpsTracking}
             onClick={() => switchTool(id)}
             className={`rounded-lg px-3 py-2 text-sm font-medium ${
               tool === id
@@ -454,6 +511,28 @@ export function FieldEditSessionClient({
             {label}
           </button>
         ))}
+
+        <button
+          type="button"
+          onClick={handleGpsToggle}
+          disabled={!canUseGpsTracking && !gpsTracking}
+          title={
+            canUseGpsTracking || gpsTracking
+              ? gpsTracking
+                ? "Sluta spåra"
+                : "GPS-spår"
+              : "GPS-spårning kräver georefererad karta"
+          }
+          className={`rounded-lg px-3 py-2 text-sm font-medium ${
+            gpsTracking
+              ? "bg-amber-600 text-white"
+              : canUseGpsTracking
+                ? "border border-ifk-blue/40 text-ifk-blue hover:bg-ifk-blue/5"
+                : "border border-slate-200 text-slate-400"
+          }`}
+        >
+          {gpsTracking ? "Sluta spåra" : "GPS-spår"}
+        </button>
 
         {addKind && (
           <FieldEditSymbolPicker
@@ -503,10 +582,16 @@ export function FieldEditSessionClient({
         </p>
       )}
 
-      {tool === "select" && (
-        <p className="text-sm text-slate-600">
-          Klicka ett objekt för att markera det. Dra en brytpunkt för att flytta, förlänga eller forma om
-          hela objektet.
+      {toolHint && (
+        <p className="text-sm text-slate-600">{toolHint}</p>
+      )}
+
+      {gpsTrackingStatus && (
+        <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+          {gpsTrackingStatus}
+          {!gpsTracking && draftPoints.length >= 2 && tool === "addLine" && (
+            <> Välj linjesymbol och klicka «Klar» för att spara linjen.</>
+          )}
         </p>
       )}
 
@@ -522,9 +607,12 @@ export function FieldEditSessionClient({
         mapSlug={mapSlug}
         versionId={sessionId}
         exportEnabled={false}
-        interactionMode="draw"
+        interactionMode={gpsTracking ? "navigate" : "draw"}
         drawPointerHandlers={drawPointerHandlers}
         renderSvgOverlay={renderSvgOverlay}
+        onOcadCrsReady={setOcadCrs}
+        onOcadMapScale={setOcadMapScale}
+        gpsTrackFollow={gpsTrackFollow}
       />
 
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">

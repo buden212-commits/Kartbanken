@@ -73,6 +73,7 @@ export function fieldEditOverlaySvg(options: {
   selectedVertexIndex: number | null;
   draftPoints: [number, number][];
   draftKind: "line" | "area" | null;
+  gpsLivePoints?: [number, number][];
 }): string {
   const {
     transform,
@@ -83,6 +84,7 @@ export function fieldEditOverlaySvg(options: {
     selectedVertexIndex,
     draftPoints,
     draftKind,
+    gpsLivePoints = [],
   } = options;
 
   const parts: string[] = [selectionBoundarySvg(selectionGeometry, transform)];
@@ -149,6 +151,11 @@ export function fieldEditOverlaySvg(options: {
       parts.push(lineSvg(draftPoints, transform, "#16a34a", 2));
     }
     parts.push(vertexHandlesSvg(draftPoints, transform, null));
+  }
+
+  if (gpsLivePoints.length >= 1) {
+    parts.push(lineSvg(gpsLivePoints, transform, "#16a34a", 3));
+    parts.push(vertexHandlesSvg(gpsLivePoints, transform, null, 80));
   }
 
   return parts.join("");
