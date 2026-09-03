@@ -12,6 +12,7 @@ export const releaseNotes: ReleaseNote[] = [
     items: [
       "Ikonerna för punkt, linje, yta, radera, GPS, Rita och Navigera är nu identiska i båda verktygen",
       "Verktygen ligger i samma ordning: punkt → linje → yta → (rektangel i kartförslag) → radera → GPS",
+      "Fix: valda verktygsikoner i fältredigering syns igen (blev vita mot vit bakgrund)",
     ],
   },
   {
