@@ -1,4 +1,5 @@
 import { requireFieldEdit } from "@/lib/auth/api";
+import { canAdmin } from "@/lib/auth/permissions";
 import { cancelCheckout, getCheckoutById, serializeCheckoutResponse } from "@/lib/checkout/repository";
 import { CheckoutMode, CheckoutStatus } from "@/lib/checkout/types";
 import { logAction } from "@/lib/audit";
@@ -44,6 +45,12 @@ export async function DELETE(request: Request, { params }: RouteParams) {
   const checkout = loaded.checkout!;
   if (checkout.status !== CheckoutStatus.ACTIVE) {
     return NextResponse.json({ error: "Endast aktiva fältredigeringar kan avbrytas" }, { status: 409 });
+  }
+
+  const isOwner = checkout.userId === session.user.id;
+  const isAdmin = canAdmin(session.user.role);
+  if (!isOwner && !isAdmin) {
+    return NextResponse.json({ error: "Endast ägaren eller admin kan avbryta fältredigeringen" }, { status: 403 });
   }
 
   let cancelReason: string | null = null;

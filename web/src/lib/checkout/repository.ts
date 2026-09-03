@@ -203,7 +203,6 @@ export async function findCheckoutHistoryForMap(mapFileId: string, limit = 20) {
   return prisma.mapCheckout.findMany({
     where: {
       mapFileId,
-      mode: CheckoutMode.OCAD_DESKTOP,
       status: { in: [CheckoutStatus.INTEGRATED, CheckoutStatus.CANCELLED] },
     },
     select: checkoutWithUserSelect,

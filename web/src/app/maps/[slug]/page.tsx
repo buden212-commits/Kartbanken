@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { canAdmin, canCheckout, canCreateCourse, canCreateMapSuggestion, canReviewMapSuggestion, canUpload, canViewCheckouts, userCanFieldEdit } from "@/lib/auth/permissions";
 import { MapTitleEditor } from "@/components/map-title-editor";
-import { findActiveCheckoutsForMap, findCheckoutHistoryForMap, getHeadVersionId, serializeCheckoutResponse } from "@/lib/checkout/repository";
+import { findActiveAreaLocksForMap, findCheckoutHistoryForMap, getHeadVersionId, serializeCheckoutResponse } from "@/lib/checkout/repository";
 import { isMapArchived } from "@/lib/maps/archive-map";
 import { listCoursesForMap, serializeCourseSummary } from "@/lib/course/repository";
 import { versionVisibilityFilter } from "@/lib/maps/version-query";
@@ -57,9 +57,9 @@ export default async function MapDetailPage({ params }: PageProps) {
   const mapArchived = isMapArchived(map.archivedAt);
   const checkoutHistory = await findCheckoutHistoryForMap(map.id);
 
-  const activeCheckouts = await findActiveCheckoutsForMap(map.id);
+  const activeAreaLocks = await findActiveAreaLocksForMap(map.id);
   const headVersionId = await getHeadVersionId(map.id);
-  const checkoutListItems = activeCheckouts.map(serializeCheckoutResponse);
+  const checkoutListItems = activeAreaLocks.map(serializeCheckoutResponse);
 
   const pendingSuggestionBreakdown =
     session?.user?.id ? await listPendingSuggestionsByVersion(map.id) : [];
@@ -196,7 +196,7 @@ export default async function MapDetailPage({ params }: PageProps) {
           publishedVersionNumber={latestPublishedVersion?.versionNumber ?? null}
           publishedVersionId={latestPublishedVersion?.id ?? null}
           suggestionBreakdown={pendingSuggestionBreakdown}
-          activeCheckoutCount={activeCheckouts.length}
+          activeCheckoutCount={activeAreaLocks.length}
           showVersionStatus={canManagePublication}
           showCheckoutStatus={canSeeCheckouts}
         />
@@ -273,11 +273,11 @@ export default async function MapDetailPage({ params }: PageProps) {
         />
       )}
 
-      {headVersionId && activeCheckouts.length > 0 && canSeeCheckouts && (
+      {headVersionId && activeAreaLocks.length > 0 && canSeeCheckouts && (
         <section className="mt-10">
           <h2 className="text-lg font-medium text-slate-900">Utcheckningsområden på kartan</h2>
           <p className="mt-1 text-sm text-slate-600">
-            Färgade ytor visar vem som checkat ut vad (read-only).
+            Färgade ytor visar aktiva utcheckningar och fältredigeringar (read-only).
           </p>
           <CheckoutOverviewMap
             mapSlug={map.slug}
@@ -301,6 +301,7 @@ export default async function MapDetailPage({ params }: PageProps) {
             mapSlug={map.slug}
             items={checkoutHistory.map((row) => ({
               id: row.id,
+              mode: row.mode,
               status: row.status,
               createdAt: row.createdAt.toISOString(),
               integratedAt: row.integratedAt?.toISOString() ?? null,

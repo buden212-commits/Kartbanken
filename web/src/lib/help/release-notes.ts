@@ -8,6 +8,15 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-03",
+    title: "Fältredigering — synlig och avbrytbar som utcheckning",
+    items: [
+      "Aktiva fältredigeringar visas i listan «Aktiva utcheckningar» och på kartan «Utcheckningsområden på kartan»",
+      "Administratör kan avbryta fältredigeringar från områdessidan — samma som vanliga utcheckningar",
+      "Avslutade fältredigeringar ingår i utcheckningshistoriken",
+    ],
+  },
+  {
+    date: "2026-09-03",
     title: "Fältredigering — välj symbol från kartobjekt",
     items: [
       "Klicka ett befintligt kartobjekt när du skapar ny punkt, linje eller yta — symbolen kopieras",

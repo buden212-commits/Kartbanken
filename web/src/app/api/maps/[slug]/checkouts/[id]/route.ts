@@ -7,7 +7,7 @@ import {
   canViewCheckouts,
 } from "@/lib/auth/permissions";
 import { cancelCheckout, getCheckoutById, serializeCheckoutResponse } from "@/lib/checkout/repository";
-import { CheckoutStatus } from "@/lib/checkout/types";
+import { CheckoutMode, CheckoutStatus } from "@/lib/checkout/types";
 import { notifyCheckoutCancelled } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
@@ -66,9 +66,19 @@ export async function DELETE(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Utcheckning hittades inte" }, { status: 404 });
   }
 
+  const cancellableStatuses: CheckoutStatus[] =
+    checkout.mode === CheckoutMode.FIELD_EDIT
+      ? [CheckoutStatus.ACTIVE]
+      : [
+          CheckoutStatus.ACTIVE,
+          CheckoutStatus.CHECKED_IN,
+          CheckoutStatus.PENDING_ADMIN_CONFIRM,
+        ];
+
   if (
     checkout.status === CheckoutStatus.INTEGRATED ||
-    checkout.status === CheckoutStatus.CANCELLED
+    checkout.status === CheckoutStatus.CANCELLED ||
+    !cancellableStatuses.includes(checkout.status as CheckoutStatus)
   ) {
     return NextResponse.json(
       { error: "Utcheckningen kan inte avbrytas i nuvarande status" },

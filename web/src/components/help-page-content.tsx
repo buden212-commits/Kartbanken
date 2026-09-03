@@ -348,6 +348,8 @@ export async function HelpPageContent() {
                   "Nya och ändrade objekt visas med riktig OCAD-symbol i editorn — inte bara enkla streck",
                   "«Min position» och «GPS-spår» fungerar som i kartförslag på georefererade kartor — spela in stigar med telefonens GPS",
                   "Helt separerat från «Föreslå ändring» och vanlig OCAD-utcheckning",
+                  "Aktiva fältredigeringar syns i «Aktiva utcheckningar» och som färgade ytor under «Utcheckningsområden på kartan»",
+                  "Administratör kan avbryta fältredigeringar från områdessidan — samma som vanliga utcheckningar",
                   "Mobilanpassad: verktyg på kartan, Navigera/Rita-läge, stora knappar och hopfällbara paneler",
                   "Ändringar sparas lokalt i webbläsaren tills du publicerar (checkar in)",
                 ]}
@@ -409,8 +411,8 @@ export async function HelpPageContent() {
             <>
               <h3 className="font-medium text-slate-900">Synliga överlagringar</h3>
               <p>
-                På områdessidan visas färgade ytor för alla aktiva utcheckningar. Varje färg
-                motsvarar en användare och visar vem som arbetar i området och när utcheckningen
+                På områdessidan visas färgade ytor för alla aktiva utcheckningar och fältredigeringar. Varje färg
+                motsvarar en användare och visar vem som arbetar i området och när sessionen
                 skapades. Det hjälper teamet undvika parallella ändringar i samma del av kartan.
               </p>
             </>
@@ -421,10 +423,10 @@ export async function HelpPageContent() {
               <h3 className="font-medium text-slate-900">Administratör</h3>
               <HelpList
                 items={[
-                  "Avbryt utcheckning (tvinga avbryt) med valfri anledning om arbetet behöver stoppas",
+                  "Avbryt utcheckning eller fältredigering (tvinga avbryt) med valfri anledning om arbetet behöver stoppas",
                   "Bekräfta och integrera efter att användaren bekräftat diff",
                   "Bekräfta granskning (kryssruta) innan integration genomförs",
-                  "Vid full uppladdning av hel karta blockeras uppladdning vid aktiva utcheckningar — admin kan bekräfta undantag",
+                  "Vid full uppladdning av hel karta blockeras uppladdning vid aktiva utcheckningar och fältredigeringar — admin kan bekräfta undantag",
                 ]}
               />
             </>

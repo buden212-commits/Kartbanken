@@ -4,11 +4,17 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { CheckoutAreaCta } from "@/components/checkout-area-cta";
-import { checkoutStatusLabel, type CheckoutSelection } from "@/lib/checkout/types";
+import {
+  CheckoutMode,
+  checkoutModeLabel,
+  checkoutStatusLabel,
+  type CheckoutSelection,
+} from "@/lib/checkout/types";
 import { formatDate } from "@/lib/format";
 
 export type CheckoutListItem = {
   id: string;
+  mode: string;
   status: string;
   selection: CheckoutSelection;
   createdAt: string;
@@ -35,10 +41,14 @@ export function CheckoutListPanel({
   const router = useRouter();
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
-  async function cancelCheckout(checkoutId: string) {
+  async function cancelCheckout(checkoutId: string, mode: string) {
     const reason = window.prompt("Anledning (valfritt):") ?? undefined;
     setLoadingId(checkoutId);
-    const res = await fetch(`/api/maps/${mapSlug}/checkouts/${checkoutId}`, {
+    const endpoint =
+      mode === CheckoutMode.FIELD_EDIT
+        ? `/api/maps/${mapSlug}/field-edits/${checkoutId}`
+        : `/api/maps/${mapSlug}/checkouts/${checkoutId}`;
+    const res = await fetch(endpoint, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ reason }),
@@ -62,12 +72,13 @@ export function CheckoutListPanel({
       </div>
 
       {checkouts.length === 0 ? (
-        <p className="mt-3 text-sm text-slate-500">Inga aktiva utcheckningar.</p>
+        <p className="mt-3 text-sm text-slate-500">Inga aktiva utcheckningar eller fältredigeringar.</p>
       ) : (
         <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="w-full min-w-[640px] text-sm">
+          <table className="w-full min-w-[720px] text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-500">
+                <th className="px-4 py-3 font-medium">Typ</th>
                 <th className="px-4 py-3 font-medium">Ägare</th>
                 <th className="px-4 py-3 font-medium">Skapad</th>
                 <th className="px-4 py-3 font-medium">Objekt</th>
@@ -78,9 +89,16 @@ export function CheckoutListPanel({
             <tbody>
               {checkouts.map((checkout) => {
                 const isOwner = checkout.user.id === sessionUserId;
+                const isFieldEdit = checkout.mode === CheckoutMode.FIELD_EDIT;
                 const canOpen = isOwner || isAdmin;
+                const openHref = isFieldEdit
+                  ? `/maps/${mapSlug}/field-edit/${checkout.id}`
+                  : `/maps/${mapSlug}/checkout/${checkout.id}`;
                 return (
                   <tr key={checkout.id} className="border-b border-slate-100 last:border-0">
+                    <td className="px-4 py-3 text-slate-600">
+                      {checkoutModeLabel(checkout.mode as never)}
+                    </td>
                     <td className="px-4 py-3 text-slate-800">
                       {checkout.user.name ?? checkout.user.email}
                     </td>
@@ -96,18 +114,15 @@ export function CheckoutListPanel({
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-2">
                         {canOpen && (
-                          <Link
-                            href={`/maps/${mapSlug}/checkout/${checkout.id}`}
-                            className="text-ifk-blue hover:underline"
-                          >
-                            Öppna
+                          <Link href={openHref} className="text-ifk-blue hover:underline">
+                            {isFieldEdit ? "Fortsätt" : "Öppna"}
                           </Link>
                         )}
                         {isAdmin && (
                           <button
                             type="button"
                             disabled={loadingId === checkout.id}
-                            onClick={() => cancelCheckout(checkout.id)}
+                            onClick={() => cancelCheckout(checkout.id, checkout.mode)}
                             className="text-red-600 hover:underline disabled:opacity-50"
                           >
                             Avbryt

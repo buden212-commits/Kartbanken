@@ -152,6 +152,16 @@ export function serializeSelection(selection: CheckoutSelection): string {
   return JSON.stringify(selection);
 }
 
+export function checkoutModeLabel(mode: CheckoutMode): string {
+  switch (mode) {
+    case CheckoutMode.FIELD_EDIT:
+      return "Fältredigering";
+    case CheckoutMode.OCAD_DESKTOP:
+    default:
+      return "OCAD-utcheckning";
+  }
+}
+
 export function checkoutStatusLabel(status: CheckoutStatus): string {
   switch (status) {
     case CheckoutStatus.ACTIVE:
