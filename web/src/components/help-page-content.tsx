@@ -344,6 +344,7 @@ export async function HelpPageContent() {
                   "Snappa mot objekt: slå på snappning och ange tolerans (meter) — brytpunkter fästs vid linjer, hörn och punktobjekt",
                   "CAD-verktyg för vald linje eller yta: förenkla (ta bort onödiga punkter), mjuka hörn, Bézier-kurva",
                   "Radera objekt, eller lägg till nya punkter, linjer och ytor med symbol grupperad efter geometri",
+                  "Klicka ett befintligt kartobjekt när du skapar nytt — då kopieras dess symbol automatiskt",
                   "Nya och ändrade objekt visas med riktig OCAD-symbol i editorn — inte bara enkla streck",
                   "«Min position» och «GPS-spår» fungerar som i kartförslag på georefererade kartor — spela in stigar med telefonens GPS",
                   "Helt separerat från «Föreslå ändring» och vanlig OCAD-utcheckning",

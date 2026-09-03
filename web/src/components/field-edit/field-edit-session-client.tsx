@@ -10,12 +10,14 @@ import {
   FieldEditMapDraftBar,
   FieldEditMapToolbars,
   FieldEditPublishBar,
+  stopFieldEditToolbarPointer,
   type FieldEditTool,
 } from "@/components/field-edit/field-edit-toolbar";
 import {
   buildSymbolGroups,
   defaultSymbolForKind,
   FieldEditSymbolPicker,
+  symbolFromMapObject,
   type SymbolGroups,
 } from "@/components/field-edit/field-edit-symbol-picker";
 import type { CheckoutSelection } from "@/lib/checkout/types";
@@ -46,6 +48,7 @@ import { applyVertexMove, verticesForHandles } from "@/lib/field-edit/vertices";
 import { metersToMapUnits, type OcadCrsInfo } from "@/lib/ocad/crs";
 import { screenToSvgPoint } from "@/lib/ocad/map-hit-test";
 import { parseOcadLayersFromSvg } from "@/lib/ocad/svg-utils";
+import { formatOcadSymbolNumber } from "@/lib/ocad/layers";
 import { fetchPreviewText } from "@/lib/ocad/preview-fetch";
 import { GPS_TRACK_MIN_DISTANCE_M } from "@/lib/suggestion/gps-track";
 import {
@@ -301,6 +304,21 @@ export function FieldEditSessionClient({
     [scheduleServerSync],
   );
 
+  const pickSymbolFromObject = useCallback(
+    (obj: FieldEditObjectEntry, kind: FieldEditGeometryKind): boolean => {
+      const sym = symbolFromMapObject(obj, kind);
+      if (sym == null) {
+        setInfo("Kartobjektet passar inte för vald geometrityp — välj symbol manuellt.");
+        return false;
+      }
+      setSymbolNumber(sym);
+      setInfo(`Symbol ${formatOcadSymbolNumber(sym)} vald från kartobjekt.`);
+      setError(null);
+      return true;
+    },
+    [],
+  );
+
   const upsertModify = useCallback(
     (objectIndex: number, coordinates: [number, number][]) => {
       const obj = objects.find((entry) => entry.i === objectIndex);
@@ -393,8 +411,12 @@ export function FieldEditSessionClient({
       }
 
       if (tool === "addPoint") {
+        const hit = hitTestFieldEditObject(objects, geo, hitDistance);
+        if (hit && !ops.deletes.includes(hit.i)) {
+          if (pickSymbolFromObject(hit, "point")) return;
+        }
         if (symbolNumber === "") {
-          setError("Välj en punkt-symbol");
+          setError("Välj en punkt-symbol eller klicka på ett kartobjekt");
           return;
         }
         updateOps((current) => ({
@@ -410,12 +432,17 @@ export function FieldEditSessionClient({
       }
 
       if (tool === "addLine" || tool === "addArea") {
+        const kind = tool === "addLine" ? "line" : "area";
+        const hit = hitTestFieldEditObject(objects, geo, hitDistance);
+        if (hit && !ops.deletes.includes(hit.i)) {
+          if (pickSymbolFromObject(hit, kind)) return;
+        }
         setDraftPoints((prev) => [...prev, geo]);
         setError(null);
         setInfo(null);
       }
     },
-    [objects, ops, resolveSnapPoint, selectedObjectIndex, symbolNumber, tool, updateOps, gpsTracking, hitDistance, vertexHitDistance],
+    [objects, ops, pickSymbolFromObject, resolveSnapPoint, selectedObjectIndex, symbolNumber, tool, updateOps, gpsTracking, hitDistance, vertexHitDistance],
   );
 
   const handlePointerMove = useCallback(
@@ -608,6 +635,17 @@ export function FieldEditSessionClient({
     if (gpsTracking) {
       cancelGpsTracking();
     }
+    const addKindForTool: FieldEditGeometryKind | null =
+      next === "addPoint" ? "point" : next === "addLine" ? "line" : next === "addArea" ? "area" : null;
+    if (addKindForTool && selectedObjectIndex != null) {
+      const obj = objects.find((entry) => entry.i === selectedObjectIndex);
+      if (obj && !ops.deletes.includes(obj.i)) {
+        const sym = symbolFromMapObject(obj, addKindForTool);
+        if (sym != null) {
+          setSymbolNumber(sym);
+        }
+      }
+    }
     setTool(next);
     setMapMode("draw");
     setDraftPoints([]);
@@ -632,10 +670,13 @@ export function FieldEditSessionClient({
       return "Klicka ett objekt för att markera det. Dra brytpunkter eller använd CAD-verktygen nedan. Snappning hjälper dig träffa befintliga linjer och hörn.";
     }
     if (tool === "addLine") {
-      return "Klicka punkter längs linjen — snappning mot befintliga objekt kan slås på nedan. Klicka «Klar» när linjen är färdig.";
+      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan punkter längs linjen.";
     }
     if (tool === "addArea") {
-      return "Klicka hörn runt ytan (minst 3). Snappning mot befintliga objekt kan slås på nedan. Klicka «Klar» när ytan är färdig.";
+      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan hörn runt ytan (minst 3).";
+    }
+    if (tool === "addPoint") {
+      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan där punkten ska ligga.";
     }
     return null;
   }, [gpsTracking, tool]);
@@ -666,6 +707,25 @@ export function FieldEditSessionClient({
           canUseGpsTracking={canUseGpsTracking}
           onGpsToggle={handleGpsToggle}
         />
+        {addKind && (
+          <div
+            data-map-toolbar
+            className={`pointer-events-auto absolute inset-x-2 z-40 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur sm:hidden ${
+              showDraftActions ? "bottom-[8.5rem]" : "bottom-2"
+            }`}
+            onPointerDown={stopFieldEditToolbarPointer}
+          >
+            <FieldEditSymbolPicker
+              groups={symbolGroups}
+              kind={addKind}
+              value={symbolNumber}
+              onChange={setSymbolNumber}
+            />
+            <p className="mt-1 text-[11px] leading-snug text-slate-500">
+              Klicka ett kartobjekt på kartan för att kopiera dess symbol.
+            </p>
+          </div>
+        )}
         <FieldEditMapDraftBar
           showDraftActions={showDraftActions}
           draftPointCount={draftPoints.length}
@@ -678,6 +738,9 @@ export function FieldEditSessionClient({
     ),
     [
       tool,
+      addKind,
+      symbolGroups,
+      symbolNumber,
       gpsTracking,
       mapMode,
       canUseGpsTracking,

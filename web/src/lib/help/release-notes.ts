@@ -7,6 +7,14 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-09-03",
+    title: "Fältredigering — välj symbol från kartobjekt",
+    items: [
+      "Klicka ett befintligt kartobjekt när du skapar ny punkt, linje eller yta — symbolen kopieras",
+      "Symbolväljaren syns igen tydligt på mobil när du ritar nytt",
+    ],
+  },
+  {
     date: "2026-09-02",
     title: "Fältredigering — fix vit mask vid CAD-verktyg",
     items: [

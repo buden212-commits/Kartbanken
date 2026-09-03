@@ -13,6 +13,7 @@ import {
   OCAD_RECTANGLE_SYMBOL,
 } from "@/lib/ocad/ocad-object-create";
 import type { FieldEditGeometryKind } from "@/lib/field-edit/types";
+import type { FieldEditObjectEntry } from "@/lib/field-edit/object-index";
 
 export type SymbolChoice = {
   symNum: number;
@@ -87,4 +88,22 @@ export function FieldEditSymbolPicker({ groups, kind, value, onChange }: Props) 
 
 export function defaultSymbolForKind(groups: SymbolGroups, kind: FieldEditGeometryKind): number | "" {
   return groups[kind][0]?.symNum ?? "";
+}
+
+export function objectGeometryKind(
+  type: FieldEditObjectEntry["t"],
+): FieldEditGeometryKind | null {
+  if (type === "line") return "line";
+  if (type === "area") return "area";
+  if (type === "point" || type === "text") return "point";
+  return null;
+}
+
+export function symbolFromMapObject(
+  obj: FieldEditObjectEntry,
+  targetKind: FieldEditGeometryKind,
+): number | null {
+  const objKind = objectGeometryKind(obj.t);
+  if (objKind !== targetKind) return null;
+  return obj.s;
 }
