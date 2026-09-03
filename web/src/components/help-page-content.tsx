@@ -344,6 +344,7 @@ export async function HelpPageContent() {
                   "Snappa mot objekt: slå på snappning och ange tolerans (meter) — brytpunkter fästs vid linjer, hörn och punktobjekt",
                   "CAD-verktyg för vald linje eller yta: förenkla (ta bort onödiga punkter), mjuka hörn, Bézier-kurva",
                   "Radera objekt, eller lägg till nya punkter, linjer och ytor med symbol grupperad efter geometri",
+                  "Ritverktygens ikoner och ordning (punkt → linje → yta → radera → GPS) är samma som i «Föreslå ändring»",
                   "Klicka ett befintligt kartobjekt när du skapar nytt — då kopieras dess symbol automatiskt",
                   "Nya och ändrade objekt visas med riktig OCAD-symbol i editorn — inte bara enkla streck",
                   "«Min position» och «GPS-spår» fungerar som i kartförslag på georefererade kartor — spela in stigar med telefonens GPS",
@@ -571,9 +572,9 @@ export async function HelpPageContent() {
           <HelpList
             items={[
               "Öppna en publicerad version via Visa karta och klicka Föreslå ändring",
-              "Välj ritverktyg som ikoner till höger på kartan: punkt, rektangel, polygon, linje eller «Radera objektet» (rött X — pekar ut var något ska tas bort; beskriv vad i kommentaren)",
+              "Välj ritverktyg som ikoner till höger på kartan (samma ikoner och ordning som i fältredigering): punkt, linje, polygon, rektangel eller «Radera objektet» (rött X — pekar ut var något ska tas bort; beskriv vad i kommentaren)",
               "«Min position» zooma till skala 1:50 och panorera till dig var 10:e sekund tills du stoppar GPS",
-              "«GPS-spår» finns som ikon i ritverktygsraden till höger (mellan linje och radera) — spelar in en linje med telefonens GPS (kräver georefererad karta)",
+              "«GPS-spår» finns som ikon i ritverktygsraden till höger (efter radera) — spelar in en linje med telefonens GPS (kräver georefererad karta)",
               "Under spårning zoomas kartan till skala 1:50 och följer din position var 10:e sekund",
               "GPS-spår filtreras (minst ca 4 m mellan punkter) och förenklas automatiskt innan linjen sparas",
               "Orimliga GPS-hopp filtreras bort och accepterade punkter utjämnas vid sämre mottagning — antal filtrerade hopp visas efter «Sluta spåra»",

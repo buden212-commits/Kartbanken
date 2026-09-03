@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-03",
+    title: "Samma ritverktygsikoner i fältredigering och kartförslag",
+    items: [
+      "Ikonerna för punkt, linje, yta, radera, GPS, Rita och Navigera är nu identiska i båda verktygen",
+      "Verktygen ligger i samma ordning: punkt → linje → yta → (rektangel i kartförslag) → radera → GPS",
+    ],
+  },
+  {
+    date: "2026-09-03",
     title: "Fältredigering — synlig och avbrytbar som utcheckning",
     items: [
       "Aktiva fältredigeringar visas i listan «Aktiva utcheckningar» och på kartan «Utcheckningsområden på kartan»",
