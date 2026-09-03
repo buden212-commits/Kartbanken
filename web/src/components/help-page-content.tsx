@@ -353,6 +353,7 @@ export async function HelpPageContent() {
                   "«Min position» och «GPS-spår» fungerar som i kartförslag på georefererade kartor — spela in stigar med telefonens GPS",
                   "Helt separerat från «Föreslå ändring» och vanlig OCAD-utcheckning",
                   "Aktiva fältredigeringar syns i «Aktiva utcheckningar» och som färgade ytor under «Utcheckningsområden på kartan»",
+                  "Fortsätt senare via «Fortsätt» i listan eller på fältredigeringssidan",
                   "Administratör kan avbryta fältredigeringar från områdessidan — samma som vanliga utcheckningar",
                   "Mobilanpassad: verktyg på kartan, Navigera/Rita-läge, stora knappar och hopfällbara paneler",
                   "«Checka in» visar en sammanfattning — därefter väntar admin-godkännande innan ny version skapas",
