@@ -35,16 +35,17 @@ const DRAW_TOOLS: FieldEditTool[] = [
 ];
 
 const iconBtnBase =
-  "group relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border-2 bg-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ifk-blue/30 disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:w-10";
+  "group relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ifk-blue/30 disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:w-10";
 const iconBtnActiveSelect = "border-ifk-blue bg-ifk-blue text-white";
 const iconBtnActiveAdd = "border-emerald-600 bg-emerald-600 text-white";
 const iconBtnActiveDelete = "border-red-600 bg-red-600 text-white";
-const iconBtnInactive = "border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50";
+const iconBtnInactive =
+  "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50";
 const iconBtnDeleteInactive =
-  "border-slate-200 text-red-600 hover:border-red-200 hover:bg-red-50";
+  "border-slate-200 bg-white text-red-600 hover:border-red-200 hover:bg-red-50";
 const iconBtnTracking = "border-amber-600 bg-amber-600 text-white";
 const iconBtnGpsInactive =
-  "border-slate-200 text-ifk-blue hover:border-ifk-blue/40 hover:bg-ifk-blue/5";
+  "border-slate-200 bg-white text-ifk-blue hover:border-ifk-blue/40 hover:bg-ifk-blue/5";
 
 const tooltipClass =
   "pointer-events-none absolute right-full top-1/2 z-40 mr-2 hidden -translate-y-1/2 whitespace-nowrap rounded-md bg-slate-800 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-sm transition group-hover:opacity-100 group-focus-visible:opacity-100 sm:block";
