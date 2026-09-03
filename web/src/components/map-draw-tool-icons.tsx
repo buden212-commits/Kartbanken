@@ -2,15 +2,39 @@
 
 export function MapSelectToolIcon() {
   return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5">
+      <path d="M4.2 2.4 15.8 10.1c.35.23.2.78-.22.78H9.55l-2.2 5.85c-.14.38-.68.3-.78-.12L4.2 2.4Z" />
+    </svg>
+  );
+}
+
+export function MapTrashToolIcon() {
+  return (
     <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
       <path
-        d="M4.5 14.5 8.5 4.5 11.5 11.5 16.5 7.5"
+        d="M7.5 4.5V3.75c0-.69.56-1.25 1.25-1.25h2.5c.69 0 1.25.56 1.25 1.25V4.5M4 4.5h12M15.25 4.5l-.7 10.15A1.5 1.5 0 0 1 13.06 16H6.94a1.5 1.5 0 0 1-1.49-1.35L4.75 4.5"
         stroke="currentColor"
         strokeWidth="1.75"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <circle cx="8.5" cy="4.5" r="1.5" fill="currentColor" />
+      <path d="M8.25 8v5.5M11.75 8v5.5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function MapChangeSymbolToolIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+      <circle cx="7" cy="10" r="3.25" stroke="currentColor" strokeWidth="1.75" />
+      <circle cx="13" cy="10" r="3.25" stroke="currentColor" strokeWidth="1.75" strokeDasharray="2.5 2" />
+      <path
+        d="M9.5 6.5 12 4.5 14.5 6.5M10.5 13.5 8 15.5 5.5 13.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }

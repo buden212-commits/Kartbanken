@@ -115,7 +115,11 @@ export function CheckoutListPanel({
                       <div className="flex flex-wrap gap-2">
                         {canOpen && (
                           <Link href={openHref} className="text-ifk-blue hover:underline">
-                            {isFieldEdit ? "Fortsätt" : "Öppna"}
+                            {isFieldEdit
+                              ? checkout.status === "PENDING_ADMIN_CONFIRM"
+                                ? "Granska"
+                                : "Fortsätt"
+                              : "Öppna"}
                           </Link>
                         )}
                         {isAdmin && (

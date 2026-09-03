@@ -68,7 +68,7 @@ export async function DELETE(request: Request, { params }: RouteParams) {
 
   const cancellableStatuses: CheckoutStatus[] =
     checkout.mode === CheckoutMode.FIELD_EDIT
-      ? [CheckoutStatus.ACTIVE]
+      ? [CheckoutStatus.ACTIVE, CheckoutStatus.PENDING_ADMIN_CONFIRM]
       : [
           CheckoutStatus.ACTIVE,
           CheckoutStatus.CHECKED_IN,

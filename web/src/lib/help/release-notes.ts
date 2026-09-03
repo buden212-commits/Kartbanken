@@ -10,11 +10,13 @@ export const releaseNotes: ReleaseNote[] = [
     date: "2026-09-03",
     title: "Fältredigering — favoriter, ångra och incheckning till admin",
     items: [
-      "Spara favoritsymboler per geometrityp — de föreslås först när du lägger till nytt",
+      "Spara favoritsymboler per geometrityp — de föreslås först när du lägger till nytt och sparas på din profil",
       "Ångra upp till 10 steg (knapp eller Ctrl/Cmd+Z)",
       "Klicka igen på samma ställe för att bläddra bland överlappande objekt",
-      "CAD-panel för valt objekt: byt symbol eller radera",
-      "«Checka in» visar en sammanfattning och skickar till admin för godkännande",
+      "CAD-panel för valt objekt: byt symbol eller radera (papperskorg)",
+      "Välj/redigera har muspekarikon",
+      "Lämna och fortsätt senare via «Fortsätt» i Aktiva utcheckningar eller på fältredigeringssidan",
+      "«Checka in» visar jämförelse — skicka in eller avbryt; admin godkänner under Admin → Utcheckningar",
     ],
   },
   {

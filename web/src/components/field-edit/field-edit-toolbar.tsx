@@ -288,40 +288,42 @@ export function FieldEditMapDraftBar({
 }
 
 type PublishBarProps = {
-  publishAfter: boolean;
-  onPublishAfterChange: (value: boolean) => void;
   publishing: boolean;
+  canUndo: boolean;
+  onUndo: () => void;
   onPublish: () => void;
   onCancel: () => void;
 };
 
 export function FieldEditPublishBar({
-  publishAfter,
-  onPublishAfterChange,
   publishing,
+  canUndo,
+  onUndo,
   onPublish,
   onCancel,
 }: PublishBarProps) {
   return (
     <div className="sticky bottom-0 z-30 -mx-2 border-t border-slate-200 bg-white/95 px-2 py-3 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] backdrop-blur supports-[padding:max(0px)]:pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:rounded-xl sm:border sm:shadow-sm sm:backdrop-blur-none">
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <label className="flex min-h-11 items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            checked={publishAfter}
-            onChange={(e) => onPublishAfterChange(e.target.checked)}
-            className="h-4 w-4"
-          />
-          Publicera ny version direkt
-        </label>
+        <p className="text-sm text-slate-600">
+          Checka in för jämförelse — admin godkänner innan ny version skapas.
+        </p>
         <div className="grid grid-cols-2 gap-2 sm:ml-auto sm:flex sm:gap-3">
+          <button
+            type="button"
+            disabled={!canUndo || publishing}
+            onClick={onUndo}
+            className={`${actionBtnNeutral}`}
+          >
+            Ångra
+          </button>
           <button
             type="button"
             disabled={publishing}
             onClick={onPublish}
             className={`col-span-2 sm:col-span-1 ${actionBtnBlue} sm:min-w-[10rem]`}
           >
-            {publishing ? "Publicerar…" : "Publicera"}
+            {publishing ? "Förbereder…" : "Checka in"}
           </button>
           <button
             type="button"
@@ -329,7 +331,7 @@ export function FieldEditPublishBar({
             onClick={onCancel}
             className={`${actionBtnNeutral}`}
           >
-            Avbryt
+            Avbryt session
           </button>
         </div>
       </div>

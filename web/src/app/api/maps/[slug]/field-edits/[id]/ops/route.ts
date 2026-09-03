@@ -1,7 +1,7 @@
 import { requireFieldEdit } from "@/lib/auth/api";
 import { getCheckoutById, serializeCheckoutResponse, updateFieldEditOps } from "@/lib/checkout/repository";
 import { CheckoutMode, CheckoutStatus } from "@/lib/checkout/types";
-import { validateFieldEditOps } from "@/lib/field-edit/apply-ops";
+import { validateFieldEditOpsShape } from "@/lib/field-edit/apply-ops";
 import { mergeFieldEditOps, parseFieldEditOps, serializeFieldEditOps, type FieldEditOps } from "@/lib/field-edit/types";
 import { prisma } from "@/lib/prisma";
 import { readStoredFile } from "@/lib/storage";
@@ -62,7 +62,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   }
 
   const headBuffer = await readStoredFile(headVersion.storagePath);
-  const validationError = await validateFieldEditOps(
+  const validationError = await validateFieldEditOpsShape(
     headBuffer,
     headVersion.originalFilename,
     checkout.selectionJson,

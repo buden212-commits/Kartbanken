@@ -43,8 +43,11 @@ export async function DELETE(request: Request, { params }: RouteParams) {
   if ("error" in loaded && loaded.error) return loaded.error;
 
   const checkout = loaded.checkout!;
-  if (checkout.status !== CheckoutStatus.ACTIVE) {
-    return NextResponse.json({ error: "Endast aktiva fältredigeringar kan avbrytas" }, { status: 409 });
+  if (
+    checkout.status !== CheckoutStatus.ACTIVE &&
+    checkout.status !== CheckoutStatus.PENDING_ADMIN_CONFIRM
+  ) {
+    return NextResponse.json({ error: "Endast aktiva eller inskickade fältredigeringar kan avbrytas" }, { status: 409 });
   }
 
   const isOwner = checkout.userId === session.user.id;

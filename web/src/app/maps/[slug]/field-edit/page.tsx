@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { userCanFieldEdit } from "@/lib/auth/permissions";
-import { findActiveAreaLocksForMap, getHeadVersionId, serializeCheckoutResponse } from "@/lib/checkout/repository";
+import { findActiveAreaLocksForMap, findActiveFieldEditsForMap, getHeadVersionId, serializeCheckoutResponse } from "@/lib/checkout/repository";
 import { FieldEditCreateClient } from "@/components/field-edit/field-edit-create-client";
 import { HelpLinkIcon } from "@/components/help-link-icon";
 import { readMapScaleFromBuffer } from "@/lib/field-edit/scale";
@@ -42,6 +42,9 @@ export default async function FieldEditCreatePage({ params }: PageProps) {
   }
 
   const locks = await findActiveAreaLocksForMap(map.id);
+  const mySessions = (await findActiveFieldEditsForMap(map.id))
+    .filter((row) => row.userId === session.user.id)
+    .map(serializeCheckoutResponse);
 
   return (
     <div className="mx-auto max-w-6xl px-2 py-4 sm:px-6 sm:py-12">
@@ -52,8 +55,8 @@ export default async function FieldEditCreatePage({ params }: PageProps) {
         <div>
           <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">Fältredigering</h1>
           <p className="mt-2 text-sm text-slate-600">
-            Admin: rita en polygon (max 1 km²) kring området du ska redigera i fält. Endast
-            utcheckat område laddas i editorn.
+            Rita en polygon (max 1 km²) kring området du ska redigera i fält. Endast
+            utcheckat område laddas i editorn. Du kan lämna och fortsätta senare.
           </p>
         </div>
         <HelpLinkIcon section="admin" className="mt-1 shrink-0" />
@@ -66,6 +69,11 @@ export default async function FieldEditCreatePage({ params }: PageProps) {
           headVersionId={headVersionId}
           mapScale={mapScale}
           existingLocks={locks.map(serializeCheckoutResponse)}
+          mySessions={mySessions.map((s) => ({
+            id: s.id,
+            status: s.status,
+            createdAt: s.createdAt,
+          }))}
         />
       </div>
     </div>

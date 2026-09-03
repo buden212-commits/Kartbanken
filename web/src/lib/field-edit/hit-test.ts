@@ -70,22 +70,26 @@ export function hitTestFieldEditObject(
   point: [number, number],
   maxDistance: number,
 ): FieldEditObjectEntry | null {
-  let best: FieldEditObjectEntry | null = null;
-  let bestDist = maxDistance;
-  let bestPriority = -1;
+  return hitTestFieldEditObjects(index, point, maxDistance)[0] ?? null;
+}
+
+/** All hits within tolerance, nearest first; same distance prefers area > line > point. */
+export function hitTestFieldEditObjects(
+  index: FieldEditObjectEntry[],
+  point: [number, number],
+  maxDistance: number,
+): FieldEditObjectEntry[] {
+  const scored: { entry: FieldEditObjectEntry; dist: number; priority: number }[] = [];
   for (const entry of index) {
     const dist = hitDistance(entry, point);
-    const priority = typePriority(entry.t);
-    if (
-      dist < bestDist ||
-      (dist <= bestDist && priority > bestPriority)
-    ) {
-      bestDist = dist;
-      bestPriority = priority;
-      best = entry;
-    }
+    if (dist > maxDistance) continue;
+    scored.push({ entry, dist, priority: typePriority(entry.t) });
   }
-  return best;
+  scored.sort((a, b) => {
+    if (a.dist !== b.dist) return a.dist - b.dist;
+    return b.priority - a.priority;
+  });
+  return scored.map((row) => row.entry);
 }
 
 export function hitTestFieldEditVertex(

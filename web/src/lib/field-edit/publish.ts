@@ -28,7 +28,12 @@ export type PublishFieldEditResult = {
 export async function publishFieldEditSession(
   checkoutId: string,
   userId: string,
-  options?: { publish?: boolean; comment?: string | null; ops?: FieldEditOps },
+  options?: {
+    publish?: boolean;
+    comment?: string | null;
+    ops?: FieldEditOps;
+    allowPendingAdmin?: boolean;
+  },
 ): Promise<PublishFieldEditResult> {
   const checkout = await prisma.mapCheckout.findUnique({
     where: { id: checkoutId },
@@ -41,8 +46,11 @@ export async function publishFieldEditSession(
   if (checkout.mode !== CheckoutMode.FIELD_EDIT) {
     throw new Error("Inte en fältredigeringssession");
   }
-  if (checkout.status !== CheckoutStatus.ACTIVE) {
-    throw new Error("Fältredigeringen är inte aktiv");
+  const allowedStatuses: CheckoutStatus[] = options?.allowPendingAdmin
+    ? [CheckoutStatus.ACTIVE, CheckoutStatus.PENDING_ADMIN_CONFIRM]
+    : [CheckoutStatus.ACTIVE];
+  if (!allowedStatuses.includes(checkout.status as CheckoutStatus)) {
+    throw new Error("Fältredigeringen kan inte publiceras i nuvarande status");
   }
 
   const ops = options?.ops ?? parseFieldEditOps(checkout.editOpsJson);

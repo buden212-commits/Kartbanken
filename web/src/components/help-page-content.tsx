@@ -429,6 +429,7 @@ export async function HelpPageContent() {
               <HelpList
                 items={[
                   "Avbryt utcheckning eller fältredigering (tvinga avbryt) med valfri anledning om arbetet behöver stoppas",
+                  "Godkänn incheckade fältredigeringar under Admin → Utcheckningar (jämförelse visas först för användaren)",
                   "Bekräfta och integrera efter att användaren bekräftat diff",
                   "Bekräfta granskning (kryssruta) innan integration genomförs",
                   "Vid full uppladdning av hel karta blockeras uppladdning vid aktiva utcheckningar och fältredigeringar — admin kan bekräfta undantag",

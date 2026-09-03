@@ -68,6 +68,23 @@ export async function validateFieldEditOps(
   selectionJson: string,
   ops: FieldEditOps,
 ): Promise<string | null> {
+  const shapeError = await validateFieldEditOpsShape(headBuffer, fileName, selectionJson, ops);
+  if (shapeError) return shapeError;
+
+  if (!hasFieldEditChanges(ops)) {
+    return "Inga ändringar att publicera";
+  }
+
+  return null;
+}
+
+/** Validates geometry/scope without requiring non-empty ops (for PATCH sync / undo). */
+export async function validateFieldEditOpsShape(
+  headBuffer: Buffer,
+  fileName: string,
+  selectionJson: string,
+  ops: FieldEditOps,
+): Promise<string | null> {
   const selection = parseSelectionJson(selectionJson);
   const parsed = await parseOcadBuffer(headBuffer, fileName);
   const scoped = new Set(
@@ -96,10 +113,6 @@ export async function validateFieldEditOps(
     if (modify.geometryKind === "area" && modify.coordinates.length < 3) {
       return `Yta ${modify.objectIndex} har för få hörn`;
     }
-  }
-
-  if (!hasFieldEditChanges(ops)) {
-    return "Inga ändringar att publicera";
   }
 
   return null;

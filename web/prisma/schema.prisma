@@ -22,6 +22,7 @@ model User {
   receiveNotifications Boolean       @default(false)
   receiveOcdAttachment Boolean       @default(false)
   canFieldEdit         Boolean       @default(false)
+  fieldEditFavoriteSymbols String?
   mustChangePassword   Boolean       @default(false)
   passwordExpiresAt    DateTime?
   createdAt          DateTime      @default(now())

@@ -218,6 +218,7 @@ export async function findPendingAdminCheckouts() {
       id: true,
       mapFileId: true,
       status: true,
+      mode: true,
       userConfirmedAt: true,
       createdAt: true,
       user: { select: { id: true, name: true, email: true } },
