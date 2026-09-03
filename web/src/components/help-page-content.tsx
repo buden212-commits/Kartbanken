@@ -341,9 +341,12 @@ export async function HelpPageContent() {
                   "Rita en polygon (max 1 km²) — bara utcheckat område visas i editorn för bättre prestanda",
                   "Utcheckat område markeras med röd begränsningslinje (ingen fyllnadsyta)",
                   "Välj / redigera: klicka objekt, dra brytpunkter (höjdkurva, stig, myr m.m.)",
+                  "Klicka igen på samma ställe för att bläddra bland överlappande objekt",
                   "Snappa mot objekt: slå på snappning och ange tolerans (meter) — brytpunkter fästs vid linjer, hörn och punktobjekt",
-                  "CAD-verktyg för vald linje eller yta: förenkla (ta bort onödiga punkter), mjuka hörn, Bézier-kurva",
+                  "CAD-verktyg för valt objekt (även punkt): byt symbol, radera, och för linje/yta förenkla, mjuka hörn, Bézier-kurva",
                   "Radera objekt, eller lägg till nya punkter, linjer och ytor med symbol grupperad efter geometri",
+                  "Favoritsymboler per geometrityp — sparas på ditt konto och föreslås först i listan",
+                  "Ångra upp till 10 steg via knappen «Ångra» eller Ctrl/Cmd+Z",
                   "Ritverktygens ikoner och ordning (punkt → linje → yta → radera → GPS) är samma som i «Föreslå ändring»",
                   "Klicka ett befintligt kartobjekt när du skapar nytt — då kopieras dess symbol automatiskt",
                   "Nya och ändrade objekt visas med riktig OCAD-symbol i editorn — inte bara enkla streck",
@@ -352,7 +355,8 @@ export async function HelpPageContent() {
                   "Aktiva fältredigeringar syns i «Aktiva utcheckningar» och som färgade ytor under «Utcheckningsområden på kartan»",
                   "Administratör kan avbryta fältredigeringar från områdessidan — samma som vanliga utcheckningar",
                   "Mobilanpassad: verktyg på kartan, Navigera/Rita-läge, stora knappar och hopfällbara paneler",
-                  "Ändringar sparas lokalt i webbläsaren tills du publicerar (checkar in)",
+                  "«Checka in» visar en sammanfattning — därefter väntar admin-godkännande innan ny version skapas",
+                  "Ändringar sparas lokalt i webbläsaren tills du checkar in",
                 ]}
               />
             </>

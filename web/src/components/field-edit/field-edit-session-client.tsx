@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { DiffMapPanel, type MapDrawPointerHandlers } from "@/components/diff-map-panel";
 import { fieldEditOverlaySvg } from "@/components/field-edit/field-edit-overlay";
 import { FieldEditCadPanel } from "@/components/field-edit/field-edit-cad-panel";
+import { FieldEditReviewDialog } from "@/components/field-edit/field-edit-review-dialog";
 import { FieldEditSnapSettings } from "@/components/field-edit/field-edit-snap-settings";
 import {
   FieldEditMapDraftBar,
@@ -21,7 +22,18 @@ import {
   type SymbolGroups,
 } from "@/components/field-edit/field-edit-symbol-picker";
 import type { CheckoutSelection } from "@/lib/checkout/types";
-import { geometryKindFromType, hitTestFieldEditObject, hitTestFieldEditVertex } from "@/lib/field-edit/hit-test";
+import {
+  emptyFieldEditFavorites,
+  parseFieldEditFavorites,
+  toggleFavoriteSymbol,
+  type FieldEditFavoriteSymbols,
+} from "@/lib/field-edit/favorites";
+import {
+  geometryKindFromType,
+  hitTestFieldEditObject,
+  hitTestFieldEditObjects,
+  hitTestFieldEditVertex,
+} from "@/lib/field-edit/hit-test";
 import type { FieldEditObjectEntry } from "@/lib/field-edit/object-index";
 import {
   clearLocalFieldEditOps,
@@ -34,6 +46,10 @@ import {
   saveFieldEditEditorSettings,
   type FieldEditEditorSettings,
 } from "@/lib/field-edit/editor-settings";
+import {
+  buildFieldEditReviewSummary,
+  type FieldEditReviewSummary,
+} from "@/lib/field-edit/review-summary";
 import { snapGeoPoint, type SnapResult } from "@/lib/field-edit/snap";
 import { useGpsTrackRecording } from "@/lib/gps/use-gps-track-recording";
 import {
@@ -83,20 +99,27 @@ export function FieldEditSessionClient({
   const [mapMode, setMapMode] = useState<"draw" | "navigate">("draw");
   const [hitDistance, setHitDistance] = useState(DEFAULT_HIT_DISTANCE);
   const [vertexHitDistance, setVertexHitDistance] = useState(DEFAULT_VERTEX_HIT_DISTANCE);
-  const [ops, setOps] = useState<FieldEditOps>(() => mergeInitialOps(sessionId, initialOps));
+  const [opsHistory, setOpsHistory] = useState<FieldEditOps[]>(() => [
+    mergeInitialOps(sessionId, initialOps),
+  ]);
+  const ops = opsHistory[opsHistory.length - 1]!;
   const [objects, setObjects] = useState<FieldEditObjectEntry[]>([]);
   const [symbolGroups, setSymbolGroups] = useState<SymbolGroups>({
     point: [],
     line: [],
     area: [],
   });
+  const [favorites, setFavorites] = useState<FieldEditFavoriteSymbols>(() =>
+    emptyFieldEditFavorites(),
+  );
   const [symbolNumber, setSymbolNumber] = useState<number | "">("");
   const [selectedObjectIndex, setSelectedObjectIndex] = useState<number | null>(null);
   const [selectedVertexIndex, setSelectedVertexIndex] = useState<number | null>(null);
   const [draftPoints, setDraftPoints] = useState<[number, number][]>([]);
   const [syncing, setSyncing] = useState(false);
   const [publishing, setPublishing] = useState(false);
-  const [publishAfter, setPublishAfter] = useState(false);
+  const [reviewSummary, setReviewSummary] = useState<FieldEditReviewSummary | null>(null);
+  const showReview = reviewSummary != null;
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [editorSettings, setEditorSettings] = useState<FieldEditEditorSettings>(() =>
@@ -120,6 +143,9 @@ export function FieldEditSessionClient({
     startCoords: [number, number][];
     objectType: FieldEditObjectEntry["t"];
   } | null>(null);
+  const hitCycleRef = useRef<{ pointKey: string; indices: number[]; index: number } | null>(
+    null,
+  );
   const opsRef = useRef(ops);
   opsRef.current = ops;
   const editorSettingsRef = useRef(editorSettings);
@@ -204,13 +230,22 @@ export function FieldEditSessionClient({
         setSymbolGroups(groups);
       })
       .catch(() => {});
+
+    fetch("/api/user/field-edit-favorites")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.favorites) {
+          setFavorites(parseFieldEditFavorites(JSON.stringify(data.favorites)));
+        }
+      })
+      .catch(() => {});
   }, [mapSlug, sessionId]);
 
   useEffect(() => {
     if (addKind) {
-      setSymbolNumber(defaultSymbolForKind(symbolGroups, addKind));
+      setSymbolNumber(defaultSymbolForKind(symbolGroups, addKind, favorites));
     }
-  }, [addKind, symbolGroups]);
+  }, [addKind, favorites, symbolGroups]);
 
   const draftPreview = useMemo(() => {
     if (symbolNumber === "" || !addKind || addKind === "point") return null;
@@ -295,13 +330,62 @@ export function FieldEditSessionClient({
 
   const updateOps = useCallback(
     (updater: (current: FieldEditOps) => FieldEditOps) => {
-      setOps((current) => {
+      setOpsHistory((history) => {
+        const current = history[history.length - 1]!;
         const next = updater(current);
+        const withNext = [...history, next];
+        const capped = withNext.length > 11 ? withNext.slice(withNext.length - 11) : withNext;
         scheduleServerSync(next);
-        return next;
+        return capped;
       });
     },
     [scheduleServerSync],
+  );
+
+  const undo = useCallback(() => {
+    setOpsHistory((history) => {
+      if (history.length <= 1) return history;
+      const nextHistory = history.slice(0, -1);
+      const previous = nextHistory[nextHistory.length - 1]!;
+      scheduleServerSync(previous);
+      return nextHistory;
+    });
+    setSelectedVertexIndex(null);
+  }, [scheduleServerSync]);
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z" || e.shiftKey) return;
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      e.preventDefault();
+      undo();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [undo]);
+
+  const toggleFavorite = useCallback(
+    (kind: FieldEditGeometryKind, symNum: number) => {
+      setFavorites((current) => {
+        const next = toggleFavoriteSymbol(current, kind, symNum);
+        void fetch("/api/user/field-edit-favorites", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ favorites: next }),
+        }).catch(() => {});
+        return next;
+      });
+    },
+    [],
   );
 
   const pickSymbolFromObject = useCallback(
@@ -328,7 +412,7 @@ export function FieldEditSessionClient({
         const existing = current.modifies.find((m) => m.objectIndex === objectIndex);
         const nextModify: FieldEditModify = {
           objectIndex,
-          symbolNumber: obj.s,
+          symbolNumber: existing?.symbolNumber ?? obj.s,
           geometryKind: kind,
           coordinates,
         };
@@ -341,6 +425,47 @@ export function FieldEditSessionClient({
     },
     [objects, updateOps],
   );
+
+  const upsertModifySymbol = useCallback(
+    (objectIndex: number, nextSymbolNumber: number) => {
+      const obj = objects.find((entry) => entry.i === objectIndex);
+      if (!obj) return;
+      updateOps((current) => {
+        const kind = geometryKindFromType(obj.t);
+        const existing = current.modifies.find((m) => m.objectIndex === objectIndex);
+        const coordinates =
+          existing?.coordinates ??
+          resolveObjectCoordinates(objectIndex, obj.v, current) ??
+          obj.v.map(([x, y]) => [x, y] as [number, number]);
+        const nextModify: FieldEditModify = {
+          objectIndex,
+          symbolNumber: nextSymbolNumber,
+          geometryKind: kind,
+          coordinates,
+        };
+        const modifies = existing
+          ? current.modifies.map((m) => (m.objectIndex === objectIndex ? nextModify : m))
+          : [...current.modifies, nextModify];
+        const deletes = current.deletes.filter((id) => id !== objectIndex);
+        return { ...current, modifies, deletes };
+      });
+    },
+    [objects, updateOps],
+  );
+
+  const deleteSelectedObject = useCallback(() => {
+    if (selectedObjectIndex == null) return;
+    const index = selectedObjectIndex;
+    updateOps((current) => {
+      const deletes = current.deletes.includes(index)
+        ? current.deletes.filter((id) => id !== index)
+        : [...current.deletes.filter((id) => id !== index), index];
+      const modifies = current.modifies.filter((m) => m.objectIndex !== index);
+      return { ...current, deletes, modifies };
+    });
+    setSelectedObjectIndex(null);
+    setSelectedVertexIndex(null);
+  }, [selectedObjectIndex, updateOps]);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent, svg: SVGSVGElement) => {
@@ -376,13 +501,24 @@ export function FieldEditSessionClient({
           }
         }
 
-        const hit = hitTestFieldEditObject(objects, geo, hitDistance);
-        if (!hit || ops.deletes.includes(hit.i)) {
+        const hits = hitTestFieldEditObjects(objects, geo, hitDistance).filter(
+          (entry) => !ops.deletes.includes(entry.i),
+        );
+        if (hits.length === 0) {
           setSelectedObjectIndex(null);
           setSelectedVertexIndex(null);
+          hitCycleRef.current = null;
           return;
         }
-        setSelectedObjectIndex(hit.i);
+        const pointKey = `${geo[0]!.toFixed(1)},${geo[1]!.toFixed(1)}`;
+        const indices = hits.map((entry) => entry.i);
+        const prev = hitCycleRef.current;
+        const nextIndex =
+          prev && prev.pointKey === pointKey && prev.indices.length > 0
+            ? (prev.index + 1) % indices.length
+            : 0;
+        hitCycleRef.current = { pointKey, indices, index: nextIndex };
+        setSelectedObjectIndex(indices[nextIndex]!);
         setSelectedVertexIndex(null);
         setError(null);
         setInfo(null);
@@ -591,29 +727,40 @@ export function FieldEditSessionClient({
     [objects, selectedObjectIndex],
   );
 
-  async function handlePublish() {
+  function handleOpenReview() {
     if (!hasFieldEditChanges(ops)) {
-      setError("Gör minst en ändring innan du publicerar");
+      setError("Gör minst en ändring innan du checkar in");
       return;
     }
+    setReviewSummary(buildFieldEditReviewSummary(ops, objects));
+    setError(null);
+  }
+
+  async function handleConfirmSubmit() {
     saveLocalFieldEditOps(sessionId, ops);
     setPublishing(true);
     setError(null);
-    const res = await fetch(`/api/maps/${mapSlug}/field-edits/${sessionId}/publish`, {
+    const res = await fetch(`/api/maps/${mapSlug}/field-edits/${sessionId}/submit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ publish: publishAfter, ops }),
+      body: JSON.stringify({ ops }),
     });
     setPublishing(false);
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      setError(data.error ?? "Publicering misslyckades");
+      setError(data.error ?? "Incheckning misslyckades");
       return;
     }
     clearLocalFieldEditOps(sessionId);
-    const data = await res.json();
-    router.push(`/maps/${mapSlug}?published=v${data.versionNumber}`);
+    setReviewSummary(null);
+    router.push(
+      `/maps/${mapSlug}?message=${encodeURIComponent("Fältredigeringen är inskickad och väntar på admin-godkännande")}`,
+    );
     router.refresh();
+  }
+
+  function handleCancelReview() {
+    setReviewSummary(null);
   }
 
   async function handleCancel() {
@@ -667,7 +814,7 @@ export function FieldEditSessionClient({
       return `GPS-spårning — gå längs spåret du vill rita. Minst ${GPS_TRACK_MIN_DISTANCE_M} m mellan punkter. Klicka «Sluta spåra» när du är klar, välj linjesymbol och klicka «Klar».`;
     }
     if (tool === "select") {
-      return "Klicka ett objekt för att markera det. Dra brytpunkter eller använd CAD-verktygen nedan. Snappning hjälper dig träffa befintliga linjer och hörn.";
+      return "Klicka ett objekt för att markera det. Klicka igen på samma ställe för att bläddra bland överlappande objekt. Dra brytpunkter eller använd CAD-verktygen nedan. Snappning hjälper dig träffa befintliga linjer och hörn.";
     }
     if (tool === "addLine") {
       return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan punkter längs linjen.";
@@ -720,6 +867,8 @@ export function FieldEditSessionClient({
               kind={addKind}
               value={symbolNumber}
               onChange={setSymbolNumber}
+              favorites={favorites}
+              onToggleFavorite={(sym) => toggleFavorite(addKind, sym)}
             />
             <p className="mt-1 text-[11px] leading-snug text-slate-500">
               Klicka ett kartobjekt på kartan för att kopiera dess symbol.
@@ -741,6 +890,8 @@ export function FieldEditSessionClient({
       addKind,
       symbolGroups,
       symbolNumber,
+      favorites,
+      toggleFavorite,
       gpsTracking,
       mapMode,
       canUseGpsTracking,
@@ -785,6 +936,8 @@ export function FieldEditSessionClient({
           kind={addKind}
           value={symbolNumber}
           onChange={setSymbolNumber}
+          favorites={favorites}
+          onToggleFavorite={(sym) => toggleFavorite(addKind, sym)}
         />
       )}
       {gpsTrackingStatus && (
@@ -863,7 +1016,14 @@ export function FieldEditSessionClient({
                 upsertModify(selectedObject.i, coordinates);
                 setSelectedVertexIndex(null);
               }}
+              onChangeSymbol={(sym) => upsertModifySymbol(selectedObject.i, sym)}
+              onDelete={deleteSelectedObject}
               onMessage={setInfo}
+              symbolGroups={symbolGroups}
+              favorites={favorites}
+              onToggleFavorite={(sym) =>
+                toggleFavorite(geometryKindFromType(selectedObject.t), sym)
+              }
             />
           </details>
           <div className="hidden sm:block">
@@ -877,7 +1037,14 @@ export function FieldEditSessionClient({
                 upsertModify(selectedObject.i, coordinates);
                 setSelectedVertexIndex(null);
               }}
+              onChangeSymbol={(sym) => upsertModifySymbol(selectedObject.i, sym)}
+              onDelete={deleteSelectedObject}
               onMessage={setInfo}
+              symbolGroups={symbolGroups}
+              favorites={favorites}
+              onToggleFavorite={(sym) =>
+                toggleFavorite(geometryKindFromType(selectedObject.t), sym)
+              }
             />
           </div>
         </>
@@ -896,12 +1063,21 @@ export function FieldEditSessionClient({
       )}
 
       <FieldEditPublishBar
-        publishAfter={publishAfter}
-        onPublishAfterChange={setPublishAfter}
         publishing={publishing}
-        onPublish={handlePublish}
+        canUndo={opsHistory.length > 1}
+        onUndo={undo}
+        onPublish={handleOpenReview}
         onCancel={handleCancel}
       />
+
+      {showReview && reviewSummary && (
+        <FieldEditReviewDialog
+          summary={reviewSummary}
+          submitting={publishing}
+          onConfirm={handleConfirmSubmit}
+          onCancel={handleCancelReview}
+        />
+      )}
     </div>
   );
 }

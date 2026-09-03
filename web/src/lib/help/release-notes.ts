@@ -8,6 +8,17 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-03",
+    title: "Fältredigering — favoriter, ångra och incheckning till admin",
+    items: [
+      "Spara favoritsymboler per geometrityp — de föreslås först när du lägger till nytt",
+      "Ångra upp till 10 steg (knapp eller Ctrl/Cmd+Z)",
+      "Klicka igen på samma ställe för att bläddra bland överlappande objekt",
+      "CAD-panel för valt objekt: byt symbol eller radera",
+      "«Checka in» visar en sammanfattning och skickar till admin för godkännande",
+    ],
+  },
+  {
+    date: "2026-09-03",
     title: "Samma ritverktygsikoner i fältredigering och kartförslag",
     items: [
       "Ikonerna för punkt, linje, yta, radera, GPS, Rita och Navigera är nu identiska i båda verktygen",
