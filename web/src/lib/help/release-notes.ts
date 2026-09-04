@@ -8,6 +8,13 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-04",
+    title: "IFK Mora-logga som webbplatsikon",
+    items: [
+      "Webbläsarfliken visar nu IFK Mora-loggan i stället för standardikonen",
+    ],
+  },
+  {
+    date: "2026-09-04",
     title: "Fältredigering — Navigera aktiv från start",
     items: [
       "När du öppnar fältredigering är panorera/zooma (Navigera) aktivt från början — byt till Rita när du ska redigera",
