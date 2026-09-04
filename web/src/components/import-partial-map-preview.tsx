@@ -301,7 +301,7 @@ export function ImportPartialMapPreview({ previewUrl, analysis, mode, title, are
         setStatus("ready");
       })
       .catch((err) => {
-        if (cancelled) return;
+        if (cancelled || controller.signal.aborted) return;
         setError(err instanceof Error ? err.message : "Kunde inte ladda kartbild");
         setStatus("error");
       });

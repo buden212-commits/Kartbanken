@@ -127,7 +127,11 @@ export async function fetchPreviewText(
 
   let pending = inflight.get(url);
   if (!pending) {
-    pending = fetchPreviewFromNetwork(url, options?.signal).finally(() => {
+    // Shared network fetch must NOT use a caller AbortSignal. In React Strict Mode
+    // (and remounts), the first effect aborts on cleanup; if that signal is tied to
+    // the shared request, the remounted effect joins the same promise and surfaces
+    // "Laddning avbröts" even though its own signal is still live.
+    pending = fetchPreviewFromNetwork(url).finally(() => {
       inflight.delete(url);
     });
     inflight.set(url, pending);

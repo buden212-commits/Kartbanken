@@ -8,6 +8,13 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-04",
+    title: "Fix: kartladdning «Laddning avbröts»",
+    items: [
+      "Kartan på fältredigering (och andra kartvyer) fastnade inte längre i «Laddning avbröts» vid omstart av sidan",
+    ],
+  },
+  {
+    date: "2026-09-04",
     title: "Fältredigering — ångra, brytpunkter och Bézier",
     items: [
       "Ångra-knapp på kartans högerkant, i egen sektion under Navigera",
