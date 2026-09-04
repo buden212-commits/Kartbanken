@@ -1,5 +1,5 @@
 export type ReleaseNote = {
-  /** ISO-datum (YYYY-MM-DD), nyast först */
+  /** ISO-datum (YYYY-MM-DD), nyast först — en post per dag */
   date: string;
   title: string;
   items: string[];
@@ -8,97 +8,38 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-04",
-    title: "IFK Mora-logga som webbplatsikon",
+    title: "Fältredigering, CAD och webbplatsikon",
     items: [
+      "Release notes grupperade till en post per dag",
       "Webbläsarfliken visar nu IFK Mora-loggan i stället för standardikonen",
-    ],
-  },
-  {
-    date: "2026-09-04",
-    title: "Fältredigering — Navigera aktiv från start",
-    items: [
       "När du öppnar fältredigering är panorera/zooma (Navigera) aktivt från början — byt till Rita när du ska redigera",
-    ],
-  },
-  {
-    date: "2026-09-04",
-    title: "Fältredigering — bläddra överlappande objekt",
-    items: [
       "Håll kvar fingret/musen på en plats med flera objekt — efter 1 sekund markeras nästa, sedan nästa, tills alla är genomgångna",
       "Flytta fingret för att avbryta bläddringen (t.ex. för att dra en brytpunkt)",
-    ],
-  },
-  {
-    date: "2026-09-04",
-    title: "Fältredigering — Klar/Avbryt i kartmenyn",
-    items: [
       "«Klar» och «Avbryt ritning» ligger nu som ikoner i kartmenyn (höger verktygsrad) när du ritar linje eller yta",
       "Klar-ikonen visar antal brytpunkter som en liten siffra",
-    ],
-  },
-  {
-    date: "2026-09-04",
-    title: "Fältredigering — OCAD-brytpunkter (normal/hörn/streck)",
-    items: [
       "Duplicera objekt är borttaget från CAD-menyn",
       "Lägg till normal (cirkel), hörnbrytpunkt (kvadrat) eller streckbrytpunkt (romb) — klicka på linjen, eller på en befintlig punkt för att ändra typ",
       "Håll inne lägg till-ikonen för att ändra alla brytpunkter till den typen",
       "Växla brytpunktstyp: normal → streck → hörn (som i OCAD)",
       "Radera brytpunkt med egen ikon",
       "Hörn visas som kvadrat och streck som romb på kartan",
-    ],
-  },
-  {
-    date: "2026-09-04",
-    title: "Fältredigering — CAD-meny med ikoner",
-    items: [
       "CAD-verktyg visas som ikoner (byt symbol, radera, mät, förenkla, mjuka hörn, Bézier, vänd riktning)",
       "Brytpunktsverktygen gäller bara valt linje- eller ytobjekt",
-    ],
-  },
-  {
-    date: "2026-09-04",
-    title: "Fältredigering — bättre förenkling",
-    items: [
       "Förenkla använder en buffert (± meter på varje sida): punkter på nästan rak linje tas bort, ny brytpunkt där linjen tangerar buffertkanten",
-    ],
-  },
-  {
-    date: "2026-09-04",
-    title: "Fältredigering — rita ny Bézier-kurva",
-    items: [
       "Håll inne linje- eller ytaverktyget för att växla till Bézier-ritning (skuggat B på ikonen)",
       "Rita segment: tryck ner på brytpunkt och dra mot P1, sedan tryck på P2 och släpp på nästa brytpunkt",
       "Håll inne samma verktyg igen för att gå tillbaka till vanlig ritning",
-    ],
-  },
-  {
-    date: "2026-09-04",
-    title: "Fix: kartladdning «Laddning avbröts»",
-    items: [
       "Kartan på fältredigering (och andra kartvyer) fastnade inte längre i «Laddning avbröts» vid omstart av sidan",
-    ],
-  },
-  {
-    date: "2026-09-04",
-    title: "Fältredigering — ångra, brytpunkter och Bézier",
-    items: [
       "Ångra-knapp på kartans högerkant, i egen sektion under Navigera",
       "Brytpunkter är mindre och halvtransparenta: X i starten, punkt i mitten, fyrkant i slutet",
       "Bézier-kurva: dra i kontrollpunkterna P1 och P2 (rombformade, skiljer sig från brytpunkter) för att forma bågen, sedan Tillämpa",
-    ],
-  },
-  {
-    date: "2026-09-04",
-    title: "Fältredigering — mobil layout",
-    items: [
       "Checka in-panelen täcker inte längre CAD-menyn på mobil",
       "Statusraden «Sparat lokalt» ligger i panelen istället för ovanpå knapparna",
     ],
   },
   {
     date: "2026-09-03",
-    title: "Fältredigering — favoriter, ångra och incheckning till admin",
+    title: "Fältredigering — favoriter, synlighet och verktyg",
     items: [
       "Spara favoritsymboler per geometrityp — de föreslås först när du lägger till nytt och sparas på din profil",
       "Ångra upp till 10 steg (knapp eller Ctrl/Cmd+Z)",
@@ -107,145 +48,49 @@ export const releaseNotes: ReleaseNote[] = [
       "Välj/redigera har muspekarikon",
       "Lämna och fortsätt senare via «Fortsätt» i Aktiva utcheckningar eller på fältredigeringssidan",
       "«Checka in» visar jämförelse — skicka in eller avbryt; admin godkänner under Admin → Utcheckningar",
-    ],
-  },
-  {
-    date: "2026-09-03",
-    title: "Samma ritverktygsikoner i fältredigering och kartförslag",
-    items: [
       "Ikonerna för punkt, linje, yta, radera, GPS, Rita och Navigera är nu identiska i båda verktygen",
       "Verktygen ligger i samma ordning: punkt → linje → yta → (rektangel i kartförslag) → radera → GPS",
       "Fix: valda verktygsikoner i fältredigering syns igen (blev vita mot vit bakgrund)",
-    ],
-  },
-  {
-    date: "2026-09-03",
-    title: "Fältredigering — synlig och avbrytbar som utcheckning",
-    items: [
       "Aktiva fältredigeringar visas i listan «Aktiva utcheckningar» och på kartan «Utcheckningsområden på kartan»",
       "Administratör kan avbryta fältredigeringar från områdessidan — samma som vanliga utcheckningar",
       "Avslutade fältredigeringar ingår i utcheckningshistoriken",
-    ],
-  },
-  {
-    date: "2026-09-03",
-    title: "Fältredigering — välj symbol från kartobjekt",
-    items: [
       "Klicka ett befintligt kartobjekt när du skapar ny punkt, linje eller yta — symbolen kopieras",
       "Symbolväljaren syns igen tydligt på mobil när du ritar nytt",
     ],
   },
   {
     date: "2026-09-02",
-    title: "Fältredigering — fix vit mask vid CAD-verktyg",
+    title: "Fältredigering, snappning och självstudier",
     items: [
       "Vit mask runt objekt efter t.ex. Bézier-kurva är borta — linjen syns korrekt igen",
       "Brytpunkter visas kvar på valda objekt även efter geometriändring",
-    ],
-  },
-  {
-    date: "2026-09-02",
-    title: "Fältredigering — mobilanpassad editor",
-    items: [
       "Verktyg och kartläge (Rita / Navigera) som flytande ikoner på kartan — större kartyta på telefon",
       "«Klar» och «Publicera» med stora knappar längst ned, anpassat för pekskärm",
       "Snappning och CAD-verktyg i hopfällbara paneler på mobil",
-    ],
-  },
-  {
-    date: "2026-09-02",
-    title: "Fältredigering — snappning och CAD-verktyg",
-    items: [
       "Snappa mot befintliga objekt med inställbar tolerans (meter) vid ritning och redigering",
       "CAD-verktyg för valda linjer och ytor: förenkla, mjuka hörn och Bézier-kurva",
-    ],
-  },
-  {
-    date: "2026-09-02",
-    title: "Fältredigering — sparade linjer och ytor försvann inte",
-    items: [
       "Nya linjer och ytor (t.ex. höjdkurvor) syns kvar på kartan efter «Klar»",
       "Linjer och ytor kan publiceras — de räknades tidigare felaktigt bort",
-    ],
-  },
-  {
-    date: "2026-09-02",
-    title: "Fältredigering — tunnare begränsningslinje och brytpunkter",
-    items: [
       "Utcheckat område markeras med tunn röd begränsningslinje — utan blå fyllnadsyta",
       "Brytpunkter vid ritning och redigering är mindre och stör inte kartan",
-    ],
-  },
-  {
-    date: "2026-09-02",
-    title: "Fältredigering — tilldela rättighet",
-    items: [
       "Administratörer kan ge enskilda läsare och redaktörer rätt att fältredigera (Admin → Användare → Redigera)",
       "Administratörer har alltid fältredigering; övriga behöver uttrycklig tilldelning",
-    ],
-  },
-  {
-    date: "2026-09-02",
-    title: "Fältredigering — riktiga symboler vid ritning",
-    items: [
       "Nya och ändrade objekt visas med korrekt OCAD-symbol (höjdkurva, stig, myr m.m.) — inte bara tunna streck",
       "Förhandsvisningen uppdateras medan du ritar eller drar brytpunkter",
-    ],
-  },
-  {
-    date: "2026-09-02",
-    title: "Fältredigering — GPS som i kartförslag",
-    items: [
       "«Min position» i kartverktygsraden — zoom till skala 1:50 och följ din position (georefererade kartor)",
       "«GPS-spår» spelar in linjer med samma filtrering och förenkling som i «Föreslå ändring»",
-    ],
-  },
-  {
-    date: "2026-09-02",
-    title: "Fältredigering — ytor och brytpunkter",
-    items: [
       "Ytor (t.ex. sankmarker) går att markera genom att klicka inuti ytan",
       "Brytpunkter syns tydligt när ett objekt är valt — dra dem för att forma om linjer och ytor",
-    ],
-  },
-  {
-    date: "2026-09-02",
-    title: "Fältredigering — full redigering i fält",
-    items: [
       "Polygon-utcheckning (max 1 km²) — bara det området visas i editorn",
       "Välj och redigera befintliga objekt genom att dra brytpunkter (linjer, ytor, punkter)",
       "Lägg till nya punkter, linjer och ytor — symboler grupperade efter geometrityp",
       "Bättre träfftest på linjer och ytor; hela objektet redigeras även om det delvis sticker ut",
       "Session sparas lokalt tills du publicerar (checkar in)",
-    ],
-  },
-  {
-    date: "2026-09-02",
-    title: "Fältredigering (admin)",
-    items: [
       "Administratörer kan checka ut max 1 km² och redigera kartan direkt i webben — radera objekt och lägg till punkter",
       "Helt separerat från «Föreslå ändring» och vanlig OCAD-utcheckning",
       "Publicering skapar en ny kartversion direkt, med val att publicera direkt",
-    ],
-  },
-  {
-    date: "2026-09-02",
-    title: "Självstudier — snyggare listor",
-    items: [
       "Checklistor och punktlistor i kursmaterialet bryts inte längre konstigt på två rader",
-    ],
-  },
-  {
-    date: "2026-09-02",
-    title: "Självstudier i Hjälp — fix",
-    items: [
       "Hjälp → Självstudier kraschade vid visning av kursmaterialet — sidan laddas nu korrekt",
-    ],
-  },
-  {
-    date: "2026-09-02",
-    title: "Självstudier i Hjälp",
-    items: [
       "Kursmaterialet med övningar och skärmdumpar finns nu under Hjälp → Självstudier, direkt efter guiden",
       "Samma innehåll kan laddas ner som PDF från sidan",
     ],
@@ -264,43 +109,19 @@ export const releaseNotes: ReleaseNote[] = [
   },
   {
     date: "2026-08-31",
-    title: "Uppladdare vid integrerad utcheckning",
+    title: "Banläggning, jämförelse och uppladdare",
     items: [
       "När en utcheckning integreras visas den som checkade in som «Uppladdare» i versionshistoriken — inte administratören som granskar",
       "Gäller även när någon annan (t.ex. admin) checkar in åt utcheckningsägaren",
-    ],
-  },
-  {
-    date: "2026-08-31",
-    title: "Jämför versioner — tydligare vänteläge",
-    items: [
       "Medan jämförelsen körs visas spinner, vilket steg som pågår och förfluten tid",
       "När kartlager byggs visas räknare (X av Y rutor) och progressfält",
       "Samma förbättrade vänteläge gäller även Verifiera-jämförelsen",
-    ],
-  },
-  {
-    date: "2026-08-31",
-    title: "Klipp — fler luckor, markörer och auto-förslag",
-    items: [
       "Luckor kan läggas på starttriangeln (701) och på sträckans slut vid kontroll/mål (inkommande sträcka)",
       "Gröna markörer visar luckor i Klipp-läge — dra markören för att flytta luckan",
       "Nya luckor snäpps automatiskt mot närmaste kartsymbol (sten, höjd etc.) när kartindex laddats",
-    ],
-  },
-  {
-    date: "2026-08-31",
-    title: "Banläggning — klipp bort del av kontroll eller sträcka",
-    items: [
       "Nytt verktyg «Klipp» i banredigeraren — klicka på kontrollcirkel, bansträcka eller manuell linje för att skapa en lucka så kartsymboler under syns",
       "Klicka igen på samma ställe för att ta bort luckan",
       "Luckor sparas med banan och följer med vid PDF-export",
-    ],
-  },
-  {
-    date: "2026-08-31",
-    title: "Lägg bana — knapp i sidhuvudet",
-    items: [
       "Knappen «Lägg bana» ligger nu uppe bredvid «Checka ut område» och «Föreslå ändring»",
       "När minst en bana finns visas «Banor (antal)» i stället — klick öppnar banredigeraren",
     ],
@@ -327,7 +148,7 @@ export const releaseNotes: ReleaseNote[] = [
   },
   {
     date: "2026-08-29",
-    title: "Kartförslag — verktyg och inskickning",
+    title: "Kartförslag, diff och behörigheter",
     items: [
       "Kartan öppnas i «Navigera»; när du väljer ritverktyg aktiveras «Rita» automatiskt",
       "Ritverktyg som ikoner till höger (punkt, rektangel, polygon, linje, radera, GPS-spår); valt verktyg markeras med röd ram",
@@ -341,22 +162,10 @@ export const releaseNotes: ReleaseNote[] = [
       "Knappen «Tala» låter dig säga ett symbolnamn som matchas mot kartans symboler; «Rensa» tömmer beskrivningen",
       "«Tillbaka» finns både överst och nederst i inskickningsdialogen",
       "Fix: öppna och pågående kartförslag från äldre versioner går att öppna från listan och kartan",
-    ],
-  },
-  {
-    date: "2026-08-29",
-    title: "Diff, utcheckning och banor",
-    items: [
       "Förbättrad diff-matchning — linjer jämförs med tolerans (2 m) och korsvis bytta objekt upptäcks",
       "Changelistan i diff-vyn pagineras (200 per sida) och visar varning om listan kapats",
       "Vid utcheckning väljer du OCAD-format (10, 11, 12 eller 2018) innan filen skapas",
       "Banläggning och PDF-export av banor använder alltid den publicerade kartversionen",
-    ],
-  },
-  {
-    date: "2026-08-29",
-    title: "Behörigheter, admin och hjälp",
-    items: [
       "Läsare ser inte utcheckningsområden, aktiva utcheckningar eller utcheckningshistorik",
       "Områdeslistan visar bara områden med minst en publicerad kartversion",
       "Knappen «Föreslå ändring» finns direkt på områdessidan när kartan är publicerad",
@@ -380,7 +189,7 @@ export const releaseNotes: ReleaseNote[] = [
       "Versionshistorik: rätt tooltips på åtgärdsikonerna (ladda ner, jämför, m.m.)",
       "Kartexport (PDF, GeoTIFF, OCD) fungerar igen",
       "Konsekvent svenska i gränssnittet — «utcheckningar» i stället för «checkouts»; «aktuell version» i stället för «head»",
-      "Release notes samlade till en post per dag (9 augusti–1 augusti)",
+      "Release notes samlade till en post per dag",
       "Fix: dubbel admin-meny på sidan Användarhantering",
       "Fix: «Visste du att…»-tips länkar till rätt avsnitt i användarguiden",
     ],

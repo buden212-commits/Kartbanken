@@ -28,5 +28,6 @@ När du committar eller deployar ändringar i webbappen (`web/src/` eller `web/p
 ## Release notes
 
 - Nyast först, ISO-datum `YYYY-MM-DD`.
+- **En post per dag** — uppdatera dagens befintliga post (lägg till punkter) i stället för att skapa en ny.
 - Skriv för slutanvändare, inte tekniska implementationer.
-- Gruppera relaterade ändringar under en titel per deploy/commit när det är rimligt.
+- Gruppera dagens ändringar under en gemensam titel.
