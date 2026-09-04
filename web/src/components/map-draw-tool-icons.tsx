@@ -322,6 +322,63 @@ export function CadToggleVertexTypeIcon() {
   );
 }
 
+/** CAD: cut / split line (OCAD Cut Line). */
+export function CadCutLineIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+      <path
+        d="M3 14.5 8.5 9l3 3L17 5.5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M11.2 6.2 14.8 9.8M14.8 6.2 11.2 9.8"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/** CAD: split area (OCAD Cut Area). */
+export function CadCutAreaIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+      <path
+        d="M4 4.5h12v11H4z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M10 4.5v11"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeDasharray="2.2 1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/** CAD: cut hole in area (OCAD Cut Hole). */
+export function CadCutHoleIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+      <path
+        d="M4 4.5h12v11H4z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <circle cx="10" cy="10" r="3.1" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
 /** @deprecated Use CadAddNormalVertexIcon */
 export function CadAddVertexIcon() {
   return <CadAddNormalVertexIcon />;

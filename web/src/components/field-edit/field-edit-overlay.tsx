@@ -293,6 +293,7 @@ export function fieldEditOverlaySvg(options: {
   snapPreview?: SnapResult | null;
   bezierEdit?: BezierEditOverlay | null;
   bezierDraw?: BezierDrawOverlay | null;
+  cutDraftPoints?: [number, number][];
 }): string {
   const {
     transform,
@@ -310,6 +311,7 @@ export function fieldEditOverlaySvg(options: {
     snapPreview = null,
     bezierEdit = null,
     bezierDraw = null,
+    cutDraftPoints = [],
   } = options;
 
   const masked = new Set(maskedObjectIndices);
@@ -370,6 +372,13 @@ export function fieldEditOverlaySvg(options: {
   if (gpsLivePoints.length >= 1 && !draftHasSymbolPreview) {
     parts.push(lineSvg(gpsLivePoints, transform, "#16a34a", 3));
     parts.push(vertexHandlesSvg(gpsLivePoints, transform, null, GPS_HANDLE_SIZE));
+  }
+
+  if (cutDraftPoints.length >= 1) {
+    if (cutDraftPoints.length >= 2) {
+      parts.push(lineSvg(cutDraftPoints, transform, "#7c3aed", 2.5));
+    }
+    parts.push(vertexHandlesSvg(cutDraftPoints, transform, null));
   }
 
   if (snapPreview) {

@@ -346,6 +346,7 @@ export async function HelpPageContent() {
                   "CAD-verktyg som ikoner: byt symbol, radera, mät, vänd, förenkla, mjuka hörn, Bézier",
                   "Brytpunkter (OCAD): lägg till normal (cirkel), hörn (kvadrat) eller streck (romb); radera; växla typ normal→streck→hörn",
                   "Håll inne lägg till-ikonen för att ändra alla brytpunkter till den typen",
+                  "Klipp (CAD): klipp linje (klick delar, dra tar bort bit), dela yta med klipplinje kant→kant, klipp hål i yta",
                   "Förenkla: buffert ± meter — tar bort brytpunkter på nästan rak linje; ny punkt där linjen tangerar kanten",
                   "Bézier: dra de orangefärgade kontrollpunkterna P1/P2 för att forma kurvan, sedan «Tillämpa kurva»",
                   "Rita ny Bézier: håll inne linje-/ytaverktyget (B på ikonen) — tryck brytpunkt→dra P1, tryck P2→släpp nästa brytpunkt",

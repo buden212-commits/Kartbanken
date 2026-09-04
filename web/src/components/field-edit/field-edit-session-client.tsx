@@ -19,7 +19,7 @@ import {
   sampleBezierPolyline,
   type BezierSegmentControls,
 } from "@/lib/field-edit/geometry-tools";
-import { FieldEditCadPanel, type CadVertexTool } from "@/components/field-edit/field-edit-cad-panel";
+import { FieldEditCadPanel, type CadCutTool, type CadVertexTool } from "@/components/field-edit/field-edit-cad-panel";
 import { FieldEditReviewDialog } from "@/components/field-edit/field-edit-review-dialog";
 import { FieldEditSnapSettings } from "@/components/field-edit/field-edit-snap-settings";
 import {
@@ -67,10 +67,20 @@ import {
 import { snapGeoPoint, type SnapResult } from "@/lib/field-edit/snap";
 import { useGpsTrackRecording } from "@/lib/gps/use-gps-track-recording";
 import {
+  cutLineGap,
+  findLineCutHit,
+  holeIsInsideOuter,
+  normalizeHoleRing,
+  polygonAreaAbs,
+  splitAreaByCutLine,
+  splitLineAtPoint,
+} from "@/lib/field-edit/cut-geometry";
+import {
   countFieldEditChanges,
   cycleVertexKind,
   hasFieldEditChanges,
   resolveObjectCoordinates,
+  resolveObjectHoles,
   resolveObjectVertexKinds,
   vertexKindsForStoredCoordinates,
   type FieldEditGeometryKind,
@@ -157,6 +167,14 @@ export function FieldEditSessionClient({
   );
   const [bezierGesture, setBezierGesture] = useState<BezierDrawGesture>({ phase: "idle" });
   const [cadVertexTool, setCadVertexTool] = useState<CadVertexTool>("off");
+  const [cadCutTool, setCadCutTool] = useState<CadCutTool>("off");
+  const [cutDraftPoints, setCutDraftPoints] = useState<[number, number][]>([]);
+  const cutLineDragRef = useRef<{
+    segmentIndex: number;
+    point: [number, number];
+    startClientX: number;
+    startClientY: number;
+  } | null>(null);
   const [draftPoints, setDraftPoints] = useState<[number, number][]>([]);
   const [syncing, setSyncing] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -545,6 +563,7 @@ export function FieldEditSessionClient({
       objectIndex: number,
       coordinates: [number, number][],
       vertexKinds?: FieldEditVertexKind[],
+      holes?: [number, number][][] | null,
     ) => {
       const obj = objects.find((entry) => entry.i === objectIndex);
       if (!obj) return;
@@ -553,7 +572,6 @@ export function FieldEditSessionClient({
         const existing = current.modifies.find((m) => m.objectIndex === objectIndex);
         let resolvedKinds: FieldEditVertexKind[] | undefined;
         if (vertexKinds) {
-          // Callers may pass handle-aligned or fully stored kinds.
           if (vertexKinds.length === coordinates.length) {
             resolvedKinds = vertexKinds;
           } else {
@@ -566,12 +584,19 @@ export function FieldEditSessionClient({
         ) {
           resolvedKinds = existing.vertexKinds;
         }
+        const resolvedHoles =
+          holes === null
+            ? undefined
+            : holes !== undefined
+              ? holes
+              : existing?.holes;
         const nextModify: FieldEditModify = {
           objectIndex,
           symbolNumber: existing?.symbolNumber ?? obj.s,
           geometryKind: kind,
           coordinates,
           ...(resolvedKinds ? { vertexKinds: resolvedKinds } : {}),
+          ...(resolvedHoles && resolvedHoles.length > 0 ? { holes: resolvedHoles } : {}),
         };
         const modifies = existing
           ? current.modifies.map((m) => (m.objectIndex === objectIndex ? nextModify : m))
@@ -627,10 +652,130 @@ export function FieldEditSessionClient({
     setSelectedVertexIndex(null);
     setBezierEdit(null);
     setCadVertexTool("off");
+    setCadCutTool("off");
+    setCutDraftPoints([]);
+    cutLineDragRef.current = null;
   }, [selectedObjectIndex, updateOps]);
+
+  const changeCutTool = useCallback((tool: CadCutTool) => {
+    setCadCutTool(tool);
+    setCutDraftPoints([]);
+    cutLineDragRef.current = null;
+    if (tool !== "off") setCadVertexTool("off");
+  }, []);
+
+  const changeVertexTool = useCallback((tool: CadVertexTool) => {
+    setCadVertexTool(tool);
+    if (tool !== "off") {
+      setCadCutTool("off");
+      setCutDraftPoints([]);
+      cutLineDragRef.current = null;
+    }
+  }, []);
+
+  const cancelCut = useCallback(() => {
+    setCutDraftPoints([]);
+    cutLineDragRef.current = null;
+    setCadCutTool("off");
+    setInfo(null);
+  }, []);
+
+  const applySplitParts = useCallback(
+    (
+      objectIndex: number,
+      objectType: "line" | "area",
+      partA: [number, number][],
+      partB: [number, number][],
+      preferSmallerSelection: boolean,
+    ) => {
+      const obj = objects.find((entry) => entry.i === objectIndex);
+      if (!obj) return;
+      const symbol =
+        opsRef.current.modifies.find((m) => m.objectIndex === objectIndex)?.symbolNumber ??
+        obj.s;
+      let keep = partA;
+      let added = partB;
+      if (preferSmallerSelection && objectType === "area") {
+        if (polygonAreaAbs(partB) < polygonAreaAbs(partA)) {
+          keep = partB;
+          added = partA;
+        }
+      }
+      upsertModify(objectIndex, keep, undefined, objectType === "area" ? [] : null);
+      updateOps((current) => ({
+        ...current,
+        adds: [
+          ...current.adds,
+          objectType === "line"
+            ? { kind: "line" as const, coordinates: added, symbolNumber: symbol }
+            : { kind: "area" as const, ring: added, symbolNumber: symbol },
+        ],
+      }));
+      setCadCutTool("off");
+      setCutDraftPoints([]);
+      cutLineDragRef.current = null;
+      setSelectedVertexIndex(null);
+      setInfo(
+        objectType === "line"
+          ? "Linjen delad i två objekt."
+          : "Ytan delad i två objekt (mindre delen vald).",
+      );
+    },
+    [objects, updateOps, upsertModify],
+  );
+
+  const finishCut = useCallback(() => {
+    if (selectedObjectIndex == null) return;
+    const obj = objects.find((entry) => entry.i === selectedObjectIndex);
+    if (!obj) return;
+    const coords =
+      resolveObjectCoordinates(selectedObjectIndex, obj.v, opsRef.current) ?? obj.v;
+
+    if (cadCutTool === "cutArea" && obj.t === "area") {
+      if (cutDraftPoints.length < 2) {
+        setInfo("Klipplinjen behöver minst två punkter.");
+        return;
+      }
+      const result = splitAreaByCutLine(coords, cutDraftPoints, hitDistance);
+      if (!result) {
+        setInfo("Klipplinjen måste börja och sluta nära ytans kant.");
+        return;
+      }
+      applySplitParts(selectedObjectIndex, "area", result.a, result.b, true);
+      return;
+    }
+
+    if (cadCutTool === "cutHole" && obj.t === "area") {
+      const hole = normalizeHoleRing(cutDraftPoints);
+      if (!hole) {
+        setInfo("Hålet behöver minst tre hörn.");
+        return;
+      }
+      if (!holeIsInsideOuter(coords, hole)) {
+        setInfo("Hålet måste ligga innanför ytan.");
+        return;
+      }
+      const existingHoles = resolveObjectHoles(selectedObjectIndex, opsRef.current);
+      upsertModify(selectedObjectIndex, coords, undefined, [...existingHoles, hole]);
+      setCadCutTool("off");
+      setCutDraftPoints([]);
+      setInfo("Hål utklippt i ytan.");
+      return;
+    }
+  }, [
+    applySplitParts,
+    cadCutTool,
+    cutDraftPoints,
+    hitDistance,
+    objects,
+    selectedObjectIndex,
+    upsertModify,
+  ]);
 
   const startBezierEdit = useCallback(() => {
     setCadVertexTool("off");
+    setCadCutTool("off");
+    setCutDraftPoints([]);
     if (selectedObjectIndex == null) return;
     const obj = objects.find((entry) => entry.i === selectedObjectIndex);
     if (!obj || (obj.t !== "line" && obj.t !== "area")) return;
@@ -735,6 +880,38 @@ export function FieldEditSessionClient({
             resolveObjectCoordinates(selectedObjectIndex, obj?.v ?? [], ops) ?? [];
           const handleCoords =
             obj?.t === "area" ? verticesForHandles(coords, obj.t) : coords;
+
+          if (
+            cadCutTool === "cutLine" &&
+            obj?.t === "line" &&
+            handleCoords.length >= 2
+          ) {
+            const hit = findLineCutHit(handleCoords, geo, hitDistance);
+            if (!hit) {
+              setInfo("Klicka på linjen för att klippa.");
+              return;
+            }
+            cutLineDragRef.current = {
+              segmentIndex: hit.segmentIndex,
+              point: hit.point,
+              startClientX: e.clientX,
+              startClientY: e.clientY,
+            };
+            return;
+          }
+
+          if (
+            (cadCutTool === "cutArea" || cadCutTool === "cutHole") &&
+            obj?.t === "area"
+          ) {
+            setCutDraftPoints((prev) => [...prev, geo]);
+            setInfo(
+              cadCutTool === "cutArea"
+                ? `Klipplinje: ${cutDraftPoints.length + 1} punkter — «Tillämpa klipp» när den går från kant till kant.`
+                : `Hål: ${cutDraftPoints.length + 1} hörn — minst 3, sedan «Tillämpa klipp».`,
+            );
+            return;
+          }
 
           if (
             cadVertexTool !== "off" &&
@@ -876,6 +1053,8 @@ export function FieldEditSessionClient({
           setSelectedVertexIndex(null);
           setBezierEdit(null);
           setCadVertexTool("off");
+          setCadCutTool("off");
+          setCutDraftPoints([]);
           return;
         }
 
@@ -886,12 +1065,15 @@ export function FieldEditSessionClient({
           if (existing >= 0) startIndex = existing;
         }
         const chosen = indices[startIndex]!;
-        setSelectedObjectIndex(chosen);
+        setSelectedObjectIndex(indices[startIndex]!);
         if (pendingVertexDragRef.current?.objectIndex !== chosen) {
           pendingVertexDragRef.current = null;
           setSelectedVertexIndex(null);
         }
         setBezierEdit(null);
+        setCadCutTool("off");
+        setCutDraftPoints([]);
+        cutLineDragRef.current = null;
         setError(null);
 
         clearHoldCycle();
@@ -1004,6 +1186,8 @@ export function FieldEditSessionClient({
       bezierEdit,
       bezierGesture,
       cadVertexTool,
+      cadCutTool,
+      cutDraftPoints.length,
       clearHoldCycle,
       draftPoints.length,
       objects,
@@ -1154,6 +1338,59 @@ export function FieldEditSessionClient({
       clearHoldCycle();
       pendingVertexDragRef.current = null;
 
+      const cutDrag = cutLineDragRef.current;
+      if (
+        cutDrag &&
+        cadCutTool === "cutLine" &&
+        selectedObjectIndex != null &&
+        _e &&
+        _svg
+      ) {
+        cutLineDragRef.current = null;
+        const obj = objects.find((o) => o.i === selectedObjectIndex);
+        if (obj?.t === "line") {
+          const coords =
+            resolveObjectCoordinates(selectedObjectIndex, obj.v, opsRef.current) ??
+            obj.v;
+          const pt = screenToSvgPoint(_svg, _e.clientX, _e.clientY);
+          if (pt) {
+            const rawGeo = svgUserToGeoPoint(pt, rootTransformRef.current);
+            const { point: geo } = resolveSnapPoint(rawGeo, selectedObjectIndex);
+            const endHit = findLineCutHit(coords, geo, hitDistance);
+            const moved = Math.hypot(
+              _e.clientX - cutDrag.startClientX,
+              _e.clientY - cutDrag.startClientY,
+            );
+            if (endHit && moved > 12) {
+              const gap = cutLineGap(
+                coords,
+                cutDrag.segmentIndex,
+                cutDrag.point,
+                endHit.segmentIndex,
+                endHit.point,
+              );
+              if (gap) {
+                applySplitParts(selectedObjectIndex, "line", gap.a, gap.b, false);
+                setSnapPreview(null);
+                return;
+              }
+            }
+            const split = splitLineAtPoint(
+              coords,
+              cutDrag.segmentIndex,
+              cutDrag.point,
+            );
+            if (split) {
+              applySplitParts(selectedObjectIndex, "line", split.a, split.b, false);
+              setSnapPreview(null);
+              return;
+            }
+            setInfo("Kunde inte klippa linjen här.");
+          }
+        }
+      }
+      cutLineDragRef.current = null;
+
       if (
         bezierDrawMode &&
         (tool === "addLine" || tool === "addArea") &&
@@ -1185,7 +1422,7 @@ export function FieldEditSessionClient({
       dragBezierControlRef.current = null;
       setSnapPreview(null);
     },
-    [bezierDrawMode, bezierGesture, clearHoldCycle, tool],
+    [applySplitParts, bezierDrawMode, bezierGesture, cadCutTool, clearHoldCycle, hitDistance, objects, resolveSnapPoint, selectedObjectIndex, tool],
   );
 
   const finishDraft = useCallback(() => {
@@ -1346,6 +1583,7 @@ export function FieldEditSessionClient({
                             : null,
                     }
                   : null,
+              cutDraftPoints: cadCutTool !== "off" ? cutDraftPoints : [],
             }),
           }}
         />
@@ -1365,6 +1603,8 @@ export function FieldEditSessionClient({
       snapPreview,
       bezierEdit,
       bezierDrawMode,
+      cadCutTool,
+      cutDraftPoints,
       bezierDraftAnchors,
       bezierDraftControls,
       bezierGesture,
@@ -1706,7 +1946,12 @@ export function FieldEditSessionClient({
               onApplyBezier={applyBezierEdit}
               onCancelBezier={cancelBezierEdit}
               vertexTool={cadVertexTool}
-              onVertexToolChange={setCadVertexTool}
+              onVertexToolChange={changeVertexTool}
+              cutTool={cadCutTool}
+              onCutToolChange={changeCutTool}
+              cutDraftPoints={cutDraftPoints}
+              onFinishCut={finishCut}
+              onCancelCut={cancelCut}
             />
           </details>
           <div className="hidden sm:block">
@@ -1736,7 +1981,12 @@ export function FieldEditSessionClient({
               onApplyBezier={applyBezierEdit}
               onCancelBezier={cancelBezierEdit}
               vertexTool={cadVertexTool}
-              onVertexToolChange={setCadVertexTool}
+              onVertexToolChange={changeVertexTool}
+              cutTool={cadCutTool}
+              onCutToolChange={changeCutTool}
+              cutDraftPoints={cutDraftPoints}
+              onFinishCut={finishCut}
+              onCancelCut={cancelCut}
             />
           </div>
         </>

@@ -58,6 +58,7 @@ type OcadFileData = {
 };
 
 const CORNER_Y_FLAG = 0x01;
+const HOLE_Y_FLAG = 0x02;
 const DASH_Y_FLAG = 0x08;
 
 function yFlagsForVertexKind(kind: FieldEditVertexKind | undefined): number {
@@ -213,6 +214,7 @@ function coordsForKind(
   kind: FieldEditGeometryKind,
   coordinates: [number, number][],
   vertexKinds?: FieldEditVertexKind[],
+  holes?: [number, number][][],
 ): OcadCoord[] {
   if (kind === "point") {
     const [x, y] = coordinates[0] ?? [0, 0];
@@ -246,6 +248,26 @@ function coordsForKind(
     y: fy,
     yFlags: coords[0]!.yFlags ?? CORNER_Y_FLAG,
   });
+
+  for (const hole of holes ?? []) {
+    const holeOpen = openRingForWrite(hole);
+    if (holeOpen.coordinates.length < 3) continue;
+    for (let i = 0; i < holeOpen.coordinates.length; i++) {
+      const [x, y] = holeOpen.coordinates[i]!;
+      coords.push({
+        x,
+        y,
+        yFlags: i === 0 ? HOLE_Y_FLAG : 0,
+      });
+    }
+    const [hx, hy] = holeOpen.coordinates[0]!;
+    coords.push({
+      x: hx,
+      y: hy,
+      yFlags: HOLE_Y_FLAG,
+    });
+  }
+
   return coords;
 }
 
@@ -256,6 +278,7 @@ export function buildSpecFromGeometry(
   coordinates: [number, number][],
   label: string,
   vertexKinds?: FieldEditVertexKind[],
+  holes?: [number, number][][],
 ): NewObjectSpec {
   assertSymbolType(ocadFile, symbolNumber, kind, label);
   const objType = objTypeForKind(kind);
@@ -264,7 +287,7 @@ export function buildSpecFromGeometry(
     ? templateFromObject(templateObj, symbolNumber, objType)
     : defaultTObject12Template(symbolNumber, objType);
   const color = resolveObjectColor(ocadFile, symbolNumber, templateObj?.col ?? template.col);
-  const coords = coordsForKind(kind, coordinates, vertexKinds);
+  const coords = coordsForKind(kind, coordinates, vertexKinds, holes);
   return buildObjectSpec(template, coords, objType, color, symbolNumber);
 }
 
@@ -295,6 +318,7 @@ export function buildSpecFromAdd(ocadFile: OcadFileData, add: FieldEditAdd): New
         add.ring,
         "Ny yta",
         add.vertexKinds,
+        add.holes,
       );
   }
 }
@@ -307,6 +331,7 @@ export function buildSpecFromModify(ocadFile: OcadFileData, modify: FieldEditMod
     modify.coordinates,
     `Ändrat objekt ${modify.objectIndex}`,
     modify.vertexKinds,
+    modify.holes,
   );
 }
 

@@ -6,6 +6,9 @@ import {
   CadAddDashVertexIcon,
   CadAddNormalVertexIcon,
   CadBezierIcon,
+  CadCutAreaIcon,
+  CadCutHoleIcon,
+  CadCutLineIcon,
   CadMeasureIcon,
   CadRemoveVertexIcon,
   CadReverseIcon,
@@ -46,6 +49,8 @@ export type CadVertexTool =
   | "addDash"
   | "toggleType";
 
+export type CadCutTool = "off" | "cutLine" | "cutArea" | "cutHole";
+
 type Props = {
   selectedObject: FieldEditObjectEntry;
   ops: FieldEditOps;
@@ -68,6 +73,11 @@ type Props = {
   onCancelBezier: () => void;
   vertexTool: CadVertexTool;
   onVertexToolChange: (tool: CadVertexTool) => void;
+  cutTool: CadCutTool;
+  onCutToolChange: (tool: CadCutTool) => void;
+  cutDraftPoints: [number, number][];
+  onFinishCut: () => void;
+  onCancelCut: () => void;
 };
 
 const LONG_PRESS_MS = 480;
@@ -174,6 +184,10 @@ function selectVertexTool(
   return current === next ? "off" : next;
 }
 
+function selectCutTool(current: CadCutTool, next: CadCutTool): CadCutTool {
+  return current === next ? "off" : next;
+}
+
 export function FieldEditCadPanel({
   selectedObject,
   ops,
@@ -193,12 +207,18 @@ export function FieldEditCadPanel({
   onCancelBezier,
   vertexTool,
   onVertexToolChange,
+  cutTool,
+  onCutToolChange,
+  cutDraftPoints,
+  onFinishCut,
+  onCancelCut,
 }: Props) {
   const [showSymbolPicker, setShowSymbolPicker] = useState(false);
   const kind = geometryKindFromType(selectedObject.t);
   const currentModify = ops.modifies.find((m) => m.objectIndex === selectedObject.i);
   const currentSymbol = currentModify?.symbolNumber ?? selectedObject.s;
   const isLineOrArea = selectedObject.t === "line" || selectedObject.t === "area";
+  const cutActive = cutTool !== "off";
 
   const rawCoords =
     resolveObjectCoordinates(selectedObject.i, selectedObject.v, ops) ?? selectedObject.v;
@@ -245,6 +265,7 @@ export function FieldEditCadPanel({
 
   function convertAllTo(target: FieldEditVertexKind) {
     onVertexToolChange("off");
+    onCutToolChange("off");
     const label =
       target === "normal" ? "normala" : target === "corner" ? "hörnbrytpunkter" : "streckbrytpunkter";
     const handleKinds = editCoords.map(() => target);
@@ -269,6 +290,19 @@ export function FieldEditCadPanel({
               ? "Växla typ: klicka på brytpunkt (normal → streck → hörn)."
               : null;
 
+  const cutHint =
+    cutTool === "cutLine"
+      ? "Klipp linje: klicka för att dela, eller dra längs linjen för att klippa bort en bit."
+      : cutTool === "cutArea"
+        ? "Dela yta: klicka klipplinje från kant till kant, sedan «Tillämpa klipp»."
+        : cutTool === "cutHole"
+          ? "Klipp hål: klicka hörnen för hålet (≥3), sedan «Tillämpa klipp»."
+          : null;
+
+  const canFinishCut =
+    (cutTool === "cutArea" && cutDraftPoints.length >= 2) ||
+    (cutTool === "cutHole" && cutDraftPoints.length >= 3);
+
   return (
     <div className="rounded-xl border border-ifk-blue/20 bg-ifk-blue/5 p-4 space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -289,6 +323,7 @@ export function FieldEditCadPanel({
           disabled={bezierActive}
           onClick={() => {
             onVertexToolChange("off");
+            onCutToolChange("off");
             setShowSymbolPicker((v) => !v);
           }}
         >
@@ -312,6 +347,7 @@ export function FieldEditCadPanel({
           disabled={bezierActive}
           onClick={() => {
             onVertexToolChange("off");
+            onCutToolChange("off");
             if (selectedObject.t === "line") {
               onMessage(`Längd: ${polylineLengthM(editCoords, mapScale).toFixed(1)} m`);
             } else if (selectedObject.t === "area") {
@@ -342,6 +378,7 @@ export function FieldEditCadPanel({
               activeClass={iconDangerActive}
               disabled={bezierActive}
               onClick={() => {
+                onCutToolChange("off");
                 const next = selectVertexTool(vertexTool, "remove");
                 onVertexToolChange(next);
                 onMessage(
@@ -360,6 +397,7 @@ export function FieldEditCadPanel({
               activeClass={iconActiveAdd}
               disabled={bezierActive}
               onClick={() => {
+                onCutToolChange("off");
                 const next = selectVertexTool(vertexTool, "addNormal");
                 onVertexToolChange(next);
                 onMessage(
@@ -379,6 +417,7 @@ export function FieldEditCadPanel({
               activeClass={iconActiveAdd}
               disabled={bezierActive}
               onClick={() => {
+                onCutToolChange("off");
                 const next = selectVertexTool(vertexTool, "addCorner");
                 onVertexToolChange(next);
                 onMessage(
@@ -398,6 +437,7 @@ export function FieldEditCadPanel({
               activeClass={iconActiveAdd}
               disabled={bezierActive}
               onClick={() => {
+                onCutToolChange("off");
                 const next = selectVertexTool(vertexTool, "addDash");
                 onVertexToolChange(next);
                 onMessage(
@@ -414,8 +454,9 @@ export function FieldEditCadPanel({
             <CadIconButton
               label="Växla brytpunktstyp (normal → streck → hörn)"
               active={vertexTool === "toggleType"}
-              disabled={bezierActive}
+              disabled={bezierActive || cutActive}
               onClick={() => {
+                onCutToolChange("off");
                 const next = selectVertexTool(vertexTool, "toggleType");
                 onVertexToolChange(next);
                 onMessage(
@@ -428,11 +469,76 @@ export function FieldEditCadPanel({
               <CadToggleVertexTypeIcon />
             </CadIconButton>
 
+            <span className="mx-0.5 hidden h-8 w-px bg-slate-200 sm:inline-block" aria-hidden />
+
+            {selectedObject.t === "line" && (
+              <CadIconButton
+                label="Klipp linje"
+                active={cutTool === "cutLine"}
+                activeClass="border-violet-600 bg-violet-600 text-white"
+                disabled={bezierActive}
+                onClick={() => {
+                  onVertexToolChange("off");
+                  const next = selectCutTool(cutTool, "cutLine");
+                  onCutToolChange(next);
+                  onMessage(
+                    next === "cutLine"
+                      ? "Klipp linje: klicka för att dela, eller dra längs linjen för att klippa bort en bit."
+                      : null,
+                  );
+                }}
+              >
+                <CadCutLineIcon />
+              </CadIconButton>
+            )}
+
+            {selectedObject.t === "area" && (
+              <>
+                <CadIconButton
+                  label="Dela yta"
+                  active={cutTool === "cutArea"}
+                  activeClass="border-violet-600 bg-violet-600 text-white"
+                  disabled={bezierActive}
+                  onClick={() => {
+                    onVertexToolChange("off");
+                    const next = selectCutTool(cutTool, "cutArea");
+                    onCutToolChange(next);
+                    onMessage(
+                      next === "cutArea"
+                        ? "Dela yta: klicka klipplinje från kant till kant, sedan «Tillämpa klipp»."
+                        : null,
+                    );
+                  }}
+                >
+                  <CadCutAreaIcon />
+                </CadIconButton>
+                <CadIconButton
+                  label="Klipp hål"
+                  active={cutTool === "cutHole"}
+                  activeClass="border-violet-600 bg-violet-600 text-white"
+                  disabled={bezierActive}
+                  onClick={() => {
+                    onVertexToolChange("off");
+                    const next = selectCutTool(cutTool, "cutHole");
+                    onCutToolChange(next);
+                    onMessage(
+                      next === "cutHole"
+                        ? "Klipp hål: klicka hörnen för hålet (≥3), sedan «Tillämpa klipp»."
+                        : null,
+                    );
+                  }}
+                >
+                  <CadCutHoleIcon />
+                </CadIconButton>
+              </>
+            )}
+
             <CadIconButton
               label="Vänd riktning"
-              disabled={bezierActive}
+              disabled={bezierActive || cutActive}
               onClick={() => {
                 onVertexToolChange("off");
+                onCutToolChange("off");
                 const next = reverseVertices(rawCoords, selectedObject.t);
                 const nextHandleKinds = [...vertexKinds].reverse();
                 const geomKind = geometryKindFromType(selectedObject.t);
@@ -458,7 +564,7 @@ export function FieldEditCadPanel({
                 min={0.1}
                 max={20}
                 step={0.1}
-                disabled={bezierActive}
+                disabled={bezierActive || cutActive}
                 value={editorSettings.simplifyToleranceM}
                 onChange={(e) => {
                   const value = Number(e.target.value);
@@ -472,9 +578,10 @@ export function FieldEditCadPanel({
 
             <CadIconButton
               label="Förenkla (buffert)"
-              disabled={bezierActive}
+              disabled={bezierActive || cutActive}
               onClick={() => {
                 onVertexToolChange("off");
+                onCutToolChange("off");
                 const result = simplifyPolyline(
                   editCoords,
                   editorSettings.simplifyToleranceM,
@@ -489,9 +596,10 @@ export function FieldEditCadPanel({
 
             <CadIconButton
               label="Mjuka hörn"
-              disabled={bezierActive}
+              disabled={bezierActive || cutActive}
               onClick={() => {
                 onVertexToolChange("off");
+                onCutToolChange("off");
                 const result = smoothPolylineChaikin(editCoords, 2, minPoints);
                 applyTool("Mjuka hörn", result.coordinates, result.beforeCount, result.afterCount);
               }}
@@ -504,9 +612,10 @@ export function FieldEditCadPanel({
               active={bezierActive}
               activeClass="border-orange-600 bg-orange-600 text-white"
               inactiveClass="border-orange-200 bg-white text-orange-800 hover:border-orange-300 hover:bg-orange-50"
-              disabled={editCoords.length < 2 && !bezierActive}
+              disabled={(editCoords.length < 2 && !bezierActive) || cutActive}
               onClick={() => {
                 onVertexToolChange("off");
+                onCutToolChange("off");
                 if (bezierActive) return;
                 onStartBezier();
               }}
@@ -517,7 +626,7 @@ export function FieldEditCadPanel({
         )}
       </div>
 
-      {showSymbolPicker && !bezierActive && (
+      {showSymbolPicker && !bezierActive && !cutActive && (
         <div className="rounded-lg border border-slate-200 bg-white p-3">
           <FieldEditSymbolPicker
             groups={symbolGroups}
@@ -531,6 +640,33 @@ export function FieldEditCadPanel({
             favorites={favorites}
             onToggleFavorite={onToggleFavorite ? (sym) => onToggleFavorite(sym) : undefined}
           />
+        </div>
+      )}
+
+      {cutActive && (cutTool === "cutArea" || cutTool === "cutHole") && (
+        <div className="space-y-2 rounded-lg border border-violet-200 bg-violet-50/80 p-3">
+          <p className="text-sm font-medium text-violet-950">
+            {cutTool === "cutArea"
+              ? `Dela yta — ${cutDraftPoints.length} punkter i klipplinjen`
+              : `Klipp hål — ${cutDraftPoints.length} hörn`}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={!canFinishCut}
+              onClick={onFinishCut}
+              className="min-h-11 flex-1 rounded-lg bg-violet-600 px-3 py-2.5 text-sm font-medium text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0 sm:flex-none sm:py-2"
+            >
+              Tillämpa klipp
+            </button>
+            <button
+              type="button"
+              onClick={onCancelCut}
+              className="min-h-11 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-50 sm:min-h-0 sm:flex-none sm:py-2"
+            >
+              Avbryt
+            </button>
+          </div>
         </div>
       )}
 
@@ -558,9 +694,10 @@ export function FieldEditCadPanel({
         </div>
       )}
 
-      {!bezierActive && vertexHint && (
+      {!bezierActive && (cutHint || vertexHint) && (
         <p className="text-xs text-slate-600">
-          {vertexHint} Håll inne lägg till-ikonen för att ändra alla brytpunkter till den typen.
+          {cutHint ??
+            `${vertexHint} Håll inne lägg till-ikonen för att ändra alla brytpunkter till den typen.`}
         </p>
       )}
     </div>

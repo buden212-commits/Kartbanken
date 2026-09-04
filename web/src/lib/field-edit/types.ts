@@ -23,6 +23,8 @@ export type FieldEditAddArea = {
   ring: [number, number][];
   symbolNumber: number;
   vertexKinds?: FieldEditVertexKind[];
+  /** Inner rings (holes); each should be a closed ring. */
+  holes?: [number, number][][];
 };
 
 export type FieldEditAdd = FieldEditAddPoint | FieldEditAddLine | FieldEditAddArea;
@@ -33,6 +35,8 @@ export type FieldEditModify = {
   geometryKind: FieldEditGeometryKind;
   coordinates: [number, number][];
   vertexKinds?: FieldEditVertexKind[];
+  /** Inner rings (holes) for area objects. */
+  holes?: [number, number][][];
 };
 
 export type FieldEditOps = {
@@ -73,6 +77,17 @@ function parseVertexKinds(
   return kinds as FieldEditVertexKind[];
 }
 
+function parseHoleRings(value: unknown): [number, number][][] | undefined {
+  if (!Array.isArray(value) || value.length === 0) return undefined;
+  const holes: [number, number][][] = [];
+  for (const entry of value) {
+    const ring = parseCoordinateList(entry);
+    if (ring.length < 3) return undefined;
+    holes.push(ring);
+  }
+  return holes;
+}
+
 export function defaultVertexKinds(count: number): FieldEditVertexKind[] {
   return Array.from({ length: Math.max(0, count) }, () => "normal" as const);
 }
@@ -96,7 +111,14 @@ function parseLegacyAdd(raw: Record<string, unknown>): FieldEditAdd | null {
     const ring = parseCoordinateList(raw.ring);
     if (ring.length < 3) return null;
     const vertexKinds = parseVertexKinds(raw.vertexKinds, ring.length);
-    return { kind: "area", ring, symbolNumber, ...(vertexKinds ? { vertexKinds } : {}) };
+    const holes = parseHoleRings(raw.holes);
+    return {
+      kind: "area",
+      ring,
+      symbolNumber,
+      ...(vertexKinds ? { vertexKinds } : {}),
+      ...(holes ? { holes } : {}),
+    };
   }
   const x = Number(raw.x);
   const y = Number(raw.y);
@@ -117,12 +139,15 @@ function parseModify(raw: unknown): FieldEditModify | null {
   if (geometryKind === "line" && coordinates.length < 2) return null;
   if (geometryKind === "area" && coordinates.length < 3) return null;
   const vertexKinds = parseVertexKinds(row.vertexKinds, coordinates.length);
+  const holes =
+    geometryKind === "area" ? parseHoleRings(row.holes) : undefined;
   return {
     objectIndex,
     symbolNumber,
     geometryKind,
     coordinates,
     ...(vertexKinds ? { vertexKinds } : {}),
+    ...(holes ? { holes } : {}),
   };
 }
 
@@ -196,6 +221,14 @@ export function resolveObjectCoordinates(
   if (ops.deletes.includes(objectIndex)) return null;
   const mod = ops.modifies.find((m) => m.objectIndex === objectIndex);
   return mod?.coordinates ?? original;
+}
+
+export function resolveObjectHoles(
+  objectIndex: number,
+  ops: FieldEditOps,
+): [number, number][][] {
+  const mod = ops.modifies.find((m) => m.objectIndex === objectIndex);
+  return mod?.holes?.map((ring) => ring.map(([x, y]) => [x, y] as [number, number])) ?? [];
 }
 
 /**
