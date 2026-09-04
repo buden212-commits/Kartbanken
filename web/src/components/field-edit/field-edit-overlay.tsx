@@ -199,6 +199,73 @@ export type BezierEditOverlay = {
   closed: boolean;
 };
 
+export type BezierDrawOverlay = {
+  anchors: [number, number][];
+  controls: BezierSegmentControls[];
+  /** Live segment while gesturing (guides + preview curve). */
+  live?: {
+    p0: [number, number];
+    p1: [number, number];
+    p2?: [number, number];
+    p3?: [number, number];
+  } | null;
+};
+
+function bezierDrawDraftSvg(
+  draft: BezierDrawOverlay,
+  transform: SvgRootTransform,
+): string {
+  const parts: string[] = [];
+  if (draft.anchors.length >= 2 && draft.controls.length > 0) {
+    parts.push(
+      bezierEditSvg(draft.anchors, draft.controls, false, transform, null),
+    );
+  } else if (draft.anchors.length >= 1) {
+    parts.push(vertexHandlesSvg(draft.anchors, transform, null));
+  }
+
+  const live = draft.live;
+  if (!live) return parts.join("");
+
+  const [x0, y0] = geoToSvgUserPoint(live.p0, transform);
+  const [x1, y1] = geoToSvgUserPoint(live.p1, transform);
+  const guide =
+    `stroke="#ea580c" stroke-opacity="0.55" stroke-width="1.25" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" fill="none" pointer-events="none"`;
+  parts.push(`<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" ${guide} />`);
+  parts.push(vertexHandlesSvg([live.p0], transform, 0));
+  {
+    const s = CONTROL_SIZE;
+    parts.push(
+      `<polygon points="${x1},${y1 - s} ${x1 + s},${y1} ${x1},${y1 + s} ${x1 - s},${y1}" fill="#ea580c" fill-opacity="${CONTROL_OPACITY}" stroke="#9a3412" stroke-opacity="${CONTROL_OPACITY}" stroke-width="${HANDLE_STROKE_PX}" vector-effect="non-scaling-stroke" pointer-events="none" />`,
+    );
+  }
+
+  if (live.p2 && live.p3) {
+    const [x2, y2] = geoToSvgUserPoint(live.p2, transform);
+    const [x3, y3] = geoToSvgUserPoint(live.p3, transform);
+    parts.push(`<line x1="${x3}" y1="${y3}" x2="${x2}" y2="${y2}" ${guide} />`);
+    const sampled = sampleBezierPolyline(
+      [live.p0, live.p3],
+      [{ p1: live.p1, p2: live.p2 }],
+      false,
+      12,
+    );
+    if (sampled.length >= 2) {
+      parts.push(lineSvg(sampled, transform, "#ea580c", 2.5));
+    }
+    const s = CONTROL_SIZE;
+    parts.push(
+      `<polygon points="${x2},${y2 - s} ${x2 + s},${y2} ${x2},${y2 + s} ${x2 - s},${y2}" fill="#ea580c" fill-opacity="${CONTROL_OPACITY}" stroke="#9a3412" stroke-opacity="${CONTROL_OPACITY}" stroke-width="${HANDLE_STROKE_PX}" vector-effect="non-scaling-stroke" pointer-events="none" />`,
+    );
+    parts.push(vertexHandlesSvg([live.p3], transform, null));
+  } else {
+    // Only P0–P1 so far: show a straight guide toward the drag
+    parts.push(lineSvg([live.p0, live.p1], transform, "#ea580c", 1.5));
+  }
+
+  return parts.join("");
+}
+
 export function fieldEditOverlaySvg(options: {
   transform: SvgRootTransform;
   selectionGeometry: CheckoutSelectionGeometry;
@@ -214,6 +281,7 @@ export function fieldEditOverlaySvg(options: {
   draftHasSymbolPreview?: boolean;
   snapPreview?: SnapResult | null;
   bezierEdit?: BezierEditOverlay | null;
+  bezierDraw?: BezierDrawOverlay | null;
 }): string {
   const {
     transform,
@@ -230,6 +298,7 @@ export function fieldEditOverlaySvg(options: {
     draftHasSymbolPreview = false,
     snapPreview = null,
     bezierEdit = null,
+    bezierDraw = null,
   } = options;
 
   const masked = new Set(maskedObjectIndices);
@@ -267,11 +336,13 @@ export function fieldEditOverlaySvg(options: {
     parts.push(vertexHandlesSvg(handleCoords, transform, selectedVertexIndex));
   }
 
-  if (!draftHasSymbolPreview && draftKind === "line" && draftPoints.length >= 1) {
+  if (bezierDraw) {
+    parts.push(bezierDrawDraftSvg(bezierDraw, transform));
+  } else if (!draftHasSymbolPreview && draftKind === "line" && draftPoints.length >= 1) {
     parts.push(lineSvg(draftPoints, transform, "#16a34a", 2));
     parts.push(vertexHandlesSvg(draftPoints, transform, null));
   }
-  if (!draftHasSymbolPreview && draftKind === "area" && draftPoints.length >= 1) {
+  if (!bezierDraw && !draftHasSymbolPreview && draftKind === "area" && draftPoints.length >= 1) {
     if (draftPoints.length >= 3) {
       parts.push(
         `<polygon points="${ringToSvgPoints(draftPoints, transform)}" fill="rgba(34,197,94,0.15)" stroke="#16a34a" stroke-width="2" pointer-events="none" />`,
@@ -280,7 +351,7 @@ export function fieldEditOverlaySvg(options: {
       parts.push(lineSvg(draftPoints, transform, "#16a34a", 2));
     }
     parts.push(vertexHandlesSvg(draftPoints, transform, null));
-  } else if (draftHasSymbolPreview && draftPoints.length >= 1) {
+  } else if (!bezierDraw && draftHasSymbolPreview && draftPoints.length >= 1) {
     parts.push(vertexHandlesSvg(draftPoints, transform, null));
   }
 

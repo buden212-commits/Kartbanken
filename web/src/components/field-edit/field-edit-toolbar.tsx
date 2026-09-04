@@ -11,6 +11,7 @@ import {
   MapSelectToolIcon,
   MapUndoToolIcon,
 } from "@/components/map-draw-tool-icons";
+import { useRef } from "react";
 
 export type FieldEditTool =
   | "select"
@@ -34,6 +35,8 @@ const DRAW_TOOLS: FieldEditTool[] = [
   "addArea",
   "delete",
 ];
+
+const LONG_PRESS_MS = 480;
 
 const iconBtnBase =
   "group relative inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border-2 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ifk-blue/30 disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:w-10";
@@ -81,6 +84,18 @@ function ToolbarTooltip({ label }: { label: string }) {
   );
 }
 
+function BezierModeBadge() {
+  return (
+    <span
+      aria-hidden="true"
+      className="pointer-events-none absolute bottom-0.5 right-0.5 text-[10px] font-bold leading-none text-white"
+      style={{ textShadow: "0 0 2px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.7)" }}
+    >
+      B
+    </span>
+  );
+}
+
 function IconToolbarButton({
   label,
   active,
@@ -88,6 +103,8 @@ function IconToolbarButton({
   inactiveClass = iconBtnInactive,
   disabled,
   onClick,
+  onLongPress,
+  badge,
   children,
 }: {
   label: string;
@@ -96,8 +113,20 @@ function IconToolbarButton({
   inactiveClass?: string;
   disabled?: boolean;
   onClick: () => void;
+  onLongPress?: () => void;
+  badge?: React.ReactNode;
   children: React.ReactNode;
 }) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressedRef = useRef(false);
+
+  function clearLongPressTimer() {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }
+
   return (
     <button
       type="button"
@@ -105,11 +134,31 @@ function IconToolbarButton({
       title={label}
       aria-label={label}
       aria-pressed={active}
-      onClick={onClick}
-      onPointerDown={stopFieldEditToolbarPointer}
+      onClick={() => {
+        if (longPressedRef.current) {
+          longPressedRef.current = false;
+          return;
+        }
+        onClick();
+      }}
+      onPointerDown={(e) => {
+        stopFieldEditToolbarPointer(e);
+        if (!onLongPress || disabled) return;
+        longPressedRef.current = false;
+        clearLongPressTimer();
+        timerRef.current = setTimeout(() => {
+          longPressedRef.current = true;
+          timerRef.current = null;
+          onLongPress();
+        }, LONG_PRESS_MS);
+      }}
+      onPointerUp={clearLongPressTimer}
+      onPointerLeave={clearLongPressTimer}
+      onPointerCancel={clearLongPressTimer}
       className={`${iconBtnBase} ${active ? activeClass : inactiveClass}`}
     >
       {children}
+      {badge}
       <ToolbarTooltip label={label} />
     </button>
   );
@@ -147,6 +196,8 @@ type ToolbarsProps = {
   onGpsToggle: () => void;
   canUndo: boolean;
   onUndo: () => void;
+  bezierDrawMode: boolean;
+  onToggleBezierDrawMode: (tool: "addLine" | "addArea") => void;
 };
 
 export function FieldEditMapToolbars({
@@ -160,6 +211,8 @@ export function FieldEditMapToolbars({
   onGpsToggle,
   canUndo,
   onUndo,
+  bezierDrawMode,
+  onToggleBezierDrawMode,
 }: ToolbarsProps) {
   const gpsLabel = gpsTracking ? "Sluta spåra" : "GPS-spår";
   const gpsTitle =
@@ -176,19 +229,34 @@ export function FieldEditMapToolbars({
       onPointerDown={stopFieldEditToolbarPointer}
     >
       <MapToolbarPanel label="Verktyg">
-        {DRAW_TOOLS.map((drawTool) => (
-          <IconToolbarButton
-            key={drawTool}
-            label={FIELD_EDIT_TOOL_LABELS[drawTool]}
-            active={tool === drawTool && !drawDisabled}
-            activeClass={activeClassForTool(drawTool)}
-            inactiveClass={drawTool === "delete" ? iconBtnDeleteInactive : iconBtnInactive}
-            disabled={drawDisabled}
-            onClick={() => onToolChange(drawTool)}
-          >
-            <ToolIcon tool={drawTool} />
-          </IconToolbarButton>
-        ))}
+        {DRAW_TOOLS.map((drawTool) => {
+          const supportsBezier = drawTool === "addLine" || drawTool === "addArea";
+          const showBezierBadge = supportsBezier && bezierDrawMode && tool === drawTool;
+          const label = supportsBezier
+            ? `${FIELD_EDIT_TOOL_LABELS[drawTool]}${
+                bezierDrawMode && tool === drawTool
+                  ? " (Bézier — håll inne för vanlig ritning)"
+                  : " (håll inne för Bézier)"
+              }`
+            : FIELD_EDIT_TOOL_LABELS[drawTool];
+          return (
+            <IconToolbarButton
+              key={drawTool}
+              label={label}
+              active={tool === drawTool && !drawDisabled}
+              activeClass={activeClassForTool(drawTool)}
+              inactiveClass={drawTool === "delete" ? iconBtnDeleteInactive : iconBtnInactive}
+              disabled={drawDisabled}
+              onClick={() => onToolChange(drawTool)}
+              onLongPress={
+                supportsBezier ? () => onToggleBezierDrawMode(drawTool) : undefined
+              }
+              badge={showBezierBadge ? <BezierModeBadge /> : null}
+            >
+              <ToolIcon tool={drawTool} />
+            </IconToolbarButton>
+          );
+        })}
         <IconToolbarButton
           label={gpsTitle}
           active={gpsTracking}

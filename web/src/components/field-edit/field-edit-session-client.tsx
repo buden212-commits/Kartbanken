@@ -92,6 +92,18 @@ type Props = {
   initialOps: FieldEditOps;
 };
 
+type BezierDrawGesture =
+  | { phase: "idle" }
+  | { phase: "drag_p1"; p0: [number, number]; p1: [number, number] }
+  | { phase: "await_p2"; p0: [number, number]; p1: [number, number] }
+  | {
+      phase: "drag_p3";
+      p0: [number, number];
+      p1: [number, number];
+      p2: [number, number];
+      p3: [number, number];
+    };
+
 const DEFAULT_HIT_DISTANCE = 35;
 const DEFAULT_VERTEX_HIT_DISTANCE = 25;
 const COARSE_HIT_DISTANCE = 50;
@@ -131,6 +143,12 @@ export function FieldEditSessionClient({
     anchors: [number, number][];
     controls: BezierSegmentControls[];
   } | null>(null);
+  const [bezierDrawMode, setBezierDrawMode] = useState(false);
+  const [bezierDraftAnchors, setBezierDraftAnchors] = useState<[number, number][]>([]);
+  const [bezierDraftControls, setBezierDraftControls] = useState<BezierSegmentControls[]>(
+    [],
+  );
+  const [bezierGesture, setBezierGesture] = useState<BezierDrawGesture>({ phase: "idle" });
   const [draftPoints, setDraftPoints] = useState<[number, number][]>([]);
   const [syncing, setSyncing] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -218,6 +236,10 @@ export function FieldEditSessionClient({
       setTool("addLine");
       setMapMode("navigate");
       setDraftPoints([]);
+      setBezierDraftAnchors([]);
+      setBezierDraftControls([]);
+      setBezierGesture({ phase: "idle" });
+      setBezierDrawMode(false);
       setSelectedObjectIndex(null);
       setSelectedVertexIndex(null);
       setBezierEdit(null);
@@ -233,6 +255,12 @@ export function FieldEditSessionClient({
   const clearBezierEdit = useCallback(() => {
     setBezierEdit(null);
     dragBezierControlRef.current = null;
+  }, []);
+
+  const clearBezierDraft = useCallback(() => {
+    setBezierDraftAnchors([]);
+    setBezierDraftControls([]);
+    setBezierGesture({ phase: "idle" });
   }, []);
 
   useEffect(() => {
@@ -275,6 +303,30 @@ export function FieldEditSessionClient({
 
   const draftPreview = useMemo(() => {
     if (symbolNumber === "" || !addKind || addKind === "point") return null;
+    if (bezierDrawMode && (tool === "addLine" || tool === "addArea")) {
+      if (bezierDraftAnchors.length < 2 || bezierDraftControls.length === 0) return null;
+      const sampled = sampleBezierPolyline(
+        bezierDraftAnchors,
+        bezierDraftControls,
+        false,
+        8,
+      );
+      if (addKind === "line" && sampled.length >= 2) {
+        return {
+          kind: "line" as const,
+          symbolNumber: Number(symbolNumber),
+          coordinates: sampled,
+        };
+      }
+      if (addKind === "area" && sampled.length >= 3) {
+        return {
+          kind: "area" as const,
+          symbolNumber: Number(symbolNumber),
+          coordinates: closedRing(sampled),
+        };
+      }
+      return null;
+    }
     if (addKind === "line" && draftPoints.length >= 2) {
       return {
         kind: "line" as const,
@@ -290,7 +342,15 @@ export function FieldEditSessionClient({
       };
     }
     return null;
-  }, [addKind, draftPoints, symbolNumber]);
+  }, [
+    addKind,
+    bezierDraftAnchors,
+    bezierDraftControls,
+    bezierDrawMode,
+    draftPoints,
+    symbolNumber,
+    tool,
+  ]);
 
   const draftHasSymbolPreview = draftPreview != null;
 
@@ -690,15 +750,47 @@ export function FieldEditSessionClient({
         const kind = tool === "addLine" ? "line" : "area";
         const hit = hitTestFieldEditObject(objects, geo, hitDistance);
         if (hit && !ops.deletes.includes(hit.i)) {
-          if (pickSymbolFromObject(hit, kind)) return;
+          const noDraftYet =
+            draftPoints.length === 0 &&
+            bezierDraftAnchors.length === 0 &&
+            bezierGesture.phase === "idle";
+          if (noDraftYet && pickSymbolFromObject(hit, kind)) return;
         }
+
+        if (bezierDrawMode) {
+          if (bezierGesture.phase === "idle") {
+            const last = bezierDraftAnchors[bezierDraftAnchors.length - 1];
+            // Continue from last breakpoint when a draft already exists.
+            const start = bezierDraftAnchors.length > 0 ? (last as [number, number]) : geo;
+            setBezierGesture({ phase: "drag_p1", p0: start, p1: geo });
+            setError(null);
+            setInfo(null);
+            return;
+          }
+          if (bezierGesture.phase === "await_p2") {
+            setBezierGesture({
+              phase: "drag_p3",
+              p0: bezierGesture.p0,
+              p1: bezierGesture.p1,
+              p2: geo,
+              p3: geo,
+            });
+            return;
+          }
+          return;
+        }
+
         setDraftPoints((prev) => [...prev, geo]);
         setError(null);
         setInfo(null);
       }
     },
     [
+      bezierDraftAnchors,
+      bezierDrawMode,
       bezierEdit,
+      bezierGesture,
+      draftPoints.length,
       objects,
       ops,
       pickSymbolFromObject,
@@ -718,6 +810,21 @@ export function FieldEditSessionClient({
       const pt = screenToSvgPoint(svg, _e.clientX, _e.clientY);
       if (!pt) return;
       const rawGeo = svgUserToGeoPoint(pt, rootTransformRef.current);
+
+      if (
+        bezierDrawMode &&
+        (tool === "addLine" || tool === "addArea") &&
+        (bezierGesture.phase === "drag_p1" || bezierGesture.phase === "drag_p3")
+      ) {
+        const { point: geo } = resolveSnapPoint(rawGeo, null);
+        if (bezierGesture.phase === "drag_p1") {
+          setBezierGesture({ ...bezierGesture, p1: geo });
+        } else {
+          setBezierGesture({ ...bezierGesture, p3: geo });
+        }
+        setSnapPreview(null);
+        return;
+      }
 
       const bezierDrag = dragBezierControlRef.current;
       if (bezierDrag && tool === "select") {
@@ -784,7 +891,9 @@ export function FieldEditSessionClient({
       setSnapPreview(snap);
     },
     [
+      bezierDrawMode,
       bezierEdit,
+      bezierGesture,
       editorSettings.snapEnabled,
       resolveSnapPoint,
       selectedObjectIndex,
@@ -793,11 +902,41 @@ export function FieldEditSessionClient({
     ],
   );
 
-  const handlePointerUp = useCallback(() => {
-    dragVertexRef.current = null;
-    dragBezierControlRef.current = null;
-    setSnapPreview(null);
-  }, []);
+  const handlePointerUp = useCallback(
+    (_e?: React.PointerEvent, _svg?: SVGSVGElement) => {
+      if (
+        bezierDrawMode &&
+        (tool === "addLine" || tool === "addArea") &&
+        (bezierGesture.phase === "drag_p1" || bezierGesture.phase === "drag_p3")
+      ) {
+        if (bezierGesture.phase === "drag_p1") {
+          setBezierGesture({
+            phase: "await_p2",
+            p0: bezierGesture.p0,
+            p1: bezierGesture.p1,
+          });
+          setInfo("Tryck ner på P2 och släpp på nästa brytpunkt.");
+        } else {
+          const { p0, p1, p2, p3 } = bezierGesture;
+          setBezierDraftAnchors((prev) => (prev.length === 0 ? [p0, p3] : [...prev, p3]));
+          setBezierDraftControls((prev) => [...prev, { p1, p2 }]);
+          setBezierGesture({ phase: "idle" });
+          setInfo(
+            "Segment sparat. Fortsätt från sista brytpunkten, eller klicka «Klar» när du är färdig.",
+          );
+        }
+        dragVertexRef.current = null;
+        dragBezierControlRef.current = null;
+        setSnapPreview(null);
+        return;
+      }
+
+      dragVertexRef.current = null;
+      dragBezierControlRef.current = null;
+      setSnapPreview(null);
+    },
+    [bezierDrawMode, bezierGesture, tool],
+  );
 
   const finishDraft = useCallback(() => {
     if (symbolNumber === "") {
@@ -805,9 +944,28 @@ export function FieldEditSessionClient({
       return;
     }
     if (tool === "addLine") {
-      if (draftPoints.length < 2) {
-        setError("Linjen behöver minst 2 punkter");
-        return;
+      let coordinates: [number, number][];
+      if (bezierDrawMode) {
+        if (bezierDraftAnchors.length < 2 || bezierDraftControls.length === 0) {
+          setError("Linjen behöver minst ett Bézier-segment (2 brytpunkter)");
+          return;
+        }
+        coordinates = sampleBezierPolyline(
+          bezierDraftAnchors,
+          bezierDraftControls,
+          false,
+          10,
+        );
+        if (coordinates.length < 2) {
+          setError("Kurvan gav för få punkter");
+          return;
+        }
+      } else {
+        if (draftPoints.length < 2) {
+          setError("Linjen behöver minst 2 punkter");
+          return;
+        }
+        coordinates = draftPoints;
       }
       updateOps((current) => ({
         ...current,
@@ -815,15 +973,38 @@ export function FieldEditSessionClient({
           ...current.adds,
           {
             kind: "line",
-            coordinates: draftPoints,
+            coordinates,
             symbolNumber: Number(symbolNumber),
           },
         ],
       }));
     } else if (tool === "addArea") {
-      if (draftPoints.length < 3) {
-        setError("Ytan behöver minst 3 hörn");
-        return;
+      let ring: [number, number][];
+      if (bezierDrawMode) {
+        if (bezierDraftAnchors.length < 3 || bezierDraftControls.length < 2) {
+          setError("Ytan behöver minst 3 brytpunkter (två Bézier-segment)");
+          return;
+        }
+        const closing = defaultBezierControlsForPolyline(bezierDraftAnchors, true);
+        const closeSeg = closing[closing.length - 1]!;
+        const controls = [...bezierDraftControls, closeSeg];
+        const sampled = sampleBezierPolyline(
+          bezierDraftAnchors,
+          controls,
+          true,
+          10,
+        );
+        ring = closedRing(sampled);
+        if (ring.length < 3) {
+          setError("Kurvan gav för få punkter");
+          return;
+        }
+      } else {
+        if (draftPoints.length < 3) {
+          setError("Ytan behöver minst 3 hörn");
+          return;
+        }
+        ring = draftPoints;
       }
       updateOps((current) => ({
         ...current,
@@ -831,19 +1012,30 @@ export function FieldEditSessionClient({
           ...current.adds,
           {
             kind: "area",
-            ring: draftPoints,
+            ring,
             symbolNumber: Number(symbolNumber),
           },
         ],
       }));
     }
     setDraftPoints([]);
+    clearBezierDraft();
     setError(null);
-  }, [draftPoints, symbolNumber, tool, updateOps]);
+  }, [
+    bezierDraftAnchors,
+    bezierDraftControls,
+    bezierDrawMode,
+    clearBezierDraft,
+    draftPoints,
+    symbolNumber,
+    tool,
+    updateOps,
+  ]);
 
   const cancelDraft = useCallback(() => {
     setDraftPoints([]);
-  }, []);
+    clearBezierDraft();
+  }, [clearBezierDraft]);
 
   const drawPointerHandlers = useMemo<MapDrawPointerHandlers>(
     () => ({
@@ -882,6 +1074,28 @@ export function FieldEditSessionClient({
                       closed: bezierEdit.objectType === "area",
                     }
                   : null,
+              bezierDraw:
+                bezierDrawMode && (tool === "addLine" || tool === "addArea")
+                  ? {
+                      anchors: bezierDraftAnchors,
+                      controls: bezierDraftControls,
+                      live:
+                        bezierGesture.phase === "drag_p1" ||
+                        bezierGesture.phase === "await_p2"
+                          ? {
+                              p0: bezierGesture.p0,
+                              p1: bezierGesture.p1,
+                            }
+                          : bezierGesture.phase === "drag_p3"
+                            ? {
+                                p0: bezierGesture.p0,
+                                p1: bezierGesture.p1,
+                                p2: bezierGesture.p2,
+                                p3: bezierGesture.p3,
+                              }
+                            : null,
+                    }
+                  : null,
             }),
           }}
         />
@@ -900,6 +1114,11 @@ export function FieldEditSessionClient({
       draftHasSymbolPreview,
       snapPreview,
       bezierEdit,
+      bezierDrawMode,
+      bezierDraftAnchors,
+      bezierDraftControls,
+      bezierGesture,
+      tool,
     ],
   );
 
@@ -980,16 +1199,44 @@ export function FieldEditSessionClient({
     setTool(next);
     setMapMode("draw");
     setDraftPoints([]);
+    clearBezierDraft();
     setSelectedVertexIndex(null);
     setBezierEdit(null);
+    if (next !== "addLine" && next !== "addArea") {
+      setBezierDrawMode(false);
+    }
     if (next !== "select") setSelectedObjectIndex(null);
+  }
+
+  function toggleBezierDrawMode(forTool: "addLine" | "addArea") {
+    if (gpsTracking) {
+      cancelGpsTracking();
+    }
+    const enabling = !(bezierDrawMode && tool === forTool);
+    setTool(forTool);
+    setMapMode("draw");
+    setDraftPoints([]);
+    clearBezierDraft();
+    setSelectedObjectIndex(null);
+    setSelectedVertexIndex(null);
+    setBezierEdit(null);
+    setBezierDrawMode(enabling);
+    setError(null);
+    setInfo(
+      enabling
+        ? "Bézier-ritning: tryck ner på brytpunkt och dra mot P1, sedan tryck på P2 och släpp på nästa brytpunkt. Håll inne verktyget igen för vanlig ritning."
+        : "Vanlig ritning: klicka brytpunkter. Håll inne verktyget för Bézier.",
+    );
   }
 
   const handleDrawInterrupt = useCallback(() => {
     dragVertexRef.current = null;
     dragBezierControlRef.current = null;
+    if (bezierGesture.phase === "drag_p1" || bezierGesture.phase === "drag_p3") {
+      setBezierGesture({ phase: "idle" });
+    }
     setSnapPreview(null);
-  }, []);
+  }, [bezierGesture.phase]);
 
   const handleGpsToggle = useCallback(() => {
     toggleGpsTracking();
@@ -1003,16 +1250,22 @@ export function FieldEditSessionClient({
       return "Klicka ett objekt för att markera det. Klicka igen på samma ställe för att bläddra bland överlappande objekt. Dra brytpunkter eller använd CAD-verktygen nedan. Snappning hjälper dig träffa befintliga linjer och hörn.";
     }
     if (tool === "addLine") {
-      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan punkter längs linjen.";
+      if (bezierDrawMode) {
+        return "Bézier-linje: tryck ner på brytpunkt → dra mot P1 → släpp; tryck på P2 → släpp på nästa brytpunkt. Håll inne linjeverktyget för vanlig ritning.";
+      }
+      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan punkter längs linjen. Håll inne linjeverktyget för Bézier.";
     }
     if (tool === "addArea") {
-      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan hörn runt ytan (minst 3).";
+      if (bezierDrawMode) {
+        return "Bézier-yta: samma gest som linje (P0→P1, P2→P3). Minst 3 brytpunkter. Håll inne ytaverktyget för vanlig ritning.";
+      }
+      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan hörn runt ytan (minst 3). Håll inne ytaverktyget för Bézier.";
     }
     if (tool === "addPoint") {
       return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan där punkten ska ligga.";
     }
     return null;
-  }, [gpsTracking, tool]);
+  }, [bezierDrawMode, gpsTracking, tool]);
 
   const localBackup = loadLocalFieldEditOps(sessionId);
   const counts = useMemo(() => countFieldEditChanges(ops), [ops]);
@@ -1024,6 +1277,9 @@ export function FieldEditSessionClient({
       : "Sparat lokalt";
 
   const isDrawInteraction = mapMode === "draw" && !gpsTracking;
+  const draftPointCount = bezierDrawMode
+    ? bezierDraftAnchors.length
+    : draftPoints.length;
   const showDraftActions =
     isDrawInteraction && (tool === "addLine" || tool === "addArea");
 
@@ -1041,6 +1297,8 @@ export function FieldEditSessionClient({
           onGpsToggle={handleGpsToggle}
           canUndo={opsHistory.length > 1}
           onUndo={undo}
+          bezierDrawMode={bezierDrawMode}
+          onToggleBezierDrawMode={toggleBezierDrawMode}
         />
         {addKind && (
           <div
@@ -1065,7 +1323,7 @@ export function FieldEditSessionClient({
         )}
         <FieldEditMapDraftBar
           showDraftActions={showDraftActions}
-          draftPointCount={draftPoints.length}
+          draftPointCount={draftPointCount}
           onFinishDraft={finishDraft}
           onCancelDraft={cancelDraft}
           countsLabel={countsLabel}
@@ -1085,7 +1343,8 @@ export function FieldEditSessionClient({
       canUseGpsTracking,
       handleGpsToggle,
       showDraftActions,
-      draftPoints.length,
+      draftPointCount,
+      bezierDrawMode,
       finishDraft,
       cancelDraft,
       countsLabel,
@@ -1108,7 +1367,7 @@ export function FieldEditSessionClient({
               onClick={finishDraft}
               className="min-h-9 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white"
             >
-              Klar ({draftPoints.length} pkt)
+              Klar ({draftPointCount} pkt)
             </button>
             <button
               type="button"

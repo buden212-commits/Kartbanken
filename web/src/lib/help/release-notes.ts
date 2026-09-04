@@ -8,6 +8,15 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-04",
+    title: "Fältredigering — rita ny Bézier-kurva",
+    items: [
+      "Håll inne linje- eller ytaverktyget för att växla till Bézier-ritning (skuggat B på ikonen)",
+      "Rita segment: tryck ner på brytpunkt och dra mot P1, sedan tryck på P2 och släpp på nästa brytpunkt",
+      "Håll inne samma verktyg igen för att gå tillbaka till vanlig ritning",
+    ],
+  },
+  {
+    date: "2026-09-04",
     title: "Fix: kartladdning «Laddning avbröts»",
     items: [
       "Kartan på fältredigering (och andra kartvyer) fastnade inte längre i «Laddning avbröts» vid omstart av sidan",

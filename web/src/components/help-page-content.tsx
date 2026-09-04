@@ -346,6 +346,7 @@ export async function HelpPageContent() {
                   "Snappa mot objekt: slå på snappning och ange tolerans (meter) — brytpunkter fästs vid linjer, hörn och punktobjekt",
                   "CAD-verktyg för valt objekt (även punkt): byt symbol, radera, och för linje/yta förenkla, mjuka hörn, Bézier-kurva",
                   "Bézier: dra de orangefärgade kontrollpunkterna P1/P2 för att forma kurvan, sedan «Tillämpa kurva»",
+                  "Rita ny Bézier: håll inne linje-/ytaverktyget (B på ikonen) — tryck brytpunkt→dra P1, tryck P2→släpp nästa brytpunkt",
                   "Radera objekt, eller lägg till nya punkter, linjer och ytor med symbol grupperad efter geometri",
                   "Favoritsymboler per geometrityp — sparas på ditt konto och föreslås först i listan",
                   "Ångra upp till 10 steg via knappen på kartans högerkant (under Navigera) eller Ctrl/Cmd+Z",
