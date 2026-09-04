@@ -354,6 +354,7 @@ export async function HelpPageContent() {
                   "Favoritsymboler per geometrityp — sparas på ditt konto och föreslås först i listan",
                   "Ångra upp till 10 steg via knappen på kartans högerkant (under Navigera) eller Ctrl/Cmd+Z",
                   "Ritverktygens ikoner och ordning (punkt → linje → yta → radera → GPS) är samma som i «Föreslå ändring»",
+                  "När du ritar linje/yta: «Klar» (bock) och «Avbryt ritning» (kryss) i kartmenyn — Klar visar antal brytpunkter",
                   "Klicka ett befintligt kartobjekt när du skapar nytt — då kopieras dess symbol automatiskt",
                   "Nya och ändrade objekt visas med riktig OCAD-symbol i editorn — inte bara enkla streck",
                   "«Min position» och «GPS-spår» fungerar som i kartförslag på georefererade kartor — spela in stigar med telefonens GPS",

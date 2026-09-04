@@ -2,8 +2,10 @@
 
 import {
   MapAreaToolIcon,
+  MapCancelDraftIcon,
   MapDeleteToolIcon,
   MapDrawModeIcon,
+  MapFinishDraftIcon,
   MapGpsToolIcon,
   MapLineToolIcon,
   MapNavigateModeIcon,
@@ -92,6 +94,18 @@ function BezierModeBadge() {
       style={{ textShadow: "0 0 2px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.7)" }}
     >
       B
+    </span>
+  );
+}
+
+function DraftCountBadge({ count }: { count: number }) {
+  const label = count > 99 ? "99+" : String(count);
+  return (
+    <span
+      aria-hidden="true"
+      className="pointer-events-none absolute -bottom-0.5 -right-0.5 min-w-[1.1rem] rounded bg-emerald-800 px-0.5 text-center text-[9px] font-bold leading-tight text-white"
+    >
+      {label}
     </span>
   );
 }
@@ -198,6 +212,10 @@ type ToolbarsProps = {
   onUndo: () => void;
   bezierDrawMode: boolean;
   onToggleBezierDrawMode: (tool: "addLine" | "addArea") => void;
+  showDraftActions?: boolean;
+  draftPointCount?: number;
+  onFinishDraft?: () => void;
+  onCancelDraft?: () => void;
 };
 
 export function FieldEditMapToolbars({
@@ -213,6 +231,10 @@ export function FieldEditMapToolbars({
   onUndo,
   bezierDrawMode,
   onToggleBezierDrawMode,
+  showDraftActions = false,
+  draftPointCount = 0,
+  onFinishDraft,
+  onCancelDraft,
 }: ToolbarsProps) {
   const gpsLabel = gpsTracking ? "Sluta spåra" : "GPS-spår";
   const gpsTitle =
@@ -268,6 +290,28 @@ export function FieldEditMapToolbars({
           <MapGpsToolIcon />
         </IconToolbarButton>
       </MapToolbarPanel>
+      {showDraftActions && onFinishDraft && onCancelDraft && (
+        <MapToolbarPanel label="Ritning">
+          <IconToolbarButton
+            label={`Klar (${draftPointCount} pkt)`}
+            active
+            activeClass="border-emerald-600 bg-emerald-600 text-white"
+            onClick={onFinishDraft}
+            badge={<DraftCountBadge count={draftPointCount} />}
+          >
+            <MapFinishDraftIcon />
+          </IconToolbarButton>
+          <IconToolbarButton
+            label="Avbryt ritning"
+            active={false}
+            activeClass="border-red-600 bg-red-600 text-white"
+            inactiveClass="border-slate-200 bg-white text-slate-700 hover:border-red-200 hover:bg-red-50 hover:text-red-700"
+            onClick={onCancelDraft}
+          >
+            <MapCancelDraftIcon />
+          </IconToolbarButton>
+        </MapToolbarPanel>
+      )}
       <MapToolbarPanel label="Kartläge">
         <IconToolbarButton
           label="Rita och redigera"
@@ -303,63 +347,8 @@ export function FieldEditMapToolbars({
 
 const actionBtnNeutral =
   "min-h-11 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50";
-const actionBtnPrimary =
-  "min-h-11 rounded-lg bg-emerald-600 px-3 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50";
 const actionBtnBlue =
   "min-h-11 rounded-lg bg-ifk-blue px-3 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-ifk-blue/90 disabled:cursor-not-allowed disabled:opacity-50";
-
-type ActionBarProps = {
-  showDraftActions: boolean;
-  draftPointCount: number;
-  onFinishDraft: () => void;
-  onCancelDraft: () => void;
-  countsLabel: string;
-  syncLabel: string;
-};
-
-export function FieldEditMapDraftBar({
-  showDraftActions,
-  draftPointCount,
-  onFinishDraft,
-  onCancelDraft,
-  countsLabel,
-  syncLabel,
-}: ActionBarProps) {
-  // Counts/sync already shown in the map header — only overlay when actively drafting.
-  if (!showDraftActions) {
-    return null;
-  }
-
-  return (
-    <div
-      data-map-toolbar
-      className="pointer-events-auto absolute inset-x-2 bottom-2 z-40 grid grid-cols-2 gap-2 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur sm:hidden"
-      role="toolbar"
-      aria-label="Ritåtgärder"
-      onPointerDown={stopFieldEditToolbarPointer}
-    >
-      <button
-        type="button"
-        onClick={onFinishDraft}
-        onPointerDown={stopFieldEditToolbarPointer}
-        className={`col-span-2 ${actionBtnPrimary}`}
-      >
-        Klar ({draftPointCount} pkt)
-      </button>
-      <button
-        type="button"
-        onClick={onCancelDraft}
-        onPointerDown={stopFieldEditToolbarPointer}
-        className={`col-span-2 ${actionBtnNeutral}`}
-      >
-        Avbryt ritning
-      </button>
-      <p className="col-span-2 text-center text-xs text-slate-500">
-        {countsLabel} · {syncLabel}
-      </p>
-    </div>
-  );
-}
 
 type PublishBarProps = {
   publishing: boolean;

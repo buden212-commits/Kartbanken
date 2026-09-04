@@ -179,6 +179,35 @@ export function MapUndoToolIcon() {
   );
 }
 
+/** Finish current line/area draft (Klar). */
+export function MapFinishDraftIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+      <path
+        d="M4.5 10.25 8.25 14 15.5 6"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Cancel current line/area draft (Avbryt ritning). */
+export function MapCancelDraftIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+      <path
+        d="M5.5 5.5 14.5 14.5M14.5 5.5 5.5 14.5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 /** CAD: remove vertex (OCAD Remove Vertex). */
 export function CadRemoveVertexIcon() {
   return (

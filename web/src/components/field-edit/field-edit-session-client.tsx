@@ -23,7 +23,6 @@ import { FieldEditCadPanel, type CadVertexTool } from "@/components/field-edit/f
 import { FieldEditReviewDialog } from "@/components/field-edit/field-edit-review-dialog";
 import { FieldEditSnapSettings } from "@/components/field-edit/field-edit-snap-settings";
 import {
-  FieldEditMapDraftBar,
   FieldEditMapToolbars,
   FieldEditPublishBar,
   stopFieldEditToolbarPointer,
@@ -1445,13 +1444,15 @@ export function FieldEditSessionClient({
           onUndo={undo}
           bezierDrawMode={bezierDrawMode}
           onToggleBezierDrawMode={toggleBezierDrawMode}
+          showDraftActions={showDraftActions}
+          draftPointCount={draftPointCount}
+          onFinishDraft={finishDraft}
+          onCancelDraft={cancelDraft}
         />
         {addKind && (
           <div
             data-map-toolbar
-            className={`pointer-events-auto absolute inset-x-2 z-40 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur sm:hidden ${
-              showDraftActions ? "bottom-[8.5rem]" : "bottom-2"
-            }`}
+            className="pointer-events-auto absolute inset-x-2 bottom-2 z-40 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur sm:hidden"
             onPointerDown={stopFieldEditToolbarPointer}
           >
             <FieldEditSymbolPicker
@@ -1467,14 +1468,6 @@ export function FieldEditSessionClient({
             </p>
           </div>
         )}
-        <FieldEditMapDraftBar
-          showDraftActions={showDraftActions}
-          draftPointCount={draftPointCount}
-          onFinishDraft={finishDraft}
-          onCancelDraft={cancelDraft}
-          countsLabel={countsLabel}
-          syncLabel={syncLabel}
-        />
       </>
     ),
     [
@@ -1493,8 +1486,6 @@ export function FieldEditSessionClient({
       bezierDrawMode,
       finishDraft,
       cancelDraft,
-      countsLabel,
-      syncLabel,
       opsHistory.length,
       undo,
     ],
@@ -1506,24 +1497,6 @@ export function FieldEditSessionClient({
         <span>{countsLabel}</span>
         <span className="hidden sm:inline">·</span>
         <span>{syncLabel}</span>
-        {showDraftActions && (
-          <div className="hidden gap-2 sm:flex">
-            <button
-              type="button"
-              onClick={finishDraft}
-              className="min-h-9 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white"
-            >
-              Klar ({draftPointCount} pkt)
-            </button>
-            <button
-              type="button"
-              onClick={cancelDraft}
-              className="min-h-9 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700"
-            >
-              Avbryt ritning
-            </button>
-          </div>
-        )}
       </div>
       {addKind && (
         <FieldEditSymbolPicker

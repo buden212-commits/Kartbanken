@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-04",
+    title: "Fältredigering — Klar/Avbryt i kartmenyn",
+    items: [
+      "«Klar» och «Avbryt ritning» ligger nu som ikoner i kartmenyn (höger verktygsrad) när du ritar linje eller yta",
+      "Klar-ikonen visar antal brytpunkter som en liten siffra",
+    ],
+  },
+  {
+    date: "2026-09-04",
     title: "Fältredigering — OCAD-brytpunkter (normal/hörn/streck)",
     items: [
       "Duplicera objekt är borttaget från CAD-menyn",
