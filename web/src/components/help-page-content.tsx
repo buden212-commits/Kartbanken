@@ -220,7 +220,8 @@ export async function HelpPageContent() {
                   <td className="px-4 py-3">
                     Visar <strong>publicerade</strong> kartversioner, skapar kartförslag och egna
                     banor. Ser bara områden med publicerad karta — inga utcheckningar. Kan få
-                    e-postnotiser men inte .ocd-bilaga.
+                    e-postnotiser men inte .ocd-bilaga. Kan få rättigheten{" "}
+                    <strong>Fältredigering</strong> av administratör.
                   </td>
                 </tr>
                 <tr className="border-b border-slate-100">
@@ -228,15 +229,17 @@ export async function HelpPageContent() {
                   <td className="px-4 py-3">
                     Allt läsare kan, plus ladda upp versioner, publicera/avpublicera, se
                     opublicerade versioner, checka ut/in områden och importera en delkarta som
-                    aldrig checkades ut här
+                    aldrig checkades ut här. Fältredigering kräver uttrycklig tilldelning (som för
+                    läsare).
                   </td>
                 </tr>
                 <tr>
                   <td className="px-4 py-3 font-medium">Administratör</td>
                   <td className="px-4 py-3">
                     Allt redaktör kan, plus skapa områden, redigera områdesnamn, radera områden,
-                    godkänna konton, avbryta utcheckningar, integrera incheckningar och hantera
-                    systeminställningar
+                    godkänna konton, avbryta utcheckningar och fältredigeringar, integrera
+                    incheckningar, tilldela fältredigering och hantera systeminställningar.
+                    Administratörer har alltid fältredigering.
                   </td>
                 </tr>
               </tbody>
