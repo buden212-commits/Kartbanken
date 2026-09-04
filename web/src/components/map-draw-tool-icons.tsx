@@ -178,3 +178,197 @@ export function MapUndoToolIcon() {
     </svg>
   );
 }
+
+/** CAD: remove vertex (OCAD-inspired). */
+export function CadRemoveVertexIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+      <path
+        d="M3.5 14.5 8 8.5 12 11.5 16.5 5.5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="11.5" r="2.6" fill="white" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M10.6 11.5h2.8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** CAD: add vertex (OCAD-inspired). */
+export function CadAddVertexIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+      <path
+        d="M3.5 14.5 8 8.5 12 11.5 16.5 5.5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="11.5" r="2.6" fill="white" stroke="currentColor" strokeWidth="1.5" />
+      <path
+        d="M12 10.1v2.8M10.6 11.5h2.8"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/** CAD: simplify polyline (fewer vertices). */
+export function CadSimplifyIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+      <path
+        d="M3.5 15.5 8.5 6.5 16.5 4.5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="3.5" cy="15.5" r="1.6" fill="currentColor" />
+      <circle cx="8.5" cy="6.5" r="1.6" fill="currentColor" />
+      <circle cx="16.5" cy="4.5" r="1.6" fill="currentColor" />
+    </svg>
+  );
+}
+
+/** CAD: soft corners / smooth. */
+export function CadSmoothCornersIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+      <path
+        d="M4 15.5V8.5a4.5 4.5 0 0 1 4.5-4.5H16"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="4" cy="15.5" r="1.5" fill="currentColor" />
+      <circle cx="16" cy="4" r="1.5" fill="currentColor" />
+    </svg>
+  );
+}
+
+/** CAD: Bézier curve with control handles. */
+export function CadBezierIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+      <path
+        d="M3.5 15C3.5 15 6 4.5 10 4.5S16.5 15 16.5 15"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+      <path
+        d="M3.5 15 6.5 7.5M16.5 15 13.5 7.5"
+        stroke="currentColor"
+        strokeWidth="1.25"
+        strokeDasharray="2 1.5"
+        strokeLinecap="round"
+      />
+      <circle cx="3.5" cy="15" r="1.5" fill="currentColor" />
+      <circle cx="16.5" cy="15" r="1.5" fill="currentColor" />
+      <rect x="5.4" y="6.4" width="2.2" height="2.2" rx="0.3" fill="currentColor" />
+      <rect x="12.4" y="6.4" width="2.2" height="2.2" rx="0.3" fill="currentColor" />
+    </svg>
+  );
+}
+
+/** CAD: reverse object direction (OCAD). */
+export function CadReverseIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+      <path
+        d="M4 7.5h9.5a3 3 0 0 1 0 6H11"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+      <path
+        d="M6.5 4.75 4 7.5 6.5 10.25"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M13.5 15.25 16 12.5 13.5 9.75"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** CAD: duplicate object (OCAD). */
+export function CadDuplicateIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+      <rect
+        x="6.5"
+        y="6.5"
+        width="9"
+        height="9"
+        rx="1.25"
+        stroke="currentColor"
+        strokeWidth="1.75"
+      />
+      <path
+        d="M4.5 13.5V4.75A1.25 1.25 0 0 1 5.75 3.5H13.5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/** CAD: rotate object (OCAD). */
+export function CadRotateIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+      <path
+        d="M15.5 9.5a5.5 5.5 0 1 1-1.4-3.7"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+      <path
+        d="M15.5 4.5v4h-4"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="10" cy="10" r="1.4" fill="currentColor" />
+    </svg>
+  );
+}
+
+/** CAD: measure length/area (OCAD). */
+export function CadMeasureIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+      <path
+        d="M3.5 14.5 14.5 3.5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+      <path
+        d="M6.2 11.8l1.1-1.1M8.4 9.6l1.1-1.1M10.6 7.4l1.1-1.1"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <circle cx="3.5" cy="14.5" r="1.5" fill="currentColor" />
+      <circle cx="14.5" cy="3.5" r="1.5" fill="currentColor" />
+    </svg>
+  );
+}

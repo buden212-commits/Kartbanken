@@ -344,7 +344,7 @@ export async function HelpPageContent() {
                   "Brytpunkter: X vid första punkten, punkt i mitten, fyrkant vid sista — mindre och halvtransparenta",
                   "Klicka igen på samma ställe för att bläddra bland överlappande objekt",
                   "Snappa mot objekt: slå på snappning och ange tolerans (meter) — brytpunkter fästs vid linjer, hörn och punktobjekt",
-                  "CAD-verktyg för valt objekt (även punkt): byt symbol, radera, och för linje/yta förenkla, mjuka hörn, Bézier-kurva",
+                  "CAD-verktyg som ikoner: byt symbol, radera, duplicera, mät, radera/lägg till brytpunkt (håll inne för att växla), vänd, förenkla, mjuka hörn, Bézier",
                   "Förenkla: buffert ± meter — tar bort brytpunkter på nästan rak linje; ny punkt där linjen tangerar kanten",
                   "Bézier: dra de orangefärgade kontrollpunkterna P1/P2 för att forma kurvan, sedan «Tillämpa kurva»",
                   "Rita ny Bézier: håll inne linje-/ytaverktyget (B på ikonen) — tryck brytpunkt→dra P1, tryck P2→släpp nästa brytpunkt",

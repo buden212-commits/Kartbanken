@@ -8,6 +8,15 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-04",
+    title: "Fältredigering — CAD-meny med ikoner",
+    items: [
+      "CAD-verktyg visas som ikoner (byt symbol, radera, duplicera, mät, förenkla, mjuka hörn, Bézier, vänd riktning)",
+      "Radera brytpunkt: klicka på punkten — håll inne ikonen för att växla till lägg till brytpunkt",
+      "Brytpunktsverktygen gäller bara valt linje- eller ytobjekt",
+    ],
+  },
+  {
+    date: "2026-09-04",
     title: "Fältredigering — bättre förenkling",
     items: [
       "Förenkla använder en buffert (± meter på varje sida): punkter på nästan rak linje tas bort, ny brytpunkt där linjen tangerar buffertkanten",

@@ -4,7 +4,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DiffMapPanel, type MapDrawPointerHandlers } from "@/components/diff-map-panel";
 import { fieldEditOverlaySvg } from "@/components/field-edit/field-edit-overlay";
-import { FieldEditCadPanel } from "@/components/field-edit/field-edit-cad-panel";
+import {
+  closedRing,
+  applyVertexMove,
+  insertVertexOnSegment,
+  removeVertexAt,
+  verticesForHandles,
+} from "@/lib/field-edit/vertices";
+import { nearestPointOnPolyline, distance2d } from "@/lib/field-edit/polyline-geometry";
+import {
+  defaultBezierControlsForPolyline,
+  hitTestBezierControl,
+  sampleBezierPolyline,
+  type BezierSegmentControls,
+} from "@/lib/field-edit/geometry-tools";
+import { FieldEditCadPanel, type CadVertexTool } from "@/components/field-edit/field-edit-cad-panel";
 import { FieldEditReviewDialog } from "@/components/field-edit/field-edit-review-dialog";
 import { FieldEditSnapSettings } from "@/components/field-edit/field-edit-snap-settings";
 import {
@@ -60,17 +74,6 @@ import {
   type FieldEditModify,
   type FieldEditOps,
 } from "@/lib/field-edit/types";
-import {
-  closedRing,
-  applyVertexMove,
-  verticesForHandles,
-} from "@/lib/field-edit/vertices";
-import {
-  defaultBezierControlsForPolyline,
-  hitTestBezierControl,
-  sampleBezierPolyline,
-  type BezierSegmentControls,
-} from "@/lib/field-edit/geometry-tools";
 import { metersToMapUnits, type OcadCrsInfo } from "@/lib/ocad/crs";
 import { screenToSvgPoint } from "@/lib/ocad/map-hit-test";
 import { parseOcadLayersFromSvg } from "@/lib/ocad/svg-utils";
@@ -149,6 +152,7 @@ export function FieldEditSessionClient({
     [],
   );
   const [bezierGesture, setBezierGesture] = useState<BezierDrawGesture>({ phase: "idle" });
+  const [cadVertexTool, setCadVertexTool] = useState<CadVertexTool>("off");
   const [draftPoints, setDraftPoints] = useState<[number, number][]>([]);
   const [syncing, setSyncing] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -554,9 +558,56 @@ export function FieldEditSessionClient({
     setSelectedObjectIndex(null);
     setSelectedVertexIndex(null);
     setBezierEdit(null);
+    setCadVertexTool("off");
   }, [selectedObjectIndex, updateOps]);
 
+  const duplicateSelectedObject = useCallback(() => {
+    if (selectedObjectIndex == null) return;
+    const obj = objects.find((entry) => entry.i === selectedObjectIndex);
+    if (!obj || opsRef.current.deletes.includes(obj.i)) return;
+    const coords =
+      resolveObjectCoordinates(obj.i, obj.v, opsRef.current) ?? obj.v;
+    const symbol =
+      opsRef.current.modifies.find((m) => m.objectIndex === obj.i)?.symbolNumber ?? obj.s;
+    if (obj.t === "point") {
+      const pt = coords[0] ?? obj.c;
+      updateOps((current) => ({
+        ...current,
+        adds: [
+          ...current.adds,
+          { kind: "point", x: pt[0], y: pt[1], symbolNumber: symbol },
+        ],
+      }));
+    } else if (obj.t === "line") {
+      updateOps((current) => ({
+        ...current,
+        adds: [
+          ...current.adds,
+          {
+            kind: "line",
+            coordinates: coords.map(([x, y]) => [x, y] as [number, number]),
+            symbolNumber: symbol,
+          },
+        ],
+      }));
+    } else {
+      updateOps((current) => ({
+        ...current,
+        adds: [
+          ...current.adds,
+          {
+            kind: "area",
+            ring: closedRing(coords),
+            symbolNumber: symbol,
+          },
+        ],
+      }));
+    }
+    setInfo("Objekt duplicerat som nytt tillägg.");
+  }, [objects, selectedObjectIndex, updateOps]);
+
   const startBezierEdit = useCallback(() => {
+    setCadVertexTool("off");
     if (selectedObjectIndex == null) return;
     const obj = objects.find((entry) => entry.i === selectedObjectIndex);
     if (!obj || (obj.t !== "line" && obj.t !== "area")) return;
@@ -661,6 +712,65 @@ export function FieldEditSessionClient({
             resolveObjectCoordinates(selectedObjectIndex, obj?.v ?? [], ops) ?? [];
           const handleCoords =
             obj?.t === "area" ? verticesForHandles(coords, obj.t) : coords;
+
+          if (
+            cadVertexTool === "remove" &&
+            obj &&
+            (obj.t === "line" || obj.t === "area")
+          ) {
+            const vertexIndex = hitTestFieldEditVertex(
+              handleCoords,
+              geo,
+              vertexHitDistance,
+            );
+            if (vertexIndex != null) {
+              const minPoints = obj.t === "line" ? 2 : 3;
+              const next = removeVertexAt(coords, obj.t, vertexIndex, minPoints);
+              if (!next) {
+                setInfo(`Kan inte radera — minst ${minPoints} brytpunkter krävs.`);
+                return;
+              }
+              upsertModify(selectedObjectIndex, next);
+              setSelectedVertexIndex(null);
+              setInfo("Brytpunkt raderad.");
+              return;
+            }
+            setInfo("Klicka på en brytpunkt för att radera den.");
+            return;
+          }
+
+          if (
+            cadVertexTool === "add" &&
+            obj &&
+            (obj.t === "line" || obj.t === "area")
+          ) {
+            const hitPolyline =
+              obj.t === "area" ? closedRing(handleCoords) : handleCoords;
+            const nearest = nearestPointOnPolyline(geo, hitPolyline);
+            if (!nearest || nearest.distance > hitDistance) {
+              setInfo("Klicka närmare linjen för att lägga till en brytpunkt.");
+              return;
+            }
+            // Avoid inserting too close to existing vertices
+            const tooClose = handleCoords.some(
+              (v) => distance2d(v, nearest.point) < vertexHitDistance * 0.35,
+            );
+            if (tooClose) {
+              setInfo("För nära en befintlig brytpunkt — välj en annan plats.");
+              return;
+            }
+            const next = insertVertexOnSegment(
+              coords,
+              obj.t,
+              nearest.segmentIndex,
+              nearest.point,
+            );
+            upsertModify(selectedObjectIndex, next);
+            setSelectedVertexIndex(null);
+            setInfo("Brytpunkt tillagd.");
+            return;
+          }
+
           const vertexIndex = hitTestFieldEditVertex(handleCoords, geo, vertexHitDistance);
           if (vertexIndex != null && obj) {
             const startCoords =
@@ -684,6 +794,7 @@ export function FieldEditSessionClient({
           setSelectedObjectIndex(null);
           setSelectedVertexIndex(null);
           setBezierEdit(null);
+          setCadVertexTool("off");
           hitCycleRef.current = null;
           return;
         }
@@ -790,6 +901,7 @@ export function FieldEditSessionClient({
       bezierDrawMode,
       bezierEdit,
       bezierGesture,
+      cadVertexTool,
       draftPoints.length,
       objects,
       ops,
@@ -799,6 +911,7 @@ export function FieldEditSessionClient({
       symbolNumber,
       tool,
       updateOps,
+      upsertModify,
       gpsTracking,
       hitDistance,
       vertexHitDistance,
@@ -1202,6 +1315,7 @@ export function FieldEditSessionClient({
     clearBezierDraft();
     setSelectedVertexIndex(null);
     setBezierEdit(null);
+    setCadVertexTool("off");
     if (next !== "addLine" && next !== "addArea") {
       setBezierDrawMode(false);
     }
@@ -1468,6 +1582,7 @@ export function FieldEditSessionClient({
               }}
               onChangeSymbol={(sym) => upsertModifySymbol(selectedObject.i, sym)}
               onDelete={deleteSelectedObject}
+              onDuplicate={duplicateSelectedObject}
               onMessage={setInfo}
               symbolGroups={symbolGroups}
               favorites={favorites}
@@ -1480,6 +1595,8 @@ export function FieldEditSessionClient({
               onStartBezier={startBezierEdit}
               onApplyBezier={applyBezierEdit}
               onCancelBezier={cancelBezierEdit}
+              vertexTool={cadVertexTool}
+              onVertexToolChange={setCadVertexTool}
             />
           </details>
           <div className="hidden sm:block">
@@ -1496,6 +1613,7 @@ export function FieldEditSessionClient({
               }}
               onChangeSymbol={(sym) => upsertModifySymbol(selectedObject.i, sym)}
               onDelete={deleteSelectedObject}
+              onDuplicate={duplicateSelectedObject}
               onMessage={setInfo}
               symbolGroups={symbolGroups}
               favorites={favorites}
@@ -1508,6 +1626,8 @@ export function FieldEditSessionClient({
               onStartBezier={startBezierEdit}
               onApplyBezier={applyBezierEdit}
               onCancelBezier={cancelBezierEdit}
+              vertexTool={cadVertexTool}
+              onVertexToolChange={setCadVertexTool}
             />
           </div>
         </>

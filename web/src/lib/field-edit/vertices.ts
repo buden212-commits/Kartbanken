@@ -81,3 +81,65 @@ export function applyVertexMove(
   }
   return next;
 }
+
+/**
+ * Remove a handle-index vertex. `vertices` should be handle coords (area without
+ * duplicate close). Returns closed ring for areas, or null if below minPoints.
+ */
+export function removeVertexAt(
+  vertices: [number, number][],
+  type: OcadObjectType,
+  vertexIndex: number,
+  minPoints: number,
+): [number, number][] | null {
+  const handles = verticesForHandles(vertices, type);
+  if (handles.length <= minPoints) return null;
+  if (vertexIndex < 0 || vertexIndex >= handles.length) return null;
+  const next = handles.filter((_, index) => index !== vertexIndex);
+  if (next.length < minPoints) return null;
+  return type === "area" ? closedRing(next) : next;
+}
+
+/**
+ * Insert a vertex on a segment. For areas, segmentIndex may be the closing edge
+ * (last → first) when using a closed ring for hit-testing.
+ */
+export function insertVertexOnSegment(
+  vertices: [number, number][],
+  type: OcadObjectType,
+  segmentIndex: number,
+  point: [number, number],
+): [number, number][] {
+  const handles = verticesForHandles(vertices, type).map(
+    ([x, y]) => [x, y] as [number, number],
+  );
+  if (handles.length < 2) {
+    return type === "area" ? closedRing([...handles, point]) : [...handles, point];
+  }
+
+  if (type === "area") {
+    // Closing edge is between last and first handle.
+    if (segmentIndex >= handles.length - 1) {
+      handles.push([point[0], point[1]]);
+    } else {
+      handles.splice(segmentIndex + 1, 0, [point[0], point[1]]);
+    }
+    return closedRing(handles);
+  }
+
+  const insertAt = Math.max(0, Math.min(handles.length, segmentIndex + 1));
+  handles.splice(insertAt, 0, [point[0], point[1]]);
+  return handles;
+}
+
+/** Reverse line/area direction (first ↔ last). */
+export function reverseVertices(
+  vertices: [number, number][],
+  type: OcadObjectType,
+): [number, number][] {
+  const handles = verticesForHandles(vertices, type).map(
+    ([x, y]) => [x, y] as [number, number],
+  );
+  handles.reverse();
+  return type === "area" ? closedRing(handles) : handles;
+}
