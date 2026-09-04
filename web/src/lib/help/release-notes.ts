@@ -15,6 +15,7 @@ export const releaseNotes: ReleaseNote[] = [
       "Fyll / kant / duplicera i CAD: välj symbol — samma typ kopierar, yta+linje skapar kant, linje+yta fyller; hål kan fyllas eller få kant",
       "Rektangelläge: håll inne linje/yta — växlar vanlig → rektangel (R) → Bézier (B); dra längsta sidan sedan vinkelrätt",
       "Kartladdning: samma förhandsvisning delas i cache (undviker dubbelhämtning) och timeout efter 2 minuter med «Försök igen»",
+      "Info om lokalt sparade ändringar visas som toast ovanpå kartan (kartan hoppar inte längre)",
       "Release notes grupperade till en post per dag",
       "Webbläsarfliken visar nu IFK Mora-loggan i stället för standardikonen",
       "När du öppnar fältredigering är panorera/zooma (Navigera) aktivt från början — byt till Rita när du ska redigera",

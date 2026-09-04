@@ -223,6 +223,7 @@ export function FieldEditSessionClient({
   const showReview = reviewSummary != null;
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [showLocalBackupToast, setShowLocalBackupToast] = useState(false);
   const [editorSettings, setEditorSettings] = useState<FieldEditEditorSettings>(() =>
     loadFieldEditEditorSettings(),
   );
@@ -2365,7 +2366,7 @@ export function FieldEditSessionClient({
     return null;
   }, [bezierDrawMode, gpsTracking, rectangularDrawMode, tool]);
 
-  const localBackup = loadLocalFieldEditOps(sessionId);
+  const hasLocalBackup = loadLocalFieldEditOps(sessionId) != null;
   const counts = useMemo(() => countFieldEditChanges(ops), [ops]);
   const countsLabel = `${counts.deletes} raderade · ${counts.modifies} ändrade · ${counts.adds} nya`;
   const syncLabel = syncing
@@ -2373,6 +2374,16 @@ export function FieldEditSessionClient({
     : syncState === "saved"
       ? "Synkad"
       : "Sparat lokalt";
+
+  useEffect(() => {
+    if (!(hasLocalBackup && syncState !== "saved")) {
+      setShowLocalBackupToast(false);
+      return;
+    }
+    setShowLocalBackupToast(true);
+    const timer = window.setTimeout(() => setShowLocalBackupToast(false), 7000);
+    return () => window.clearTimeout(timer);
+  }, [hasLocalBackup, sessionId, syncState]);
 
   const isDrawInteraction = mapMode === "draw" && !gpsTracking;
   const draftPointCount = rectangularDrawMode
@@ -2390,6 +2401,29 @@ export function FieldEditSessionClient({
   const mapToolbarOverlay = useMemo(
     () => (
       <>
+        {showLocalBackupToast && (
+          <div
+            data-map-toolbar
+            role="status"
+            className="pointer-events-auto absolute left-2 right-14 top-2 z-40 max-w-md rounded-lg border border-amber-200 bg-amber-50/95 px-3 py-2 shadow-lg backdrop-blur sm:right-auto"
+            onPointerDown={stopFieldEditToolbarPointer}
+          >
+            <div className="flex items-start gap-2">
+              <p className="min-w-0 flex-1 text-xs leading-snug text-amber-950 sm:text-sm">
+                Ändringar sparas i webbläsaren tills du publicerar. Vid nätverksfel behålls
+                arbetet lokalt.
+              </p>
+              <button
+                type="button"
+                aria-label="Stäng"
+                className="shrink-0 rounded px-1.5 py-0.5 text-sm font-medium text-amber-800 hover:bg-amber-100"
+                onClick={() => setShowLocalBackupToast(false)}
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
         <FieldEditMapToolbars
           tool={tool}
           onToolChange={switchTool}
@@ -2449,6 +2483,7 @@ export function FieldEditSessionClient({
       cancelDraft,
       opsHistory.length,
       undo,
+      showLocalBackupToast,
     ],
   );
 
@@ -2493,12 +2528,6 @@ export function FieldEditSessionClient({
 
   return (
     <div className="flex flex-col gap-3 sm:gap-4">
-      {localBackup && syncState !== "saved" && (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          Ändringar sparas i webbläsaren tills du publicerar. Vid nätverksfel behålls arbetet lokalt.
-        </p>
-      )}
-
       <DiffMapPanel
         previewUrl={`/api/maps/${mapSlug}/field-edits/${sessionId}/preview`}
         title={mapTitle}

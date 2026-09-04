@@ -368,7 +368,7 @@ export async function HelpPageContent() {
                   "Administratör kan avbryta fältredigeringar från områdessidan — samma som vanliga utcheckningar",
                   "Mobilanpassad: verktyg på kartan, startar i Navigera (panorera/zooma) — byt till Rita för att redigera",
                   "«Checka in» visar en sammanfattning — därefter väntar admin-godkännande innan ny version skapas",
-                  "Ändringar sparas lokalt i webbläsaren tills du checkar in",
+                  "Ändringar sparas lokalt i webbläsaren tills du checkar in — en kort toast visas uppe på kartan (kartan hoppar inte)",
                 ]}
               />
             </>
