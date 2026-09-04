@@ -306,6 +306,22 @@ export function FieldEditMapToolbars({
             </IconToolbarButton>
           );
         })}
+        {(tool === "addLine" || tool === "addArea") && (
+          <IconToolbarButton
+            label={
+              rectangularDrawMode
+                ? "Rektangelläge på — klicka för vanlig ritning"
+                : "Rektangelläge (byggnader, rätvinkliga ytor)"
+            }
+            active={rectangularDrawMode}
+            activeClass="border-amber-600 bg-amber-600 text-white"
+            inactiveClass="border-amber-300 bg-amber-50 text-amber-950 hover:border-amber-400 hover:bg-amber-100"
+            disabled={drawDisabled || bezierDrawMode}
+            onClick={onToggleRectangularDrawMode}
+          >
+            <MapRectangularModeIcon />
+          </IconToolbarButton>
+        )}
         <IconToolbarButton
           label={gpsTitle}
           active={gpsTracking}
@@ -319,20 +335,6 @@ export function FieldEditMapToolbars({
       </MapToolbarPanel>
       {showDraftActions && onFinishDraft && onCancelDraft && (
         <MapToolbarPanel label="Ritning">
-          <IconToolbarButton
-            label={
-              rectangularDrawMode
-                ? "Rektangelläge på — klicka för vanlig ritning"
-                : "Rektangelläge (byggnader, rätvinkliga ytor)"
-            }
-            active={rectangularDrawMode}
-            activeClass="border-amber-600 bg-amber-600 text-white"
-            inactiveClass="border-amber-200 bg-white text-amber-900 hover:border-amber-300 hover:bg-amber-50"
-            disabled={bezierDrawMode}
-            onClick={onToggleRectangularDrawMode}
-          >
-            <MapRectangularModeIcon />
-          </IconToolbarButton>
           <IconToolbarButton
             label={`Klar (${draftPointCount} pkt)`}
             active

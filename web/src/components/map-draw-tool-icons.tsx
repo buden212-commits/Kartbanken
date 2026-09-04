@@ -92,27 +92,19 @@ export function MapRectangleToolIcon() {
 }
 
 /**
- * Field edit: OCAD Rectangular mode — orthogonal building outline.
- * Solid edges = drawn so far; dashed = preview of remaining sides.
+ * Field edit: OCAD Rectangular mode — orthogonal L-shaped building footprint
+ * (tilted), matching OCAD's Rectangular mode toolbar icon.
  */
 export function MapRectangularModeIcon() {
   return (
     <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
-      {/* Rotated rectangle: solid L (first two sides), dashed close */}
+      {/* Stepped/L footprint rotated ~40° — all right angles */}
       <path
-        d="M5.2 12.2 9.8 5.8 14.8 9.2"
+        d="M6.1 13.4 10.4 7.2 13.2 9.1 11.6 11.4 14.2 13.2 9.9 19.4 6.1 13.4Z"
         stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
+        strokeWidth="1.55"
         strokeLinejoin="round"
-      />
-      <path
-        d="M14.8 9.2 10.2 15.6 5.2 12.2"
-        stroke="currentColor"
-        strokeWidth="1.75"
         strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeDasharray="2.4 1.8"
       />
     </svg>
   );
