@@ -157,3 +157,24 @@ export function MapNavigateModeIcon() {
     </svg>
   );
 }
+
+export function MapUndoToolIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+      <path
+        d="M7.5 5.25 4.25 8.5 7.5 11.75"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M4.5 8.5h7.25a3.75 3.75 0 1 1 0 7.5H8.5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}

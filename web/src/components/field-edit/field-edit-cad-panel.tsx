@@ -5,7 +5,6 @@ import { MapChangeSymbolToolIcon, MapTrashToolIcon } from "@/components/map-draw
 import type { FieldEditFavoriteSymbols } from "@/lib/field-edit/favorites";
 import type { FieldEditEditorSettings } from "@/lib/field-edit/editor-settings";
 import {
-  bezierSmoothPolyline,
   smoothPolylineChaikin,
   simplifyPolyline,
 } from "@/lib/field-edit/geometry-tools";
@@ -30,6 +29,10 @@ type Props = {
   symbolGroups: SymbolGroups;
   favorites?: FieldEditFavoriteSymbols;
   onToggleFavorite?: (symNum: number) => void;
+  bezierActive: boolean;
+  onStartBezier: () => void;
+  onApplyBezier: () => void;
+  onCancelBezier: () => void;
 };
 
 export function FieldEditCadPanel({
@@ -45,6 +48,10 @@ export function FieldEditCadPanel({
   symbolGroups,
   favorites,
   onToggleFavorite,
+  bezierActive,
+  onStartBezier,
+  onApplyBezier,
+  onCancelBezier,
 }: Props) {
   const [showSymbolPicker, setShowSymbolPicker] = useState(false);
   const kind = geometryKindFromType(selectedObject.t);
@@ -94,8 +101,9 @@ export function FieldEditCadPanel({
           type="button"
           title="Byt symbol"
           aria-label="Byt symbol"
+          disabled={bezierActive}
           onClick={() => setShowSymbolPicker((v) => !v)}
-          className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-50 sm:min-h-0 sm:py-2"
+          className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0 sm:py-2"
         >
           <MapChangeSymbolToolIcon />
           Byt symbol
@@ -104,18 +112,19 @@ export function FieldEditCadPanel({
           type="button"
           title="Radera objekt"
           aria-label="Radera objekt"
+          disabled={bezierActive}
           onClick={() => {
             if (!confirm("Radera valt objekt?")) return;
             onDelete();
           }}
-          className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-2.5 text-sm font-medium text-red-700 hover:bg-red-50 sm:min-h-0 sm:py-2"
+          className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-2.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0 sm:py-2"
         >
           <MapTrashToolIcon />
           Radera
         </button>
       </div>
 
-      {showSymbolPicker && (
+      {showSymbolPicker && !bezierActive && (
         <div className="rounded-lg border border-slate-200 bg-white p-3">
           <FieldEditSymbolPicker
             groups={symbolGroups}
@@ -134,68 +143,97 @@ export function FieldEditCadPanel({
 
       {isLineOrArea && (
         <>
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              Förenkla-tolerans
-              <input
-                type="number"
-                min={0.1}
-                max={20}
-                step={0.1}
-                value={editorSettings.simplifyToleranceM}
-                onChange={(e) => {
-                  const value = Number(e.target.value);
-                  if (!Number.isFinite(value) || value <= 0) return;
-                  onEditorSettingsChange({ ...editorSettings, simplifyToleranceM: value });
+          {bezierActive ? (
+            <div className="space-y-2 rounded-lg border border-orange-200 bg-orange-50/80 p-3">
+              <p className="text-sm font-medium text-orange-950">
+                Bézier-läge — dra i de orangefärgade kontrollpunkterna (P1/P2) för att forma bågen.
+              </p>
+              <p className="text-xs text-orange-900/80">
+                Brytpunkter (X / punkt / fyrkant) är kurvans ändpunkter. Kontrollpunkterna sparas
+                som vanlig polylinje när du tillämpar.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={onApplyBezier}
+                  className="min-h-11 flex-1 rounded-lg bg-orange-600 px-3 py-2.5 text-sm font-medium text-white hover:bg-orange-700 sm:min-h-0 sm:flex-none sm:py-2"
+                >
+                  Tillämpa kurva
+                </button>
+                <button
+                  type="button"
+                  onClick={onCancelBezier}
+                  className="min-h-11 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-50 sm:min-h-0 sm:flex-none sm:py-2"
+                >
+                  Avbryt
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                Förenkla-tolerans
+                <input
+                  type="number"
+                  min={0.1}
+                  max={20}
+                  step={0.1}
+                  value={editorSettings.simplifyToleranceM}
+                  onChange={(e) => {
+                    const value = Number(e.target.value);
+                    if (!Number.isFinite(value) || value <= 0) return;
+                    onEditorSettingsChange({ ...editorSettings, simplifyToleranceM: value });
+                  }}
+                  className="w-16 rounded border border-slate-300 px-2 py-1 text-sm"
+                />
+                m
+              </label>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const result = simplifyPolyline(
+                    editCoords,
+                    editorSettings.simplifyToleranceM,
+                    mapScale,
+                    minPoints,
+                  );
+                  applyTool("Förenkla", result.coordinates, result.beforeCount, result.afterCount);
                 }}
-                className="w-16 rounded border border-slate-300 px-2 py-1 text-sm"
-              />
-              m
-            </label>
+                className="min-h-11 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-50 sm:min-h-0 sm:flex-none sm:py-2"
+              >
+                Förenkla
+              </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                const result = simplifyPolyline(
-                  editCoords,
-                  editorSettings.simplifyToleranceM,
-                  mapScale,
-                  minPoints,
-                );
-                applyTool("Förenkla", result.coordinates, result.beforeCount, result.afterCount);
-              }}
-              className="min-h-11 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-50 sm:min-h-0 sm:flex-none sm:py-2"
-            >
-              Förenkla
-            </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const result = smoothPolylineChaikin(editCoords, 2, minPoints);
+                  applyTool("Mjuka hörn", result.coordinates, result.beforeCount, result.afterCount);
+                }}
+                className="min-h-11 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-50 sm:min-h-0 sm:flex-none sm:py-2"
+              >
+                Mjuka hörn
+              </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                const result = smoothPolylineChaikin(editCoords, 2, minPoints);
-                applyTool("Mjuka hörn", result.coordinates, result.beforeCount, result.afterCount);
-              }}
-              className="min-h-11 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-50 sm:min-h-0 sm:flex-none sm:py-2"
-            >
-              Mjuka hörn
-            </button>
+              <button
+                type="button"
+                onClick={onStartBezier}
+                disabled={editCoords.length < 2}
+                className="min-h-11 flex-1 rounded-lg border border-orange-300 bg-white px-3 py-2.5 text-sm font-medium text-orange-800 hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0 sm:flex-none sm:py-2"
+              >
+                Bézier-kurva
+              </button>
+            </div>
+          )}
 
-            <button
-              type="button"
-              onClick={() => {
-                const result = bezierSmoothPolyline(editCoords, 8, minPoints);
-                applyTool("Bézier-kurva", result.coordinates, result.beforeCount, result.afterCount);
-              }}
-              className="min-h-11 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-50 sm:min-h-0 sm:flex-none sm:py-2"
-            >
-              Bézier-kurva
-            </button>
-          </div>
-
-          <p className="text-xs text-slate-600">
-            Förenkla tar bort onödiga brytpunkter inom toleransen. Mjuka hörn rundar av vinklar.
-            Bézier-kurva ersätter raka segment med mjuka kurvor (sparas som förenklad polylinje i OCAD).
-          </p>
+          {!bezierActive && (
+            <p className="text-xs text-slate-600">
+              Förenkla tar bort onödiga brytpunkter inom toleransen. Mjuka hörn rundar av vinklar.
+              Bézier-kurva låter dig dra kontrollpunkterna P1 och P2 för varje segment (sparas som
+              polylinje i OCAD).
+            </p>
+          )}
         </>
       )}
     </div>

@@ -8,6 +8,15 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-04",
+    title: "Fältredigering — ångra, brytpunkter och Bézier",
+    items: [
+      "Ångra-knapp på kartans högerkant, i egen sektion under Navigera",
+      "Brytpunkter är mindre och halvtransparenta: X i starten, punkt i mitten, fyrkant i slutet",
+      "Bézier-kurva: dra i kontrollpunkterna P1 och P2 (rombformade, skiljer sig från brytpunkter) för att forma bågen, sedan Tillämpa",
+    ],
+  },
+  {
+    date: "2026-09-04",
     title: "Fältredigering — mobil layout",
     items: [
       "Checka in-panelen täcker inte längre CAD-menyn på mobil",

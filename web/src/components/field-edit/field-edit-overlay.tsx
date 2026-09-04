@@ -2,6 +2,8 @@ import {
   CheckoutSelectionType,
   type CheckoutSelectionGeometry,
 } from "@/lib/checkout/types";
+import type { BezierSegmentControls } from "@/lib/field-edit/geometry-tools";
+import { sampleBezierPolyline } from "@/lib/field-edit/geometry-tools";
 import type { SnapResult } from "@/lib/field-edit/snap";
 import type { FieldEditObjectEntry } from "@/lib/field-edit/object-index";
 import type { FieldEditOps } from "@/lib/field-edit/types";
@@ -15,11 +17,15 @@ import {
 
 /** Screen pixels (non-scaling-stroke) for checkout boundary outline. */
 const SELECTION_BOUNDARY_STROKE_PX = 2;
-/** SVG user units — vertex/draft handle radius (geo-scaled). */
-const HANDLE_RADIUS = 12;
-const GPS_HANDLE_RADIUS = 10;
+/** SVG user units — vertex/draft handle size (geo-scaled). */
+const HANDLE_SIZE = 6;
+const GPS_HANDLE_SIZE = 5;
 /** Screen pixels (non-scaling-stroke) for handle outline. */
-const HANDLE_STROKE_PX = 2;
+const HANDLE_STROKE_PX = 1.5;
+const HANDLE_OPACITY = 0.5;
+/** Bézier control handles (P1/P2) — distinct from breakpoints. */
+const CONTROL_SIZE = 8;
+const CONTROL_OPACITY = 0.85;
 
 function ringToSvgPoints(ring: [number, number][], transform: SvgRootTransform): string {
   return ring
@@ -69,21 +75,101 @@ function maskPointSvg(point: [number, number], transform: SvgRootTransform): str
   return `<circle cx="${x}" cy="${y}" r="30" fill="#ffffff" stroke="#ffffff" stroke-width="8" pointer-events="none" />`;
 }
 
+function vertexRole(
+  index: number,
+  count: number,
+): "first" | "last" | "middle" {
+  if (count <= 1) return "middle";
+  if (index === 0) return "first";
+  if (index === count - 1) return "last";
+  return "middle";
+}
+
+function singleVertexHandleSvg(
+  sx: number,
+  sy: number,
+  role: "first" | "last" | "middle",
+  selected: boolean,
+  handleSize: number,
+): string {
+  const fill = selected ? "#2563eb" : "#ffffff";
+  const stroke = selected ? "#1d4ed8" : "#64748b";
+  const size = selected ? handleSize * 1.15 : handleSize;
+  const common =
+    `fill="${fill}" fill-opacity="${HANDLE_OPACITY}" stroke="${stroke}" stroke-opacity="${HANDLE_OPACITY}" stroke-width="${HANDLE_STROKE_PX}" vector-effect="non-scaling-stroke" pointer-events="none"`;
+
+  if (role === "first") {
+    const arm = size;
+    return `<g pointer-events="none">
+      <line x1="${sx - arm}" y1="${sy - arm}" x2="${sx + arm}" y2="${sy + arm}" stroke="${stroke}" stroke-opacity="${HANDLE_OPACITY}" stroke-width="${HANDLE_STROKE_PX * 1.4}" vector-effect="non-scaling-stroke" />
+      <line x1="${sx + arm}" y1="${sy - arm}" x2="${sx - arm}" y2="${sy + arm}" stroke="${stroke}" stroke-opacity="${HANDLE_OPACITY}" stroke-width="${HANDLE_STROKE_PX * 1.4}" vector-effect="non-scaling-stroke" />
+    </g>`;
+  }
+
+  if (role === "last") {
+    return `<rect x="${sx - size}" y="${sy - size}" width="${size * 2}" height="${size * 2}" ${common} />`;
+  }
+
+  return `<circle cx="${sx}" cy="${sy}" r="${size}" ${common} />`;
+}
+
 function vertexHandlesSvg(
   coords: [number, number][],
   transform: SvgRootTransform,
   selectedVertex: number | null,
-  handleRadius = HANDLE_RADIUS,
+  handleSize = HANDLE_SIZE,
 ): string {
   return coords
     .map(([x, y], index) => {
       const [sx, sy] = geoToSvgUserPoint([x, y], transform);
-      const fill = selectedVertex === index ? "#2563eb" : "#ffffff";
-      const stroke = selectedVertex === index ? "#1d4ed8" : "#64748b";
-      const r = selectedVertex === index ? handleRadius * 1.15 : handleRadius;
-      return `<circle cx="${sx}" cy="${sy}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="${HANDLE_STROKE_PX}" vector-effect="non-scaling-stroke" pointer-events="none" />`;
+      const role = vertexRole(index, coords.length);
+      return singleVertexHandleSvg(sx, sy, role, selectedVertex === index, handleSize);
     })
     .join("");
+}
+
+function bezierEditSvg(
+  anchors: [number, number][],
+  controls: BezierSegmentControls[],
+  closed: boolean,
+  transform: SvgRootTransform,
+  selectedVertex: number | null,
+): string {
+  if (anchors.length < 2 || controls.length === 0) return "";
+
+  const sampled = sampleBezierPolyline(anchors, controls, closed, 12);
+  const parts: string[] = [];
+  if (sampled.length >= 2) {
+    parts.push(lineSvg(sampled, transform, "#ea580c", 2.5));
+  }
+
+  const n = anchors.length;
+  for (let i = 0; i < controls.length; i++) {
+    const p0 = anchors[i]!;
+    const p3 = anchors[(i + 1) % n]!;
+    const { p1, p2 } = controls[i]!;
+    const [x0, y0] = geoToSvgUserPoint(p0, transform);
+    const [x1, y1] = geoToSvgUserPoint(p1, transform);
+    const [x2, y2] = geoToSvgUserPoint(p2, transform);
+    const [x3, y3] = geoToSvgUserPoint(p3, transform);
+    const guide =
+      `stroke="#ea580c" stroke-opacity="0.55" stroke-width="1.25" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" fill="none" pointer-events="none"`;
+    parts.push(`<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" ${guide} />`);
+    parts.push(`<line x1="${x3}" y1="${y3}" x2="${x2}" y2="${y2}" ${guide} />`);
+
+    for (const [cx, cy] of [
+      [x1, y1],
+      [x2, y2],
+    ] as const) {
+      const s = CONTROL_SIZE;
+      parts.push(
+        `<polygon points="${cx},${cy - s} ${cx + s},${cy} ${cx},${cy + s} ${cx - s},${cy}" fill="#ea580c" fill-opacity="${CONTROL_OPACITY}" stroke="#9a3412" stroke-opacity="${CONTROL_OPACITY}" stroke-width="${HANDLE_STROKE_PX}" vector-effect="non-scaling-stroke" pointer-events="none" />`,
+      );
+    }
+  }
+
+  parts.push(vertexHandlesSvg(anchors, transform, selectedVertex));
+  return parts.join("");
 }
 
 function deleteMarkerSvg(centroid: [number, number], transform: SvgRootTransform): string {
@@ -107,6 +193,12 @@ function snapIndicatorSvg(snap: SnapResult, transform: SvgRootTransform): string
   </g>`;
 }
 
+export type BezierEditOverlay = {
+  anchors: [number, number][];
+  controls: BezierSegmentControls[];
+  closed: boolean;
+};
+
 export function fieldEditOverlaySvg(options: {
   transform: SvgRootTransform;
   selectionGeometry: CheckoutSelectionGeometry;
@@ -121,6 +213,7 @@ export function fieldEditOverlaySvg(options: {
   maskedObjectIndices?: number[];
   draftHasSymbolPreview?: boolean;
   snapPreview?: SnapResult | null;
+  bezierEdit?: BezierEditOverlay | null;
 }): string {
   const {
     transform,
@@ -136,6 +229,7 @@ export function fieldEditOverlaySvg(options: {
     maskedObjectIndices = [],
     draftHasSymbolPreview = false,
     snapPreview = null,
+    bezierEdit = null,
   } = options;
 
   const masked = new Set(maskedObjectIndices);
@@ -155,6 +249,18 @@ export function fieldEditOverlaySvg(options: {
 
   for (const obj of objects) {
     if (selectedObjectIndex !== obj.i) continue;
+    if (bezierEdit) {
+      parts.push(
+        bezierEditSvg(
+          bezierEdit.anchors,
+          bezierEdit.controls,
+          bezierEdit.closed,
+          transform,
+          selectedVertexIndex,
+        ),
+      );
+      continue;
+    }
     const coords = resolveObjectCoordinates(obj.i, obj.v, ops);
     if (!coords || coords.length === 0) continue;
     const handleCoords = obj.t === "area" ? verticesForHandles(coords, obj.t) : coords;
@@ -180,7 +286,7 @@ export function fieldEditOverlaySvg(options: {
 
   if (gpsLivePoints.length >= 1 && !draftHasSymbolPreview) {
     parts.push(lineSvg(gpsLivePoints, transform, "#16a34a", 3));
-    parts.push(vertexHandlesSvg(gpsLivePoints, transform, null, GPS_HANDLE_RADIUS));
+    parts.push(vertexHandlesSvg(gpsLivePoints, transform, null, GPS_HANDLE_SIZE));
   }
 
   if (snapPreview) {

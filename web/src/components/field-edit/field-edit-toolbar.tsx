@@ -9,6 +9,7 @@ import {
   MapNavigateModeIcon,
   MapPointToolIcon,
   MapSelectToolIcon,
+  MapUndoToolIcon,
 } from "@/components/map-draw-tool-icons";
 
 export type FieldEditTool =
@@ -144,6 +145,8 @@ type ToolbarsProps = {
   gpsTracking: boolean;
   canUseGpsTracking: boolean;
   onGpsToggle: () => void;
+  canUndo: boolean;
+  onUndo: () => void;
 };
 
 export function FieldEditMapToolbars({
@@ -155,6 +158,8 @@ export function FieldEditMapToolbars({
   gpsTracking,
   canUseGpsTracking,
   onGpsToggle,
+  canUndo,
+  onUndo,
 }: ToolbarsProps) {
   const gpsLabel = gpsTracking ? "Sluta spåra" : "GPS-spår";
   const gpsTitle =
@@ -211,6 +216,17 @@ export function FieldEditMapToolbars({
           onClick={() => onMapModeChange("navigate")}
         >
           <MapNavigateModeIcon />
+        </IconToolbarButton>
+      </MapToolbarPanel>
+      <MapToolbarPanel label="Ångra">
+        <IconToolbarButton
+          label="Ångra senaste ändring (Ctrl/Cmd+Z)"
+          active={false}
+          activeClass={iconBtnActiveSelect}
+          disabled={!canUndo}
+          onClick={onUndo}
+        >
+          <MapUndoToolIcon />
         </IconToolbarButton>
       </MapToolbarPanel>
     </div>

@@ -83,7 +83,74 @@ export function smoothPolylineChaikin(
   return { coordinates: current, beforeCount, afterCount: current.length };
 }
 
-/** Catmull–Rom spline sampled as a dense polyline (Bézier-lik kurva). */
+/** Control points P1/P2 for one cubic Bézier segment (anchors are P0/P3). */
+export type BezierSegmentControls = {
+  p1: [number, number];
+  p2: [number, number];
+};
+
+/** Default P1/P2 on the straight segment (1/3 and 2/3) — drag to bend the curve. */
+export function defaultBezierControlsForPolyline(
+  anchors: [number, number][],
+  closed: boolean,
+): BezierSegmentControls[] {
+  const n = anchors.length;
+  const segmentCount = closed ? n : Math.max(0, n - 1);
+  const controls: BezierSegmentControls[] = [];
+  for (let i = 0; i < segmentCount; i++) {
+    const a = anchors[i]!;
+    const b = anchors[(i + 1) % n]!;
+    controls.push({
+      p1: [a[0] + (b[0] - a[0]) / 3, a[1] + (b[1] - a[1]) / 3],
+      p2: [a[0] + (2 * (b[0] - a[0])) / 3, a[1] + (2 * (b[1] - a[1])) / 3],
+    });
+  }
+  return controls;
+}
+
+/** Sample cubic Bézier segments into a polyline (for OCAD storage). */
+export function sampleBezierPolyline(
+  anchors: [number, number][],
+  controls: BezierSegmentControls[],
+  closed: boolean,
+  samplesPerSegment: number,
+): [number, number][] {
+  const n = anchors.length;
+  if (n < 2 || controls.length === 0) return anchors.map(([x, y]) => [x, y] as [number, number]);
+
+  const samples = Math.max(4, Math.min(24, Math.round(samplesPerSegment)));
+  const result: [number, number][] = [];
+
+  for (let i = 0; i < controls.length; i++) {
+    const p0 = anchors[i]!;
+    const p3 = anchors[(i + 1) % n]!;
+    const { p1, p2 } = controls[i]!;
+    const startStep = i === 0 ? 0 : 1;
+    for (let step = startStep; step <= samples; step++) {
+      const t = step / samples;
+      result.push(cubicBezierPoint(p0, p1, p2, p3, t));
+    }
+  }
+
+  if (closed && result.length > 0) {
+    const first = result[0]!;
+    const last = result[result.length - 1]!;
+    if (distance2d(first, last) > 0.01) {
+      result.push([first[0], first[1]]);
+    }
+  }
+
+  const deduped: [number, number][] = [];
+  for (const point of result) {
+    const last = deduped[deduped.length - 1];
+    if (!last || distance2d(last, point) > 0.01) {
+      deduped.push(point);
+    }
+  }
+  return deduped;
+}
+
+/** Catmull–Rom spline sampled as a dense polyline (legacy one-shot smooth). */
 export function bezierSmoothPolyline(
   coordinates: [number, number][],
   samplesPerSegment: number,
@@ -135,4 +202,28 @@ export function bezierSmoothPolyline(
     beforeCount,
     afterCount: output.length,
   };
+}
+
+export function hitTestBezierControl(
+  anchors: [number, number][],
+  controls: BezierSegmentControls[],
+  closed: boolean,
+  point: [number, number],
+  maxDistance: number,
+): { segmentIndex: number; which: "p1" | "p2" } | null {
+  let best: { segmentIndex: number; which: "p1" | "p2" } | null = null;
+  let bestDist = maxDistance;
+  const n = anchors.length;
+  for (let i = 0; i < controls.length; i++) {
+    if (!closed && i >= n - 1) break;
+    const seg = controls[i]!;
+    for (const which of ["p1", "p2"] as const) {
+      const dist = distance2d(point, seg[which]);
+      if (dist <= bestDist) {
+        bestDist = dist;
+        best = { segmentIndex: i, which };
+      }
+    }
+  }
+  return best;
 }

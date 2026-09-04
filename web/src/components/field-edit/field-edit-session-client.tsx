@@ -60,7 +60,17 @@ import {
   type FieldEditModify,
   type FieldEditOps,
 } from "@/lib/field-edit/types";
-import { applyVertexMove, verticesForHandles } from "@/lib/field-edit/vertices";
+import {
+  closedRing,
+  applyVertexMove,
+  verticesForHandles,
+} from "@/lib/field-edit/vertices";
+import {
+  defaultBezierControlsForPolyline,
+  hitTestBezierControl,
+  sampleBezierPolyline,
+  type BezierSegmentControls,
+} from "@/lib/field-edit/geometry-tools";
 import { metersToMapUnits, type OcadCrsInfo } from "@/lib/ocad/crs";
 import { screenToSvgPoint } from "@/lib/ocad/map-hit-test";
 import { parseOcadLayersFromSvg } from "@/lib/ocad/svg-utils";
@@ -115,6 +125,12 @@ export function FieldEditSessionClient({
   const [symbolNumber, setSymbolNumber] = useState<number | "">("");
   const [selectedObjectIndex, setSelectedObjectIndex] = useState<number | null>(null);
   const [selectedVertexIndex, setSelectedVertexIndex] = useState<number | null>(null);
+  const [bezierEdit, setBezierEdit] = useState<{
+    objectIndex: number;
+    objectType: "line" | "area";
+    anchors: [number, number][];
+    controls: BezierSegmentControls[];
+  } | null>(null);
   const [draftPoints, setDraftPoints] = useState<[number, number][]>([]);
   const [syncing, setSyncing] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -142,6 +158,10 @@ export function FieldEditSessionClient({
     vertexIndex: number;
     startCoords: [number, number][];
     objectType: FieldEditObjectEntry["t"];
+  } | null>(null);
+  const dragBezierControlRef = useRef<{
+    segmentIndex: number;
+    which: "p1" | "p2";
   } | null>(null);
   const hitCycleRef = useRef<{ pointKey: string; indices: number[]; index: number } | null>(
     null,
@@ -200,6 +220,7 @@ export function FieldEditSessionClient({
       setDraftPoints([]);
       setSelectedObjectIndex(null);
       setSelectedVertexIndex(null);
+      setBezierEdit(null);
       setError(null);
     },
     onTrackComplete: (coordinates) => {
@@ -208,6 +229,11 @@ export function FieldEditSessionClient({
     },
     onTrackError: (message) => setError(message),
   });
+
+  const clearBezierEdit = useCallback(() => {
+    setBezierEdit(null);
+    dragBezierControlRef.current = null;
+  }, []);
 
   useEffect(() => {
     const coarse = window.matchMedia("(pointer: coarse)").matches;
@@ -343,6 +369,8 @@ export function FieldEditSessionClient({
   );
 
   const undo = useCallback(() => {
+    setBezierEdit(null);
+    dragBezierControlRef.current = null;
     setOpsHistory((history) => {
       if (history.length <= 1) return history;
       const nextHistory = history.slice(0, -1);
@@ -465,7 +493,63 @@ export function FieldEditSessionClient({
     });
     setSelectedObjectIndex(null);
     setSelectedVertexIndex(null);
+    setBezierEdit(null);
   }, [selectedObjectIndex, updateOps]);
+
+  const startBezierEdit = useCallback(() => {
+    if (selectedObjectIndex == null) return;
+    const obj = objects.find((entry) => entry.i === selectedObjectIndex);
+    if (!obj || (obj.t !== "line" && obj.t !== "area")) return;
+    const coords =
+      resolveObjectCoordinates(selectedObjectIndex, obj.v, opsRef.current) ?? obj.v;
+    const anchors = verticesForHandles(coords, obj.t).map(
+      ([x, y]) => [x, y] as [number, number],
+    );
+    if (anchors.length < 2) {
+      setInfo("Bézier-kurva behöver minst två brytpunkter.");
+      return;
+    }
+    const closed = obj.t === "area";
+    setBezierEdit({
+      objectIndex: selectedObjectIndex,
+      objectType: obj.t,
+      anchors,
+      controls: defaultBezierControlsForPolyline(anchors, closed),
+    });
+    setSelectedVertexIndex(null);
+    setInfo(
+      "Bézier-läge: dra de orangefärgade kontrollpunkterna (P1/P2) för att forma bågen, sedan «Tillämpa kurva».",
+    );
+  }, [objects, selectedObjectIndex]);
+
+  const applyBezierEdit = useCallback(() => {
+    if (!bezierEdit) return;
+    const closed = bezierEdit.objectType === "area";
+    const sampled = sampleBezierPolyline(
+      bezierEdit.anchors,
+      bezierEdit.controls,
+      closed,
+      10,
+    );
+    const minPoints = closed ? 3 : 2;
+    if (sampled.length < minPoints) {
+      setInfo("Kurvan gav för få punkter — justera kontrollpunkterna.");
+      return;
+    }
+    const coordinates = closed ? closedRing(sampled) : sampled;
+    upsertModify(bezierEdit.objectIndex, coordinates);
+    setBezierEdit(null);
+    dragBezierControlRef.current = null;
+    setSelectedVertexIndex(null);
+    setInfo(
+      `Bézier-kurva tillämpad: ${bezierEdit.anchors.length} brytpunkter → ${sampled.length} punkter.`,
+    );
+  }, [bezierEdit, upsertModify]);
+
+  const cancelBezierEdit = useCallback(() => {
+    clearBezierEdit();
+    setInfo(null);
+  }, [clearBezierEdit]);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent, svg: SVGSVGElement) => {
@@ -479,6 +563,38 @@ export function FieldEditSessionClient({
       setSnapPreview(snap);
 
       if (tool === "select") {
+        if (bezierEdit && bezierEdit.objectIndex === selectedObjectIndex) {
+          const closed = bezierEdit.objectType === "area";
+          const controlHit = hitTestBezierControl(
+            bezierEdit.anchors,
+            bezierEdit.controls,
+            closed,
+            geo,
+            vertexHitDistance,
+          );
+          if (controlHit) {
+            dragBezierControlRef.current = controlHit;
+            setSelectedVertexIndex(null);
+            return;
+          }
+          const vertexIndex = hitTestFieldEditVertex(
+            bezierEdit.anchors,
+            geo,
+            vertexHitDistance,
+          );
+          if (vertexIndex != null) {
+            dragVertexRef.current = {
+              objectIndex: bezierEdit.objectIndex,
+              vertexIndex,
+              startCoords: bezierEdit.anchors.map(([x, y]) => [x, y] as [number, number]),
+              objectType: bezierEdit.objectType,
+            };
+            setSelectedVertexIndex(vertexIndex);
+            return;
+          }
+          return;
+        }
+
         if (selectedObjectIndex != null) {
           const obj = objects.find((o) => o.i === selectedObjectIndex);
           const coords =
@@ -507,6 +623,7 @@ export function FieldEditSessionClient({
         if (hits.length === 0) {
           setSelectedObjectIndex(null);
           setSelectedVertexIndex(null);
+          setBezierEdit(null);
           hitCycleRef.current = null;
           return;
         }
@@ -520,6 +637,7 @@ export function FieldEditSessionClient({
         hitCycleRef.current = { pointKey, indices, index: nextIndex };
         setSelectedObjectIndex(indices[nextIndex]!);
         setSelectedVertexIndex(null);
+        setBezierEdit(null);
         setError(null);
         setInfo(null);
         return;
@@ -541,6 +659,7 @@ export function FieldEditSessionClient({
         if (selectedObjectIndex === hit.i) {
           setSelectedObjectIndex(null);
           setSelectedVertexIndex(null);
+          setBezierEdit(null);
         }
         setError(null);
         return;
@@ -578,7 +697,20 @@ export function FieldEditSessionClient({
         setInfo(null);
       }
     },
-    [objects, ops, pickSymbolFromObject, resolveSnapPoint, selectedObjectIndex, symbolNumber, tool, updateOps, gpsTracking, hitDistance, vertexHitDistance],
+    [
+      bezierEdit,
+      objects,
+      ops,
+      pickSymbolFromObject,
+      resolveSnapPoint,
+      selectedObjectIndex,
+      symbolNumber,
+      tool,
+      updateOps,
+      gpsTracking,
+      hitDistance,
+      vertexHitDistance,
+    ],
   );
 
   const handlePointerMove = useCallback(
@@ -587,9 +719,44 @@ export function FieldEditSessionClient({
       if (!pt) return;
       const rawGeo = svgUserToGeoPoint(pt, rootTransformRef.current);
 
+      const bezierDrag = dragBezierControlRef.current;
+      if (bezierDrag && tool === "select") {
+        const geo = rawGeo;
+        setBezierEdit((current) => {
+          if (!current) return current;
+          const controls = current.controls.map((seg, index) => {
+            if (index !== bezierDrag.segmentIndex) return seg;
+            return {
+              ...seg,
+              [bezierDrag.which]: [geo[0], geo[1]] as [number, number],
+            };
+          });
+          return { ...current, controls };
+        });
+        return;
+      }
+
       const drag = dragVertexRef.current;
       if (drag && tool === "select") {
         const { point: geo } = resolveSnapPoint(rawGeo, drag.objectIndex);
+        if (bezierEdit && bezierEdit.objectIndex === drag.objectIndex) {
+          const nextAnchors = applyVertexMove(
+            drag.startCoords,
+            drag.objectType,
+            drag.vertexIndex,
+            geo,
+          );
+          const anchors = verticesForHandles(nextAnchors, drag.objectType);
+          setBezierEdit((current) =>
+            current
+              ? {
+                  ...current,
+                  anchors: anchors.map(([x, y]) => [x, y] as [number, number]),
+                }
+              : current,
+          );
+          return;
+        }
         const next = applyVertexMove(
           drag.startCoords,
           drag.objectType,
@@ -616,11 +783,19 @@ export function FieldEditSessionClient({
       const { snap } = resolveSnapPoint(rawGeo, excludeIndex);
       setSnapPreview(snap);
     },
-    [editorSettings.snapEnabled, resolveSnapPoint, selectedObjectIndex, tool, upsertModify],
+    [
+      bezierEdit,
+      editorSettings.snapEnabled,
+      resolveSnapPoint,
+      selectedObjectIndex,
+      tool,
+      upsertModify,
+    ],
   );
 
   const handlePointerUp = useCallback(() => {
     dragVertexRef.current = null;
+    dragBezierControlRef.current = null;
     setSnapPreview(null);
   }, []);
 
@@ -699,6 +874,14 @@ export function FieldEditSessionClient({
               maskedObjectIndices: symbolPreview.maskedIndices,
               draftHasSymbolPreview,
               snapPreview,
+              bezierEdit:
+                bezierEdit && bezierEdit.objectIndex === selectedObjectIndex
+                  ? {
+                      anchors: bezierEdit.anchors,
+                      controls: bezierEdit.controls,
+                      closed: bezierEdit.objectType === "area",
+                    }
+                  : null,
             }),
           }}
         />
@@ -716,6 +899,7 @@ export function FieldEditSessionClient({
       symbolPreview,
       draftHasSymbolPreview,
       snapPreview,
+      bezierEdit,
     ],
   );
 
@@ -797,11 +981,13 @@ export function FieldEditSessionClient({
     setMapMode("draw");
     setDraftPoints([]);
     setSelectedVertexIndex(null);
+    setBezierEdit(null);
     if (next !== "select") setSelectedObjectIndex(null);
   }
 
   const handleDrawInterrupt = useCallback(() => {
     dragVertexRef.current = null;
+    dragBezierControlRef.current = null;
     setSnapPreview(null);
   }, []);
 
@@ -853,6 +1039,8 @@ export function FieldEditSessionClient({
           gpsTracking={gpsTracking}
           canUseGpsTracking={canUseGpsTracking}
           onGpsToggle={handleGpsToggle}
+          canUndo={opsHistory.length > 1}
+          onUndo={undo}
         />
         {addKind && (
           <div
@@ -902,6 +1090,8 @@ export function FieldEditSessionClient({
       cancelDraft,
       countsLabel,
       syncLabel,
+      opsHistory.length,
+      undo,
     ],
   );
 
@@ -1015,6 +1205,7 @@ export function FieldEditSessionClient({
               onApplyCoordinates={(coordinates) => {
                 upsertModify(selectedObject.i, coordinates);
                 setSelectedVertexIndex(null);
+                setBezierEdit(null);
               }}
               onChangeSymbol={(sym) => upsertModifySymbol(selectedObject.i, sym)}
               onDelete={deleteSelectedObject}
@@ -1024,6 +1215,12 @@ export function FieldEditSessionClient({
               onToggleFavorite={(sym) =>
                 toggleFavorite(geometryKindFromType(selectedObject.t), sym)
               }
+              bezierActive={
+                bezierEdit != null && bezierEdit.objectIndex === selectedObject.i
+              }
+              onStartBezier={startBezierEdit}
+              onApplyBezier={applyBezierEdit}
+              onCancelBezier={cancelBezierEdit}
             />
           </details>
           <div className="hidden sm:block">
@@ -1036,6 +1233,7 @@ export function FieldEditSessionClient({
               onApplyCoordinates={(coordinates) => {
                 upsertModify(selectedObject.i, coordinates);
                 setSelectedVertexIndex(null);
+                setBezierEdit(null);
               }}
               onChangeSymbol={(sym) => upsertModifySymbol(selectedObject.i, sym)}
               onDelete={deleteSelectedObject}
@@ -1045,6 +1243,12 @@ export function FieldEditSessionClient({
               onToggleFavorite={(sym) =>
                 toggleFavorite(geometryKindFromType(selectedObject.t), sym)
               }
+              bezierActive={
+                bezierEdit != null && bezierEdit.objectIndex === selectedObject.i
+              }
+              onStartBezier={startBezierEdit}
+              onApplyBezier={applyBezierEdit}
+              onCancelBezier={cancelBezierEdit}
             />
           </div>
         </>
