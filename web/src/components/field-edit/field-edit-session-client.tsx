@@ -82,6 +82,7 @@ import {
   mergeLineObjects,
   sameMergeSymbol,
 } from "@/lib/field-edit/merge-geometry";
+import { planFillOrBorderOrDuplicate } from "@/lib/field-edit/fill-or-border";
 import {
   countFieldEditChanges,
   cycleVertexKind,
@@ -859,6 +860,45 @@ export function FieldEditSessionClient({
     selectedObjectIndex,
     updateOps,
   ]);
+
+  const applyFillOrBorder = useCallback(
+    (args: {
+      targetSymbol: number;
+      targetKind: FieldEditGeometryKind;
+      useHoles: boolean;
+    }) => {
+      if (selectedObjectIndex == null) return;
+      const obj = objects.find((entry) => entry.i === selectedObjectIndex);
+      if (!obj) return;
+      const objectSymbol =
+        opsRef.current.modifies.find((m) => m.objectIndex === selectedObjectIndex)
+          ?.symbolNumber ?? obj.s;
+      const coordinates =
+        resolveObjectCoordinates(selectedObjectIndex, obj.v, opsRef.current) ?? obj.v;
+      const holes = resolveObjectHoles(selectedObjectIndex, opsRef.current);
+      const plan = planFillOrBorderOrDuplicate({
+        objectType: obj.t,
+        objectSymbol,
+        coordinates: coordinates.map(([x, y]) => [x, y] as [number, number]),
+        holes,
+        bbox: obj.b,
+        targetSymbol: args.targetSymbol,
+        targetKind: args.targetKind,
+        bboxPadMapUnits: metersToMapUnits(2, ocadMapScale),
+        useHoles: args.useHoles,
+      });
+      if ("error" in plan) {
+        setInfo(plan.error);
+        return;
+      }
+      updateOps((current) => ({
+        ...current,
+        adds: [...current.adds, ...plan.adds],
+      }));
+      setInfo(plan.label);
+    },
+    [objects, ocadMapScale, selectedObjectIndex, updateOps],
+  );
 
   const applySplitParts = useCallback(
     (
@@ -2183,6 +2223,7 @@ export function FieldEditSessionClient({
               onToggleMerge={toggleMerge}
               onApplyMerge={applyMerge}
               onCancelMerge={cancelMerge}
+              onFillOrBorder={applyFillOrBorder}
             />
           </details>
           <div className="hidden sm:block">
@@ -2224,6 +2265,7 @@ export function FieldEditSessionClient({
               onToggleMerge={toggleMerge}
               onApplyMerge={applyMerge}
               onCancelMerge={cancelMerge}
+              onFillOrBorder={applyFillOrBorder}
             />
           </div>
         </>

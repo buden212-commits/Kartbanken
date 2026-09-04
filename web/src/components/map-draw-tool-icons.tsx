@@ -405,6 +405,31 @@ export function CadMergeIcon() {
   );
 }
 
+/**
+ * CAD: Fill or Make Border or Duplicate Identically (OCAD).
+ * Outer outline + inner fill suggests fill/border/copy.
+ */
+export function CadFillOrBorderIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+      <path
+        d="M4 4.5h12v11H4z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M6.5 7h7v6h-7z"
+        fill="currentColor"
+        fillOpacity="0.35"
+        stroke="currentColor"
+        strokeWidth="1.25"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 /** @deprecated Use CadAddNormalVertexIcon */
 export function CadAddVertexIcon() {
   return <CadAddNormalVertexIcon />;

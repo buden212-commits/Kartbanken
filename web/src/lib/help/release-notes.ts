@@ -12,6 +12,7 @@ export const releaseNotes: ReleaseNote[] = [
     items: [
       "Klipp i CAD: klipp linje (klick/dra), dela yta (klipplinje kant→kant) och klipp hål i yta",
       "Sammanfoga i CAD: markera flera linjer (ändpunkter nära) eller överlappande ytor med samma symbol och slå ihop dem",
+      "Fyll / kant / duplicera i CAD: välj symbol — samma typ kopierar, yta+linje skapar kant, linje+yta fyller; hål kan fyllas eller få kant",
       "Release notes grupperade till en post per dag",
       "Webbläsarfliken visar nu IFK Mora-loggan i stället för standardikonen",
       "När du öppnar fältredigering är panorera/zooma (Navigera) aktivt från början — byt till Rita när du ska redigera",
@@ -19,7 +20,6 @@ export const releaseNotes: ReleaseNote[] = [
       "Flytta fingret för att avbryta bläddringen (t.ex. för att dra en brytpunkt)",
       "«Klar» och «Avbryt ritning» ligger nu som ikoner i kartmenyn (höger verktygsrad) när du ritar linje eller yta",
       "Klar-ikonen visar antal brytpunkter som en liten siffra",
-      "Duplicera objekt är borttaget från CAD-menyn",
       "Lägg till normal (cirkel), hörnbrytpunkt (kvadrat) eller streckbrytpunkt (romb) — klicka på linjen, eller på en befintlig punkt för att ändra typ",
       "Håll inne lägg till-ikonen för att ändra alla brytpunkter till den typen",
       "Växla brytpunktstyp: normal → streck → hörn (som i OCAD)",

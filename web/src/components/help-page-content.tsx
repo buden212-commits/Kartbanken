@@ -348,6 +348,7 @@ export async function HelpPageContent() {
                   "Håll inne lägg till-ikonen för att ändra alla brytpunkter till den typen",
                   "Klipp (CAD): klipp linje (klick delar, dra tar bort bit), dela yta med klipplinje kant→kant, klipp hål i yta",
                   "Sammanfoga (CAD): aktivera merge, klicka fler objekt med samma symbol — linjer med nära ändpunkter eller överlappande ytor — sedan Tillämpa",
+                  "Fyll / kant / duplicera (CAD): välj symbol i panelen — samma typ kopierar, yta+linje = kant, linje+yta = fyll; kryssa i «Använd hål» för hål i yta",
                   "Förenkla: buffert ± meter — tar bort brytpunkter på nästan rak linje; ny punkt där linjen tangerar kanten",
                   "Bézier: dra de orangefärgade kontrollpunkterna P1/P2 för att forma kurvan, sedan «Tillämpa kurva»",
                   "Rita ny Bézier: håll inne linje-/ytaverktyget (B på ikonen) — tryck brytpunkt→dra P1, tryck P2→släpp nästa brytpunkt",

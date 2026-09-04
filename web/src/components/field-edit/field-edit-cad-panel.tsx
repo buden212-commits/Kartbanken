@@ -9,6 +9,7 @@ import {
   CadCutAreaIcon,
   CadCutHoleIcon,
   CadCutLineIcon,
+  CadFillOrBorderIcon,
   CadMergeIcon,
   CadMeasureIcon,
   CadRemoveVertexIcon,
@@ -22,6 +23,10 @@ import {
 import type { FieldEditFavoriteSymbols } from "@/lib/field-edit/favorites";
 import type { FieldEditEditorSettings } from "@/lib/field-edit/editor-settings";
 import {
+  findSymbolKind,
+  planFillOrBorderOrDuplicate,
+} from "@/lib/field-edit/fill-or-border";
+import {
   smoothPolylineChaikin,
   simplifyPolyline,
 } from "@/lib/field-edit/geometry-tools";
@@ -31,16 +36,17 @@ import { distance2d } from "@/lib/field-edit/polyline-geometry";
 import {
   defaultVertexKinds,
   resolveObjectCoordinates,
+  resolveObjectHoles,
   resolveObjectVertexKinds,
   vertexKindsForStoredCoordinates,
+  type FieldEditGeometryKind,
   type FieldEditOps,
   type FieldEditVertexKind,
 } from "@/lib/field-edit/types";
 import { reverseVertices, verticesForHandles } from "@/lib/field-edit/vertices";
-import { mapUnitsToMeters } from "@/lib/ocad/crs";
+import { mapUnitsToMeters, metersToMapUnits } from "@/lib/ocad/crs";
 import { formatOcadSymbolNumber } from "@/lib/ocad/layers";
-import { useRef } from "react";
-import { useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 export type CadVertexTool =
   | "off"
@@ -85,6 +91,11 @@ type Props = {
   onToggleMerge: () => void;
   onApplyMerge: () => void;
   onCancelMerge: () => void;
+  onFillOrBorder: (args: {
+    targetSymbol: number;
+    targetKind: FieldEditGeometryKind;
+    useHoles: boolean;
+  }) => void;
 };
 
 const LONG_PRESS_MS = 480;
@@ -225,14 +236,25 @@ export function FieldEditCadPanel({
   onToggleMerge,
   onApplyMerge,
   onCancelMerge,
+  onFillOrBorder,
 }: Props) {
   const [showSymbolPicker, setShowSymbolPicker] = useState(false);
+  const [fillBorderOpen, setFillBorderOpen] = useState(false);
+  const [fillTargetKind, setFillTargetKind] = useState<FieldEditGeometryKind>(() =>
+    geometryKindFromType(selectedObject.t) === "point"
+      ? "point"
+      : geometryKindFromType(selectedObject.t) === "area"
+        ? "area"
+        : "line",
+  );
+  const [fillTargetSymbol, setFillTargetSymbol] = useState<number | "">("");
+  const [fillUseHoles, setFillUseHoles] = useState(false);
   const kind = geometryKindFromType(selectedObject.t);
   const currentModify = ops.modifies.find((m) => m.objectIndex === selectedObject.i);
   const currentSymbol = currentModify?.symbolNumber ?? selectedObject.s;
   const isLineOrArea = selectedObject.t === "line" || selectedObject.t === "area";
   const cutActive = cutTool !== "off";
-  const editLocked = bezierActive || cutActive || mergeActive;
+  const editLocked = bezierActive || cutActive || mergeActive || fillBorderOpen;
 
   const rawCoords =
     resolveObjectCoordinates(selectedObject.i, selectedObject.v, ops) ?? selectedObject.v;
@@ -240,6 +262,7 @@ export function FieldEditCadPanel({
     selectedObject.t === "area"
       ? verticesForHandles(rawCoords, selectedObject.t)
       : rawCoords;
+  const objectHoles = resolveObjectHoles(selectedObject.i, ops);
   const vertexKinds = resolveObjectVertexKinds(
     selectedObject.i,
     editCoords.length,
@@ -248,6 +271,61 @@ export function FieldEditCadPanel({
   const minPoints = selectedObject.t === "line" ? 2 : 3;
   const kindLabel =
     selectedObject.t === "line" ? "linje" : selectedObject.t === "area" ? "yta" : "punkt";
+
+  const fillPlan = useMemo(() => {
+    if (!fillBorderOpen || fillTargetSymbol === "") return null;
+    const targetKind =
+      findSymbolKind(symbolGroups, fillTargetSymbol) ?? fillTargetKind;
+    return planFillOrBorderOrDuplicate({
+      objectType: selectedObject.t,
+      objectSymbol: currentSymbol,
+      coordinates: rawCoords.map(([x, y]) => [x, y] as [number, number]),
+      holes: objectHoles,
+      bbox: selectedObject.b,
+      targetSymbol: fillTargetSymbol,
+      targetKind,
+      bboxPadMapUnits: metersToMapUnits(2, mapScale),
+      useHoles: fillUseHoles,
+    });
+  }, [
+    currentSymbol,
+    fillBorderOpen,
+    fillTargetKind,
+    fillTargetSymbol,
+    fillUseHoles,
+    mapScale,
+    objectHoles,
+    rawCoords,
+    selectedObject.b,
+    selectedObject.t,
+    symbolGroups,
+  ]);
+
+  function openFillBorder() {
+    onVertexToolChange("off");
+    onCutToolChange("off");
+    if (mergeActive) onCancelMerge();
+    setShowSymbolPicker(false);
+    const initialKind: FieldEditGeometryKind =
+      kind === "area" ? "line" : kind === "line" ? "area" : "area";
+    setFillTargetKind(initialKind);
+    const initial =
+      symbolGroups[initialKind].find((c) => c.symNum === currentSymbol)?.symNum ??
+      symbolGroups[initialKind][0]?.symNum ??
+      "";
+    setFillTargetSymbol(initial);
+    setFillUseHoles(false);
+    setFillBorderOpen(true);
+    onMessage(
+      "Välj symbol: samma typ = kopiera, yta+linje = kant, linje+yta = fyll.",
+    );
+  }
+
+  function closeFillBorder() {
+    setFillBorderOpen(false);
+    setFillUseHoles(false);
+    onMessage(null);
+  }
 
   function applyTool(
     label: string,
@@ -281,6 +359,7 @@ export function FieldEditCadPanel({
     onVertexToolChange("off");
     onCutToolChange("off");
     if (mergeActive) onCancelMerge();
+    if (fillBorderOpen) closeFillBorder();
     const label =
       target === "normal" ? "normala" : target === "corner" ? "hörnbrytpunkter" : "streckbrytpunkter";
     const handleKinds = editCoords.map(() => target);
@@ -341,11 +420,12 @@ export function FieldEditCadPanel({
         <CadIconButton
           label="Byt symbol"
           active={showSymbolPicker}
-          disabled={bezierActive || mergeActive}
+          disabled={bezierActive || mergeActive || fillBorderOpen}
           onClick={() => {
             onVertexToolChange("off");
             onCutToolChange("off");
             if (mergeActive) onCancelMerge();
+            if (fillBorderOpen) closeFillBorder();
             setShowSymbolPicker((v) => !v);
           }}
         >
@@ -354,7 +434,7 @@ export function FieldEditCadPanel({
 
         <CadIconButton
           label="Radera objekt"
-          disabled={bezierActive || mergeActive}
+          disabled={bezierActive || mergeActive || fillBorderOpen}
           inactiveClass={iconDanger}
           onClick={() => {
             if (!confirm("Radera valt objekt?")) return;
@@ -365,12 +445,26 @@ export function FieldEditCadPanel({
         </CadIconButton>
 
         <CadIconButton
+          label="Fyll / kant / duplicera"
+          active={fillBorderOpen}
+          activeClass="border-sky-600 bg-sky-600 text-white"
+          disabled={bezierActive || cutActive || mergeActive}
+          onClick={() => {
+            if (fillBorderOpen) closeFillBorder();
+            else openFillBorder();
+          }}
+        >
+          <CadFillOrBorderIcon />
+        </CadIconButton>
+
+        <CadIconButton
           label="Mät längd/yta"
-          disabled={bezierActive || mergeActive}
+          disabled={bezierActive || mergeActive || fillBorderOpen}
           onClick={() => {
             onVertexToolChange("off");
             onCutToolChange("off");
             if (mergeActive) onCancelMerge();
+            if (fillBorderOpen) closeFillBorder();
             if (selectedObject.t === "line") {
               onMessage(`Längd: ${polylineLengthM(editCoords, mapScale).toFixed(1)} m`);
             } else if (selectedObject.t === "area") {
@@ -504,7 +598,7 @@ export function FieldEditCadPanel({
                 label="Klipp linje"
                 active={cutTool === "cutLine"}
                 activeClass="border-violet-600 bg-violet-600 text-white"
-                disabled={bezierActive || mergeActive}
+                disabled={bezierActive || mergeActive || fillBorderOpen}
                 onClick={() => {
                   onVertexToolChange("off");
                   if (mergeActive) onCancelMerge();
@@ -527,7 +621,7 @@ export function FieldEditCadPanel({
                   label="Dela yta"
                   active={cutTool === "cutArea"}
                   activeClass="border-violet-600 bg-violet-600 text-white"
-                  disabled={bezierActive || mergeActive}
+                  disabled={bezierActive || mergeActive || fillBorderOpen}
                   onClick={() => {
                     onVertexToolChange("off");
                     if (mergeActive) onCancelMerge();
@@ -546,7 +640,7 @@ export function FieldEditCadPanel({
                   label="Klipp hål"
                   active={cutTool === "cutHole"}
                   activeClass="border-violet-600 bg-violet-600 text-white"
-                  disabled={bezierActive || mergeActive}
+                  disabled={bezierActive || mergeActive || fillBorderOpen}
                   onClick={() => {
                     onVertexToolChange("off");
                     if (mergeActive) onCancelMerge();
@@ -568,10 +662,11 @@ export function FieldEditCadPanel({
               label="Sammanfoga (merge)"
               active={mergeActive}
               activeClass="border-teal-600 bg-teal-600 text-white"
-              disabled={bezierActive || cutActive}
+              disabled={bezierActive || cutActive || fillBorderOpen}
               onClick={() => {
                 onVertexToolChange("off");
                 onCutToolChange("off");
+                if (fillBorderOpen) closeFillBorder();
                 onToggleMerge();
               }}
             >
@@ -675,7 +770,7 @@ export function FieldEditCadPanel({
         )}
       </div>
 
-      {showSymbolPicker && !bezierActive && !cutActive && !mergeActive && (
+      {showSymbolPicker && !bezierActive && !cutActive && !mergeActive && !fillBorderOpen && (
         <div className="rounded-lg border border-slate-200 bg-white p-3">
           <FieldEditSymbolPicker
             groups={symbolGroups}
@@ -689,6 +784,95 @@ export function FieldEditCadPanel({
             favorites={favorites}
             onToggleFavorite={onToggleFavorite ? (sym) => onToggleFavorite(sym) : undefined}
           />
+        </div>
+      )}
+
+      {fillBorderOpen && (
+        <div className="space-y-3 rounded-lg border border-sky-200 bg-sky-50/80 p-3">
+          <p className="text-sm font-medium text-sky-950">
+            Fyll / kant / duplicera
+          </p>
+          <p className="text-xs text-sky-900/80">
+            Välj symbol som i OCAD: samma typ kopierar objektet, yta+linje skapar kant,
+            linje+yta fyller, punkt+linje/yta använder omslutande rektangel.
+          </p>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Symboltyp">
+            {(["line", "area", "point"] as FieldEditGeometryKind[]).map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => {
+                  setFillTargetKind(k);
+                  setFillTargetSymbol(symbolGroups[k][0]?.symNum ?? "");
+                }}
+                className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium ${
+                  fillTargetKind === k
+                    ? "border-sky-600 bg-sky-600 text-white"
+                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                {k === "line" ? "Linje" : k === "area" ? "Yta" : "Punkt"}
+              </button>
+            ))}
+          </div>
+          <FieldEditSymbolPicker
+            groups={symbolGroups}
+            kind={fillTargetKind}
+            value={fillTargetSymbol}
+            onChange={(symNum) => {
+              setFillTargetSymbol(symNum);
+              const detected = findSymbolKind(symbolGroups, symNum);
+              if (detected) setFillTargetKind(detected);
+            }}
+            favorites={favorites}
+            onToggleFavorite={onToggleFavorite ? (sym) => onToggleFavorite(sym) : undefined}
+          />
+          {selectedObject.t === "area" && objectHoles.length > 0 && (
+            <label className="flex items-center gap-2 text-sm text-sky-950">
+              <input
+                type="checkbox"
+                checked={fillUseHoles}
+                onChange={(e) => setFillUseHoles(e.target.checked)}
+                className="h-4 w-4 rounded border-slate-300"
+              />
+              Använd hål ({objectHoles.length}) i stället för ytterkant
+            </label>
+          )}
+          {fillPlan && "error" in fillPlan && (
+            <p className="text-xs text-red-700">{fillPlan.error}</p>
+          )}
+          {fillPlan && "label" in fillPlan && (
+            <p className="text-xs font-medium text-sky-900">{fillPlan.label}</p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={
+                fillTargetSymbol === "" || !fillPlan || "error" in fillPlan
+              }
+              onClick={() => {
+                if (fillTargetSymbol === "") return;
+                const targetKind =
+                  findSymbolKind(symbolGroups, fillTargetSymbol) ?? fillTargetKind;
+                onFillOrBorder({
+                  targetSymbol: fillTargetSymbol,
+                  targetKind,
+                  useHoles: fillUseHoles,
+                });
+                closeFillBorder();
+              }}
+              className="min-h-11 flex-1 rounded-lg bg-sky-600 px-3 py-2.5 text-sm font-medium text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0 sm:flex-none sm:py-2"
+            >
+              Tillämpa
+            </button>
+            <button
+              type="button"
+              onClick={closeFillBorder}
+              className="min-h-11 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-50 sm:min-h-0 sm:flex-none sm:py-2"
+            >
+              Avbryt
+            </button>
+          </div>
         </div>
       )}
 
