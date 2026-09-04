@@ -401,7 +401,7 @@ export function FieldEditSessionClient({
       })
       .catch(() => {});
 
-    fetchPreviewText(`/api/maps/${mapSlug}/field-edits/${sessionId}/preview?direct=1`)
+    fetchPreviewText(`/api/maps/${mapSlug}/field-edits/${sessionId}/preview`)
       .then((svg) => {
         const layers = parseOcadLayersFromSvg(svg);
         const groups = buildSymbolGroups(layers);

@@ -434,6 +434,21 @@ export function DiffMapPanel({
     return () => window.clearTimeout(timer);
   }, [loading]);
 
+  // Safety net: if the network hang never resolves, surface a recoverable error.
+  useEffect(() => {
+    if (!loading) return;
+    const timer = window.setTimeout(() => {
+      setLoading((stillLoading) => {
+        if (!stillLoading) return stillLoading;
+        setError(
+          "Kartladdningen tar ovanligt lång tid. Kontrollera nätverket och försök igen.",
+        );
+        return false;
+      });
+    }, 120_000);
+    return () => window.clearTimeout(timer);
+  }, [loading, reloadKey]);
+
   const retryPreviewLoad = useCallback(() => {
     clearPreviewCache(previewUrl);
     setReloadKey((key) => key + 1);

@@ -14,6 +14,7 @@ export const releaseNotes: ReleaseNote[] = [
       "Sammanfoga i CAD: markera flera linjer (ändpunkter nära) eller överlappande ytor med samma symbol och slå ihop dem",
       "Fyll / kant / duplicera i CAD: välj symbol — samma typ kopierar, yta+linje skapar kant, linje+yta fyller; hål kan fyllas eller få kant",
       "Rektangelläge vid ritning av linje/yta: dra längsta sidan, sedan vinkelrätt — alla hörn blir räta (byggnader m.m.)",
+      "Kartladdning: samma förhandsvisning delas i cache (undviker dubbelhämtning) och timeout efter 2 minuter med «Försök igen»",
       "Release notes grupperade till en post per dag",
       "Webbläsarfliken visar nu IFK Mora-loggan i stället för standardikonen",
       "När du öppnar fältredigering är panorera/zooma (Navigera) aktivt från början — byt till Rita när du ska redigera",
