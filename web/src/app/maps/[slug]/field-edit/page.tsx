@@ -59,7 +59,7 @@ export default async function FieldEditCreatePage({ params }: PageProps) {
             utcheckat område laddas i editorn. Du kan lämna och fortsätta senare.
           </p>
         </div>
-        <HelpLinkIcon section="admin" className="mt-1 shrink-0" />
+        <HelpLinkIcon section="faltredigering" className="mt-1 shrink-0" />
       </div>
 
       <div className="mt-6">

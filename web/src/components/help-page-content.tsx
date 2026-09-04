@@ -12,6 +12,7 @@ import {
   checkoutSteps,
   compareFlow,
   courseFlow,
+  fieldEditFlow,
   importPartialFlow,
   loginFlow,
   mapViewExport,
@@ -33,6 +34,7 @@ const sections = [
   { id: "omraden", label: "Områden" },
   { id: "versioner", label: "Versionshantering" },
   { id: "checkout", label: "Checka ut och in" },
+  { id: "faltredigering", label: "Fältredigering" },
   { id: "bana", label: "Lägg bana" },
   { id: "kartforslag", label: "Kartförslag" },
   { id: "publicering", label: "Publicering" },
@@ -134,10 +136,16 @@ export async function HelpPageContent() {
             <li>Rita start, kontroller och mål med IOF-symboler 701–709.</li>
             <li>Spara banan och exportera som PDF vid behov.</li>
           </ol>
+          <p className="mt-4">Fältredigering (direkt i webben):</p>
+          <ol className="list-decimal space-y-2 pl-5">
+            <li>Öppna Fältredigering på områdessidan (kräver behörighet).</li>
+            <li>Rita ett område (max 1 km²) och redigera kartobjekt i webbläsaren.</li>
+            <li>Checka in — administratör godkänner innan ny version skapas.</li>
+          </ol>
           <HelpProcessDiagram
             title="Översikt — huvudflöden i systemet"
             chart={overviewSystem}
-            caption="Versionshantering är kärnflödet; utcheckning, banor, kartförslag och verifiering sker parallellt."
+            caption="Versionshantering är kärnflödet; utcheckning, fältredigering, banor, kartförslag och verifiering sker parallellt."
           />
         </HelpSection>
 
@@ -330,49 +338,13 @@ export async function HelpPageContent() {
             integration. Redaktörer och administratörer ser aktiva utcheckningsområden som färgade
             överlagringar med vem som checkat ut och när.
           </p>
-
-          {showAdmin && (
-            <>
-              <h3 className="font-medium text-slate-900">Fältredigering</h3>
-              <HelpList
-                items={[
-                  "Knappen «Fältredigering» på områdessidan — administratörer och användare som fått rättigheten",
-                  "Administratörer tilldelar rättigheten under Admin → Användare → Redigera (kryss «Fältredigering»)",
-                  "Rita en polygon (max 1 km²) — bara utcheckat område visas i editorn för bättre prestanda",
-                  "Utcheckat område markeras med röd begränsningslinje (ingen fyllnadsyta)",
-                  "Välj / redigera: tryck på objekt; vid överlapp håll kvar — nästa objekt markeras varje sekund",
-                  "Brytpunkter: X vid första punkten, punkt i mitten, fyrkant vid sista — mindre och halvtransparenta",
-                  "Snappa mot objekt: slå på snappning och ange tolerans (meter) — brytpunkter fästs vid linjer, hörn och punktobjekt",
-                  "CAD-verktyg som ikoner: byt symbol, radera, mät, vänd, förenkla, mjuka hörn, Bézier",
-                  "Brytpunkter (OCAD): lägg till normal (cirkel), hörn (kvadrat) eller streck (romb); radera; växla typ normal→streck→hörn",
-                  "Håll inne lägg till-ikonen för att ändra alla brytpunkter till den typen",
-                  "Klipp (CAD): klipp linje (klick delar, dra tar bort bit), dela yta med klipplinje kant→kant, klipp hål i yta",
-                  "Sammanfoga (CAD): aktivera merge, klicka fler objekt med samma symbol — linjer med nära ändpunkter eller överlappande ytor — sedan Tillämpa",
-                  "Fyll / kant / duplicera (CAD): välj symbol i panelen — samma typ kopierar, yta+linje = kant, linje+yta = fyll; kryssa i «Använd hål» för hål i yta",
-                  "Rektangelläge / Bézier: håll inne linje- eller ytaverktyget för att växla vanlig → rektangel (R) → Bézier (B) → vanlig",
-                  "Rektangelritning: dra längsta sidan, sedan vinkelrätt; streckad förhandsvisning; klicka för att avsluta",
-                  "Förenkla: buffert ± meter — tar bort brytpunkter på nästan rak linje; ny punkt där linjen tangerar kanten",
-                  "Bézier: dra de orangefärgade kontrollpunkterna P1/P2 för att forma kurvan, sedan «Tillämpa kurva»",
-                  "Rita ny Bézier: håll inne linje-/ytaverktyget tills B visas — tryck brytpunkt→dra P1, tryck P2→släpp nästa brytpunkt",
-                  "Radera objekt, eller lägg till nya punkter, linjer och ytor med symbol grupperad efter geometri",
-                  "Favoritsymboler per geometrityp — sparas på ditt konto och föreslås först i listan",
-                  "Ångra upp till 10 steg via knappen på kartans högerkant (under Navigera) eller Ctrl/Cmd+Z",
-                  "Ritverktygens ikoner och ordning (punkt → linje → yta → radera → GPS) är samma som i «Föreslå ändring»",
-                  "När du ritar linje/yta: «Klar» (bock) och «Avbryt ritning» (kryss) i kartmenyn — Klar visar antal brytpunkter",
-                  "Klicka ett befintligt kartobjekt när du skapar nytt — då kopieras dess symbol automatiskt",
-                  "Nya och ändrade objekt visas med riktig OCAD-symbol i editorn — inte bara enkla streck",
-                  "«Min position» och «GPS-spår» fungerar som i kartförslag på georefererade kartor — spela in stigar med telefonens GPS",
-                  "Helt separerat från «Föreslå ändring» och vanlig OCAD-utcheckning",
-                  "Aktiva fältredigeringar syns i «Aktiva utcheckningar» och som färgade ytor under «Utcheckningsområden på kartan»",
-                  "Fortsätt senare via «Fortsätt» i listan eller på fältredigeringssidan",
-                  "Administratör kan avbryta fältredigeringar från områdessidan — samma som vanliga utcheckningar",
-                  "Mobilanpassad: verktyg på kartan, startar i Navigera (panorera/zooma) — byt till Rita för att redigera",
-                  "«Checka in» visar en sammanfattning — därefter väntar admin-godkännande innan ny version skapas",
-                  "Ändringar sparas lokalt i webbläsaren tills du checkar in — en kort toast visas uppe på kartan (kartan hoppar inte)",
-                ]}
-              />
-            </>
-          )}
+          <p>
+            Vill du redigera kartan direkt i webbläsaren istället för i OCAD? Se kapitlet{" "}
+            <a href="#faltredigering" className="link-primary">
+              Fältredigering
+            </a>
+            .
+          </p>
 
           {showEditor ? (
             <>
@@ -472,6 +444,128 @@ export async function HelpPageContent() {
           {showEditor && (
             <HelpProcessDiagram title="Steg för steg — checka ut och in" chart={checkoutSteps} />
           )}
+        </HelpSection>
+
+        <HelpSection id="faltredigering" title="Fältredigering">
+          <p>
+            Med <strong>Fältredigering</strong> redigerar du kartobjekt direkt i webbläsaren —
+            utan OCAD. Du reserverar ett delområde (max 1 km²), ändrar, raderar eller lägger till
+            objekt, och checkar in så att en administratör kan godkänna ändringarna till en ny
+            kartversion.
+          </p>
+          <p>
+            Fältredigering är separat från både{" "}
+            <a href="#checkout" className="link-primary">
+              OCAD-utcheckning
+            </a>{" "}
+            och{" "}
+            <a href="#kartforslag" className="link-primary">
+              Kartförslag
+            </a>
+            . Aktiva sessioner syns i listan «Aktiva utcheckningar» och som färgade ytor under
+            «Utcheckningsområden på kartan».
+          </p>
+
+          <h3 className="font-medium text-slate-900">Behörighet</h3>
+          <HelpList
+            items={[
+              "Administratörer har alltid tillgång",
+              "Läsare och redaktörer behöver rättigheten «Fältredigering» (Admin → Användare → Redigera)",
+              "Öppna via knappen «Fältredigering» på områdessidan",
+            ]}
+          />
+
+          <h3 className="font-medium text-slate-900">Starta och fortsätta</h3>
+          <HelpList
+            items={[
+              "Rita en polygon kring området (max 1 km²) — bara det området laddas i editorn",
+              "Utcheckat område markeras med röd begränsningslinje (ingen fyllnadsyta)",
+              "Lämna och fortsätt senare via «Fortsätt» i Aktiva utcheckningar eller på fältredigeringssidan",
+              "Administratör kan avbryta sessioner från områdessidan — samma som vanliga utcheckningar",
+            ]}
+          />
+
+          <h3 className="font-medium text-slate-900">Navigera och rita</h3>
+          <HelpList
+            items={[
+              "Startar i Navigera (panorera/zooma) — byt till Rita när du ska redigera",
+              "Verktyg som flytande ikoner på kartan: punkt → linje → yta → radera → GPS (samma ordning som i «Föreslå ändring»)",
+              "Håll inne linje- eller ytaverktyget för att växla vanlig → rektangel (R) → Bézier (B) → vanlig",
+              "Rektangelritning: dra längsta sidan, sedan vinkelrätt; streckad förhandsvisning; klicka för att avsluta",
+              "När du ritar linje/yta: «Klar» (bock) och «Avbryt ritning» (kryss) i kartmenyn — Klar visar antal brytpunkter",
+              "Ångra upp till 10 steg via knappen under Navigera eller Ctrl/Cmd+Z",
+              "«Min position» och «GPS-spår» fungerar på georefererade kartor — spela in stigar med telefonens GPS",
+            ]}
+          />
+
+          <h3 className="font-medium text-slate-900">Välj och redigera objekt</h3>
+          <HelpList
+            items={[
+              "Tryck på objekt för att markera; vid överlapp håll kvar — nästa objekt markeras varje sekund",
+              "Flytta fingret för att avbryta bläddringen (t.ex. för att dra en brytpunkt)",
+              "Klicka ett befintligt kartobjekt när du skapar nytt — då kopieras dess symbol",
+              "Nya och ändrade objekt visas med riktig OCAD-symbol i editorn",
+              "Favoritsymboler per geometrityp — sparas på ditt konto och föreslås först i listan",
+            ]}
+          />
+
+          <h3 className="font-medium text-slate-900">Brytpunkter</h3>
+          <HelpList
+            items={[
+              "Visning: X vid första punkten, punkt i mitten, fyrkant vid sista — mindre och halvtransparenta",
+              "Lägg till normal (cirkel), hörn (kvadrat) eller streck (romb); radera; växla typ normal → streck → hörn",
+              "Håll inne lägg till-ikonen för att ändra alla brytpunkter till den typen",
+              "Hörn visas som kvadrat och streck som romb på kartan",
+            ]}
+          />
+
+          <h3 className="font-medium text-slate-900">Snappning</h3>
+          <p>
+            Slå på snappning och ange tolerans i meter. Brytpunkter fästs då mot linjer, hörn och
+            punktobjekt när du ritar eller redigerar.
+          </p>
+
+          <h3 className="font-medium text-slate-900">CAD-verktyg</h3>
+          <HelpList
+            items={[
+              "Ikoner: byt symbol, radera, mät, vänd riktning, förenkla, mjuka hörn, Bézier",
+              "Klipp: klipp linje (klick delar, dra tar bort bit), dela yta med klipplinje kant→kant, klipp hål i yta",
+              "Sammanfoga: markera flera objekt med samma symbol — linjer med nära ändpunkter eller överlappande ytor — sedan Tillämpa",
+              "Fyll / kant / duplicera: välj symbol — samma typ kopierar, yta+linje = kant, linje+yta = fyll; kryssa i «Använd hål» för hål",
+              "Förenkla: buffert ± meter — tar bort brytpunkter på nästan rak linje; ny punkt där linjen tangerar kanten",
+              "Bézier: dra kontrollpunkterna P1/P2 för att forma kurvan, sedan «Tillämpa kurva»",
+              "Rita ny Bézier: håll inne linje-/ytaverktyget tills B visas — tryck brytpunkt→dra P1, tryck P2→släpp nästa brytpunkt",
+            ]}
+          />
+
+          <h3 className="font-medium text-slate-900">Spara och checka in</h3>
+          <HelpList
+            items={[
+              "Ändringar sparas lokalt i webbläsaren tills du checkar in — en kort toast visas uppe på kartan",
+              "Vid nätverksfel behålls arbetet lokalt",
+              "«Checka in» visar en sammanfattning — därefter väntar admin-godkännande innan ny version skapas",
+              "Avslutade fältredigeringar ingår i utcheckningshistoriken",
+            ]}
+          />
+
+          {showAdmin && (
+            <>
+              <h3 className="font-medium text-slate-900">Administratör</h3>
+              <HelpList
+                items={[
+                  "Tilldela rättigheten under Admin → Användare → Redigera",
+                  "Godkänn incheckade fältredigeringar under Admin → Utcheckningar",
+                  "Avbryt aktiva sessioner från områdessidan vid behov",
+                ]}
+              />
+            </>
+          )}
+
+          <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-700">
+            Fältredigering skapar en ny kartversion först efter admin-godkännande — samma
+            publiceringssteg som efter OCAD-utcheckning gäller innan läsare ser ändringarna.
+          </p>
+          <HelpProcessDiagram title="Flöde — fältredigering" chart={fieldEditFlow} />
         </HelpSection>
 
         <HelpSection id="bana" title="Lägg bana">
@@ -1026,6 +1120,19 @@ export async function HelpPageContent() {
                 stund. Om kartan fortfarande saknas: ladda om sidan. Kartbilden skapas automatiskt
                 — öppna området eller «Visa karta» och vänta tills den ritas. Ladda ner via «Ladda
                 ner» om du vill öppna filen i OCAD.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-slate-900">Vad är Fältredigering?</h3>
+              <p className="mt-1">
+                Fältredigering låter dig redigera kartobjekt direkt i webbläsaren (utan OCAD) inom
+                ett utcheckat område på max 1 km². Administratörer har alltid tillgång; övriga får
+                rättigheten under Admin → Användare. Efter «Checka in» godkänner en administratör
+                ändringarna innan en ny version skapas. Se kapitlet{" "}
+                <a href="#faltredigering" className="link-primary">
+                  Fältredigering
+                </a>
+                .
               </p>
             </div>
             <div>

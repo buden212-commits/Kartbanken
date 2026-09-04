@@ -16,6 +16,7 @@ export const releaseNotes: ReleaseNote[] = [
       "Rektangelläge: håll inne linje/yta — växlar vanlig → rektangel (R) → Bézier (B); dra längsta sidan sedan vinkelrätt",
       "Kartladdning: samma förhandsvisning delas i cache (undviker dubbelhämtning) och timeout efter 2 minuter med «Försök igen»",
       "Info om lokalt sparade ändringar visas som toast ovanpå kartan (kartan hoppar inte längre)",
+      "Fältredigering är ett eget kapitel i hjälpen (samma nivå som Lägg bana)",
       "Release notes grupperade till en post per dag",
       "Webbläsarfliken visar nu IFK Mora-loggan i stället för standardikonen",
       "När du öppnar fältredigering är panorera/zooma (Navigera) aktivt från början — byt till Rita när du ska redigera",
