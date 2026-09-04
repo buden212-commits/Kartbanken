@@ -294,6 +294,7 @@ export function fieldEditOverlaySvg(options: {
   bezierEdit?: BezierEditOverlay | null;
   bezierDraw?: BezierDrawOverlay | null;
   cutDraftPoints?: [number, number][];
+  mergeObjectIndices?: number[];
 }): string {
   const {
     transform,
@@ -312,6 +313,7 @@ export function fieldEditOverlaySvg(options: {
     bezierEdit = null,
     bezierDraw = null,
     cutDraftPoints = [],
+    mergeObjectIndices = [],
   } = options;
 
   const masked = new Set(maskedObjectIndices);
@@ -327,6 +329,33 @@ export function fieldEditOverlaySvg(options: {
 
   if (symbolPreviewInner) {
     parts.push(`<g pointer-events="none">${symbolPreviewInner}</g>`);
+  }
+
+  for (const obj of objects) {
+    if (mergeObjectIndices.includes(obj.i) && obj.i !== selectedObjectIndex) {
+      const coords = resolveObjectCoordinates(obj.i, obj.v, ops);
+      if (coords && coords.length > 0) {
+        if (obj.t === "area") {
+          parts.push(
+            `<polygon points="${ringToSvgPoints(coords, transform)}" fill="rgba(13,148,136,0.18)" stroke="#0d9488" stroke-width="2.5" stroke-dasharray="6 4" pointer-events="none" />`,
+          );
+        } else if (obj.t === "line") {
+          parts.push(lineSvg(coords, transform, "#0d9488", 3));
+        }
+      }
+    }
+    if (mergeObjectIndices.includes(obj.i) && obj.i === selectedObjectIndex) {
+      const coords = resolveObjectCoordinates(obj.i, obj.v, ops);
+      if (coords && coords.length > 0) {
+        if (obj.t === "area") {
+          parts.push(
+            `<polygon points="${ringToSvgPoints(coords, transform)}" fill="rgba(13,148,136,0.12)" stroke="#0f766e" stroke-width="2.5" pointer-events="none" />`,
+          );
+        } else if (obj.t === "line") {
+          parts.push(lineSvg(coords, transform, "#0f766e", 3.5));
+        }
+      }
+    }
   }
 
   for (const obj of objects) {

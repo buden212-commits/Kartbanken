@@ -76,6 +76,13 @@ import {
   splitLineAtPoint,
 } from "@/lib/field-edit/cut-geometry";
 import {
+  areasCanMerge,
+  linesCanMerge,
+  mergeAreaObjects,
+  mergeLineObjects,
+  sameMergeSymbol,
+} from "@/lib/field-edit/merge-geometry";
+import {
   countFieldEditChanges,
   cycleVertexKind,
   hasFieldEditChanges,
@@ -169,6 +176,8 @@ export function FieldEditSessionClient({
   const [cadVertexTool, setCadVertexTool] = useState<CadVertexTool>("off");
   const [cadCutTool, setCadCutTool] = useState<CadCutTool>("off");
   const [cutDraftPoints, setCutDraftPoints] = useState<[number, number][]>([]);
+  const [mergeActive, setMergeActive] = useState(false);
+  const [mergeObjectIndices, setMergeObjectIndices] = useState<number[]>([]);
   const cutLineDragRef = useRef<{
     segmentIndex: number;
     point: [number, number];
@@ -249,6 +258,8 @@ export function FieldEditSessionClient({
     setSelectedVertexIndex(null);
     setBezierEdit(null);
     setCadVertexTool("off");
+    setMergeActive(false);
+    setMergeObjectIndices([]);
     pendingVertexDragRef.current = null;
     setInfo(
       `Överlappande objekt ${current.index + 1}/${current.indices.length} — håll kvar för nästa`,
@@ -654,6 +665,8 @@ export function FieldEditSessionClient({
     setCadVertexTool("off");
     setCadCutTool("off");
     setCutDraftPoints([]);
+    setMergeActive(false);
+    setMergeObjectIndices([]);
     cutLineDragRef.current = null;
   }, [selectedObjectIndex, updateOps]);
 
@@ -661,7 +674,11 @@ export function FieldEditSessionClient({
     setCadCutTool(tool);
     setCutDraftPoints([]);
     cutLineDragRef.current = null;
-    if (tool !== "off") setCadVertexTool("off");
+    if (tool !== "off") {
+      setCadVertexTool("off");
+      setMergeActive(false);
+      setMergeObjectIndices([]);
+    }
   }, []);
 
   const changeVertexTool = useCallback((tool: CadVertexTool) => {
@@ -670,6 +687,8 @@ export function FieldEditSessionClient({
       setCadCutTool("off");
       setCutDraftPoints([]);
       cutLineDragRef.current = null;
+      setMergeActive(false);
+      setMergeObjectIndices([]);
     }
   }, []);
 
@@ -679,6 +698,167 @@ export function FieldEditSessionClient({
     setCadCutTool("off");
     setInfo(null);
   }, []);
+
+  const cancelMerge = useCallback(() => {
+    setMergeActive(false);
+    setMergeObjectIndices([]);
+    setInfo(null);
+  }, []);
+
+  const objectSymbolAndKind = useCallback(
+    (objectIndex: number) => {
+      const obj = objects.find((entry) => entry.i === objectIndex);
+      if (!obj || (obj.t !== "line" && obj.t !== "area")) return null;
+      const symbol =
+        opsRef.current.modifies.find((m) => m.objectIndex === objectIndex)?.symbolNumber ??
+        obj.s;
+      return {
+        symbolNumber: symbol,
+        kind: geometryKindFromType(obj.t),
+        type: obj.t as "line" | "area",
+        obj,
+      };
+    },
+    [objects],
+  );
+
+  const toggleMerge = useCallback(() => {
+    if (mergeActive) {
+      cancelMerge();
+      return;
+    }
+    if (selectedObjectIndex == null) return;
+    const meta = objectSymbolAndKind(selectedObjectIndex);
+    if (!meta) {
+      setInfo("Sammanfoga gäller linjer och ytor.");
+      return;
+    }
+    setCadVertexTool("off");
+    setCadCutTool("off");
+    setCutDraftPoints([]);
+    cutLineDragRef.current = null;
+    setBezierEdit(null);
+    setMergeActive(true);
+    setMergeObjectIndices([selectedObjectIndex]);
+    setInfo(
+      meta.type === "line"
+        ? "Sammanfoga: klicka fler linjer med samma symbol (ändpunkter nära varandra)."
+        : "Sammanfoga: klicka fler ytor med samma symbol som överlappar.",
+    );
+  }, [cancelMerge, mergeActive, objectSymbolAndKind, selectedObjectIndex]);
+
+  const mergeToleranceMapUnits = useMemo(
+    () => metersToMapUnits(editorSettings.snapToleranceM, ocadMapScale),
+    [editorSettings.snapToleranceM, ocadMapScale],
+  );
+
+  const canApplyMerge = useMemo(() => {
+    if (!mergeActive || mergeObjectIndices.length < 2 || selectedObjectIndex == null) {
+      return false;
+    }
+    const primary = objectSymbolAndKind(selectedObjectIndex);
+    if (!primary) return false;
+    const rings: [number, number][][] = [];
+    for (const idx of mergeObjectIndices) {
+      const meta = objectSymbolAndKind(idx);
+      if (!meta || !sameMergeSymbol(primary, meta) || meta.type !== primary.type) return false;
+      const coords =
+        resolveObjectCoordinates(idx, meta.obj.v, ops) ?? meta.obj.v;
+      rings.push(coords.map(([x, y]) => [x, y] as [number, number]));
+    }
+    if (primary.type === "line") {
+      return (
+        linesCanMerge(rings, mergeToleranceMapUnits) &&
+        mergeLineObjects(rings, mergeToleranceMapUnits).length === 1
+      );
+    }
+    return areasCanMerge(rings) && mergeAreaObjects(rings).length === 1;
+  }, [
+    mergeActive,
+    mergeObjectIndices,
+    mergeToleranceMapUnits,
+    objectSymbolAndKind,
+    ops,
+    selectedObjectIndex,
+  ]);
+
+  const applyMerge = useCallback(() => {
+    if (selectedObjectIndex == null || mergeObjectIndices.length < 2) return;
+    const primary = objectSymbolAndKind(selectedObjectIndex);
+    if (!primary) return;
+
+    const rings: [number, number][][] = [];
+    const others: number[] = [];
+    for (const idx of mergeObjectIndices) {
+      const meta = objectSymbolAndKind(idx);
+      if (!meta || !sameMergeSymbol(primary, meta) || meta.type !== primary.type) {
+        setInfo("Alla objekt måste ha samma symbol och typ.");
+        return;
+      }
+      const coords =
+        resolveObjectCoordinates(idx, meta.obj.v, opsRef.current) ?? meta.obj.v;
+      rings.push(coords.map(([x, y]) => [x, y] as [number, number]));
+      if (idx !== selectedObjectIndex) others.push(idx);
+    }
+
+    let merged: [number, number][] | null = null;
+    if (primary.type === "line") {
+      const parts = mergeLineObjects(rings, mergeToleranceMapUnits);
+      if (parts.length !== 1 || !parts[0]) {
+        setInfo(
+          "Linjerna kan inte sammanfogas — ändpunkterna måste ligga inom snappningstoleransen.",
+        );
+        return;
+      }
+      merged = parts[0];
+    } else {
+      const parts = mergeAreaObjects(rings);
+      if (parts.length !== 1 || !parts[0]) {
+        setInfo("Ytorna kan inte sammanfogas — de måste överlappa.");
+        return;
+      }
+      merged = parts[0];
+    }
+
+    const mergedCoords = merged;
+    const count = mergeObjectIndices.length;
+    updateOps((current) => {
+      const existing = current.modifies.find((m) => m.objectIndex === selectedObjectIndex);
+      const nextModify: FieldEditModify = {
+        objectIndex: selectedObjectIndex,
+        symbolNumber: existing?.symbolNumber ?? primary.symbolNumber,
+        geometryKind: primary.kind,
+        coordinates: mergedCoords,
+      };
+      let modifies = existing
+        ? current.modifies.map((m) =>
+            m.objectIndex === selectedObjectIndex ? nextModify : m,
+          )
+        : [...current.modifies, nextModify];
+      modifies = modifies.filter((m) => !others.includes(m.objectIndex));
+      const deletes = [...current.deletes];
+      for (const idx of others) {
+        if (!deletes.includes(idx)) deletes.push(idx);
+      }
+      // Ensure primary is not marked deleted.
+      const cleanedDeletes = deletes.filter((id) => id !== selectedObjectIndex);
+      return { ...current, modifies, deletes: cleanedDeletes };
+    });
+    setMergeActive(false);
+    setMergeObjectIndices([]);
+    setSelectedVertexIndex(null);
+    setInfo(
+      primary.type === "line"
+        ? `Sammanfogade ${count} linjer till ett objekt.`
+        : `Sammanfogade ${count} ytor till ett objekt.`,
+    );
+  }, [
+    mergeObjectIndices,
+    mergeToleranceMapUnits,
+    objectSymbolAndKind,
+    selectedObjectIndex,
+    updateOps,
+  ]);
 
   const applySplitParts = useCallback(
     (
@@ -1049,12 +1229,49 @@ export function FieldEditSessionClient({
             setInfo(null);
             return;
           }
+          if (mergeActive) {
+            setInfo("Klicka ett objekt med samma symbol för att lägga till i sammanfogningen.");
+            return;
+          }
           setSelectedObjectIndex(null);
           setSelectedVertexIndex(null);
           setBezierEdit(null);
           setCadVertexTool("off");
           setCadCutTool("off");
           setCutDraftPoints([]);
+          setMergeActive(false);
+          setMergeObjectIndices([]);
+          return;
+        }
+
+        if (mergeActive && selectedObjectIndex != null) {
+          const primary = objectSymbolAndKind(selectedObjectIndex);
+          if (!primary) {
+            cancelMerge();
+            return;
+          }
+          const candidate =
+            hits.find((hit) => {
+              const meta = objectSymbolAndKind(hit.i);
+              return meta && sameMergeSymbol(primary, meta) && meta.type === primary.type;
+            }) ?? null;
+          if (!candidate) {
+            setInfo("Objektet har annan symbol eller typ — välj samma symbol.");
+            return;
+          }
+          setMergeObjectIndices((prev) => {
+            if (prev.includes(candidate.i)) {
+              if (candidate.i === selectedObjectIndex) return prev;
+              const next = prev.filter((id) => id !== candidate.i);
+              setInfo(`Borttagen från sammanfogning (${next.length} objekt).`);
+              return next;
+            }
+            const next = [...prev, candidate.i];
+            setInfo(`Tillagd i sammanfogning (${next.length} objekt).`);
+            return next;
+          });
+          clearHoldCycle();
+          setError(null);
           return;
         }
 
@@ -1074,6 +1291,8 @@ export function FieldEditSessionClient({
         setCadCutTool("off");
         setCutDraftPoints([]);
         cutLineDragRef.current = null;
+        setMergeActive(false);
+        setMergeObjectIndices([]);
         setError(null);
 
         clearHoldCycle();
@@ -1187,9 +1406,12 @@ export function FieldEditSessionClient({
       bezierGesture,
       cadVertexTool,
       cadCutTool,
+      cancelMerge,
       cutDraftPoints.length,
       clearHoldCycle,
       draftPoints.length,
+      mergeActive,
+      objectSymbolAndKind,
       objects,
       ops,
       pickSymbolFromObject,
@@ -1584,6 +1806,7 @@ export function FieldEditSessionClient({
                     }
                   : null,
               cutDraftPoints: cadCutTool !== "off" ? cutDraftPoints : [],
+              mergeObjectIndices: mergeActive ? mergeObjectIndices : [],
             }),
           }}
         />
@@ -1605,6 +1828,8 @@ export function FieldEditSessionClient({
       bezierDrawMode,
       cadCutTool,
       cutDraftPoints,
+      mergeActive,
+      mergeObjectIndices,
       bezierDraftAnchors,
       bezierDraftControls,
       bezierGesture,
@@ -1952,6 +2177,12 @@ export function FieldEditSessionClient({
               cutDraftPoints={cutDraftPoints}
               onFinishCut={finishCut}
               onCancelCut={cancelCut}
+              mergeActive={mergeActive}
+              mergeCount={mergeObjectIndices.length}
+              canApplyMerge={canApplyMerge}
+              onToggleMerge={toggleMerge}
+              onApplyMerge={applyMerge}
+              onCancelMerge={cancelMerge}
             />
           </details>
           <div className="hidden sm:block">
@@ -1987,6 +2218,12 @@ export function FieldEditSessionClient({
               cutDraftPoints={cutDraftPoints}
               onFinishCut={finishCut}
               onCancelCut={cancelCut}
+              mergeActive={mergeActive}
+              mergeCount={mergeObjectIndices.length}
+              canApplyMerge={canApplyMerge}
+              onToggleMerge={toggleMerge}
+              onApplyMerge={applyMerge}
+              onCancelMerge={cancelMerge}
             />
           </div>
         </>

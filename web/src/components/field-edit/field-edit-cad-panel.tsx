@@ -9,6 +9,7 @@ import {
   CadCutAreaIcon,
   CadCutHoleIcon,
   CadCutLineIcon,
+  CadMergeIcon,
   CadMeasureIcon,
   CadRemoveVertexIcon,
   CadReverseIcon,
@@ -78,6 +79,12 @@ type Props = {
   cutDraftPoints: [number, number][];
   onFinishCut: () => void;
   onCancelCut: () => void;
+  mergeActive: boolean;
+  mergeCount: number;
+  canApplyMerge: boolean;
+  onToggleMerge: () => void;
+  onApplyMerge: () => void;
+  onCancelMerge: () => void;
 };
 
 const LONG_PRESS_MS = 480;
@@ -212,6 +219,12 @@ export function FieldEditCadPanel({
   cutDraftPoints,
   onFinishCut,
   onCancelCut,
+  mergeActive,
+  mergeCount,
+  canApplyMerge,
+  onToggleMerge,
+  onApplyMerge,
+  onCancelMerge,
 }: Props) {
   const [showSymbolPicker, setShowSymbolPicker] = useState(false);
   const kind = geometryKindFromType(selectedObject.t);
@@ -219,6 +232,7 @@ export function FieldEditCadPanel({
   const currentSymbol = currentModify?.symbolNumber ?? selectedObject.s;
   const isLineOrArea = selectedObject.t === "line" || selectedObject.t === "area";
   const cutActive = cutTool !== "off";
+  const editLocked = bezierActive || cutActive || mergeActive;
 
   const rawCoords =
     resolveObjectCoordinates(selectedObject.i, selectedObject.v, ops) ?? selectedObject.v;
@@ -266,6 +280,7 @@ export function FieldEditCadPanel({
   function convertAllTo(target: FieldEditVertexKind) {
     onVertexToolChange("off");
     onCutToolChange("off");
+    if (mergeActive) onCancelMerge();
     const label =
       target === "normal" ? "normala" : target === "corner" ? "hörnbrytpunkter" : "streckbrytpunkter";
     const handleKinds = editCoords.map(() => target);
@@ -299,6 +314,12 @@ export function FieldEditCadPanel({
           ? "Klipp hål: klicka hörnen för hålet (≥3), sedan «Tillämpa klipp»."
           : null;
 
+  const mergeHint = mergeActive
+    ? selectedObject.t === "line"
+      ? "Sammanfoga: klicka fler linjer med samma symbol (ändpunkter nära varandra), sedan «Tillämpa»."
+      : "Sammanfoga: klicka fler ytor med samma symbol som överlappar, sedan «Tillämpa»."
+    : null;
+
   const canFinishCut =
     (cutTool === "cutArea" && cutDraftPoints.length >= 2) ||
     (cutTool === "cutHole" && cutDraftPoints.length >= 3);
@@ -320,10 +341,11 @@ export function FieldEditCadPanel({
         <CadIconButton
           label="Byt symbol"
           active={showSymbolPicker}
-          disabled={bezierActive}
+          disabled={bezierActive || mergeActive}
           onClick={() => {
             onVertexToolChange("off");
             onCutToolChange("off");
+            if (mergeActive) onCancelMerge();
             setShowSymbolPicker((v) => !v);
           }}
         >
@@ -332,7 +354,7 @@ export function FieldEditCadPanel({
 
         <CadIconButton
           label="Radera objekt"
-          disabled={bezierActive}
+          disabled={bezierActive || mergeActive}
           inactiveClass={iconDanger}
           onClick={() => {
             if (!confirm("Radera valt objekt?")) return;
@@ -344,10 +366,11 @@ export function FieldEditCadPanel({
 
         <CadIconButton
           label="Mät längd/yta"
-          disabled={bezierActive}
+          disabled={bezierActive || mergeActive}
           onClick={() => {
             onVertexToolChange("off");
             onCutToolChange("off");
+            if (mergeActive) onCancelMerge();
             if (selectedObject.t === "line") {
               onMessage(`Längd: ${polylineLengthM(editCoords, mapScale).toFixed(1)} m`);
             } else if (selectedObject.t === "area") {
@@ -376,9 +399,10 @@ export function FieldEditCadPanel({
               label="Radera brytpunkt"
               active={vertexTool === "remove"}
               activeClass={iconDangerActive}
-              disabled={bezierActive}
+              disabled={bezierActive || mergeActive}
               onClick={() => {
                 onCutToolChange("off");
+                if (mergeActive) onCancelMerge();
                 const next = selectVertexTool(vertexTool, "remove");
                 onVertexToolChange(next);
                 onMessage(
@@ -395,9 +419,10 @@ export function FieldEditCadPanel({
               label="Lägg till normal brytpunkt (håll inne: ändra alla till normal)"
               active={vertexTool === "addNormal"}
               activeClass={iconActiveAdd}
-              disabled={bezierActive}
+              disabled={bezierActive || mergeActive}
               onClick={() => {
                 onCutToolChange("off");
+                if (mergeActive) onCancelMerge();
                 const next = selectVertexTool(vertexTool, "addNormal");
                 onVertexToolChange(next);
                 onMessage(
@@ -415,9 +440,10 @@ export function FieldEditCadPanel({
               label="Lägg till hörnbrytpunkt (håll inne: ändra alla till hörn)"
               active={vertexTool === "addCorner"}
               activeClass={iconActiveAdd}
-              disabled={bezierActive}
+              disabled={bezierActive || mergeActive}
               onClick={() => {
                 onCutToolChange("off");
+                if (mergeActive) onCancelMerge();
                 const next = selectVertexTool(vertexTool, "addCorner");
                 onVertexToolChange(next);
                 onMessage(
@@ -435,9 +461,10 @@ export function FieldEditCadPanel({
               label="Lägg till streckbrytpunkt (håll inne: ändra alla till streck)"
               active={vertexTool === "addDash"}
               activeClass={iconActiveAdd}
-              disabled={bezierActive}
+              disabled={bezierActive || mergeActive}
               onClick={() => {
                 onCutToolChange("off");
+                if (mergeActive) onCancelMerge();
                 const next = selectVertexTool(vertexTool, "addDash");
                 onVertexToolChange(next);
                 onMessage(
@@ -454,9 +481,10 @@ export function FieldEditCadPanel({
             <CadIconButton
               label="Växla brytpunktstyp (normal → streck → hörn)"
               active={vertexTool === "toggleType"}
-              disabled={bezierActive || cutActive}
+              disabled={editLocked}
               onClick={() => {
                 onCutToolChange("off");
+                if (mergeActive) onCancelMerge();
                 const next = selectVertexTool(vertexTool, "toggleType");
                 onVertexToolChange(next);
                 onMessage(
@@ -476,9 +504,10 @@ export function FieldEditCadPanel({
                 label="Klipp linje"
                 active={cutTool === "cutLine"}
                 activeClass="border-violet-600 bg-violet-600 text-white"
-                disabled={bezierActive}
+                disabled={bezierActive || mergeActive}
                 onClick={() => {
                   onVertexToolChange("off");
+                  if (mergeActive) onCancelMerge();
                   const next = selectCutTool(cutTool, "cutLine");
                   onCutToolChange(next);
                   onMessage(
@@ -498,9 +527,10 @@ export function FieldEditCadPanel({
                   label="Dela yta"
                   active={cutTool === "cutArea"}
                   activeClass="border-violet-600 bg-violet-600 text-white"
-                  disabled={bezierActive}
+                  disabled={bezierActive || mergeActive}
                   onClick={() => {
                     onVertexToolChange("off");
+                    if (mergeActive) onCancelMerge();
                     const next = selectCutTool(cutTool, "cutArea");
                     onCutToolChange(next);
                     onMessage(
@@ -516,9 +546,10 @@ export function FieldEditCadPanel({
                   label="Klipp hål"
                   active={cutTool === "cutHole"}
                   activeClass="border-violet-600 bg-violet-600 text-white"
-                  disabled={bezierActive}
+                  disabled={bezierActive || mergeActive}
                   onClick={() => {
                     onVertexToolChange("off");
+                    if (mergeActive) onCancelMerge();
                     const next = selectCutTool(cutTool, "cutHole");
                     onCutToolChange(next);
                     onMessage(
@@ -534,11 +565,26 @@ export function FieldEditCadPanel({
             )}
 
             <CadIconButton
-              label="Vänd riktning"
+              label="Sammanfoga (merge)"
+              active={mergeActive}
+              activeClass="border-teal-600 bg-teal-600 text-white"
               disabled={bezierActive || cutActive}
               onClick={() => {
                 onVertexToolChange("off");
                 onCutToolChange("off");
+                onToggleMerge();
+              }}
+            >
+              <CadMergeIcon />
+            </CadIconButton>
+
+            <CadIconButton
+              label="Vänd riktning"
+              disabled={editLocked}
+              onClick={() => {
+                onVertexToolChange("off");
+                onCutToolChange("off");
+                if (mergeActive) onCancelMerge();
                 const next = reverseVertices(rawCoords, selectedObject.t);
                 const nextHandleKinds = [...vertexKinds].reverse();
                 const geomKind = geometryKindFromType(selectedObject.t);
@@ -564,7 +610,7 @@ export function FieldEditCadPanel({
                 min={0.1}
                 max={20}
                 step={0.1}
-                disabled={bezierActive || cutActive}
+                disabled={editLocked}
                 value={editorSettings.simplifyToleranceM}
                 onChange={(e) => {
                   const value = Number(e.target.value);
@@ -578,10 +624,11 @@ export function FieldEditCadPanel({
 
             <CadIconButton
               label="Förenkla (buffert)"
-              disabled={bezierActive || cutActive}
+              disabled={editLocked}
               onClick={() => {
                 onVertexToolChange("off");
                 onCutToolChange("off");
+                if (mergeActive) onCancelMerge();
                 const result = simplifyPolyline(
                   editCoords,
                   editorSettings.simplifyToleranceM,
@@ -596,10 +643,11 @@ export function FieldEditCadPanel({
 
             <CadIconButton
               label="Mjuka hörn"
-              disabled={bezierActive || cutActive}
+              disabled={editLocked}
               onClick={() => {
                 onVertexToolChange("off");
                 onCutToolChange("off");
+                if (mergeActive) onCancelMerge();
                 const result = smoothPolylineChaikin(editCoords, 2, minPoints);
                 applyTool("Mjuka hörn", result.coordinates, result.beforeCount, result.afterCount);
               }}
@@ -612,10 +660,11 @@ export function FieldEditCadPanel({
               active={bezierActive}
               activeClass="border-orange-600 bg-orange-600 text-white"
               inactiveClass="border-orange-200 bg-white text-orange-800 hover:border-orange-300 hover:bg-orange-50"
-              disabled={(editCoords.length < 2 && !bezierActive) || cutActive}
+              disabled={(editCoords.length < 2 && !bezierActive) || cutActive || mergeActive}
               onClick={() => {
                 onVertexToolChange("off");
                 onCutToolChange("off");
+                if (mergeActive) onCancelMerge();
                 if (bezierActive) return;
                 onStartBezier();
               }}
@@ -626,7 +675,7 @@ export function FieldEditCadPanel({
         )}
       </div>
 
-      {showSymbolPicker && !bezierActive && !cutActive && (
+      {showSymbolPicker && !bezierActive && !cutActive && !mergeActive && (
         <div className="rounded-lg border border-slate-200 bg-white p-3">
           <FieldEditSymbolPicker
             groups={symbolGroups}
@@ -640,6 +689,31 @@ export function FieldEditCadPanel({
             favorites={favorites}
             onToggleFavorite={onToggleFavorite ? (sym) => onToggleFavorite(sym) : undefined}
           />
+        </div>
+      )}
+
+      {mergeActive && (
+        <div className="space-y-2 rounded-lg border border-teal-200 bg-teal-50/80 p-3">
+          <p className="text-sm font-medium text-teal-950">
+            Sammanfoga — {mergeCount} objekt markerade
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={!canApplyMerge}
+              onClick={onApplyMerge}
+              className="min-h-11 flex-1 rounded-lg bg-teal-600 px-3 py-2.5 text-sm font-medium text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0 sm:flex-none sm:py-2"
+            >
+              Tillämpa sammanfogning
+            </button>
+            <button
+              type="button"
+              onClick={onCancelMerge}
+              className="min-h-11 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-50 sm:min-h-0 sm:flex-none sm:py-2"
+            >
+              Avbryt
+            </button>
+          </div>
         </div>
       )}
 
@@ -694,11 +768,15 @@ export function FieldEditCadPanel({
         </div>
       )}
 
-      {!bezierActive && (cutHint || vertexHint) && (
+      {!bezierActive && !mergeActive && (cutHint || vertexHint) && (
         <p className="text-xs text-slate-600">
           {cutHint ??
             `${vertexHint} Håll inne lägg till-ikonen för att ändra alla brytpunkter till den typen.`}
         </p>
+      )}
+
+      {mergeHint && (
+        <p className="text-xs text-slate-600">{mergeHint}</p>
       )}
     </div>
   );

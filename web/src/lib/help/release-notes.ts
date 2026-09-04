@@ -8,9 +8,10 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-04",
-    title: "Fältredigering, CAD, klipp och webbplatsikon",
+    title: "Fältredigering, CAD, klipp, sammanfoga och webbplatsikon",
     items: [
       "Klipp i CAD: klipp linje (klick/dra), dela yta (klipplinje kant→kant) och klipp hål i yta",
+      "Sammanfoga i CAD: markera flera linjer (ändpunkter nära) eller överlappande ytor med samma symbol och slå ihop dem",
       "Release notes grupperade till en post per dag",
       "Webbläsarfliken visar nu IFK Mora-loggan i stället för standardikonen",
       "När du öppnar fältredigering är panorera/zooma (Navigera) aktivt från början — byt till Rita när du ska redigera",

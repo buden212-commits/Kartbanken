@@ -379,6 +379,32 @@ export function CadCutHoleIcon() {
   );
 }
 
+/** CAD: merge / join objects (OCAD Merge). */
+export function CadMergeIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+      <path
+        d="M3.5 6.5h5.2v7H3.5z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M11.3 6.5H16.5v7H11.3z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M8.2 10h3.6M10 8.2v3.6"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 /** @deprecated Use CadAddNormalVertexIcon */
 export function CadAddVertexIcon() {
   return <CadAddNormalVertexIcon />;
