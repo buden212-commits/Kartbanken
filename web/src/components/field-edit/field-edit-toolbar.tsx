@@ -10,7 +10,6 @@ import {
   MapLineToolIcon,
   MapNavigateModeIcon,
   MapPointToolIcon,
-  MapRectangularModeIcon,
   MapSelectToolIcon,
   MapUndoToolIcon,
 } from "@/components/map-draw-tool-icons";
@@ -224,9 +223,8 @@ type ToolbarsProps = {
   canUndo: boolean;
   onUndo: () => void;
   bezierDrawMode: boolean;
-  onToggleBezierDrawMode: (tool: "addLine" | "addArea") => void;
   rectangularDrawMode: boolean;
-  onToggleRectangularDrawMode: () => void;
+  onCycleLineAreaDrawMode: (tool: "addLine" | "addArea") => void;
   showDraftActions?: boolean;
   draftPointCount?: number;
   onFinishDraft?: () => void;
@@ -245,9 +243,8 @@ export function FieldEditMapToolbars({
   canUndo,
   onUndo,
   bezierDrawMode,
-  onToggleBezierDrawMode,
   rectangularDrawMode,
-  onToggleRectangularDrawMode,
+  onCycleLineAreaDrawMode,
   showDraftActions = false,
   draftPointCount = 0,
   onFinishDraft,
@@ -269,19 +266,21 @@ export function FieldEditMapToolbars({
     >
       <MapToolbarPanel label="Verktyg">
         {DRAW_TOOLS.map((drawTool) => {
-          const supportsBezier = drawTool === "addLine" || drawTool === "addArea";
-          const showBezierBadge = supportsBezier && bezierDrawMode && tool === drawTool;
+          const supportsDrawModes = drawTool === "addLine" || drawTool === "addArea";
+          const showBezierBadge = supportsDrawModes && bezierDrawMode && tool === drawTool;
           const showRectBadge =
-            supportsBezier && rectangularDrawMode && tool === drawTool && !bezierDrawMode;
-          const label = supportsBezier
-            ? `${FIELD_EDIT_TOOL_LABELS[drawTool]}${
-                bezierDrawMode && tool === drawTool
-                  ? " (Bézier — håll inne för vanlig ritning)"
-                  : rectangularDrawMode && tool === drawTool
-                    ? " (rektangel — håll inne för Bézier)"
-                    : " (håll inne för Bézier)"
-              }`
-            : FIELD_EDIT_TOOL_LABELS[drawTool];
+            supportsDrawModes && rectangularDrawMode && tool === drawTool && !bezierDrawMode;
+          let modeHint = "";
+          if (supportsDrawModes) {
+            if (bezierDrawMode && tool === drawTool) {
+              modeHint = " (Bézier — håll inne: vanlig → rektangel → Bézier)";
+            } else if (rectangularDrawMode && tool === drawTool) {
+              modeHint = " (rektangel — håll inne: vanlig → rektangel → Bézier)";
+            } else {
+              modeHint = " (håll inne: vanlig → rektangel → Bézier)";
+            }
+          }
+          const label = `${FIELD_EDIT_TOOL_LABELS[drawTool]}${modeHint}`;
           return (
             <IconToolbarButton
               key={drawTool}
@@ -292,7 +291,9 @@ export function FieldEditMapToolbars({
               disabled={drawDisabled}
               onClick={() => onToolChange(drawTool)}
               onLongPress={
-                supportsBezier ? () => onToggleBezierDrawMode(drawTool) : undefined
+                supportsDrawModes
+                  ? () => onCycleLineAreaDrawMode(drawTool)
+                  : undefined
               }
               badge={
                 showBezierBadge ? (
@@ -306,22 +307,6 @@ export function FieldEditMapToolbars({
             </IconToolbarButton>
           );
         })}
-        {(tool === "addLine" || tool === "addArea") && (
-          <IconToolbarButton
-            label={
-              rectangularDrawMode
-                ? "Rektangelläge på — klicka för vanlig ritning"
-                : "Rektangelläge (byggnader, rätvinkliga ytor)"
-            }
-            active={rectangularDrawMode}
-            activeClass="border-amber-600 bg-amber-600 text-white"
-            inactiveClass="border-amber-300 bg-amber-50 text-amber-950 hover:border-amber-400 hover:bg-amber-100"
-            disabled={drawDisabled || bezierDrawMode}
-            onClick={onToggleRectangularDrawMode}
-          >
-            <MapRectangularModeIcon />
-          </IconToolbarButton>
-        )}
         <IconToolbarButton
           label={gpsTitle}
           active={gpsTracking}

@@ -2272,11 +2272,23 @@ export function FieldEditSessionClient({
     if (next !== "select") setSelectedObjectIndex(null);
   }
 
-  function toggleBezierDrawMode(forTool: "addLine" | "addArea") {
+  function cycleLineAreaDrawMode(forTool: "addLine" | "addArea") {
     if (gpsTracking) {
       cancelGpsTracking();
     }
-    const enabling = !(bezierDrawMode && tool === forTool);
+    const onThisTool = tool === forTool;
+    // Cycle: vanlig → rektangel → Bézier → vanlig
+    let next: "normal" | "rectangular" | "bezier";
+    if (!onThisTool) {
+      next = "rectangular";
+    } else if (bezierDrawMode) {
+      next = "normal";
+    } else if (rectangularDrawMode) {
+      next = "bezier";
+    } else {
+      next = "rectangular";
+    }
+
     setTool(forTool);
     setMapMode("draw");
     setDraftPoints([]);
@@ -2285,39 +2297,22 @@ export function FieldEditSessionClient({
     setSelectedObjectIndex(null);
     setSelectedVertexIndex(null);
     setBezierEdit(null);
-    setBezierDrawMode(enabling);
-    if (enabling) setRectangularDrawMode(false);
+    setBezierDrawMode(next === "bezier");
+    setRectangularDrawMode(next === "rectangular");
     setError(null);
-    setInfo(
-      enabling
-        ? "Bézier-ritning: tryck ner på brytpunkt och dra mot P1, sedan tryck på P2 och släpp på nästa brytpunkt. Håll inne verktyget igen för vanlig ritning."
-        : "Vanlig ritning: klicka brytpunkter. Håll inne verktyget för Bézier.",
-    );
-  }
-
-  function toggleRectangularDrawMode() {
-    if (gpsTracking) {
-      cancelGpsTracking();
+    if (next === "rectangular") {
+      setInfo(
+        "Rektangelläge: dra längsta sidan → släpp → dra vinkelrätt → klicka för att avsluta. Håll inne verktyget igen för Bézier.",
+      );
+    } else if (next === "bezier") {
+      setInfo(
+        "Bézier-ritning: tryck ner på brytpunkt och dra mot P1, sedan tryck på P2 och släpp på nästa brytpunkt. Håll inne verktyget igen för vanlig ritning.",
+      );
+    } else {
+      setInfo(
+        "Vanlig ritning: klicka brytpunkter. Håll inne verktyget för rektangel eller Bézier.",
+      );
     }
-    if (tool !== "addLine" && tool !== "addArea") {
-      setTool("addArea");
-    }
-    setMapMode("draw");
-    const enabling = !rectangularDrawMode;
-    setDraftPoints([]);
-    clearBezierDraft();
-    clearRectangularGesture();
-    setSelectedObjectIndex(null);
-    setSelectedVertexIndex(null);
-    setBezierEdit(null);
-    setRectangularDrawMode(enabling);
-    if (enabling) setBezierDrawMode(false);
-    setError(null);
-    setInfo(
-      enabling
-        ? "Rektangelläge: dra längsta sidan → släpp → dra vinkelrätt → klicka för att avsluta. Börja alltid med längsta sidan."
-        : "Vanlig ritning: klicka brytpunkter.",
-    );
   }
 
   const handleDrawInterrupt = useCallback(() => {
@@ -2348,21 +2343,21 @@ export function FieldEditSessionClient({
     }
     if (tool === "addLine") {
       if (bezierDrawMode) {
-        return "Bézier-linje: tryck ner på brytpunkt → dra mot P1 → släpp; tryck på P2 → släpp på nästa brytpunkt. Håll inne linjeverktyget för vanlig ritning.";
+        return "Bézier-linje: tryck ner på brytpunkt → dra mot P1 → släpp; tryck på P2 → släpp på nästa brytpunkt. Håll inne linjeverktyget för att växla läge.";
       }
       if (rectangularDrawMode) {
-        return "Rektangelläge: dra längsta sidan → släpp → dra vinkelrätt till tredje hörnet → klicka för att avsluta. Streckad linje visar hela rektangeln.";
+        return "Rektangelläge: dra längsta sidan → släpp → dra vinkelrätt till tredje hörnet → klicka för att avsluta. Håll inne linjeverktyget för Bézier.";
       }
-      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan punkter längs linjen. Håll inne linjeverktyget för Bézier. Rektangelläge i ritningspanelen.";
+      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan punkter längs linjen. Håll inne linjeverktyget: vanlig → rektangel (R) → Bézier (B).";
     }
     if (tool === "addArea") {
       if (bezierDrawMode) {
-        return "Bézier-yta: samma gest som linje (P0→P1, P2→P3). Minst 3 brytpunkter. Håll inne ytaverktyget för vanlig ritning.";
+        return "Bézier-yta: samma gest som linje (P0→P1, P2→P3). Minst 3 brytpunkter. Håll inne ytaverktyget för att växla läge.";
       }
       if (rectangularDrawMode) {
-        return "Rektangelläge: dra längsta sidan → släpp → dra vinkelrätt till tredje hörnet → klicka för att avsluta. Perfekt för byggnader och andra rätvinkliga ytor.";
+        return "Rektangelläge: dra längsta sidan → släpp → dra vinkelrätt till tredje hörnet → klicka för att avsluta. Håll inne ytaverktyget för Bézier.";
       }
-      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan hörn runt ytan (minst 3). Håll inne ytaverktyget för Bézier. Rektangelläge i ritningspanelen.";
+      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan hörn runt ytan (minst 3). Håll inne ytaverktyget: vanlig → rektangel (R) → Bézier (B).";
     }
     if (tool === "addPoint") {
       return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan där punkten ska ligga.";
@@ -2407,9 +2402,8 @@ export function FieldEditSessionClient({
           canUndo={opsHistory.length > 1}
           onUndo={undo}
           bezierDrawMode={bezierDrawMode}
-          onToggleBezierDrawMode={toggleBezierDrawMode}
           rectangularDrawMode={rectangularDrawMode}
-          onToggleRectangularDrawMode={toggleRectangularDrawMode}
+          onCycleLineAreaDrawMode={cycleLineAreaDrawMode}
           showDraftActions={showDraftActions}
           draftPointCount={draftPointCount}
           onFinishDraft={finishDraft}
