@@ -361,7 +361,7 @@ export async function HelpPageContent() {
                   "Aktiva fältredigeringar syns i «Aktiva utcheckningar» och som färgade ytor under «Utcheckningsområden på kartan»",
                   "Fortsätt senare via «Fortsätt» i listan eller på fältredigeringssidan",
                   "Administratör kan avbryta fältredigeringar från områdessidan — samma som vanliga utcheckningar",
-                  "Mobilanpassad: verktyg på kartan, Navigera/Rita-läge, stora knappar och hopfällbara paneler",
+                  "Mobilanpassad: verktyg på kartan, startar i Navigera (panorera/zooma) — byt till Rita för att redigera",
                   "«Checka in» visar en sammanfattning — därefter väntar admin-godkännande innan ny version skapas",
                   "Ändringar sparas lokalt i webbläsaren tills du checkar in",
                 ]}
