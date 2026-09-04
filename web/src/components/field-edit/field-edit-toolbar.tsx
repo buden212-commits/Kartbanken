@@ -10,6 +10,7 @@ import {
   MapLineToolIcon,
   MapNavigateModeIcon,
   MapPointToolIcon,
+  MapRectangularModeIcon,
   MapSelectToolIcon,
   MapUndoToolIcon,
 } from "@/components/map-draw-tool-icons";
@@ -94,6 +95,18 @@ function BezierModeBadge() {
       style={{ textShadow: "0 0 2px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.7)" }}
     >
       B
+    </span>
+  );
+}
+
+function RectangularModeBadge() {
+  return (
+    <span
+      aria-hidden="true"
+      className="pointer-events-none absolute bottom-0.5 right-0.5 text-[10px] font-bold leading-none text-white"
+      style={{ textShadow: "0 0 2px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.7)" }}
+    >
+      R
     </span>
   );
 }
@@ -212,6 +225,8 @@ type ToolbarsProps = {
   onUndo: () => void;
   bezierDrawMode: boolean;
   onToggleBezierDrawMode: (tool: "addLine" | "addArea") => void;
+  rectangularDrawMode: boolean;
+  onToggleRectangularDrawMode: () => void;
   showDraftActions?: boolean;
   draftPointCount?: number;
   onFinishDraft?: () => void;
@@ -231,6 +246,8 @@ export function FieldEditMapToolbars({
   onUndo,
   bezierDrawMode,
   onToggleBezierDrawMode,
+  rectangularDrawMode,
+  onToggleRectangularDrawMode,
   showDraftActions = false,
   draftPointCount = 0,
   onFinishDraft,
@@ -254,11 +271,15 @@ export function FieldEditMapToolbars({
         {DRAW_TOOLS.map((drawTool) => {
           const supportsBezier = drawTool === "addLine" || drawTool === "addArea";
           const showBezierBadge = supportsBezier && bezierDrawMode && tool === drawTool;
+          const showRectBadge =
+            supportsBezier && rectangularDrawMode && tool === drawTool && !bezierDrawMode;
           const label = supportsBezier
             ? `${FIELD_EDIT_TOOL_LABELS[drawTool]}${
                 bezierDrawMode && tool === drawTool
                   ? " (Bézier — håll inne för vanlig ritning)"
-                  : " (håll inne för Bézier)"
+                  : rectangularDrawMode && tool === drawTool
+                    ? " (rektangel — håll inne för Bézier)"
+                    : " (håll inne för Bézier)"
               }`
             : FIELD_EDIT_TOOL_LABELS[drawTool];
           return (
@@ -273,7 +294,13 @@ export function FieldEditMapToolbars({
               onLongPress={
                 supportsBezier ? () => onToggleBezierDrawMode(drawTool) : undefined
               }
-              badge={showBezierBadge ? <BezierModeBadge /> : null}
+              badge={
+                showBezierBadge ? (
+                  <BezierModeBadge />
+                ) : showRectBadge ? (
+                  <RectangularModeBadge />
+                ) : null
+              }
             >
               <ToolIcon tool={drawTool} />
             </IconToolbarButton>
@@ -292,6 +319,20 @@ export function FieldEditMapToolbars({
       </MapToolbarPanel>
       {showDraftActions && onFinishDraft && onCancelDraft && (
         <MapToolbarPanel label="Ritning">
+          <IconToolbarButton
+            label={
+              rectangularDrawMode
+                ? "Rektangelläge på — klicka för vanlig ritning"
+                : "Rektangelläge (byggnader, rätvinkliga ytor)"
+            }
+            active={rectangularDrawMode}
+            activeClass="border-amber-600 bg-amber-600 text-white"
+            inactiveClass="border-amber-200 bg-white text-amber-900 hover:border-amber-300 hover:bg-amber-50"
+            disabled={bezierDrawMode}
+            onClick={onToggleRectangularDrawMode}
+          >
+            <MapRectangularModeIcon />
+          </IconToolbarButton>
           <IconToolbarButton
             label={`Klar (${draftPointCount} pkt)`}
             active

@@ -84,6 +84,12 @@ import {
 } from "@/lib/field-edit/merge-geometry";
 import { planFillOrBorderOrDuplicate } from "@/lib/field-edit/fill-or-border";
 import {
+  rectangularAreaRing,
+  rectangularCorners,
+  rectangularEdgeLength,
+  rectangularLineCoords,
+} from "@/lib/field-edit/rectangular-geometry";
+import {
   countFieldEditChanges,
   cycleVertexKind,
   hasFieldEditChanges,
@@ -129,10 +135,31 @@ type BezierDrawGesture =
       p3: [number, number];
     };
 
+type RectangularDrawGesture =
+  | { phase: "idle" }
+  | { phase: "drag_edge1"; p0: [number, number]; p1: [number, number] }
+  | { phase: "await_edge2"; p0: [number, number]; p1: [number, number] }
+  | {
+      phase: "drag_edge2";
+      p0: [number, number];
+      p1: [number, number];
+      p2: [number, number];
+      p3: [number, number];
+    }
+  | {
+      phase: "ready";
+      p0: [number, number];
+      p1: [number, number];
+      p2: [number, number];
+      p3: [number, number];
+    };
+
 const DEFAULT_HIT_DISTANCE = 35;
 const DEFAULT_VERTEX_HIT_DISTANCE = 25;
 const COARSE_HIT_DISTANCE = 50;
 const COARSE_VERTEX_HIT_DISTANCE = 35;
+/** Minimum first-edge length in map units before accepting rectangular base. */
+const RECT_MIN_EDGE = 1e-3;
 
 export function FieldEditSessionClient({
   mapSlug,
@@ -169,6 +196,10 @@ export function FieldEditSessionClient({
     controls: BezierSegmentControls[];
   } | null>(null);
   const [bezierDrawMode, setBezierDrawMode] = useState(false);
+  const [rectangularDrawMode, setRectangularDrawMode] = useState(false);
+  const [rectangularGesture, setRectangularGesture] = useState<RectangularDrawGesture>({
+    phase: "idle",
+  });
   const [bezierDraftAnchors, setBezierDraftAnchors] = useState<[number, number][]>([]);
   const [bezierDraftControls, setBezierDraftControls] = useState<BezierSegmentControls[]>(
     [],
@@ -342,6 +373,20 @@ export function FieldEditSessionClient({
     setBezierGesture({ phase: "idle" });
   }, []);
 
+  const clearRectangularGesture = useCallback(() => {
+    setRectangularGesture({ phase: "idle" });
+  }, []);
+
+  const rectangularCornersFromGesture = useCallback(
+    (g: RectangularDrawGesture): [[number, number], [number, number], [number, number], [number, number]] | null => {
+      if (g.phase === "drag_edge2" || g.phase === "ready") {
+        return [g.p0, g.p1, g.p2, g.p3];
+      }
+      return null;
+    },
+    [],
+  );
+
   useEffect(() => {
     const coarse = window.matchMedia("(pointer: coarse)").matches;
     setHitDistance(coarse ? COARSE_HIT_DISTANCE : DEFAULT_HIT_DISTANCE);
@@ -406,6 +451,26 @@ export function FieldEditSessionClient({
       }
       return null;
     }
+    if (
+      rectangularDrawMode &&
+      (tool === "addLine" || tool === "addArea") &&
+      (rectangularGesture.phase === "drag_edge2" || rectangularGesture.phase === "ready")
+    ) {
+      const corners = rectangularCornersFromGesture(rectangularGesture);
+      if (!corners) return null;
+      if (addKind === "line") {
+        return {
+          kind: "line" as const,
+          symbolNumber: Number(symbolNumber),
+          coordinates: rectangularLineCoords(corners),
+        };
+      }
+      return {
+        kind: "area" as const,
+        symbolNumber: Number(symbolNumber),
+        coordinates: rectangularAreaRing(corners),
+      };
+    }
     if (addKind === "line" && draftPoints.length >= 2) {
       return {
         kind: "line" as const,
@@ -427,6 +492,9 @@ export function FieldEditSessionClient({
     bezierDraftControls,
     bezierDrawMode,
     draftPoints,
+    rectangularCornersFromGesture,
+    rectangularDrawMode,
+    rectangularGesture,
     symbolNumber,
     tool,
   ]);
@@ -1407,8 +1475,84 @@ export function FieldEditSessionClient({
           const noDraftYet =
             draftPoints.length === 0 &&
             bezierDraftAnchors.length === 0 &&
-            bezierGesture.phase === "idle";
+            bezierGesture.phase === "idle" &&
+            rectangularGesture.phase === "idle";
           if (noDraftYet && pickSymbolFromObject(hit, kind)) return;
+        }
+
+        if (rectangularDrawMode) {
+          if (rectangularGesture.phase === "idle") {
+            setRectangularGesture({ phase: "drag_edge1", p0: geo, p1: geo });
+            setInfo("Rektangel: dra längsta sidan till nästa hörn, släpp.");
+            setError(null);
+            return;
+          }
+          if (rectangularGesture.phase === "await_edge2") {
+            const [p0, p1, p2, p3] = rectangularCorners(
+              rectangularGesture.p0,
+              rectangularGesture.p1,
+              geo,
+            );
+            setRectangularGesture({
+              phase: "drag_edge2",
+              p0,
+              p1,
+              p2,
+              p3,
+            });
+            setInfo("Dra vinkelrätt till tredje hörnet — streckad linje visar hela rektangeln.");
+            return;
+          }
+          if (rectangularGesture.phase === "ready") {
+            // Click finishes (OCAD).
+            if (symbolNumber === "") {
+              setError("Välj symbol");
+              return;
+            }
+            const corners: [
+              [number, number],
+              [number, number],
+              [number, number],
+              [number, number],
+            ] = [
+              rectangularGesture.p0,
+              rectangularGesture.p1,
+              rectangularGesture.p2,
+              rectangularGesture.p3,
+            ];
+            if (tool === "addLine") {
+              updateOps((current) => ({
+                ...current,
+                adds: [
+                  ...current.adds,
+                  {
+                    kind: "line",
+                    coordinates: rectangularLineCoords(corners),
+                    symbolNumber: Number(symbolNumber),
+                    vertexKinds: ["corner", "corner", "corner", "corner", "corner"],
+                  },
+                ],
+              }));
+            } else {
+              updateOps((current) => ({
+                ...current,
+                adds: [
+                  ...current.adds,
+                  {
+                    kind: "area",
+                    ring: rectangularAreaRing(corners),
+                    symbolNumber: Number(symbolNumber),
+                    vertexKinds: ["corner", "corner", "corner", "corner", "corner"],
+                  },
+                ],
+              }));
+            }
+            setRectangularGesture({ phase: "idle" });
+            setInfo("Rektangel skapad. Börja nästa eller byt verktyg.");
+            setError(null);
+            return;
+          }
+          return;
         }
 
         if (bezierDrawMode) {
@@ -1455,6 +1599,8 @@ export function FieldEditSessionClient({
       objects,
       ops,
       pickSymbolFromObject,
+      rectangularDrawMode,
+      rectangularGesture,
       resolveSnapPoint,
       selectedObjectIndex,
       symbolNumber,
@@ -1501,6 +1647,37 @@ export function FieldEditSessionClient({
           };
           pendingVertexDragRef.current = null;
         }
+      }
+
+      if (
+        rectangularDrawMode &&
+        (tool === "addLine" || tool === "addArea") &&
+        (rectangularGesture.phase === "drag_edge1" ||
+          rectangularGesture.phase === "drag_edge2")
+      ) {
+        const { point: geo } = resolveSnapPoint(rawGeo, null);
+        if (rectangularGesture.phase === "drag_edge1") {
+          setRectangularGesture({
+            phase: "drag_edge1",
+            p0: rectangularGesture.p0,
+            p1: geo,
+          });
+        } else {
+          const [p0, p1, p2, p3] = rectangularCorners(
+            rectangularGesture.p0,
+            rectangularGesture.p1,
+            geo,
+          );
+          setRectangularGesture({
+            phase: "drag_edge2",
+            p0,
+            p1,
+            p2,
+            p3,
+          });
+        }
+        setSnapPreview(null);
+        return;
       }
 
       if (
@@ -1588,6 +1765,8 @@ export function FieldEditSessionClient({
       bezierGesture,
       clearHoldCycle,
       editorSettings.snapEnabled,
+      rectangularDrawMode,
+      rectangularGesture,
       resolveSnapPoint,
       selectedObjectIndex,
       tool,
@@ -1599,6 +1778,55 @@ export function FieldEditSessionClient({
     (_e?: React.PointerEvent, _svg?: SVGSVGElement) => {
       clearHoldCycle();
       pendingVertexDragRef.current = null;
+
+      if (
+        rectangularDrawMode &&
+        (tool === "addLine" || tool === "addArea") &&
+        rectangularGesture.phase === "drag_edge1"
+      ) {
+        if (rectangularEdgeLength(rectangularGesture.p0, rectangularGesture.p1) < RECT_MIN_EDGE) {
+          setRectangularGesture({ phase: "idle" });
+          setInfo("Dra en längre sida — börja med den längsta sidan.");
+          setSnapPreview(null);
+          return;
+        }
+        setRectangularGesture({
+          phase: "await_edge2",
+          p0: rectangularGesture.p0,
+          p1: rectangularGesture.p1,
+        });
+        setInfo("Tryck och dra vinkelrätt till tredje hörnet.");
+        setSnapPreview(null);
+        return;
+      }
+
+      if (
+        rectangularDrawMode &&
+        (tool === "addLine" || tool === "addArea") &&
+        rectangularGesture.phase === "drag_edge2"
+      ) {
+        const width = rectangularEdgeLength(rectangularGesture.p1, rectangularGesture.p2);
+        if (width < RECT_MIN_EDGE) {
+          setRectangularGesture({
+            phase: "await_edge2",
+            p0: rectangularGesture.p0,
+            p1: rectangularGesture.p1,
+          });
+          setInfo("Dra ut bredden, sedan släpp. Klicka för att avsluta när förhandsvisningen syns.");
+          setSnapPreview(null);
+          return;
+        }
+        setRectangularGesture({
+          phase: "ready",
+          p0: rectangularGesture.p0,
+          p1: rectangularGesture.p1,
+          p2: rectangularGesture.p2,
+          p3: rectangularGesture.p3,
+        });
+        setInfo("Klicka för att avsluta, eller tryck «Klar».");
+        setSnapPreview(null);
+        return;
+      }
 
       const cutDrag = cutLineDragRef.current;
       if (
@@ -1684,12 +1912,54 @@ export function FieldEditSessionClient({
       dragBezierControlRef.current = null;
       setSnapPreview(null);
     },
-    [applySplitParts, bezierDrawMode, bezierGesture, cadCutTool, clearHoldCycle, hitDistance, objects, resolveSnapPoint, selectedObjectIndex, tool],
+    [applySplitParts, bezierDrawMode, bezierGesture, cadCutTool, clearHoldCycle, hitDistance, objects, rectangularDrawMode, rectangularGesture, resolveSnapPoint, selectedObjectIndex, tool],
   );
 
   const finishDraft = useCallback(() => {
     if (symbolNumber === "") {
       setError("Välj symbol");
+      return;
+    }
+    if (
+      rectangularDrawMode &&
+      (tool === "addLine" || tool === "addArea") &&
+      (rectangularGesture.phase === "ready" || rectangularGesture.phase === "drag_edge2")
+    ) {
+      const corners = rectangularCornersFromGesture(rectangularGesture);
+      if (!corners) {
+        setError("Rita klart rektangeln först (två sidor).");
+        return;
+      }
+      if (tool === "addLine") {
+        updateOps((current) => ({
+          ...current,
+          adds: [
+            ...current.adds,
+            {
+              kind: "line",
+              coordinates: rectangularLineCoords(corners),
+              symbolNumber: Number(symbolNumber),
+              vertexKinds: ["corner", "corner", "corner", "corner", "corner"],
+            },
+          ],
+        }));
+      } else {
+        updateOps((current) => ({
+          ...current,
+          adds: [
+            ...current.adds,
+            {
+              kind: "area",
+              ring: rectangularAreaRing(corners),
+              symbolNumber: Number(symbolNumber),
+              vertexKinds: ["corner", "corner", "corner", "corner", "corner"],
+            },
+          ],
+        }));
+      }
+      setRectangularGesture({ phase: "idle" });
+      setError(null);
+      setInfo("Rektangel skapad.");
       return;
     }
     if (tool === "addLine") {
@@ -1769,13 +2039,18 @@ export function FieldEditSessionClient({
     }
     setDraftPoints([]);
     clearBezierDraft();
+    clearRectangularGesture();
     setError(null);
   }, [
     bezierDraftAnchors,
     bezierDraftControls,
     bezierDrawMode,
     clearBezierDraft,
+    clearRectangularGesture,
     draftPoints,
+    rectangularCornersFromGesture,
+    rectangularDrawMode,
+    rectangularGesture,
     symbolNumber,
     tool,
     updateOps,
@@ -1784,7 +2059,8 @@ export function FieldEditSessionClient({
   const cancelDraft = useCallback(() => {
     setDraftPoints([]);
     clearBezierDraft();
-  }, [clearBezierDraft]);
+    clearRectangularGesture();
+  }, [clearBezierDraft, clearRectangularGesture]);
 
   const drawPointerHandlers = useMemo<MapDrawPointerHandlers>(
     () => ({
@@ -1847,6 +2123,34 @@ export function FieldEditSessionClient({
                   : null,
               cutDraftPoints: cadCutTool !== "off" ? cutDraftPoints : [],
               mergeObjectIndices: mergeActive ? mergeObjectIndices : [],
+              rectangularDraw: (() => {
+                if (!rectangularDrawMode || (tool !== "addLine" && tool !== "addArea")) {
+                  return null;
+                }
+                const g = rectangularGesture;
+                if (g.phase === "drag_edge1") {
+                  return {
+                    solid: [g.p0, g.p1] as [number, number][],
+                    dashed: [] as [number, number][],
+                    fill: false,
+                  };
+                }
+                if (g.phase === "await_edge2") {
+                  return {
+                    solid: [g.p0, g.p1] as [number, number][],
+                    dashed: [] as [number, number][],
+                    fill: false,
+                  };
+                }
+                if (g.phase === "drag_edge2" || g.phase === "ready") {
+                  return {
+                    solid: [g.p0, g.p1, g.p2] as [number, number][],
+                    dashed: [g.p2, g.p3, g.p0] as [number, number][],
+                    fill: tool === "addArea",
+                  };
+                }
+                return null;
+              })(),
             }),
           }}
         />
@@ -1870,6 +2174,8 @@ export function FieldEditSessionClient({
       cutDraftPoints,
       mergeActive,
       mergeObjectIndices,
+      rectangularDrawMode,
+      rectangularGesture,
       bezierDraftAnchors,
       bezierDraftControls,
       bezierGesture,
@@ -1955,11 +2261,13 @@ export function FieldEditSessionClient({
     setMapMode("draw");
     setDraftPoints([]);
     clearBezierDraft();
+    clearRectangularGesture();
     setSelectedVertexIndex(null);
     setBezierEdit(null);
     setCadVertexTool("off");
     if (next !== "addLine" && next !== "addArea") {
       setBezierDrawMode(false);
+      setRectangularDrawMode(false);
     }
     if (next !== "select") setSelectedObjectIndex(null);
   }
@@ -1973,15 +2281,42 @@ export function FieldEditSessionClient({
     setMapMode("draw");
     setDraftPoints([]);
     clearBezierDraft();
+    clearRectangularGesture();
     setSelectedObjectIndex(null);
     setSelectedVertexIndex(null);
     setBezierEdit(null);
     setBezierDrawMode(enabling);
+    if (enabling) setRectangularDrawMode(false);
     setError(null);
     setInfo(
       enabling
         ? "Bézier-ritning: tryck ner på brytpunkt och dra mot P1, sedan tryck på P2 och släpp på nästa brytpunkt. Håll inne verktyget igen för vanlig ritning."
         : "Vanlig ritning: klicka brytpunkter. Håll inne verktyget för Bézier.",
+    );
+  }
+
+  function toggleRectangularDrawMode() {
+    if (gpsTracking) {
+      cancelGpsTracking();
+    }
+    if (tool !== "addLine" && tool !== "addArea") {
+      setTool("addArea");
+    }
+    setMapMode("draw");
+    const enabling = !rectangularDrawMode;
+    setDraftPoints([]);
+    clearBezierDraft();
+    clearRectangularGesture();
+    setSelectedObjectIndex(null);
+    setSelectedVertexIndex(null);
+    setBezierEdit(null);
+    setRectangularDrawMode(enabling);
+    if (enabling) setBezierDrawMode(false);
+    setError(null);
+    setInfo(
+      enabling
+        ? "Rektangelläge: dra längsta sidan → släpp → dra vinkelrätt → klicka för att avsluta. Börja alltid med längsta sidan."
+        : "Vanlig ritning: klicka brytpunkter.",
     );
   }
 
@@ -1991,8 +2326,14 @@ export function FieldEditSessionClient({
     if (bezierGesture.phase === "drag_p1" || bezierGesture.phase === "drag_p3") {
       setBezierGesture({ phase: "idle" });
     }
+    if (
+      rectangularGesture.phase === "drag_edge1" ||
+      rectangularGesture.phase === "drag_edge2"
+    ) {
+      setRectangularGesture({ phase: "idle" });
+    }
     setSnapPreview(null);
-  }, [bezierGesture.phase]);
+  }, [bezierGesture.phase, rectangularGesture.phase]);
 
   const handleGpsToggle = useCallback(() => {
     toggleGpsTracking();
@@ -2009,19 +2350,25 @@ export function FieldEditSessionClient({
       if (bezierDrawMode) {
         return "Bézier-linje: tryck ner på brytpunkt → dra mot P1 → släpp; tryck på P2 → släpp på nästa brytpunkt. Håll inne linjeverktyget för vanlig ritning.";
       }
-      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan punkter längs linjen. Håll inne linjeverktyget för Bézier.";
+      if (rectangularDrawMode) {
+        return "Rektangelläge: dra längsta sidan → släpp → dra vinkelrätt till tredje hörnet → klicka för att avsluta. Streckad linje visar hela rektangeln.";
+      }
+      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan punkter längs linjen. Håll inne linjeverktyget för Bézier. Rektangelläge i ritningspanelen.";
     }
     if (tool === "addArea") {
       if (bezierDrawMode) {
         return "Bézier-yta: samma gest som linje (P0→P1, P2→P3). Minst 3 brytpunkter. Håll inne ytaverktyget för vanlig ritning.";
       }
-      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan hörn runt ytan (minst 3). Håll inne ytaverktyget för Bézier.";
+      if (rectangularDrawMode) {
+        return "Rektangelläge: dra längsta sidan → släpp → dra vinkelrätt till tredje hörnet → klicka för att avsluta. Perfekt för byggnader och andra rätvinkliga ytor.";
+      }
+      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan hörn runt ytan (minst 3). Håll inne ytaverktyget för Bézier. Rektangelläge i ritningspanelen.";
     }
     if (tool === "addPoint") {
       return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan där punkten ska ligga.";
     }
     return null;
-  }, [bezierDrawMode, gpsTracking, tool]);
+  }, [bezierDrawMode, gpsTracking, rectangularDrawMode, tool]);
 
   const localBackup = loadLocalFieldEditOps(sessionId);
   const counts = useMemo(() => countFieldEditChanges(ops), [ops]);
@@ -2033,9 +2380,15 @@ export function FieldEditSessionClient({
       : "Sparat lokalt";
 
   const isDrawInteraction = mapMode === "draw" && !gpsTracking;
-  const draftPointCount = bezierDrawMode
-    ? bezierDraftAnchors.length
-    : draftPoints.length;
+  const draftPointCount = rectangularDrawMode
+    ? rectangularGesture.phase === "ready" || rectangularGesture.phase === "drag_edge2"
+      ? 4
+      : rectangularGesture.phase === "drag_edge1" || rectangularGesture.phase === "await_edge2"
+        ? 2
+        : 0
+    : bezierDrawMode
+      ? bezierDraftAnchors.length
+      : draftPoints.length;
   const showDraftActions =
     isDrawInteraction && (tool === "addLine" || tool === "addArea");
 
@@ -2055,6 +2408,8 @@ export function FieldEditSessionClient({
           onUndo={undo}
           bezierDrawMode={bezierDrawMode}
           onToggleBezierDrawMode={toggleBezierDrawMode}
+          rectangularDrawMode={rectangularDrawMode}
+          onToggleRectangularDrawMode={toggleRectangularDrawMode}
           showDraftActions={showDraftActions}
           draftPointCount={draftPointCount}
           onFinishDraft={finishDraft}
@@ -2095,6 +2450,7 @@ export function FieldEditSessionClient({
       showDraftActions,
       draftPointCount,
       bezierDrawMode,
+      rectangularDrawMode,
       finishDraft,
       cancelDraft,
       opsHistory.length,

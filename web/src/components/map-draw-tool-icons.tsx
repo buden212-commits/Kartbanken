@@ -91,6 +91,33 @@ export function MapRectangleToolIcon() {
   );
 }
 
+/**
+ * Field edit: OCAD Rectangular mode — orthogonal building outline.
+ * Solid edges = drawn so far; dashed = preview of remaining sides.
+ */
+export function MapRectangularModeIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+      {/* Rotated rectangle: solid L (first two sides), dashed close */}
+      <path
+        d="M5.2 12.2 9.8 5.8 14.8 9.2"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M14.8 9.2 10.2 15.6 5.2 12.2"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeDasharray="2.4 1.8"
+      />
+    </svg>
+  );
+}
+
 export function MapDeleteToolIcon() {
   return (
     <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">

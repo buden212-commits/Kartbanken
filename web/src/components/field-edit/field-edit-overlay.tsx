@@ -58,6 +58,17 @@ function lineSvg(coords: [number, number][], transform: SvgRootTransform, stroke
   return `<polyline points="${points}" fill="none" stroke="${stroke}" stroke-width="${width}" pointer-events="none" />`;
 }
 
+function dashedLineSvg(
+  coords: [number, number][],
+  transform: SvgRootTransform,
+  stroke: string,
+  width = 2,
+): string {
+  if (coords.length < 2) return "";
+  const points = ringToSvgPoints(coords, transform);
+  return `<polyline points="${points}" fill="none" stroke="${stroke}" stroke-width="${width}" stroke-dasharray="6 4" pointer-events="none" />`;
+}
+
 function maskLineSvg(coords: [number, number][], transform: SvgRootTransform): string {
   if (coords.length < 2) return "";
   const points = ringToSvgPoints(coords, transform);
@@ -295,6 +306,11 @@ export function fieldEditOverlaySvg(options: {
   bezierDraw?: BezierDrawOverlay | null;
   cutDraftPoints?: [number, number][];
   mergeObjectIndices?: number[];
+  rectangularDraw?: {
+    solid: [number, number][];
+    dashed: [number, number][];
+    fill: boolean;
+  } | null;
 }): string {
   const {
     transform,
@@ -314,6 +330,7 @@ export function fieldEditOverlaySvg(options: {
     bezierDraw = null,
     cutDraftPoints = [],
     mergeObjectIndices = [],
+    rectangularDraw = null,
   } = options;
 
   const masked = new Set(maskedObjectIndices);
@@ -381,11 +398,43 @@ export function fieldEditOverlaySvg(options: {
 
   if (bezierDraw) {
     parts.push(bezierDrawDraftSvg(bezierDraw, transform));
+  } else if (rectangularDraw) {
+    if (rectangularDraw.fill && rectangularDraw.solid.length + rectangularDraw.dashed.length >= 3) {
+      const ring = [...rectangularDraw.solid];
+      for (const p of rectangularDraw.dashed) {
+        const last = ring[ring.length - 1];
+        if (!last || last[0] !== p[0] || last[1] !== p[1]) ring.push(p);
+      }
+      if (ring.length >= 3) {
+        parts.push(
+          `<polygon points="${ringToSvgPoints(ring, transform)}" fill="rgba(245,158,11,0.15)" stroke="none" pointer-events="none" />`,
+        );
+      }
+    }
+    if (rectangularDraw.solid.length >= 2) {
+      parts.push(lineSvg(rectangularDraw.solid, transform, "#d97706", 2.5));
+    }
+    if (rectangularDraw.dashed.length >= 2) {
+      parts.push(dashedLineSvg(rectangularDraw.dashed, transform, "#d97706", 2.5));
+    }
+    const handles = [
+      ...rectangularDraw.solid,
+      ...rectangularDraw.dashed.slice(1),
+    ];
+    if (handles.length >= 1) {
+      parts.push(vertexHandlesSvg(handles, transform, null));
+    }
   } else if (!draftHasSymbolPreview && draftKind === "line" && draftPoints.length >= 1) {
     parts.push(lineSvg(draftPoints, transform, "#16a34a", 2));
     parts.push(vertexHandlesSvg(draftPoints, transform, null));
   }
-  if (!bezierDraw && !draftHasSymbolPreview && draftKind === "area" && draftPoints.length >= 1) {
+  if (
+    !bezierDraw &&
+    !rectangularDraw &&
+    !draftHasSymbolPreview &&
+    draftKind === "area" &&
+    draftPoints.length >= 1
+  ) {
     if (draftPoints.length >= 3) {
       parts.push(
         `<polygon points="${ringToSvgPoints(draftPoints, transform)}" fill="rgba(34,197,94,0.15)" stroke="#16a34a" stroke-width="2" pointer-events="none" />`,
@@ -394,7 +443,12 @@ export function fieldEditOverlaySvg(options: {
       parts.push(lineSvg(draftPoints, transform, "#16a34a", 2));
     }
     parts.push(vertexHandlesSvg(draftPoints, transform, null));
-  } else if (!bezierDraw && draftHasSymbolPreview && draftPoints.length >= 1) {
+  } else if (
+    !bezierDraw &&
+    !rectangularDraw &&
+    draftHasSymbolPreview &&
+    draftPoints.length >= 1
+  ) {
     parts.push(vertexHandlesSvg(draftPoints, transform, null));
   }
 
