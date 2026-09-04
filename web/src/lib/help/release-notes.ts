@@ -8,7 +8,7 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-04",
-    title: "Fältredigering, CAD, klipp, sammanfoga och webbplatsikon",
+    title: "Fältredigering, CAD-klipp, sammanfoga, fyll/kant och webbplatsikon",
     items: [
       "Klipp i CAD: klipp linje (klick/dra), dela yta (klipplinje kant→kant) och klipp hål i yta",
       "Sammanfoga i CAD: markera flera linjer (ändpunkter nära) eller överlappande ytor med samma symbol och slå ihop dem",
