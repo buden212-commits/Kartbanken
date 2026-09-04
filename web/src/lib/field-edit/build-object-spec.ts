@@ -16,7 +16,12 @@ import {
   writeTObject12,
 } from "@/lib/ocad/ocad-object-create";
 import type { NewObjectSpec } from "@/lib/ocad/ocad-integrate";
-import type { FieldEditAdd, FieldEditGeometryKind, FieldEditModify } from "./types";
+import type {
+  FieldEditAdd,
+  FieldEditGeometryKind,
+  FieldEditModify,
+  FieldEditVertexKind,
+} from "./types";
 
 const require = createRequire(import.meta.url);
 const { readOcad } = require("ocad2geojson") as {
@@ -53,6 +58,31 @@ type OcadFileData = {
 };
 
 const CORNER_Y_FLAG = 0x01;
+const DASH_Y_FLAG = 0x08;
+
+function yFlagsForVertexKind(kind: FieldEditVertexKind | undefined): number {
+  if (kind === "corner") return CORNER_Y_FLAG;
+  if (kind === "dash") return DASH_Y_FLAG;
+  return 0;
+}
+
+/** Drop duplicate closing corner so we only close once when writing OCAD. */
+function openRingForWrite(
+  coordinates: [number, number][],
+  vertexKinds?: FieldEditVertexKind[],
+): { coordinates: [number, number][]; vertexKinds?: FieldEditVertexKind[] } {
+  if (coordinates.length < 2) return { coordinates, vertexKinds };
+  const first = coordinates[0]!;
+  const last = coordinates[coordinates.length - 1]!;
+  if (first[0] !== last[0] || first[1] !== last[1]) {
+    return { coordinates, vertexKinds };
+  }
+  const open = coordinates.slice(0, -1);
+  if (!vertexKinds || vertexKinds.length !== coordinates.length) {
+    return { coordinates: open, vertexKinds };
+  }
+  return { coordinates: open, vertexKinds: vertexKinds.slice(0, -1) };
+}
 
 function isActiveObject(obj: { objIndex?: { status: number } }): boolean {
   const status = obj.objIndex?.status;
@@ -182,6 +212,7 @@ function buildObjectSpec(
 function coordsForKind(
   kind: FieldEditGeometryKind,
   coordinates: [number, number][],
+  vertexKinds?: FieldEditVertexKind[],
 ): OcadCoord[] {
   if (kind === "point") {
     const [x, y] = coordinates[0] ?? [0, 0];
@@ -191,18 +222,30 @@ function coordsForKind(
     if (coordinates.length < 2) {
       throw new Error("Linjen har för få punkter");
     }
-    return coordinates.map(([x, y]) => ({ x, y }));
+    return coordinates.map(([x, y], index) => ({
+      x,
+      y,
+      yFlags: yFlagsForVertexKind(vertexKinds?.[index]),
+    }));
   }
-  if (coordinates.length < 3) {
+  const opened = openRingForWrite(coordinates, vertexKinds);
+  if (opened.coordinates.length < 3) {
     throw new Error("Ytan har för få hörn");
   }
-  const coords: OcadCoord[] = coordinates.map(([x, y], index) => ({
+  const coords: OcadCoord[] = opened.coordinates.map(([x, y], index) => ({
     x,
     y,
-    yFlags: index === 0 ? CORNER_Y_FLAG : 0,
+    yFlags: yFlagsForVertexKind(opened.vertexKinds?.[index]),
   }));
-  const [fx, fy] = coordinates[0]!;
-  coords.push({ x: fx, y: fy, yFlags: CORNER_Y_FLAG });
+  if (!(coords[0]!.yFlags! & CORNER_Y_FLAG) && !opened.vertexKinds?.[0]) {
+    coords[0]!.yFlags = CORNER_Y_FLAG;
+  }
+  const [fx, fy] = opened.coordinates[0]!;
+  coords.push({
+    x: fx,
+    y: fy,
+    yFlags: coords[0]!.yFlags ?? CORNER_Y_FLAG,
+  });
   return coords;
 }
 
@@ -212,6 +255,7 @@ export function buildSpecFromGeometry(
   symbolNumber: number,
   coordinates: [number, number][],
   label: string,
+  vertexKinds?: FieldEditVertexKind[],
 ): NewObjectSpec {
   assertSymbolType(ocadFile, symbolNumber, kind, label);
   const objType = objTypeForKind(kind);
@@ -220,7 +264,7 @@ export function buildSpecFromGeometry(
     ? templateFromObject(templateObj, symbolNumber, objType)
     : defaultTObject12Template(symbolNumber, objType);
   const color = resolveObjectColor(ocadFile, symbolNumber, templateObj?.col ?? template.col);
-  const coords = coordsForKind(kind, coordinates);
+  const coords = coordsForKind(kind, coordinates, vertexKinds);
   return buildObjectSpec(template, coords, objType, color, symbolNumber);
 }
 
@@ -241,9 +285,17 @@ export function buildSpecFromAdd(ocadFile: OcadFileData, add: FieldEditAdd): New
         add.symbolNumber,
         add.coordinates,
         "Ny linje",
+        add.vertexKinds,
       );
     case "area":
-      return buildSpecFromGeometry(ocadFile, "area", add.symbolNumber, add.ring, "Ny yta");
+      return buildSpecFromGeometry(
+        ocadFile,
+        "area",
+        add.symbolNumber,
+        add.ring,
+        "Ny yta",
+        add.vertexKinds,
+      );
   }
 }
 
@@ -254,6 +306,7 @@ export function buildSpecFromModify(ocadFile: OcadFileData, modify: FieldEditMod
     modify.symbolNumber,
     modify.coordinates,
     `Ändrat objekt ${modify.objectIndex}`,
+    modify.vertexKinds,
   );
 }
 

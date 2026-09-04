@@ -8,10 +8,21 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-04",
+    title: "Fältredigering — OCAD-brytpunkter (normal/hörn/streck)",
+    items: [
+      "Duplicera objekt är borttaget från CAD-menyn",
+      "Lägg till normal (cirkel), hörnbrytpunkt (kvadrat) eller streckbrytpunkt (romb) — klicka på linjen, eller på en befintlig punkt för att ändra typ",
+      "Håll inne lägg till-ikonen för att ändra alla brytpunkter till den typen",
+      "Växla brytpunktstyp: normal → streck → hörn (som i OCAD)",
+      "Radera brytpunkt med egen ikon",
+      "Hörn visas som kvadrat och streck som romb på kartan",
+    ],
+  },
+  {
+    date: "2026-09-04",
     title: "Fältredigering — CAD-meny med ikoner",
     items: [
-      "CAD-verktyg visas som ikoner (byt symbol, radera, duplicera, mät, förenkla, mjuka hörn, Bézier, vänd riktning)",
-      "Radera brytpunkt: klicka på punkten — håll inne ikonen för att växla till lägg till brytpunkt",
+      "CAD-verktyg visas som ikoner (byt symbol, radera, mät, förenkla, mjuka hörn, Bézier, vänd riktning)",
       "Brytpunktsverktygen gäller bara valt linje- eller ytobjekt",
     ],
   },

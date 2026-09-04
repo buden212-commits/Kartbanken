@@ -7,8 +7,9 @@ import { fieldEditOverlaySvg } from "@/components/field-edit/field-edit-overlay"
 import {
   closedRing,
   applyVertexMove,
-  insertVertexOnSegment,
-  removeVertexAt,
+  insertVertexOnSegmentWithKinds,
+  removeVertexAtWithKinds,
+  setVertexKindAt,
   verticesForHandles,
 } from "@/lib/field-edit/vertices";
 import { nearestPointOnPolyline, distance2d } from "@/lib/field-edit/polyline-geometry";
@@ -68,11 +69,15 @@ import { snapGeoPoint, type SnapResult } from "@/lib/field-edit/snap";
 import { useGpsTrackRecording } from "@/lib/gps/use-gps-track-recording";
 import {
   countFieldEditChanges,
+  cycleVertexKind,
   hasFieldEditChanges,
   resolveObjectCoordinates,
+  resolveObjectVertexKinds,
+  vertexKindsForStoredCoordinates,
   type FieldEditGeometryKind,
   type FieldEditModify,
   type FieldEditOps,
+  type FieldEditVertexKind,
 } from "@/lib/field-edit/types";
 import { metersToMapUnits, type OcadCrsInfo } from "@/lib/ocad/crs";
 import { screenToSvgPoint } from "@/lib/ocad/map-hit-test";
@@ -496,17 +501,37 @@ export function FieldEditSessionClient({
   );
 
   const upsertModify = useCallback(
-    (objectIndex: number, coordinates: [number, number][]) => {
+    (
+      objectIndex: number,
+      coordinates: [number, number][],
+      vertexKinds?: FieldEditVertexKind[],
+    ) => {
       const obj = objects.find((entry) => entry.i === objectIndex);
       if (!obj) return;
       updateOps((current) => {
         const kind = geometryKindFromType(obj.t);
         const existing = current.modifies.find((m) => m.objectIndex === objectIndex);
+        let resolvedKinds: FieldEditVertexKind[] | undefined;
+        if (vertexKinds) {
+          // Callers may pass handle-aligned or fully stored kinds.
+          if (vertexKinds.length === coordinates.length) {
+            resolvedKinds = vertexKinds;
+          } else {
+            resolvedKinds = vertexKindsForStoredCoordinates(coordinates, vertexKinds, kind);
+          }
+        } else if (
+          existing?.vertexKinds &&
+          existing.vertexKinds.length === existing.coordinates.length &&
+          existing.coordinates.length === coordinates.length
+        ) {
+          resolvedKinds = existing.vertexKinds;
+        }
         const nextModify: FieldEditModify = {
           objectIndex,
           symbolNumber: existing?.symbolNumber ?? obj.s,
           geometryKind: kind,
           coordinates,
+          ...(resolvedKinds ? { vertexKinds: resolvedKinds } : {}),
         };
         const modifies = existing
           ? current.modifies.map((m) => (m.objectIndex === objectIndex ? nextModify : m))
@@ -534,6 +559,9 @@ export function FieldEditSessionClient({
           symbolNumber: nextSymbolNumber,
           geometryKind: kind,
           coordinates,
+          ...(existing?.vertexKinds && existing.vertexKinds.length === coordinates.length
+            ? { vertexKinds: existing.vertexKinds }
+            : {}),
         };
         const modifies = existing
           ? current.modifies.map((m) => (m.objectIndex === objectIndex ? nextModify : m))
@@ -560,51 +588,6 @@ export function FieldEditSessionClient({
     setBezierEdit(null);
     setCadVertexTool("off");
   }, [selectedObjectIndex, updateOps]);
-
-  const duplicateSelectedObject = useCallback(() => {
-    if (selectedObjectIndex == null) return;
-    const obj = objects.find((entry) => entry.i === selectedObjectIndex);
-    if (!obj || opsRef.current.deletes.includes(obj.i)) return;
-    const coords =
-      resolveObjectCoordinates(obj.i, obj.v, opsRef.current) ?? obj.v;
-    const symbol =
-      opsRef.current.modifies.find((m) => m.objectIndex === obj.i)?.symbolNumber ?? obj.s;
-    if (obj.t === "point") {
-      const pt = coords[0] ?? obj.c;
-      updateOps((current) => ({
-        ...current,
-        adds: [
-          ...current.adds,
-          { kind: "point", x: pt[0], y: pt[1], symbolNumber: symbol },
-        ],
-      }));
-    } else if (obj.t === "line") {
-      updateOps((current) => ({
-        ...current,
-        adds: [
-          ...current.adds,
-          {
-            kind: "line",
-            coordinates: coords.map(([x, y]) => [x, y] as [number, number]),
-            symbolNumber: symbol,
-          },
-        ],
-      }));
-    } else {
-      updateOps((current) => ({
-        ...current,
-        adds: [
-          ...current.adds,
-          {
-            kind: "area",
-            ring: closedRing(coords),
-            symbolNumber: symbol,
-          },
-        ],
-      }));
-    }
-    setInfo("Objekt duplicerat som nytt tillägg.");
-  }, [objects, selectedObjectIndex, updateOps]);
 
   const startBezierEdit = useCallback(() => {
     setCadVertexTool("off");
@@ -714,44 +697,91 @@ export function FieldEditSessionClient({
             obj?.t === "area" ? verticesForHandles(coords, obj.t) : coords;
 
           if (
-            cadVertexTool === "remove" &&
+            cadVertexTool !== "off" &&
             obj &&
             (obj.t === "line" || obj.t === "area")
           ) {
+            const kinds = resolveObjectVertexKinds(
+              selectedObjectIndex,
+              handleCoords.length,
+              ops,
+            );
+            const minPoints = obj.t === "line" ? 2 : 3;
             const vertexIndex = hitTestFieldEditVertex(
               handleCoords,
               geo,
               vertexHitDistance,
             );
-            if (vertexIndex != null) {
-              const minPoints = obj.t === "line" ? 2 : 3;
-              const next = removeVertexAt(coords, obj.t, vertexIndex, minPoints);
-              if (!next) {
-                setInfo(`Kan inte radera — minst ${minPoints} brytpunkter krävs.`);
+
+            if (cadVertexTool === "remove") {
+              if (vertexIndex != null) {
+                const result = removeVertexAtWithKinds(
+                  coords,
+                  kinds,
+                  obj.t,
+                  vertexIndex,
+                  minPoints,
+                );
+                if (!result) {
+                  setInfo(`Kan inte radera — minst ${minPoints} brytpunkter krävs.`);
+                  return;
+                }
+                upsertModify(selectedObjectIndex, result.coordinates, result.vertexKinds);
+                setSelectedVertexIndex(null);
+                setInfo("Brytpunkt raderad.");
                 return;
               }
-              upsertModify(selectedObjectIndex, next);
-              setSelectedVertexIndex(null);
-              setInfo("Brytpunkt raderad.");
+              setInfo("Klicka på en brytpunkt för att radera den.");
               return;
             }
-            setInfo("Klicka på en brytpunkt för att radera den.");
-            return;
-          }
 
-          if (
-            cadVertexTool === "add" &&
-            obj &&
-            (obj.t === "line" || obj.t === "area")
-          ) {
+            if (cadVertexTool === "toggleType") {
+              if (vertexIndex != null) {
+                const currentKind = kinds[vertexIndex] ?? "normal";
+                const nextKind = cycleVertexKind(currentKind);
+                const result = setVertexKindAt(coords, kinds, obj.t, vertexIndex, nextKind);
+                if (!result) return;
+                upsertModify(selectedObjectIndex, result.coordinates, result.vertexKinds);
+                setSelectedVertexIndex(vertexIndex);
+                const label =
+                  nextKind === "normal"
+                    ? "normal"
+                    : nextKind === "corner"
+                      ? "hörn"
+                      : "streck";
+                setInfo(`Brytpunkt → ${label}.`);
+                return;
+              }
+              setInfo("Klicka på en brytpunkt för att växla typ.");
+              return;
+            }
+
+            const addKind: FieldEditVertexKind =
+              cadVertexTool === "addCorner"
+                ? "corner"
+                : cadVertexTool === "addDash"
+                  ? "dash"
+                  : "normal";
+            const addLabel =
+              addKind === "normal" ? "normal" : addKind === "corner" ? "hörn" : "streck";
+
+            // OCAD: in add mode, clicking an existing vertex converts its type.
+            if (vertexIndex != null) {
+              const result = setVertexKindAt(coords, kinds, obj.t, vertexIndex, addKind);
+              if (!result) return;
+              upsertModify(selectedObjectIndex, result.coordinates, result.vertexKinds);
+              setSelectedVertexIndex(vertexIndex);
+              setInfo(`Brytpunkt ändrad till ${addLabel}.`);
+              return;
+            }
+
             const hitPolyline =
               obj.t === "area" ? closedRing(handleCoords) : handleCoords;
             const nearest = nearestPointOnPolyline(geo, hitPolyline);
             if (!nearest || nearest.distance > hitDistance) {
-              setInfo("Klicka närmare linjen för att lägga till en brytpunkt.");
+              setInfo(`Klicka närmare linjen för att lägga till en ${addLabel}-brytpunkt.`);
               return;
             }
-            // Avoid inserting too close to existing vertices
             const tooClose = handleCoords.some(
               (v) => distance2d(v, nearest.point) < vertexHitDistance * 0.35,
             );
@@ -759,15 +789,17 @@ export function FieldEditSessionClient({
               setInfo("För nära en befintlig brytpunkt — välj en annan plats.");
               return;
             }
-            const next = insertVertexOnSegment(
+            const result = insertVertexOnSegmentWithKinds(
               coords,
+              kinds,
               obj.t,
               nearest.segmentIndex,
               nearest.point,
+              addKind,
             );
-            upsertModify(selectedObjectIndex, next);
+            upsertModify(selectedObjectIndex, result.coordinates, result.vertexKinds);
             setSelectedVertexIndex(null);
-            setInfo("Brytpunkt tillagd.");
+            setInfo(`${addLabel === "normal" ? "Normal" : addLabel === "hörn" ? "Hörn" : "Streck"}brytpunkt tillagd.`);
             return;
           }
 
@@ -1575,14 +1607,13 @@ export function FieldEditSessionClient({
               mapScale={ocadMapScale}
               editorSettings={editorSettings}
               onEditorSettingsChange={updateEditorSettings}
-              onApplyCoordinates={(coordinates) => {
-                upsertModify(selectedObject.i, coordinates);
+              onApplyCoordinates={(coordinates, vertexKinds) => {
+                upsertModify(selectedObject.i, coordinates, vertexKinds);
                 setSelectedVertexIndex(null);
                 setBezierEdit(null);
               }}
               onChangeSymbol={(sym) => upsertModifySymbol(selectedObject.i, sym)}
               onDelete={deleteSelectedObject}
-              onDuplicate={duplicateSelectedObject}
               onMessage={setInfo}
               symbolGroups={symbolGroups}
               favorites={favorites}
@@ -1606,14 +1637,13 @@ export function FieldEditSessionClient({
               mapScale={ocadMapScale}
               editorSettings={editorSettings}
               onEditorSettingsChange={updateEditorSettings}
-              onApplyCoordinates={(coordinates) => {
-                upsertModify(selectedObject.i, coordinates);
+              onApplyCoordinates={(coordinates, vertexKinds) => {
+                upsertModify(selectedObject.i, coordinates, vertexKinds);
                 setSelectedVertexIndex(null);
                 setBezierEdit(null);
               }}
               onChangeSymbol={(sym) => upsertModifySymbol(selectedObject.i, sym)}
               onDelete={deleteSelectedObject}
-              onDuplicate={duplicateSelectedObject}
               onMessage={setInfo}
               symbolGroups={symbolGroups}
               favorites={favorites}

@@ -6,8 +6,8 @@ import type { BezierSegmentControls } from "@/lib/field-edit/geometry-tools";
 import { sampleBezierPolyline } from "@/lib/field-edit/geometry-tools";
 import type { SnapResult } from "@/lib/field-edit/snap";
 import type { FieldEditObjectEntry } from "@/lib/field-edit/object-index";
-import type { FieldEditOps } from "@/lib/field-edit/types";
-import { resolveObjectCoordinates } from "@/lib/field-edit/types";
+import type { FieldEditOps, FieldEditVertexKind } from "@/lib/field-edit/types";
+import { resolveObjectCoordinates, resolveObjectVertexKinds } from "@/lib/field-edit/types";
 import { verticesForHandles } from "@/lib/field-edit/vertices";
 import {
   geoBboxToSvgUser,
@@ -89,6 +89,7 @@ function singleVertexHandleSvg(
   sx: number,
   sy: number,
   role: "first" | "last" | "middle",
+  kind: FieldEditVertexKind,
   selected: boolean,
   handleSize: number,
 ): string {
@@ -97,6 +98,14 @@ function singleVertexHandleSvg(
   const size = selected ? handleSize * 1.15 : handleSize;
   const common =
     `fill="${fill}" fill-opacity="${HANDLE_OPACITY}" stroke="${stroke}" stroke-opacity="${HANDLE_OPACITY}" stroke-width="${HANDLE_STROKE_PX}" vector-effect="non-scaling-stroke" pointer-events="none"`;
+
+  // OCAD: dash = diamond, corner = square; otherwise keep role markers (X / square / circle).
+  if (kind === "dash") {
+    return `<polygon points="${sx},${sy - size} ${sx + size},${sy} ${sx},${sy + size} ${sx - size},${sy}" ${common} />`;
+  }
+  if (kind === "corner") {
+    return `<rect x="${sx - size}" y="${sy - size}" width="${size * 2}" height="${size * 2}" ${common} />`;
+  }
 
   if (role === "first") {
     const arm = size;
@@ -118,12 +127,14 @@ function vertexHandlesSvg(
   transform: SvgRootTransform,
   selectedVertex: number | null,
   handleSize = HANDLE_SIZE,
+  kinds?: FieldEditVertexKind[],
 ): string {
   return coords
     .map(([x, y], index) => {
       const [sx, sy] = geoToSvgUserPoint([x, y], transform);
       const role = vertexRole(index, coords.length);
-      return singleVertexHandleSvg(sx, sy, role, selectedVertex === index, handleSize);
+      const kind = kinds?.[index] ?? "normal";
+      return singleVertexHandleSvg(sx, sy, role, kind, selectedVertex === index, handleSize);
     })
     .join("");
 }
@@ -333,7 +344,8 @@ export function fieldEditOverlaySvg(options: {
     const coords = resolveObjectCoordinates(obj.i, obj.v, ops);
     if (!coords || coords.length === 0) continue;
     const handleCoords = obj.t === "area" ? verticesForHandles(coords, obj.t) : coords;
-    parts.push(vertexHandlesSvg(handleCoords, transform, selectedVertexIndex));
+    const kinds = resolveObjectVertexKinds(obj.i, handleCoords.length, ops);
+    parts.push(vertexHandlesSvg(handleCoords, transform, selectedVertexIndex, HANDLE_SIZE, kinds));
   }
 
   if (bezierDraw) {

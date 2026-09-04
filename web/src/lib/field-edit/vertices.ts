@@ -1,4 +1,5 @@
 import type { Geometry } from "geojson";
+import type { FieldEditVertexKind } from "@/lib/field-edit/types";
 import type { OcadObjectType } from "@/lib/ocad/types";
 
 /** Extract editable vertex ring from GeoJSON geometry (outer ring for areas). */
@@ -142,4 +143,100 @@ export function reverseVertices(
   );
   handles.reverse();
   return type === "area" ? closedRing(handles) : handles;
+}
+
+function handleKindsAligned(
+  kinds: FieldEditVertexKind[],
+  handleCount: number,
+): FieldEditVertexKind[] {
+  if (kinds.length === handleCount) return kinds.slice();
+  if (kinds.length === handleCount + 1) return kinds.slice(0, handleCount);
+  return Array.from({ length: handleCount }, (_, i) => kinds[i] ?? "normal");
+}
+
+function storeCoordsAndKinds(
+  handles: [number, number][],
+  handleKinds: FieldEditVertexKind[],
+  type: OcadObjectType,
+): { coordinates: [number, number][]; vertexKinds: FieldEditVertexKind[] } {
+  if (type === "area") {
+    const coordinates = closedRing(handles);
+    const vertexKinds = isClosedRing(coordinates)
+      ? [...handleKinds, handleKinds[0] ?? "normal"]
+      : handleKinds.slice();
+    return { coordinates, vertexKinds };
+  }
+  return { coordinates: handles, vertexKinds: handleKinds.slice() };
+}
+
+/** Remove a handle vertex and keep vertex kinds in sync. */
+export function removeVertexAtWithKinds(
+  vertices: [number, number][],
+  kinds: FieldEditVertexKind[],
+  type: OcadObjectType,
+  vertexIndex: number,
+  minPoints: number,
+): { coordinates: [number, number][]; vertexKinds: FieldEditVertexKind[] } | null {
+  const handles = verticesForHandles(vertices, type);
+  const handleKinds = handleKindsAligned(kinds, handles.length);
+  if (handles.length <= minPoints) return null;
+  if (vertexIndex < 0 || vertexIndex >= handles.length) return null;
+  const nextHandles = handles.filter((_, index) => index !== vertexIndex);
+  const nextKinds = handleKinds.filter((_, index) => index !== vertexIndex);
+  if (nextHandles.length < minPoints) return null;
+  return storeCoordsAndKinds(nextHandles, nextKinds, type);
+}
+
+/** Insert a vertex of the given kind on a segment. */
+export function insertVertexOnSegmentWithKinds(
+  vertices: [number, number][],
+  kinds: FieldEditVertexKind[],
+  type: OcadObjectType,
+  segmentIndex: number,
+  point: [number, number],
+  newKind: FieldEditVertexKind,
+): { coordinates: [number, number][]; vertexKinds: FieldEditVertexKind[] } {
+  const handles = verticesForHandles(vertices, type).map(
+    ([x, y]) => [x, y] as [number, number],
+  );
+  const handleKinds = handleKindsAligned(kinds, handles.length);
+
+  if (handles.length < 2) {
+    const nextHandles = [...handles, point];
+    const nextKinds = [...handleKinds, newKind];
+    return storeCoordsAndKinds(nextHandles, nextKinds, type);
+  }
+
+  if (type === "area") {
+    if (segmentIndex >= handles.length - 1) {
+      handles.push([point[0], point[1]]);
+      handleKinds.push(newKind);
+    } else {
+      handles.splice(segmentIndex + 1, 0, [point[0], point[1]]);
+      handleKinds.splice(segmentIndex + 1, 0, newKind);
+    }
+    return storeCoordsAndKinds(handles, handleKinds, type);
+  }
+
+  const insertAt = Math.max(0, Math.min(handles.length, segmentIndex + 1));
+  handles.splice(insertAt, 0, [point[0], point[1]]);
+  handleKinds.splice(insertAt, 0, newKind);
+  return storeCoordsAndKinds(handles, handleKinds, type);
+}
+
+/** Set kind at a handle index (keeps coordinates). */
+export function setVertexKindAt(
+  vertices: [number, number][],
+  kinds: FieldEditVertexKind[],
+  type: OcadObjectType,
+  vertexIndex: number,
+  kind: FieldEditVertexKind,
+): { coordinates: [number, number][]; vertexKinds: FieldEditVertexKind[] } | null {
+  const handles = verticesForHandles(vertices, type).map(
+    ([x, y]) => [x, y] as [number, number],
+  );
+  if (vertexIndex < 0 || vertexIndex >= handles.length) return null;
+  const handleKinds = handleKindsAligned(kinds, handles.length);
+  handleKinds[vertexIndex] = kind;
+  return storeCoordsAndKinds(handles, handleKinds, type);
 }

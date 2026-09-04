@@ -179,43 +179,123 @@ export function MapUndoToolIcon() {
   );
 }
 
-/** CAD: remove vertex (OCAD-inspired). */
+/** CAD: remove vertex (OCAD Remove Vertex). */
 export function CadRemoveVertexIcon() {
   return (
     <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
       <path
-        d="M3.5 14.5 8 8.5 12 11.5 16.5 5.5"
+        d="M3 15.5 7.5 9.5 12.5 12 17 5"
         stroke="currentColor"
         strokeWidth="1.75"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <circle cx="12" cy="11.5" r="2.6" fill="white" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M10.6 11.5h2.8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="12.5" cy="12" r="3" fill="white" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M10.9 12h3.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
   );
 }
 
-/** CAD: add vertex (OCAD-inspired). */
-export function CadAddVertexIcon() {
+/** CAD: add normal vertex (OCAD — circle). */
+export function CadAddNormalVertexIcon() {
   return (
     <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
       <path
-        d="M3.5 14.5 8 8.5 12 11.5 16.5 5.5"
+        d="M3 15.5 7.5 9.5 12.5 12 17 5"
         stroke="currentColor"
         strokeWidth="1.75"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <circle cx="12" cy="11.5" r="2.6" fill="white" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="12.5" cy="12" r="3" fill="white" stroke="currentColor" strokeWidth="1.5" />
       <path
-        d="M12 10.1v2.8M10.6 11.5h2.8"
+        d="M12.5 10.4v3.2M10.9 12h3.2"
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="round"
       />
     </svg>
   );
+}
+
+/** CAD: add corner vertex (OCAD — square). */
+export function CadAddCornerVertexIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+      <path
+        d="M3 15.5 7.5 9.5 12.5 12 17 5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <rect
+        x="9.6"
+        y="9.1"
+        width="5.8"
+        height="5.8"
+        rx="0.4"
+        fill="white"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M12.5 10.4v3.2M10.9 12h3.2"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/** CAD: add dash vertex (OCAD — diamond). */
+export function CadAddDashVertexIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+      <path
+        d="M3 15.5 7.5 9.5 12.5 12 17 5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12.5 8.6 15.4 12 12.5 15.4 9.6 12Z"
+        fill="white"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12.5 10.4v3.2M10.9 12h3.2"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+/** CAD: toggle / change vertex type (normal ↔ dash ↔ corner). */
+export function CadToggleVertexTypeIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+      <circle cx="5.2" cy="10" r="2.1" stroke="currentColor" strokeWidth="1.5" />
+      <path
+        d="M10 7.4 12.6 10 10 12.6 7.4 10Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <rect x="13.2" y="7.9" width="4.2" height="4.2" rx="0.35" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+/** @deprecated Use CadAddNormalVertexIcon */
+export function CadAddVertexIcon() {
+  return <CadAddNormalVertexIcon />;
 }
 
 /** CAD: simplify polyline (fewer vertices). */
@@ -301,29 +381,6 @@ export function CadReverseIcon() {
         strokeWidth="1.75"
         strokeLinecap="round"
         strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-/** CAD: duplicate object (OCAD). */
-export function CadDuplicateIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
-      <rect
-        x="6.5"
-        y="6.5"
-        width="9"
-        height="9"
-        rx="1.25"
-        stroke="currentColor"
-        strokeWidth="1.75"
-      />
-      <path
-        d="M4.5 13.5V4.75A1.25 1.25 0 0 1 5.75 3.5H13.5"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
       />
     </svg>
   );

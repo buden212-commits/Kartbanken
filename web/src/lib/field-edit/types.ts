@@ -1,5 +1,8 @@
 export type FieldEditGeometryKind = "point" | "line" | "area";
 
+/** OCAD vertex kinds — maps to TdPoly yFlags (corner=0x01, dash=0x08). */
+export type FieldEditVertexKind = "normal" | "corner" | "dash";
+
 export type FieldEditAddPoint = {
   kind: "point";
   x: number;
@@ -11,12 +14,15 @@ export type FieldEditAddLine = {
   kind: "line";
   coordinates: [number, number][];
   symbolNumber: number;
+  /** Parallel to coordinates; defaults to normal when omitted. */
+  vertexKinds?: FieldEditVertexKind[];
 };
 
 export type FieldEditAddArea = {
   kind: "area";
   ring: [number, number][];
   symbolNumber: number;
+  vertexKinds?: FieldEditVertexKind[];
 };
 
 export type FieldEditAdd = FieldEditAddPoint | FieldEditAddLine | FieldEditAddArea;
@@ -26,6 +32,7 @@ export type FieldEditModify = {
   symbolNumber: number;
   geometryKind: FieldEditGeometryKind;
   coordinates: [number, number][];
+  vertexKinds?: FieldEditVertexKind[];
 };
 
 export type FieldEditOps = {
@@ -51,18 +58,45 @@ function parseCoordinateList(value: unknown): [number, number][] {
   return value.map(parseCoordinatePair).filter((p): p is [number, number] => p != null);
 }
 
+function parseVertexKind(value: unknown): FieldEditVertexKind | null {
+  if (value === "normal" || value === "corner" || value === "dash") return value;
+  return null;
+}
+
+function parseVertexKinds(
+  value: unknown,
+  expectedLength: number,
+): FieldEditVertexKind[] | undefined {
+  if (!Array.isArray(value) || expectedLength <= 0) return undefined;
+  const kinds = value.map(parseVertexKind);
+  if (kinds.length !== expectedLength || kinds.some((k) => k == null)) return undefined;
+  return kinds as FieldEditVertexKind[];
+}
+
+export function defaultVertexKinds(count: number): FieldEditVertexKind[] {
+  return Array.from({ length: Math.max(0, count) }, () => "normal" as const);
+}
+
+export function cycleVertexKind(kind: FieldEditVertexKind): FieldEditVertexKind {
+  if (kind === "normal") return "dash";
+  if (kind === "dash") return "corner";
+  return "normal";
+}
+
 function parseLegacyAdd(raw: Record<string, unknown>): FieldEditAdd | null {
   const symbolNumber = Number(raw.symbolNumber);
   if (!Number.isFinite(symbolNumber)) return null;
   if (raw.kind === "line") {
     const coordinates = parseCoordinateList(raw.coordinates);
     if (coordinates.length < 2) return null;
-    return { kind: "line", coordinates, symbolNumber };
+    const vertexKinds = parseVertexKinds(raw.vertexKinds, coordinates.length);
+    return { kind: "line", coordinates, symbolNumber, ...(vertexKinds ? { vertexKinds } : {}) };
   }
   if (raw.kind === "area") {
     const ring = parseCoordinateList(raw.ring);
     if (ring.length < 3) return null;
-    return { kind: "area", ring, symbolNumber };
+    const vertexKinds = parseVertexKinds(raw.vertexKinds, ring.length);
+    return { kind: "area", ring, symbolNumber, ...(vertexKinds ? { vertexKinds } : {}) };
   }
   const x = Number(raw.x);
   const y = Number(raw.y);
@@ -82,7 +116,14 @@ function parseModify(raw: unknown): FieldEditModify | null {
   if (geometryKind === "point" && coordinates.length < 1) return null;
   if (geometryKind === "line" && coordinates.length < 2) return null;
   if (geometryKind === "area" && coordinates.length < 3) return null;
-  return { objectIndex, symbolNumber, geometryKind, coordinates };
+  const vertexKinds = parseVertexKinds(row.vertexKinds, coordinates.length);
+  return {
+    objectIndex,
+    symbolNumber,
+    geometryKind,
+    coordinates,
+    ...(vertexKinds ? { vertexKinds } : {}),
+  };
 }
 
 export function parseFieldEditOps(raw: string | null | undefined): FieldEditOps {
@@ -155,4 +196,53 @@ export function resolveObjectCoordinates(
   if (ops.deletes.includes(objectIndex)) return null;
   const mod = ops.modifies.find((m) => m.objectIndex === objectIndex);
   return mod?.coordinates ?? original;
+}
+
+/**
+ * Resolve vertex kinds for UI handles (`coordinateCount` = handle count,
+ * i.e. area without duplicate closing corner).
+ */
+export function resolveObjectVertexKinds(
+  objectIndex: number,
+  coordinateCount: number,
+  ops: FieldEditOps,
+): FieldEditVertexKind[] {
+  const mod = ops.modifies.find((m) => m.objectIndex === objectIndex);
+  if (!mod?.vertexKinds?.length) return defaultVertexKinds(coordinateCount);
+  const kinds = mod.vertexKinds;
+  if (kinds.length === coordinateCount) return kinds.slice();
+  // Stored closed ring: N+1 kinds for N handles
+  if (kinds.length === coordinateCount + 1) return kinds.slice(0, coordinateCount);
+  if (kinds.length === mod.coordinates.length) {
+    return Array.from({ length: coordinateCount }, (_, i) => kinds[i] ?? "normal");
+  }
+  return defaultVertexKinds(coordinateCount);
+}
+
+/** Expand handle-aligned kinds to match stored coordinates (closed area ring). */
+export function vertexKindsForStoredCoordinates(
+  coordinates: [number, number][],
+  handleKinds: FieldEditVertexKind[],
+  geometryKind: FieldEditGeometryKind,
+): FieldEditVertexKind[] {
+  if (geometryKind === "point" || coordinates.length === 0) return [];
+  if (geometryKind === "line") {
+    const out = handleKinds.slice(0, coordinates.length);
+    while (out.length < coordinates.length) out.push("normal");
+    return out;
+  }
+  const first = coordinates[0]!;
+  const last = coordinates[coordinates.length - 1]!;
+  const closed =
+    coordinates.length >= 2 && first[0] === last[0] && first[1] === last[1];
+  if (closed) {
+    const n = coordinates.length - 1;
+    const out: FieldEditVertexKind[] = [];
+    for (let i = 0; i < n; i++) out.push(handleKinds[i] ?? "normal");
+    out.push(out[0] ?? "normal");
+    return out;
+  }
+  const out = handleKinds.slice(0, coordinates.length);
+  while (out.length < coordinates.length) out.push("normal");
+  return out;
 }

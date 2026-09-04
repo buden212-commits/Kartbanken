@@ -2,14 +2,16 @@
 
 import { FieldEditSymbolPicker, type SymbolGroups } from "@/components/field-edit/field-edit-symbol-picker";
 import {
-  CadAddVertexIcon,
+  CadAddCornerVertexIcon,
+  CadAddDashVertexIcon,
+  CadAddNormalVertexIcon,
   CadBezierIcon,
-  CadDuplicateIcon,
   CadMeasureIcon,
   CadRemoveVertexIcon,
   CadReverseIcon,
   CadSimplifyIcon,
   CadSmoothCornersIcon,
+  CadToggleVertexTypeIcon,
   MapChangeSymbolToolIcon,
   MapTrashToolIcon,
 } from "@/components/map-draw-tool-icons";
@@ -21,15 +23,28 @@ import {
 } from "@/lib/field-edit/geometry-tools";
 import type { FieldEditObjectEntry } from "@/lib/field-edit/object-index";
 import { geometryKindFromType } from "@/lib/field-edit/hit-test";
-import { resolveObjectCoordinates } from "@/lib/field-edit/types";
-import type { FieldEditOps } from "@/lib/field-edit/types";
+import { distance2d } from "@/lib/field-edit/polyline-geometry";
+import {
+  defaultVertexKinds,
+  resolveObjectCoordinates,
+  resolveObjectVertexKinds,
+  vertexKindsForStoredCoordinates,
+  type FieldEditOps,
+  type FieldEditVertexKind,
+} from "@/lib/field-edit/types";
 import { reverseVertices, verticesForHandles } from "@/lib/field-edit/vertices";
 import { mapUnitsToMeters } from "@/lib/ocad/crs";
 import { formatOcadSymbolNumber } from "@/lib/ocad/layers";
-import { distance2d } from "@/lib/field-edit/polyline-geometry";
-import { useRef, useState } from "react";
+import { useRef } from "react";
+import { useState } from "react";
 
-export type CadVertexTool = "off" | "remove" | "add";
+export type CadVertexTool =
+  | "off"
+  | "remove"
+  | "addNormal"
+  | "addCorner"
+  | "addDash"
+  | "toggleType";
 
 type Props = {
   selectedObject: FieldEditObjectEntry;
@@ -37,10 +52,12 @@ type Props = {
   mapScale: number;
   editorSettings: FieldEditEditorSettings;
   onEditorSettingsChange: (settings: FieldEditEditorSettings) => void;
-  onApplyCoordinates: (coordinates: [number, number][]) => void;
+  onApplyCoordinates: (
+    coordinates: [number, number][],
+    vertexKinds?: FieldEditVertexKind[],
+  ) => void;
   onChangeSymbol: (symbolNumber: number) => void;
   onDelete: () => void;
-  onDuplicate: () => void;
   onMessage: (message: string | null) => void;
   symbolGroups: SymbolGroups;
   favorites?: FieldEditFavoriteSymbols;
@@ -73,7 +90,6 @@ function CadIconButton({
   disabled,
   onClick,
   onLongPress,
-  badge,
   children,
 }: {
   label: string;
@@ -83,7 +99,6 @@ function CadIconButton({
   disabled?: boolean;
   onClick: () => void;
   onLongPress?: () => void;
-  badge?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -127,7 +142,6 @@ function CadIconButton({
       className={`${iconBtn} ${active ? activeClass : inactiveClass}`}
     >
       {children}
-      {badge}
     </button>
   );
 }
@@ -153,6 +167,13 @@ function polygonAreaM2(ring: [number, number][], mapScale: number): number {
   return areaMap * mPerUnit * mPerUnit;
 }
 
+function selectVertexTool(
+  current: CadVertexTool,
+  next: CadVertexTool,
+): CadVertexTool {
+  return current === next ? "off" : next;
+}
+
 export function FieldEditCadPanel({
   selectedObject,
   ops,
@@ -162,7 +183,6 @@ export function FieldEditCadPanel({
   onApplyCoordinates,
   onChangeSymbol,
   onDelete,
-  onDuplicate,
   onMessage,
   symbolGroups,
   favorites,
@@ -186,6 +206,11 @@ export function FieldEditCadPanel({
     selectedObject.t === "area"
       ? verticesForHandles(rawCoords, selectedObject.t)
       : rawCoords;
+  const vertexKinds = resolveObjectVertexKinds(
+    selectedObject.i,
+    editCoords.length,
+    ops,
+  );
   const minPoints = selectedObject.t === "line" ? 2 : 3;
   const kindLabel =
     selectedObject.t === "line" ? "linje" : selectedObject.t === "area" ? "yta" : "punkt";
@@ -200,29 +225,49 @@ export function FieldEditCadPanel({
       onMessage(`${label} gav för få punkter — behåller minst ${minPoints}.`);
       return;
     }
-    onApplyCoordinates(next);
+    const stored =
+      selectedObject.t === "area" ? closedRingIfNeeded(next) : next;
+    const geomKind = geometryKindFromType(selectedObject.t);
+    onApplyCoordinates(
+      stored,
+      vertexKindsForStoredCoordinates(stored, defaultVertexKinds(next.length), geomKind),
+    );
     onMessage(`${label}: ${beforeCount} → ${afterCount} brytpunkter.`);
   }
 
-  function toggleVertexTool() {
-    if (vertexTool === "off" || vertexTool === "add") {
-      onVertexToolChange("remove");
-      onMessage("Radera brytpunkt: klicka på den brytpunkt du vill ta bort. Håll inne för att lägga till.");
-    } else {
-      onVertexToolChange("off");
-      onMessage(null);
-    }
+  function closedRingIfNeeded(coords: [number, number][]): [number, number][] {
+    if (coords.length < 3) return coords;
+    const first = coords[0]!;
+    const last = coords[coords.length - 1]!;
+    if (first[0] === last[0] && first[1] === last[1]) return coords;
+    return [...coords, [first[0], first[1]] as [number, number]];
   }
 
-  function longPressVertexTool() {
-    if (vertexTool === "add") {
-      onVertexToolChange("remove");
-      onMessage("Radera brytpunkt: klicka på brytpunkten. Håll inne för att lägga till.");
-    } else {
-      onVertexToolChange("add");
-      onMessage("Lägg till brytpunkt: klicka på linjen där punkten ska sitta. Håll inne för att radera.");
-    }
+  function convertAllTo(target: FieldEditVertexKind) {
+    onVertexToolChange("off");
+    const label =
+      target === "normal" ? "normala" : target === "corner" ? "hörnbrytpunkter" : "streckbrytpunkter";
+    const handleKinds = editCoords.map(() => target);
+    const geomKind = geometryKindFromType(selectedObject.t);
+    onApplyCoordinates(
+      rawCoords,
+      vertexKindsForStoredCoordinates(rawCoords, handleKinds, geomKind),
+    );
+    onMessage(`Alla brytpunkter ändrade till ${label}.`);
   }
+
+  const vertexHint =
+    vertexTool === "remove"
+      ? "Radera brytpunkt: klicka på punkten."
+      : vertexTool === "addNormal"
+        ? "Lägg till normal brytpunkt: klicka på linjen."
+        : vertexTool === "addCorner"
+          ? "Lägg till hörnbrytpunkt: klicka på linjen."
+          : vertexTool === "addDash"
+            ? "Lägg till streckbrytpunkt: klicka på linjen."
+            : vertexTool === "toggleType"
+              ? "Växla typ: klicka på brytpunkt (normal → streck → hörn)."
+              : null;
 
   return (
     <div className="rounded-xl border border-ifk-blue/20 bg-ifk-blue/5 p-4 space-y-3">
@@ -237,11 +282,7 @@ export function FieldEditCadPanel({
         </span>
       </div>
 
-      <div
-        className="flex flex-wrap items-center gap-1.5"
-        role="toolbar"
-        aria-label="CAD-verktyg"
-      >
+      <div className="flex flex-wrap items-center gap-1.5" role="toolbar" aria-label="CAD-verktyg">
         <CadIconButton
           label="Byt symbol"
           active={showSymbolPicker}
@@ -267,33 +308,21 @@ export function FieldEditCadPanel({
         </CadIconButton>
 
         <CadIconButton
-          label="Duplicera objekt"
-          disabled={bezierActive}
-          onClick={() => {
-            onVertexToolChange("off");
-            onDuplicate();
-          }}
-        >
-          <CadDuplicateIcon />
-        </CadIconButton>
-
-        <CadIconButton
           label="Mät längd/yta"
           disabled={bezierActive}
           onClick={() => {
             onVertexToolChange("off");
             if (selectedObject.t === "line") {
-              const len = polylineLengthM(editCoords, mapScale);
-              onMessage(`Längd: ${len.toFixed(1)} m`);
+              onMessage(`Längd: ${polylineLengthM(editCoords, mapScale).toFixed(1)} m`);
             } else if (selectedObject.t === "area") {
-              const area = polygonAreaM2(
-                editCoords.length >= 2 &&
-                  editCoords[0]![0] === editCoords[editCoords.length - 1]![0] &&
-                  editCoords[0]![1] === editCoords[editCoords.length - 1]![1]
+              const ring =
+                editCoords[0] &&
+                editCoords[editCoords.length - 1] &&
+                editCoords[0][0] === editCoords[editCoords.length - 1]![0] &&
+                editCoords[0][1] === editCoords[editCoords.length - 1]![1]
                   ? editCoords
-                  : [...editCoords, editCoords[0]!],
-                mapScale,
-              );
+                  : [...editCoords, editCoords[0]!];
+              const area = polygonAreaM2(ring, mapScale);
               onMessage(`Yta: ${area.toFixed(0)} m² (${(area / 1e6).toFixed(3)} km²)`);
             } else {
               onMessage("Mätning gäller linjer och ytor.");
@@ -305,32 +334,98 @@ export function FieldEditCadPanel({
 
         {isLineOrArea && (
           <>
+            <span className="mx-0.5 hidden h-8 w-px bg-slate-200 sm:inline-block" aria-hidden />
+
             <CadIconButton
-              label={
-                vertexTool === "add"
-                  ? "Lägg till brytpunkt (håll inne för radera)"
-                  : "Radera brytpunkt (håll inne för lägg till)"
-              }
-              active={vertexTool !== "off"}
-              activeClass={vertexTool === "add" ? iconActiveAdd : iconDangerActive}
+              label="Radera brytpunkt"
+              active={vertexTool === "remove"}
+              activeClass={iconDangerActive}
               disabled={bezierActive}
-              onClick={toggleVertexTool}
-              onLongPress={longPressVertexTool}
-              badge={
-                vertexTool === "add" ? (
-                  <span
-                    aria-hidden="true"
-                    className="pointer-events-none absolute bottom-0.5 right-0.5 text-[10px] font-bold leading-none text-white"
-                    style={{
-                      textShadow: "0 0 2px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.7)",
-                    }}
-                  >
-                    +
-                  </span>
-                ) : null
-              }
+              onClick={() => {
+                const next = selectVertexTool(vertexTool, "remove");
+                onVertexToolChange(next);
+                onMessage(
+                  next === "remove"
+                    ? "Radera brytpunkt: klicka på punkten."
+                    : null,
+                );
+              }}
             >
-              {vertexTool === "add" ? <CadAddVertexIcon /> : <CadRemoveVertexIcon />}
+              <CadRemoveVertexIcon />
+            </CadIconButton>
+
+            <CadIconButton
+              label="Lägg till normal brytpunkt (håll inne: ändra alla till normal)"
+              active={vertexTool === "addNormal"}
+              activeClass={iconActiveAdd}
+              disabled={bezierActive}
+              onClick={() => {
+                const next = selectVertexTool(vertexTool, "addNormal");
+                onVertexToolChange(next);
+                onMessage(
+                  next === "addNormal"
+                    ? "Lägg till normal brytpunkt: klicka på linjen."
+                    : null,
+                );
+              }}
+              onLongPress={() => convertAllTo("normal")}
+            >
+              <CadAddNormalVertexIcon />
+            </CadIconButton>
+
+            <CadIconButton
+              label="Lägg till hörnbrytpunkt (håll inne: ändra alla till hörn)"
+              active={vertexTool === "addCorner"}
+              activeClass={iconActiveAdd}
+              disabled={bezierActive}
+              onClick={() => {
+                const next = selectVertexTool(vertexTool, "addCorner");
+                onVertexToolChange(next);
+                onMessage(
+                  next === "addCorner"
+                    ? "Lägg till hörnbrytpunkt: klicka på linjen."
+                    : null,
+                );
+              }}
+              onLongPress={() => convertAllTo("corner")}
+            >
+              <CadAddCornerVertexIcon />
+            </CadIconButton>
+
+            <CadIconButton
+              label="Lägg till streckbrytpunkt (håll inne: ändra alla till streck)"
+              active={vertexTool === "addDash"}
+              activeClass={iconActiveAdd}
+              disabled={bezierActive}
+              onClick={() => {
+                const next = selectVertexTool(vertexTool, "addDash");
+                onVertexToolChange(next);
+                onMessage(
+                  next === "addDash"
+                    ? "Lägg till streckbrytpunkt: klicka på linjen."
+                    : null,
+                );
+              }}
+              onLongPress={() => convertAllTo("dash")}
+            >
+              <CadAddDashVertexIcon />
+            </CadIconButton>
+
+            <CadIconButton
+              label="Växla brytpunktstyp (normal → streck → hörn)"
+              active={vertexTool === "toggleType"}
+              disabled={bezierActive}
+              onClick={() => {
+                const next = selectVertexTool(vertexTool, "toggleType");
+                onVertexToolChange(next);
+                onMessage(
+                  next === "toggleType"
+                    ? "Växla typ: klicka på brytpunkt (normal → streck → hörn)."
+                    : null,
+                );
+              }}
+            >
+              <CadToggleVertexTypeIcon />
             </CadIconButton>
 
             <CadIconButton
@@ -339,7 +434,12 @@ export function FieldEditCadPanel({
               onClick={() => {
                 onVertexToolChange("off");
                 const next = reverseVertices(rawCoords, selectedObject.t);
-                onApplyCoordinates(next);
+                const nextHandleKinds = [...vertexKinds].reverse();
+                const geomKind = geometryKindFromType(selectedObject.t);
+                onApplyCoordinates(
+                  next,
+                  vertexKindsForStoredCoordinates(next, nextHandleKinds, geomKind),
+                );
                 onMessage("Riktning vänd.");
               }}
             >
@@ -458,11 +558,9 @@ export function FieldEditCadPanel({
         </div>
       )}
 
-      {!bezierActive && vertexTool !== "off" && isLineOrArea && (
+      {!bezierActive && vertexHint && (
         <p className="text-xs text-slate-600">
-          {vertexTool === "remove"
-            ? "Klicka en brytpunkt för att radera den. Håll inne ikonen för att växla till lägg till."
-            : "Klicka på linjen/kanten för att lägga till en brytpunkt. Håll inne ikonen för att växla till radera."}
+          {vertexHint} Håll inne lägg till-ikonen för att ändra alla brytpunkter till den typen.
         </p>
       )}
     </div>
