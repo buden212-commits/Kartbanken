@@ -1068,6 +1068,8 @@ export function FieldEditSessionClient({
         onUndo={undo}
         onPublish={handleOpenReview}
         onCancel={handleCancel}
+        countsLabel={countsLabel}
+        syncLabel={syncLabel}
       />
 
       {showReview && reviewSummary && (

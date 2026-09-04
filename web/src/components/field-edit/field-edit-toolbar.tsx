@@ -241,19 +241,9 @@ export function FieldEditMapDraftBar({
   countsLabel,
   syncLabel,
 }: ActionBarProps) {
+  // Counts/sync already shown in the map header — only overlay when actively drafting.
   if (!showDraftActions) {
-    return (
-      <div
-        data-map-toolbar
-        className="pointer-events-auto absolute inset-x-2 bottom-2 z-40 rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-xs text-slate-600 shadow-lg backdrop-blur sm:hidden"
-        onPointerDown={stopFieldEditToolbarPointer}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span>{countsLabel}</span>
-          <span>{syncLabel}</span>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   return (
@@ -293,6 +283,8 @@ type PublishBarProps = {
   onUndo: () => void;
   onPublish: () => void;
   onCancel: () => void;
+  countsLabel?: string;
+  syncLabel?: string;
 };
 
 export function FieldEditPublishBar({
@@ -301,13 +293,22 @@ export function FieldEditPublishBar({
   onUndo,
   onPublish,
   onCancel,
+  countsLabel,
+  syncLabel,
 }: PublishBarProps) {
   return (
-    <div className="sticky bottom-0 z-30 -mx-2 border-t border-slate-200 bg-white/95 px-2 py-3 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] backdrop-blur supports-[padding:max(0px)]:pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:static sm:mx-0 sm:rounded-xl sm:border sm:shadow-sm sm:backdrop-blur-none">
+    <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm supports-[padding:max(0px)]:pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <p className="text-sm text-slate-600">
-          Checka in för jämförelse — admin godkänner innan ny version skapas.
-        </p>
+        <div className="min-w-0 space-y-1">
+          <p className="text-sm text-slate-600">
+            Checka in för jämförelse — admin godkänner innan ny version skapas.
+          </p>
+          {(countsLabel || syncLabel) && (
+            <p className="text-xs text-slate-500 sm:hidden">
+              {[countsLabel, syncLabel].filter(Boolean).join(" · ")}
+            </p>
+          )}
+        </div>
         <div className="grid grid-cols-2 gap-2 sm:ml-auto sm:flex sm:gap-3">
           <button
             type="button"

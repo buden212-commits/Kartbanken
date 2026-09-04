@@ -7,6 +7,14 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-09-04",
+    title: "Fältredigering — mobil layout",
+    items: [
+      "Checka in-panelen täcker inte längre CAD-menyn på mobil",
+      "Statusraden «Sparat lokalt» ligger i panelen istället för ovanpå knapparna",
+    ],
+  },
+  {
     date: "2026-09-03",
     title: "Fältredigering — favoriter, ångra och incheckning till admin",
     items: [
