@@ -189,13 +189,54 @@ export function FieldEditSessionClient({
     segmentIndex: number;
     which: "p1" | "p2";
   } | null>(null);
-  const hitCycleRef = useRef<{ pointKey: string; indices: number[]; index: number } | null>(
-    null,
-  );
+  const holdCycleRef = useRef<{
+    indices: number[];
+    index: number;
+    startClientX: number;
+    startClientY: number;
+    timer: ReturnType<typeof setTimeout> | null;
+  } | null>(null);
+  const pendingVertexDragRef = useRef<{
+    objectIndex: number;
+    vertexIndex: number;
+    startCoords: [number, number][];
+    objectType: FieldEditObjectEntry["t"];
+    startClientX: number;
+    startClientY: number;
+  } | null>(null);
+  const advanceHoldCycleRef = useRef<() => void>(() => {});
   const opsRef = useRef(ops);
   opsRef.current = ops;
   const editorSettingsRef = useRef(editorSettings);
   editorSettingsRef.current = editorSettings;
+
+  const clearHoldCycle = useCallback(() => {
+    if (holdCycleRef.current?.timer) {
+      clearTimeout(holdCycleRef.current.timer);
+    }
+    holdCycleRef.current = null;
+  }, []);
+
+  useEffect(() => () => clearHoldCycle(), [clearHoldCycle]);
+
+  advanceHoldCycleRef.current = () => {
+    const current = holdCycleRef.current;
+    if (!current || current.indices.length < 2) {
+      clearHoldCycle();
+      return;
+    }
+    current.index = (current.index + 1) % current.indices.length;
+    const nextId = current.indices[current.index]!;
+    setSelectedObjectIndex(nextId);
+    setSelectedVertexIndex(null);
+    setBezierEdit(null);
+    setCadVertexTool("off");
+    pendingVertexDragRef.current = null;
+    setInfo(
+      `Överlappande objekt ${current.index + 1}/${current.indices.length} — håll kvar för nästa`,
+    );
+    current.timer = setTimeout(() => advanceHoldCycleRef.current(), 1000);
+  };
 
   const updateEditorSettings = useCallback((next: FieldEditEditorSettings) => {
     setEditorSettings(next);
@@ -804,17 +845,20 @@ export function FieldEditSessionClient({
 
           const vertexIndex = hitTestFieldEditVertex(handleCoords, geo, vertexHitDistance);
           if (vertexIndex != null && obj) {
+            // Defer drag until the pointer moves — so hold-to-cycle can run on overlaps.
             const startCoords =
               resolveObjectCoordinates(selectedObjectIndex, obj.v, opsRef.current) ??
               obj.v.map(([x, y]) => [x, y] as [number, number]);
-            dragVertexRef.current = {
+            pendingVertexDragRef.current = {
               objectIndex: selectedObjectIndex,
               vertexIndex,
               startCoords: startCoords.map(([x, y]) => [x, y] as [number, number]),
               objectType: obj.t,
+              startClientX: e.clientX,
+              startClientY: e.clientY,
             };
             setSelectedVertexIndex(vertexIndex);
-            return;
+            // Fall through so overlapping objects can still be cycled by holding.
           }
         }
 
@@ -822,26 +866,53 @@ export function FieldEditSessionClient({
           (entry) => !ops.deletes.includes(entry.i),
         );
         if (hits.length === 0) {
+          clearHoldCycle();
+          // Vertex handles can be slightly outside the object hit radius — keep pending drag.
+          if (pendingVertexDragRef.current) {
+            setInfo(null);
+            return;
+          }
           setSelectedObjectIndex(null);
           setSelectedVertexIndex(null);
           setBezierEdit(null);
           setCadVertexTool("off");
-          hitCycleRef.current = null;
           return;
         }
-        const pointKey = `${geo[0]!.toFixed(1)},${geo[1]!.toFixed(1)}`;
+
         const indices = hits.map((entry) => entry.i);
-        const prev = hitCycleRef.current;
-        const nextIndex =
-          prev && prev.pointKey === pointKey && prev.indices.length > 0
-            ? (prev.index + 1) % indices.length
-            : 0;
-        hitCycleRef.current = { pointKey, indices, index: nextIndex };
-        setSelectedObjectIndex(indices[nextIndex]!);
-        setSelectedVertexIndex(null);
+        let startIndex = 0;
+        if (selectedObjectIndex != null) {
+          const existing = indices.indexOf(selectedObjectIndex);
+          if (existing >= 0) startIndex = existing;
+        }
+        const chosen = indices[startIndex]!;
+        setSelectedObjectIndex(chosen);
+        if (pendingVertexDragRef.current?.objectIndex !== chosen) {
+          pendingVertexDragRef.current = null;
+          setSelectedVertexIndex(null);
+        }
         setBezierEdit(null);
         setError(null);
-        setInfo(null);
+
+        clearHoldCycle();
+        if (indices.length > 1) {
+          holdCycleRef.current = {
+            indices,
+            index: startIndex,
+            startClientX: e.clientX,
+            startClientY: e.clientY,
+            timer: null,
+          };
+          holdCycleRef.current.timer = setTimeout(
+            () => advanceHoldCycleRef.current(),
+            1000,
+          );
+          setInfo(
+            `Överlappande objekt ${startIndex + 1}/${indices.length} — håll kvar för nästa`,
+          );
+        } else {
+          setInfo(null);
+        }
         return;
       }
 
@@ -933,6 +1004,7 @@ export function FieldEditSessionClient({
       bezierEdit,
       bezierGesture,
       cadVertexTool,
+      clearHoldCycle,
       draftPoints.length,
       objects,
       ops,
@@ -954,6 +1026,36 @@ export function FieldEditSessionClient({
       const pt = screenToSvgPoint(svg, _e.clientX, _e.clientY);
       if (!pt) return;
       const rawGeo = svgUserToGeoPoint(pt, rootTransformRef.current);
+
+      const HOLD_MOVE_CANCEL_PX = 12;
+      const hold = holdCycleRef.current;
+      if (hold) {
+        const moved = Math.hypot(
+          _e.clientX - hold.startClientX,
+          _e.clientY - hold.startClientY,
+        );
+        if (moved > HOLD_MOVE_CANCEL_PX) {
+          clearHoldCycle();
+        }
+      }
+
+      const pending = pendingVertexDragRef.current;
+      if (pending && !dragVertexRef.current && tool === "select") {
+        const moved = Math.hypot(
+          _e.clientX - pending.startClientX,
+          _e.clientY - pending.startClientY,
+        );
+        if (moved > HOLD_MOVE_CANCEL_PX) {
+          clearHoldCycle();
+          dragVertexRef.current = {
+            objectIndex: pending.objectIndex,
+            vertexIndex: pending.vertexIndex,
+            startCoords: pending.startCoords,
+            objectType: pending.objectType,
+          };
+          pendingVertexDragRef.current = null;
+        }
+      }
 
       if (
         bezierDrawMode &&
@@ -1038,6 +1140,7 @@ export function FieldEditSessionClient({
       bezierDrawMode,
       bezierEdit,
       bezierGesture,
+      clearHoldCycle,
       editorSettings.snapEnabled,
       resolveSnapPoint,
       selectedObjectIndex,
@@ -1048,6 +1151,9 @@ export function FieldEditSessionClient({
 
   const handlePointerUp = useCallback(
     (_e?: React.PointerEvent, _svg?: SVGSVGElement) => {
+      clearHoldCycle();
+      pendingVertexDragRef.current = null;
+
       if (
         bezierDrawMode &&
         (tool === "addLine" || tool === "addArea") &&
@@ -1079,7 +1185,7 @@ export function FieldEditSessionClient({
       dragBezierControlRef.current = null;
       setSnapPreview(null);
     },
-    [bezierDrawMode, bezierGesture, tool],
+    [bezierDrawMode, bezierGesture, clearHoldCycle, tool],
   );
 
   const finishDraft = useCallback(() => {
@@ -1392,7 +1498,7 @@ export function FieldEditSessionClient({
       return `GPS-spårning — gå längs spåret du vill rita. Minst ${GPS_TRACK_MIN_DISTANCE_M} m mellan punkter. Klicka «Sluta spåra» när du är klar, välj linjesymbol och klicka «Klar».`;
     }
     if (tool === "select") {
-      return "Klicka ett objekt för att markera det. Klicka igen på samma ställe för att bläddra bland överlappande objekt. Dra brytpunkter eller använd CAD-verktygen nedan. Snappning hjälper dig träffa befintliga linjer och hörn.";
+      return "Tryck på ett objekt för att markera det. Vid överlapp: håll kvar — efter 1 sekund markeras nästa, och så vidare. Dra brytpunkter eller använd CAD-verktygen nedan. Snappning hjälper dig träffa befintliga linjer och hörn.";
     }
     if (tool === "addLine") {
       if (bezierDrawMode) {

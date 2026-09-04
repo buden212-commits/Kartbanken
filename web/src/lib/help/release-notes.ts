@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-04",
+    title: "Fältredigering — bläddra överlappande objekt",
+    items: [
+      "Håll kvar fingret/musen på en plats med flera objekt — efter 1 sekund markeras nästa, sedan nästa, tills alla är genomgångna",
+      "Flytta fingret för att avbryta bläddringen (t.ex. för att dra en brytpunkt)",
+    ],
+  },
+  {
+    date: "2026-09-04",
     title: "Fältredigering — Klar/Avbryt i kartmenyn",
     items: [
       "«Klar» och «Avbryt ritning» ligger nu som ikoner i kartmenyn (höger verktygsrad) när du ritar linje eller yta",
