@@ -26,7 +26,11 @@ function cubicBezierPoint(
   ];
 }
 
-/** Douglas–Peucker simplification; tolerance in meters on the ground. */
+/** Douglas–Peucker simplification; tolerance in meters on the ground.
+ * Uses a corridor/buffer model (Reumann–Witkam): points within ±tolerance of the
+ * current line direction are dropped; a new breakpoint is kept when the path
+ * leaves the buffer (touches the edge).
+ */
 export function simplifyPolyline(
   coordinates: [number, number][],
   toleranceM: number,
@@ -38,7 +42,10 @@ export function simplifyPolyline(
     return { coordinates: coordinates.slice(), beforeCount, afterCount: beforeCount };
   }
   const toleranceMapUnits = metersToMapUnits(Math.max(0.1, toleranceM), mapScale);
-  let simplified = douglasPeucker(coordinates, toleranceMapUnits);
+  let simplified = corridorSimplify(coordinates, toleranceMapUnits);
+  // Second pass: Douglas–Peucker catches remaining near-collinear stretches
+  // that the directional corridor may leave.
+  simplified = douglasPeucker(simplified, toleranceMapUnits);
   if (simplified.length < minPoints) {
     simplified = coordinates.slice(0, minPoints);
   }
@@ -47,6 +54,73 @@ export function simplifyPolyline(
     beforeCount,
     afterCount: simplified.length,
   };
+}
+
+/** Perpendicular distance from point to the infinite line through a→b. */
+function perpendicularDistanceToLine(
+  point: [number, number],
+  a: [number, number],
+  b: [number, number],
+): number {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-12) return distance2d(point, a);
+  return Math.abs(dy * point[0] - dx * point[1] + b[0] * a[1] - b[1] * a[0]) / len;
+}
+
+/**
+ * Corridor / buffer simplification.
+ * Half-width `tolerance` on each side of the chord between kept breakpoints —
+ * intermediate points inside the strip are removed. Extends the chord as far as
+ * possible until some intermediate point would leave the buffer (touch the edge);
+ * that end becomes the next breakpoint.
+ */
+export function corridorSimplify(
+  coordinates: [number, number][],
+  tolerance: number,
+): [number, number][] {
+  if (coordinates.length <= 2 || !(tolerance > 0)) {
+    return coordinates.map(([x, y]) => [x, y] as [number, number]);
+  }
+
+  const pts = coordinates.map(([x, y]) => [x, y] as [number, number]);
+  const result: [number, number][] = [[pts[0]![0], pts[0]![1]]];
+  let i = 0;
+
+  while (i < pts.length - 1) {
+    let best = i + 1;
+    for (let end = i + 2; end < pts.length; end++) {
+      let withinBuffer = true;
+      for (let k = i + 1; k < end; k++) {
+        if (perpendicularDistanceToLine(pts[k]!, pts[i]!, pts[end]!) > tolerance) {
+          withinBuffer = false;
+          break;
+        }
+      }
+      if (withinBuffer) {
+        best = end;
+      } else {
+        break;
+      }
+    }
+
+    const next = pts[best]!;
+    if (distance2d(result[result.length - 1]!, next) > 1e-9) {
+      result.push([next[0], next[1]]);
+    }
+    if (best <= i) {
+      break;
+    }
+    i = best;
+  }
+
+  const last = pts[pts.length - 1]!;
+  if (distance2d(result[result.length - 1]!, last) > 1e-9) {
+    result.push([last[0], last[1]]);
+  }
+
+  return result;
 }
 
 /** Chaikin corner-cutting smooth (open polyline). */

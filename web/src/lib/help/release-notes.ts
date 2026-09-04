@@ -8,6 +8,13 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-04",
+    title: "Fältredigering — bättre förenkling",
+    items: [
+      "Förenkla använder en buffert (± meter på varje sida): punkter på nästan rak linje tas bort, ny brytpunkt där linjen tangerar buffertkanten",
+    ],
+  },
+  {
+    date: "2026-09-04",
     title: "Fältredigering — rita ny Bézier-kurva",
     items: [
       "Håll inne linje- eller ytaverktyget för att växla till Bézier-ritning (skuggat B på ikonen)",

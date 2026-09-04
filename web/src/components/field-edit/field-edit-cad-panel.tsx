@@ -172,7 +172,7 @@ export function FieldEditCadPanel({
           ) : (
             <div className="flex flex-wrap items-center gap-2">
               <label className="flex items-center gap-2 text-sm text-slate-700">
-                Förenkla-tolerans
+                Buffert
                 <input
                   type="number"
                   min={0.1}
@@ -186,7 +186,7 @@ export function FieldEditCadPanel({
                   }}
                   className="w-16 rounded border border-slate-300 px-2 py-1 text-sm"
                 />
-                m
+                m (±)
               </label>
 
               <button
@@ -229,9 +229,10 @@ export function FieldEditCadPanel({
 
           {!bezierActive && (
             <p className="text-xs text-slate-600">
-              Förenkla tar bort onödiga brytpunkter inom toleransen. Mjuka hörn rundar av vinklar.
-              Bézier-kurva låter dig dra kontrollpunkterna P1 och P2 för varje segment (sparas som
-              polylinje i OCAD).
+              Förenkla tar bort brytpunkter som ligger inom en buffert (± meter) längs en rak
+              riktning — kvar blir punkter där linjen «tangerar» buffertkanten. Mjuka hörn rundar
+              av vinklar. Bézier-kurva låter dig dra kontrollpunkterna P1 och P2 för varje segment
+              (sparas som polylinje i OCAD).
             </p>
           )}
         </>

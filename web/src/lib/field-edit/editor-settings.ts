@@ -2,7 +2,7 @@ export type FieldEditEditorSettings = {
   snapEnabled: boolean;
   /** Snap tolerance on the ground (meters). */
   snapToleranceM: number;
-  /** Douglas–Peucker tolerance for «Förenkla» (meters). */
+  /** Corridor half-width for «Förenkla» (meters on each side of the line). */
   simplifyToleranceM: number;
 };
 
