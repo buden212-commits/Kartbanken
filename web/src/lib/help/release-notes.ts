@@ -8,6 +8,13 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-04",
+    title: "Fältredigering — Navigera aktiv från start",
+    items: [
+      "När du öppnar fältredigering är panorera/zooma (Navigera) aktivt från början — byt till Rita när du ska redigera",
+    ],
+  },
+  {
+    date: "2026-09-04",
     title: "Fältredigering — bläddra överlappande objekt",
     items: [
       "Håll kvar fingret/musen på en plats med flera objekt — efter 1 sekund markeras nästa, sedan nästa, tills alla är genomgångna",

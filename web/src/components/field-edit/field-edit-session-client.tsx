@@ -125,7 +125,7 @@ export function FieldEditSessionClient({
 }: Props) {
   const router = useRouter();
   const [tool, setTool] = useState<FieldEditTool>("select");
-  const [mapMode, setMapMode] = useState<"draw" | "navigate">("draw");
+  const [mapMode, setMapMode] = useState<"draw" | "navigate">("navigate");
   const [hitDistance, setHitDistance] = useState(DEFAULT_HIT_DISTANCE);
   const [vertexHitDistance, setVertexHitDistance] = useState(DEFAULT_VERTEX_HIT_DISTANCE);
   const [opsHistory, setOpsHistory] = useState<FieldEditOps[]>(() => [
