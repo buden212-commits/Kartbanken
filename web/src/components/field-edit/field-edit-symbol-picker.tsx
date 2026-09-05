@@ -131,7 +131,6 @@ export function FieldEditSymbolPicker({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
-  const searchRef = useRef<HTMLInputElement>(null);
 
   const selected = typeof value === "number" ? choices.find((c) => c.symNum === value) : null;
   const isFavorite = typeof value === "number" && favoriteNums.includes(value);
@@ -175,7 +174,8 @@ export function FieldEditSymbolPicker({
   useEffect(() => {
     if (open) {
       setQuery("");
-      requestAnimationFrame(() => searchRef.current?.focus());
+      // Do not autofocus search — on mobile that opens the keyboard while drawing.
+      // Focus only when the user taps the search field.
     }
   }, [open]);
 
