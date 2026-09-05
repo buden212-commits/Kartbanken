@@ -98,6 +98,12 @@ import {
   rectangularLineCoords,
 } from "@/lib/field-edit/rectangular-geometry";
 import {
+  axisLength,
+  circleRingFromDiameter,
+  ellipseMinorAxisEnds,
+  ellipseRingFromAxes,
+} from "@/lib/field-edit/circular-geometry";
+import {
   freehandMinSampleDistanceM,
   maybeAppendFreehandPoint,
   smoothFreehandPolyline,
@@ -168,6 +174,16 @@ type RectangularDrawGesture =
       p3: [number, number];
     };
 
+type CircleDrawGesture =
+  | { phase: "idle" }
+  | { phase: "drag_diameter"; a: [number, number]; b: [number, number] };
+
+type EllipseDrawGesture =
+  | { phase: "idle" }
+  | { phase: "drag_major"; a: [number, number]; b: [number, number] }
+  | { phase: "await_minor"; a: [number, number]; b: [number, number] }
+  | { phase: "drag_minor"; a: [number, number]; b: [number, number]; q: [number, number] };
+
 const DEFAULT_HIT_DISTANCE = 35;
 const DEFAULT_VERTEX_HIT_DISTANCE = 25;
 const COARSE_HIT_DISTANCE = 50;
@@ -211,10 +227,14 @@ export function FieldEditSessionClient({
   } | null>(null);
   const [bezierDrawMode, setBezierDrawMode] = useState(false);
   const [rectangularDrawMode, setRectangularDrawMode] = useState(false);
+  const [circleDrawMode, setCircleDrawMode] = useState(false);
+  const [ellipseDrawMode, setEllipseDrawMode] = useState(false);
   const [freehandDrawMode, setFreehandDrawMode] = useState(false);
   const [rectangularGesture, setRectangularGesture] = useState<RectangularDrawGesture>({
     phase: "idle",
   });
+  const [circleGesture, setCircleGesture] = useState<CircleDrawGesture>({ phase: "idle" });
+  const [ellipseGesture, setEllipseGesture] = useState<EllipseDrawGesture>({ phase: "idle" });
   const [bezierDraftAnchors, setBezierDraftAnchors] = useState<[number, number][]>([]);
   const [bezierDraftControls, setBezierDraftControls] = useState<BezierSegmentControls[]>(
     [],
@@ -319,6 +339,10 @@ export function FieldEditSessionClient({
   bezierDraftAnchorsRef.current = bezierDraftAnchors;
   const rectangularGestureRef = useRef(rectangularGesture);
   rectangularGestureRef.current = rectangularGesture;
+  const circleGestureRef = useRef(circleGesture);
+  circleGestureRef.current = circleGesture;
+  const ellipseGestureRef = useRef(ellipseGesture);
+  ellipseGestureRef.current = ellipseGesture;
   const cutDraftPointsRef = useRef(cutDraftPoints);
   cutDraftPointsRef.current = cutDraftPoints;
 
@@ -404,6 +428,14 @@ export function FieldEditSessionClient({
         if (rect.phase !== "idle" && "p0" in rect) {
           pushUnique(rect.p0);
         }
+        const circle = circleGestureRef.current;
+        if (circle.phase !== "idle" && "a" in circle) {
+          pushUnique(circle.a);
+        }
+        const ellipse = ellipseGestureRef.current;
+        if (ellipse.phase !== "idle" && "a" in ellipse) {
+          pushUnique(ellipse.a);
+        }
       }
       if (currentTool === "select") {
         const cutStart = cutDraftPointsRef.current[0];
@@ -448,6 +480,12 @@ export function FieldEditSessionClient({
       setBezierDraftControls([]);
       setBezierGesture({ phase: "idle" });
       setBezierDrawMode(false);
+      setRectangularDrawMode(false);
+      setCircleDrawMode(false);
+      setEllipseDrawMode(false);
+      setRectangularGesture({ phase: "idle" });
+      setCircleGesture({ phase: "idle" });
+      setEllipseGesture({ phase: "idle" });
       setSelectedObjectIndex(null);
       setSelectedVertexIndex(null);
       setBezierEdit(null);
@@ -473,6 +511,14 @@ export function FieldEditSessionClient({
 
   const clearRectangularGesture = useCallback(() => {
     setRectangularGesture({ phase: "idle" });
+  }, []);
+
+  const clearCircleGesture = useCallback(() => {
+    setCircleGesture({ phase: "idle" });
+  }, []);
+
+  const clearEllipseGesture = useCallback(() => {
+    setEllipseGesture({ phase: "idle" });
   }, []);
 
   const rectangularCornersFromGesture = useCallback(
@@ -580,6 +626,46 @@ export function FieldEditSessionClient({
         coordinates: rectangularAreaRing(corners),
       };
     }
+    if (
+      circleDrawMode &&
+      (tool === "addLine" || tool === "addArea") &&
+      circleGesture.phase === "drag_diameter"
+    ) {
+      const ring = circleRingFromDiameter(circleGesture.a, circleGesture.b);
+      if (!ring || ring.length < 3) return null;
+      if (addKind === "line") {
+        return {
+          kind: "line" as const,
+          symbolNumber: Number(symbolNumber),
+          coordinates: closedRing(ring),
+        };
+      }
+      return {
+        kind: "area" as const,
+        symbolNumber: Number(symbolNumber),
+        coordinates: closedRing(ring),
+      };
+    }
+    if (
+      ellipseDrawMode &&
+      (tool === "addLine" || tool === "addArea") &&
+      ellipseGesture.phase === "drag_minor"
+    ) {
+      const ring = ellipseRingFromAxes(ellipseGesture.a, ellipseGesture.b, ellipseGesture.q);
+      if (!ring || ring.length < 3) return null;
+      if (addKind === "line") {
+        return {
+          kind: "line" as const,
+          symbolNumber: Number(symbolNumber),
+          coordinates: closedRing(ring),
+        };
+      }
+      return {
+        kind: "area" as const,
+        symbolNumber: Number(symbolNumber),
+        coordinates: closedRing(ring),
+      };
+    }
     if (addKind === "line" && draftPoints.length >= 2) {
       return {
         kind: "line" as const,
@@ -600,7 +686,11 @@ export function FieldEditSessionClient({
     bezierDraftAnchors,
     bezierDraftControls,
     bezierDrawMode,
+    circleDrawMode,
+    circleGesture,
     draftPoints,
+    ellipseDrawMode,
+    ellipseGesture,
     rectangularCornersFromGesture,
     rectangularDrawMode,
     rectangularGesture,
@@ -682,6 +772,50 @@ export function FieldEditSessionClient({
       });
     },
     [scheduleServerSync],
+  );
+
+  const commitCurveRing = useCallback(
+    (ring: [number, number][], forTool: "addLine" | "addArea") => {
+      if (symbolNumber === "") {
+        setError("Välj symbol");
+        return false;
+      }
+      const closed = closedRing(ring);
+      if (closed.length < 3) {
+        setError("Kurvan gav för få punkter");
+        return false;
+      }
+      const nextAddIndex = opsRef.current.adds.length;
+      if (forTool === "addLine") {
+        updateOps((current) => ({
+          ...current,
+          adds: [
+            ...current.adds,
+            {
+              kind: "line",
+              coordinates: closed,
+              symbolNumber: Number(symbolNumber),
+            },
+          ],
+        }));
+      } else {
+        updateOps((current) => ({
+          ...current,
+          adds: [
+            ...current.adds,
+            {
+              kind: "area",
+              ring: closed,
+              symbolNumber: Number(symbolNumber),
+            },
+          ],
+        }));
+      }
+      setError(null);
+      selectNewestAdd(nextAddIndex);
+      return true;
+    },
+    [selectNewestAdd, symbolNumber, updateOps],
   );
 
   const undo = useCallback(() => {
@@ -1748,7 +1882,9 @@ export function FieldEditSessionClient({
             draftPoints.length === 0 &&
             bezierDraftAnchors.length === 0 &&
             bezierGesture.phase === "idle" &&
-            rectangularGesture.phase === "idle";
+            rectangularGesture.phase === "idle" &&
+            circleGesture.phase === "idle" &&
+            ellipseGesture.phase === "idle";
           if (noDraftYet && pickSymbolFromObject(hit, kind)) return;
         }
 
@@ -1827,6 +1963,36 @@ export function FieldEditSessionClient({
           return;
         }
 
+        if (circleDrawMode) {
+          if (circleGesture.phase === "idle") {
+            setCircleGesture({ phase: "drag_diameter", a: geo, b: geo });
+            setInfo("Cirkel: dra diametern från kant till kant, släpp för att skapa.");
+            setError(null);
+            return;
+          }
+          return;
+        }
+
+        if (ellipseDrawMode) {
+          if (ellipseGesture.phase === "idle") {
+            setEllipseGesture({ phase: "drag_major", a: geo, b: geo });
+            setInfo("Ellips: dra längsta axeln till andra kanten, släpp.");
+            setError(null);
+            return;
+          }
+          if (ellipseGesture.phase === "await_minor") {
+            setEllipseGesture({
+              phase: "drag_minor",
+              a: ellipseGesture.a,
+              b: ellipseGesture.b,
+              q: geo,
+            });
+            setInfo("Dra kortare axeln vinkelrätt genom centrum, släpp för att skapa.");
+            return;
+          }
+          return;
+        }
+
         if (bezierDrawMode) {
           if (bezierGesture.phase === "idle") {
             const last = bezierDraftAnchors[bezierDraftAnchors.length - 1];
@@ -1898,6 +2064,10 @@ export function FieldEditSessionClient({
       pickSymbolFromObject,
       rectangularDrawMode,
       rectangularGesture,
+      circleDrawMode,
+      circleGesture,
+      ellipseDrawMode,
+      ellipseGesture,
       resolveSnapPoint,
       selectedObjectIndex,
       symbolNumber,
@@ -1999,6 +2169,45 @@ export function FieldEditSessionClient({
       }
 
       if (
+        circleDrawMode &&
+        (tool === "addLine" || tool === "addArea") &&
+        circleGesture.phase === "drag_diameter"
+      ) {
+        const { point: geo } = resolveSnapPoint(rawGeo, null);
+        setCircleGesture({
+          phase: "drag_diameter",
+          a: circleGesture.a,
+          b: geo,
+        });
+        setSnapPreview(null);
+        return;
+      }
+
+      if (
+        ellipseDrawMode &&
+        (tool === "addLine" || tool === "addArea") &&
+        (ellipseGesture.phase === "drag_major" || ellipseGesture.phase === "drag_minor")
+      ) {
+        const { point: geo } = resolveSnapPoint(rawGeo, null);
+        if (ellipseGesture.phase === "drag_major") {
+          setEllipseGesture({
+            phase: "drag_major",
+            a: ellipseGesture.a,
+            b: geo,
+          });
+        } else {
+          setEllipseGesture({
+            phase: "drag_minor",
+            a: ellipseGesture.a,
+            b: ellipseGesture.b,
+            q: geo,
+          });
+        }
+        setSnapPreview(null);
+        return;
+      }
+
+      if (
         bezierDrawMode &&
         (tool === "addLine" || tool === "addArea") &&
         (bezierGesture.phase === "drag_p1" || bezierGesture.phase === "drag_p3")
@@ -2082,7 +2291,11 @@ export function FieldEditSessionClient({
       bezierEdit,
       bezierGesture,
       clearHoldCycle,
+      circleDrawMode,
+      circleGesture,
       editorSettings.snapEnabled,
+      ellipseDrawMode,
+      ellipseGesture,
       freehandDrawMode,
       ocadMapScale,
       rectangularDrawMode,
@@ -2170,6 +2383,89 @@ export function FieldEditSessionClient({
         return;
       }
 
+      if (
+        circleDrawMode &&
+        (tool === "addLine" || tool === "addArea") &&
+        circleGesture.phase === "drag_diameter"
+      ) {
+        if (axisLength(circleGesture.a, circleGesture.b) < RECT_MIN_EDGE) {
+          setCircleGesture({ phase: "idle" });
+          setInfo("Dra en längre diameter — från kant till motsatt kant.");
+          setSnapPreview(null);
+          return;
+        }
+        const ring = circleRingFromDiameter(circleGesture.a, circleGesture.b);
+        setCircleGesture({ phase: "idle" });
+        setSnapPreview(null);
+        if (!ring) {
+          setInfo("Cirkel: dra diametern från kant till kant, släpp för att skapa.");
+          return;
+        }
+        if (commitCurveRing(ring, tool)) {
+          setInfo("Cirkel skapad. Börja nästa eller byt verktyg.");
+        }
+        return;
+      }
+
+      if (
+        ellipseDrawMode &&
+        (tool === "addLine" || tool === "addArea") &&
+        ellipseGesture.phase === "drag_major"
+      ) {
+        if (axisLength(ellipseGesture.a, ellipseGesture.b) < RECT_MIN_EDGE) {
+          setEllipseGesture({ phase: "idle" });
+          setInfo("Dra en längre axel först — det blir ellipsens längsta sida.");
+          setSnapPreview(null);
+          return;
+        }
+        setEllipseGesture({
+          phase: "await_minor",
+          a: ellipseGesture.a,
+          b: ellipseGesture.b,
+        });
+        setInfo("Tryck och dra kortare axeln vinkelrätt genom centrum.");
+        setSnapPreview(null);
+        return;
+      }
+
+      if (
+        ellipseDrawMode &&
+        (tool === "addLine" || tool === "addArea") &&
+        ellipseGesture.phase === "drag_minor"
+      ) {
+        const minorEnds = ellipseMinorAxisEnds(
+          ellipseGesture.a,
+          ellipseGesture.b,
+          ellipseGesture.q,
+        );
+        const minorLen = minorEnds ? axisLength(minorEnds[0], minorEnds[1]) : 0;
+        if (minorLen < RECT_MIN_EDGE) {
+          setEllipseGesture({
+            phase: "await_minor",
+            a: ellipseGesture.a,
+            b: ellipseGesture.b,
+          });
+          setInfo("Dra ut den kortare axeln, sedan släpp för att skapa.");
+          setSnapPreview(null);
+          return;
+        }
+        const ring = ellipseRingFromAxes(
+          ellipseGesture.a,
+          ellipseGesture.b,
+          ellipseGesture.q,
+        );
+        setEllipseGesture({ phase: "idle" });
+        setSnapPreview(null);
+        if (!ring) {
+          setInfo("Ellips: dra längsta axeln → släpp → dra kortare axeln → släpp.");
+          return;
+        }
+        if (commitCurveRing(ring, tool)) {
+          setInfo("Ellips skapad. Börja nästa eller byt verktyg.");
+        }
+        return;
+      }
+
       const cutDrag = cutLineDragRef.current;
       if (
         cutDrag &&
@@ -2254,12 +2550,54 @@ export function FieldEditSessionClient({
       dragBezierControlRef.current = null;
       setSnapPreview(null);
     },
-    [applySplitParts, bezierDrawMode, bezierGesture, cadCutTool, clearHoldCycle, draftPoints.length, freehandDrawMode, hitDistance, objects, rectangularDrawMode, rectangularGesture, resolveSnapPoint, selectedObjectIndex, tool],
+    [applySplitParts, bezierDrawMode, bezierGesture, cadCutTool, clearHoldCycle, circleDrawMode, circleGesture, commitCurveRing, draftPoints.length, ellipseDrawMode, ellipseGesture, freehandDrawMode, hitDistance, objects, rectangularDrawMode, rectangularGesture, resolveSnapPoint, selectedObjectIndex, tool],
   );
 
   const finishDraft = useCallback(() => {
     if (symbolNumber === "") {
       setError("Välj symbol");
+      return;
+    }
+    if (
+      circleDrawMode &&
+      (tool === "addLine" || tool === "addArea") &&
+      circleGesture.phase === "drag_diameter"
+    ) {
+      if (axisLength(circleGesture.a, circleGesture.b) < RECT_MIN_EDGE) {
+        setError("Dra en längre diameter först.");
+        return;
+      }
+      const ring = circleRingFromDiameter(circleGesture.a, circleGesture.b);
+      if (!ring) {
+        setError("Kunde inte skapa cirkeln.");
+        return;
+      }
+      setCircleGesture({ phase: "idle" });
+      commitCurveRing(ring, tool);
+      return;
+    }
+    if (
+      ellipseDrawMode &&
+      (tool === "addLine" || tool === "addArea") &&
+      ellipseGesture.phase === "drag_minor"
+    ) {
+      const minorEnds = ellipseMinorAxisEnds(
+        ellipseGesture.a,
+        ellipseGesture.b,
+        ellipseGesture.q,
+      );
+      const minorLen = minorEnds ? axisLength(minorEnds[0], minorEnds[1]) : 0;
+      if (minorLen < RECT_MIN_EDGE) {
+        setError("Dra ut den kortare axeln först.");
+        return;
+      }
+      const ring = ellipseRingFromAxes(ellipseGesture.a, ellipseGesture.b, ellipseGesture.q);
+      if (!ring) {
+        setError("Kunde inte skapa ellipsen.");
+        return;
+      }
+      setEllipseGesture({ phase: "idle" });
+      commitCurveRing(ring, tool);
       return;
     }
     if (
@@ -2398,6 +2736,8 @@ export function FieldEditSessionClient({
     setDraftPoints([]);
     clearBezierDraft();
     clearRectangularGesture();
+    clearCircleGesture();
+    clearEllipseGesture();
     freehandDrawingRef.current = false;
     freehandPointerDownRef.current = null;
     setError(null);
@@ -2406,10 +2746,17 @@ export function FieldEditSessionClient({
     bezierDraftAnchors,
     bezierDraftControls,
     bezierDrawMode,
+    circleDrawMode,
+    circleGesture,
     clearBezierDraft,
+    clearCircleGesture,
+    clearEllipseGesture,
     clearRectangularGesture,
+    commitCurveRing,
     draftPoints,
     editorSettings.freehandSmoothingFactor,
+    ellipseDrawMode,
+    ellipseGesture,
     freehandDrawMode,
     ocadMapScale,
     rectangularCornersFromGesture,
@@ -2426,9 +2773,11 @@ export function FieldEditSessionClient({
     setDraftPoints([]);
     clearBezierDraft();
     clearRectangularGesture();
+    clearCircleGesture();
+    clearEllipseGesture();
     freehandDrawingRef.current = false;
     freehandPointerDownRef.current = null;
-  }, [clearBezierDraft, clearRectangularGesture]);
+  }, [clearBezierDraft, clearCircleGesture, clearEllipseGesture, clearRectangularGesture]);
 
   const drawPointerHandlers = useMemo<MapDrawPointerHandlers>(
     () => ({
@@ -2519,6 +2868,48 @@ export function FieldEditSessionClient({
                 }
                 return null;
               })(),
+              curveDraw: (() => {
+                if (
+                  (!circleDrawMode && !ellipseDrawMode) ||
+                  (tool !== "addLine" && tool !== "addArea")
+                ) {
+                  return null;
+                }
+                if (circleDrawMode && circleGesture.phase === "drag_diameter") {
+                  const ring =
+                    circleRingFromDiameter(circleGesture.a, circleGesture.b) ??
+                    ([] as [number, number][]);
+                  return {
+                    ring,
+                    fill: tool === "addArea",
+                    axesSolid: [circleGesture.a, circleGesture.b] as [number, number][],
+                  };
+                }
+                if (ellipseDrawMode) {
+                  const g = ellipseGesture;
+                  if (g.phase === "drag_major" || g.phase === "await_minor") {
+                    return {
+                      ring: [] as [number, number][],
+                      fill: false,
+                      axesSolid: [g.a, g.b] as [number, number][],
+                    };
+                  }
+                  if (g.phase === "drag_minor") {
+                    const ring =
+                      ellipseRingFromAxes(g.a, g.b, g.q) ?? ([] as [number, number][]);
+                    const minor = ellipseMinorAxisEnds(g.a, g.b, g.q);
+                    return {
+                      ring,
+                      fill: tool === "addArea",
+                      axesSolid: [g.a, g.b] as [number, number][],
+                      axesDashed: minor
+                        ? ([minor[0], minor[1]] as [number, number][])
+                        : undefined,
+                    };
+                  }
+                }
+                return null;
+              })(),
             }),
           }}
         />
@@ -2544,6 +2935,10 @@ export function FieldEditSessionClient({
       mergeObjectIndices,
       rectangularDrawMode,
       rectangularGesture,
+      circleDrawMode,
+      circleGesture,
+      ellipseDrawMode,
+      ellipseGesture,
       bezierDraftAnchors,
       bezierDraftControls,
       bezierGesture,
@@ -2630,12 +3025,16 @@ export function FieldEditSessionClient({
     setDraftPoints([]);
     clearBezierDraft();
     clearRectangularGesture();
+    clearCircleGesture();
+    clearEllipseGesture();
     setSelectedVertexIndex(null);
     setBezierEdit(null);
     setCadVertexTool("off");
     if (next !== "addLine" && next !== "addArea") {
       setBezierDrawMode(false);
       setRectangularDrawMode(false);
+      setCircleDrawMode(false);
+      setEllipseDrawMode(false);
       setFreehandDrawMode(false);
       freehandDrawingRef.current = false;
       freehandPointerDownRef.current = null;
@@ -2648,16 +3047,20 @@ export function FieldEditSessionClient({
       cancelGpsTracking();
     }
     const onThisTool = tool === forTool;
-    // Cycle: vanlig → rektangel → Bézier → frihand → vanlig
-    let next: "normal" | "rectangular" | "bezier" | "freehand";
+    // Cycle: vanlig → rektangel → cirkel → ellips → Bézier → frihand → vanlig
+    let next: "normal" | "rectangular" | "circle" | "ellipse" | "bezier" | "freehand";
     if (!onThisTool) {
       next = "rectangular";
     } else if (freehandDrawMode) {
       next = "normal";
     } else if (bezierDrawMode) {
       next = "freehand";
-    } else if (rectangularDrawMode) {
+    } else if (ellipseDrawMode) {
       next = "bezier";
+    } else if (circleDrawMode) {
+      next = "ellipse";
+    } else if (rectangularDrawMode) {
+      next = "circle";
     } else {
       next = "rectangular";
     }
@@ -2667,6 +3070,8 @@ export function FieldEditSessionClient({
     setDraftPoints([]);
     clearBezierDraft();
     clearRectangularGesture();
+    clearCircleGesture();
+    clearEllipseGesture();
     freehandDrawingRef.current = false;
     freehandPointerDownRef.current = null;
     setSelectedObjectIndex(null);
@@ -2674,11 +3079,21 @@ export function FieldEditSessionClient({
     setBezierEdit(null);
     setBezierDrawMode(next === "bezier");
     setRectangularDrawMode(next === "rectangular");
+    setCircleDrawMode(next === "circle");
+    setEllipseDrawMode(next === "ellipse");
     setFreehandDrawMode(next === "freehand");
     setError(null);
     if (next === "rectangular") {
       setInfo(
-        "Rektangelläge: dra längsta sidan → släpp → dra vinkelrätt → klicka för att avsluta. Håll inne verktyget igen för Bézier.",
+        "Rektangelläge: dra längsta sidan → släpp → dra vinkelrätt → klicka för att avsluta. Håll inne verktyget igen för cirkel.",
+      );
+    } else if (next === "circle") {
+      setInfo(
+        "Cirkelläge: dra diametern från kant till kant, släpp för att skapa. Håll inne verktyget igen för ellips.",
+      );
+    } else if (next === "ellipse") {
+      setInfo(
+        "Ellipsläge: dra längsta axeln → släpp → dra kortare axeln vinkelrätt genom centrum → släpp. Håll inne verktyget igen för Bézier.",
       );
     } else if (next === "bezier") {
       setInfo(
@@ -2690,7 +3105,7 @@ export function FieldEditSessionClient({
       );
     } else {
       setInfo(
-        "Vanlig ritning: klicka brytpunkter. Håll inne verktyget: vanlig → rektangel (R) → Bézier (B) → frihand (F).",
+        "Vanlig ritning: klicka brytpunkter. Håll inne verktyget: vanlig → rektangel (R) → cirkel (C) → ellips (E) → Bézier (B) → frihand (F).",
       );
     }
   }
@@ -2707,8 +3122,14 @@ export function FieldEditSessionClient({
     ) {
       setRectangularGesture({ phase: "idle" });
     }
+    if (circleGesture.phase === "drag_diameter") {
+      setCircleGesture({ phase: "idle" });
+    }
+    if (ellipseGesture.phase === "drag_major" || ellipseGesture.phase === "drag_minor") {
+      setEllipseGesture({ phase: "idle" });
+    }
     setSnapPreview(null);
-  }, [bezierGesture.phase, rectangularGesture.phase]);
+  }, [bezierGesture.phase, circleGesture.phase, ellipseGesture.phase, rectangularGesture.phase]);
 
   const handleGpsToggle = useCallback(() => {
     toggleGpsTracking();
@@ -2728,10 +3149,16 @@ export function FieldEditSessionClient({
       if (bezierDrawMode) {
         return "Bézier-linje: tryck ner på brytpunkt → dra mot P1 → släpp; tryck på P2 → släpp på nästa brytpunkt. Håll inne linjeverktyget för frihand.";
       }
-      if (rectangularDrawMode) {
-        return "Rektangelläge: dra längsta sidan → släpp → dra vinkelrätt till tredje hörnet → klicka för att avsluta. Håll inne linjeverktyget för Bézier.";
+      if (ellipseDrawMode) {
+        return "Ellipsläge: dra längsta axeln → släpp → dra kortare axeln vinkelrätt genom centrum → släpp. Håll inne linjeverktyget för Bézier.";
       }
-      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan punkter längs linjen. Håll inne linjeverktyget: vanlig → rektangel (R) → Bézier (B) → frihand (F).";
+      if (circleDrawMode) {
+        return "Cirkelläge: dra diametern från kant till kant, släpp för att skapa. Håll inne linjeverktyget för ellips.";
+      }
+      if (rectangularDrawMode) {
+        return "Rektangelläge: dra längsta sidan → släpp → dra vinkelrätt till tredje hörnet → klicka för att avsluta. Håll inne linjeverktyget för cirkel.";
+      }
+      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan punkter längs linjen. Håll inne linjeverktyget: vanlig → rektangel (R) → cirkel (C) → ellips (E) → Bézier (B) → frihand (F).";
     }
     if (tool === "addArea") {
       if (freehandDrawMode) {
@@ -2740,16 +3167,30 @@ export function FieldEditSessionClient({
       if (bezierDrawMode) {
         return "Bézier-yta: samma gest som linje (P0→P1, P2→P3). Minst 3 brytpunkter. Håll inne ytaverktyget för frihand.";
       }
-      if (rectangularDrawMode) {
-        return "Rektangelläge: dra längsta sidan → släpp → dra vinkelrätt till tredje hörnet → klicka för att avsluta. Håll inne ytaverktyget för Bézier.";
+      if (ellipseDrawMode) {
+        return "Ellipsläge: dra längsta axeln → släpp → dra kortare axeln vinkelrätt genom centrum → släpp. Håll inne ytaverktyget för Bézier.";
       }
-      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan hörn runt ytan (minst 3). Håll inne ytaverktyget: vanlig → rektangel (R) → Bézier (B) → frihand (F).";
+      if (circleDrawMode) {
+        return "Cirkelläge: dra diametern från kant till kant, släpp för att skapa. Håll inne ytaverktyget för ellips.";
+      }
+      if (rectangularDrawMode) {
+        return "Rektangelläge: dra längsta sidan → släpp → dra vinkelrätt till tredje hörnet → klicka för att avsluta. Håll inne ytaverktyget för cirkel.";
+      }
+      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan hörn runt ytan (minst 3). Håll inne ytaverktyget: vanlig → rektangel (R) → cirkel (C) → ellips (E) → Bézier (B) → frihand (F).";
     }
     if (tool === "addPoint") {
       return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan där punkten ska ligga.";
     }
     return null;
-  }, [bezierDrawMode, freehandDrawMode, gpsTracking, rectangularDrawMode, tool]);
+  }, [
+    bezierDrawMode,
+    circleDrawMode,
+    ellipseDrawMode,
+    freehandDrawMode,
+    gpsTracking,
+    rectangularDrawMode,
+    tool,
+  ]);
 
   const hasLocalBackup = loadLocalFieldEditOps(sessionId) != null;
   const counts = useMemo(() => countFieldEditChanges(ops), [ops]);
@@ -2777,9 +3218,19 @@ export function FieldEditSessionClient({
       : rectangularGesture.phase === "drag_edge1" || rectangularGesture.phase === "await_edge2"
         ? 2
         : 0
-    : bezierDrawMode
-      ? bezierDraftAnchors.length
-      : draftPoints.length;
+    : circleDrawMode
+      ? circleGesture.phase === "drag_diameter"
+        ? 2
+        : 0
+      : ellipseDrawMode
+        ? ellipseGesture.phase === "drag_minor"
+          ? 4
+          : ellipseGesture.phase === "drag_major" || ellipseGesture.phase === "await_minor"
+            ? 2
+            : 0
+        : bezierDrawMode
+          ? bezierDraftAnchors.length
+          : draftPoints.length;
   const showDraftActions =
     isDrawInteraction && (tool === "addLine" || tool === "addArea");
 
@@ -2822,6 +3273,8 @@ export function FieldEditSessionClient({
           onUndo={undo}
           bezierDrawMode={bezierDrawMode}
           rectangularDrawMode={rectangularDrawMode}
+          circleDrawMode={circleDrawMode}
+          ellipseDrawMode={ellipseDrawMode}
           freehandDrawMode={freehandDrawMode}
           onCycleLineAreaDrawMode={cycleLineAreaDrawMode}
           showDraftActions={showDraftActions}
@@ -2865,6 +3318,8 @@ export function FieldEditSessionClient({
       draftPointCount,
       bezierDrawMode,
       rectangularDrawMode,
+      circleDrawMode,
+      ellipseDrawMode,
       freehandDrawMode,
       finishDraft,
       cancelDraft,

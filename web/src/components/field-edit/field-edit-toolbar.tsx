@@ -122,6 +122,30 @@ function FreehandModeBadge() {
   );
 }
 
+function CircleModeBadge() {
+  return (
+    <span
+      aria-hidden="true"
+      className="pointer-events-none absolute bottom-0.5 right-0.5 text-[10px] font-bold leading-none text-white"
+      style={{ textShadow: "0 0 2px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.7)" }}
+    >
+      C
+    </span>
+  );
+}
+
+function EllipseModeBadge() {
+  return (
+    <span
+      aria-hidden="true"
+      className="pointer-events-none absolute bottom-0.5 right-0.5 text-[10px] font-bold leading-none text-white"
+      style={{ textShadow: "0 0 2px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.7)" }}
+    >
+      E
+    </span>
+  );
+}
+
 function DraftCountBadge({ count }: { count: number }) {
   const label = count > 99 ? "99+" : String(count);
   return (
@@ -236,6 +260,8 @@ type ToolbarsProps = {
   onUndo: () => void;
   bezierDrawMode: boolean;
   rectangularDrawMode: boolean;
+  circleDrawMode: boolean;
+  ellipseDrawMode: boolean;
   freehandDrawMode: boolean;
   onCycleLineAreaDrawMode: (tool: "addLine" | "addArea") => void;
   showDraftActions?: boolean;
@@ -257,6 +283,8 @@ export function FieldEditMapToolbars({
   onUndo,
   bezierDrawMode,
   rectangularDrawMode,
+  circleDrawMode,
+  ellipseDrawMode,
   freehandDrawMode,
   onCycleLineAreaDrawMode,
   showDraftActions = false,
@@ -285,22 +313,43 @@ export function FieldEditMapToolbars({
             supportsDrawModes && freehandDrawMode && tool === drawTool;
           const showBezierBadge =
             supportsDrawModes && bezierDrawMode && tool === drawTool && !freehandDrawMode;
+          const showEllipseBadge =
+            supportsDrawModes &&
+            ellipseDrawMode &&
+            tool === drawTool &&
+            !bezierDrawMode &&
+            !freehandDrawMode;
+          const showCircleBadge =
+            supportsDrawModes &&
+            circleDrawMode &&
+            tool === drawTool &&
+            !ellipseDrawMode &&
+            !bezierDrawMode &&
+            !freehandDrawMode;
           const showRectBadge =
             supportsDrawModes &&
             rectangularDrawMode &&
             tool === drawTool &&
+            !circleDrawMode &&
+            !ellipseDrawMode &&
             !bezierDrawMode &&
             !freehandDrawMode;
+          const cycleHint =
+            "vanlig → rektangel (R) → cirkel (C) → ellips (E) → Bézier (B) → frihand (F)";
           let modeHint = "";
           if (supportsDrawModes) {
             if (freehandDrawMode && tool === drawTool) {
-              modeHint = " (frihand — håll inne: vanlig → rektangel → Bézier → frihand)";
+              modeHint = ` (frihand — håll inne: ${cycleHint})`;
             } else if (bezierDrawMode && tool === drawTool) {
-              modeHint = " (Bézier — håll inne: vanlig → rektangel → Bézier → frihand)";
+              modeHint = ` (Bézier — håll inne: ${cycleHint})`;
+            } else if (ellipseDrawMode && tool === drawTool) {
+              modeHint = ` (ellips — håll inne: ${cycleHint})`;
+            } else if (circleDrawMode && tool === drawTool) {
+              modeHint = ` (cirkel — håll inne: ${cycleHint})`;
             } else if (rectangularDrawMode && tool === drawTool) {
-              modeHint = " (rektangel — håll inne: vanlig → rektangel → Bézier → frihand)";
+              modeHint = ` (rektangel — håll inne: ${cycleHint})`;
             } else {
-              modeHint = " (håll inne: vanlig → rektangel → Bézier → frihand)";
+              modeHint = ` (håll inne: ${cycleHint})`;
             }
           }
           const label = `${FIELD_EDIT_TOOL_LABELS[drawTool]}${modeHint}`;
@@ -323,6 +372,10 @@ export function FieldEditMapToolbars({
                   <FreehandModeBadge />
                 ) : showBezierBadge ? (
                   <BezierModeBadge />
+                ) : showEllipseBadge ? (
+                  <EllipseModeBadge />
+                ) : showCircleBadge ? (
+                  <CircleModeBadge />
                 ) : showRectBadge ? (
                   <RectangularModeBadge />
                 ) : null

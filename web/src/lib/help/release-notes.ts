@@ -12,7 +12,8 @@ export const releaseNotes: ReleaseNote[] = [
     items: [
       "Incheckade fältredigeringar som admin ska godkänna visar en jämförelsekarta där raderade, ändrade och nya objekt markeras",
       "Papperskorgen (radera objekt) ligger sist bland CAD-ikonerna",
-      "Frihandsläge (F): håll inne linje- eller ytaverktyget — vanlig → rektangel (R) → Bézier (B) → frihand (F); tryck och dra, klicka igen eller «Klar» för att avsluta",
+      "Frihandsläge (F): håll inne linje- eller ytaverktyget — vanlig → rektangel (R) → cirkel (C) → ellips (E) → Bézier (B) → frihand (F); tryck och dra, klicka igen eller «Klar» för att avsluta",
+      "Cirkel (C) och ellips (E): samma håll-inne-växling — cirkel med diameter kant→kant; ellips med längsta axel sedan kortare axel (som i OCAD)",
       "Frihandsutjämning 1–3 (OCAD-stil) under snappningsinställningarna",
       "Symbolväljaren visas bara en gång (nere på kartan) — den dubbla överst är borttagen",
       "Nya objekt som du ritar kan markeras och redigeras direkt på kartan (som befintliga objekt)",

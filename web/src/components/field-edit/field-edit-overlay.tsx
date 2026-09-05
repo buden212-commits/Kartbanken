@@ -315,6 +315,13 @@ export function fieldEditOverlaySvg(options: {
     dashed: [number, number][];
     fill: boolean;
   } | null;
+  /** Circle/ellipse help lines + sampled Bézier ring while drawing. */
+  curveDraw?: {
+    ring: [number, number][];
+    fill: boolean;
+    axesSolid?: [number, number][];
+    axesDashed?: [number, number][];
+  } | null;
 }): string {
   const {
     transform,
@@ -335,6 +342,7 @@ export function fieldEditOverlaySvg(options: {
     cutDraftPoints = [],
     mergeObjectIndices = [],
     rectangularDraw = null,
+    curveDraw = null,
   } = options;
 
   const masked = new Set(maskedObjectIndices);
@@ -430,6 +438,27 @@ export function fieldEditOverlaySvg(options: {
     if (handles.length >= 1) {
       parts.push(vertexHandlesSvg(handles, transform, null));
     }
+  } else if (curveDraw) {
+    if (curveDraw.fill && curveDraw.ring.length >= 3) {
+      parts.push(
+        `<polygon points="${ringToSvgPoints(curveDraw.ring, transform)}" fill="rgba(245,158,11,0.15)" stroke="#d97706" stroke-width="2.5" pointer-events="none" />`,
+      );
+    } else if (curveDraw.ring.length >= 2) {
+      parts.push(lineSvg(curveDraw.ring, transform, "#d97706", 2.5));
+    }
+    if (curveDraw.axesSolid && curveDraw.axesSolid.length >= 2) {
+      parts.push(lineSvg(curveDraw.axesSolid, transform, "#ea580c", 2));
+    }
+    if (curveDraw.axesDashed && curveDraw.axesDashed.length >= 2) {
+      parts.push(dashedLineSvg(curveDraw.axesDashed, transform, "#ea580c", 2));
+    }
+    const axisHandles = [
+      ...(curveDraw.axesSolid ?? []),
+      ...(curveDraw.axesDashed ?? []).slice(1),
+    ];
+    if (axisHandles.length >= 1) {
+      parts.push(vertexHandlesSvg(axisHandles, transform, null));
+    }
   } else if (!draftHasSymbolPreview && draftKind === "line" && draftPoints.length >= 1) {
     parts.push(lineSvg(draftPoints, transform, "#16a34a", 2));
     parts.push(vertexHandlesSvg(draftPoints, transform, null));
@@ -437,6 +466,7 @@ export function fieldEditOverlaySvg(options: {
   if (
     !bezierDraw &&
     !rectangularDraw &&
+    !curveDraw &&
     !draftHasSymbolPreview &&
     draftKind === "area" &&
     draftPoints.length >= 1
@@ -452,6 +482,7 @@ export function fieldEditOverlaySvg(options: {
   } else if (
     !bezierDraw &&
     !rectangularDraw &&
+    !curveDraw &&
     draftHasSymbolPreview &&
     draftPoints.length >= 1
   ) {

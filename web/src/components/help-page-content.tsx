@@ -493,8 +493,10 @@ export async function HelpPageContent() {
             items={[
               "Startar i Navigera (panorera/zooma) — byt till Rita när du ska redigera",
               "Verktyg som flytande ikoner på kartan: punkt → linje → yta → radera → GPS (samma ordning som i «Föreslå ändring»)",
-              "Håll inne linje- eller ytaverktyget för att växla vanlig → rektangel (R) → Bézier (B) → frihand (F) → vanlig",
+              "Håll inne linje- eller ytaverktyget för att växla vanlig → rektangel (R) → cirkel (C) → ellips (E) → Bézier (B) → frihand (F) → vanlig",
               "Rektangelritning: dra längsta sidan, sedan vinkelrätt; streckad förhandsvisning; klicka för att avsluta",
+              "Cirkel: dra diametern från kant till kant, släpp för att skapa (som i OCAD)",
+              "Ellips: dra längsta axeln, släpp, sedan kortare axeln vinkelrätt genom centrum och släpp",
               "När du ritar linje/yta: «Klar» (bock) och «Avbryt ritning» (kryss) i kartmenyn — Klar visar antal brytpunkter",
               "Ångra upp till 10 steg via knappen under Navigera eller Ctrl/Cmd+Z",
               "«Min position» och «GPS-spår» fungerar på georefererade kartor — spela in stigar med telefonens GPS",
@@ -541,6 +543,7 @@ export async function HelpPageContent() {
               "Förenkla: buffert ± meter — tar bort brytpunkter på nästan rak linje; ny punkt där linjen tangerar kanten",
               "Bézier: dra kontrollpunkterna P1/P2 för att forma kurvan, sedan «Tillämpa kurva»",
               "Frihand: håll inne linje/yta tills F visas — tryck och dra; klicka igen eller «Klar» avslutar. Utjämning 1–3 under snappning",
+              "Cirkel (C) / ellips (E): håll inne linje/yta — cirkel: dra diameter och släpp; ellips: längsta axel sedan kortare axel",
               "Rita ny Bézier: håll inne linje-/ytaverktyget tills B visas — tryck brytpunkt→dra P1, tryck P2→släpp nästa brytpunkt",
             ]}
           />
