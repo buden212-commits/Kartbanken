@@ -10,6 +10,7 @@ export const releaseNotes: ReleaseNote[] = [
     date: "2026-09-05",
     title: "Fältredigering — CAD-ordning, frihand och hjälp",
     items: [
+      "Borttaget meddelande «Ny yta saknar hörn inom området» — det blockerade ofta giltiga ytor (t.ex. cirklar) utan att hjälpa",
       "Borttagen hjälptext under symbolväljaren på kartan («Klicka ett kartobjekt…») — funktionen att kopiera symbol från kartobjekt finns kvar",
       "Symbolväljaren nere på kartan är smalare (15 % marginal på varje sida) så mer av kartan syns bakom",
       "Symbolväljarens sökfält öppnar inte längre tangentbordet automatiskt i mobilen — det visas först när du trycker i sökrutan",

@@ -2,12 +2,10 @@ import { appendNewObjects } from "@/lib/ocad/ocad-integrate";
 import { markObjectsDeletedByIndices } from "@/lib/ocad/ocad-export-server";
 import { parseOcadBuffer } from "@/lib/ocad/read";
 import { filterObjectsInSelection } from "@/lib/checkout/selection-objects";
-import { pointInPolygon } from "@/lib/checkout/overlap";
-import { parseSelectionJson, CheckoutSelectionType, type CheckoutSelectionGeometry } from "@/lib/checkout/types";
+import { parseSelectionJson } from "@/lib/checkout/types";
 import {
   allRemovedIndices,
   hasFieldEditChanges,
-  type FieldEditAdd,
   type FieldEditOps,
 } from "./types";
 import {
@@ -15,45 +13,6 @@ import {
   buildSpecFromModify,
   readOcadFileData,
 } from "./build-object-spec";
-
-function pointInSelectionGeometry(
-  x: number,
-  y: number,
-  geometry: CheckoutSelectionGeometry,
-): boolean {
-  if (geometry.type === CheckoutSelectionType.BBOX) {
-    const bbox = geometry.bbox;
-    return x >= bbox.minX && x <= bbox.maxX && y >= bbox.minY && y <= bbox.maxY;
-  }
-  return pointInPolygon(x, y, geometry.ring);
-}
-
-function geometryTouchesSelection(
-  coordinates: [number, number][],
-  geometry: CheckoutSelectionGeometry,
-): boolean {
-  return coordinates.some(([x, y]) => pointInSelectionGeometry(x, y, geometry));
-}
-
-function validateAdd(add: FieldEditAdd, geometry: CheckoutSelectionGeometry): string | null {
-  switch (add.kind) {
-    case "point":
-      if (!pointInSelectionGeometry(add.x, add.y, geometry)) {
-        return "Ny punkt ligger utanför området";
-      }
-      return null;
-    case "line":
-      if (!geometryTouchesSelection(add.coordinates, geometry)) {
-        return "Ny linje saknar punkter inom området";
-      }
-      return null;
-    case "area":
-      if (!geometryTouchesSelection(add.ring, geometry)) {
-        return "Ny yta saknar hörn inom området";
-      }
-      return null;
-  }
-}
 
 export type ApplyFieldEditResult = {
   buffer: Buffer;
@@ -98,10 +57,9 @@ export async function validateFieldEditOpsShape(
     }
   }
 
-  for (const add of ops.adds) {
-    const addError = validateAdd(add, selection.geometry);
-    if (addError) return addError;
-  }
+  // New points/lines/areas are not blocked for being outside the checkout
+  // selection — that check produced confusing errors (e.g. circles whose
+  // vertices miss the polygon) without helping the user.
 
   for (const modify of ops.modifies) {
     if (!scoped.has(modify.objectIndex)) {
