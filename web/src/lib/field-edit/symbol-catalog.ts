@@ -1,25 +1,15 @@
-import {
-  OCAD_AREA_SYMBOL,
-  OCAD_LINE_SYMBOL,
-  OCAD_LINE_TEXT_SYMBOL,
-  OCAD_POINT_SYMBOL,
-  OCAD_RECTANGLE_SYMBOL,
-} from "@/lib/ocad/ocad-object-create";
 import { formatOcadSymbolNumber } from "@/lib/ocad/layers";
 import { ocadIconBitsToPngDataUrl } from "@/lib/ocad/symbol-icon";
-import type { FieldEditGeometryKind } from "@/lib/field-edit/types";
+import {
+  geometryKindForSymbolType,
+  type FieldEditSymbolCatalogEntry,
+} from "@/lib/field-edit/symbol-catalog-shared";
 
-export type FieldEditSymbolCatalogEntry = {
-  symNum: number;
-  label: string;
-  type: number;
-  iconUrl: string | null;
-};
-
-export type FieldEditSymbolCatalogGroups = Record<
-  FieldEditGeometryKind,
-  FieldEditSymbolCatalogEntry[]
->;
+export type { FieldEditSymbolCatalogEntry, FieldEditSymbolCatalogGroups } from "@/lib/field-edit/symbol-catalog-shared";
+export {
+  geometryKindForSymbolType,
+  groupFieldEditSymbolCatalog,
+} from "@/lib/field-edit/symbol-catalog-shared";
 
 type OcadCatalogSymbol = {
   symNum: number;
@@ -34,13 +24,6 @@ type OcadCatalogSymbol = {
 type OcadCatalogFile = {
   symbols: OcadCatalogSymbol[];
 };
-
-export function geometryKindForSymbolType(type: number): FieldEditGeometryKind | null {
-  if (type === OCAD_POINT_SYMBOL) return "point";
-  if (type === OCAD_LINE_SYMBOL || type === OCAD_LINE_TEXT_SYMBOL) return "line";
-  if (type === OCAD_AREA_SYMBOL || type === OCAD_RECTANGLE_SYMBOL) return "area";
-  return null;
-}
 
 function symbolType(symbol: OcadCatalogSymbol): number | null {
   const value = symbol.otp ?? symbol.type;
@@ -76,16 +59,4 @@ export async function buildFieldEditSymbolCatalog(
   }
 
   return [...bySym.values()].sort((a, b) => a.label.localeCompare(b.label, "sv"));
-}
-
-export function groupFieldEditSymbolCatalog(
-  entries: FieldEditSymbolCatalogEntry[],
-): FieldEditSymbolCatalogGroups {
-  const groups: FieldEditSymbolCatalogGroups = { point: [], line: [], area: [] };
-  for (const entry of entries) {
-    const kind = geometryKindForSymbolType(entry.type);
-    if (!kind) continue;
-    groups[kind].push(entry);
-  }
-  return groups;
 }

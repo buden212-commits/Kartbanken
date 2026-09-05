@@ -16,8 +16,8 @@ import {
 import type { FieldEditFavoriteSymbols } from "@/lib/field-edit/favorites";
 import type { FieldEditGeometryKind } from "@/lib/field-edit/types";
 import type { FieldEditObjectEntry } from "@/lib/field-edit/object-index";
-import type { FieldEditSymbolCatalogEntry } from "@/lib/field-edit/symbol-catalog";
-import { geometryKindForSymbolType } from "@/lib/field-edit/symbol-catalog";
+import type { FieldEditSymbolCatalogEntry } from "@/lib/field-edit/symbol-catalog-shared";
+import { geometryKindForSymbolType } from "@/lib/field-edit/symbol-catalog-shared";
 
 export type SymbolChoice = {
   symNum: number;

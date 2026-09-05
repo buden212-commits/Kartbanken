@@ -36,7 +36,7 @@ import {
   symbolFromMapObject,
   type SymbolGroups,
 } from "@/components/field-edit/field-edit-symbol-picker";
-import type { FieldEditSymbolCatalogEntry } from "@/lib/field-edit/symbol-catalog";
+import type { FieldEditSymbolCatalogEntry } from "@/lib/field-edit/symbol-catalog-shared";
 import type { CheckoutSelection } from "@/lib/checkout/types";
 import {
   emptyFieldEditFavorites,
