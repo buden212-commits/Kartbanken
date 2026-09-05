@@ -29,42 +29,100 @@ function isNearBlack(r: number, g: number, b: number): boolean {
   return r < 40 && g < 40 && b < 40;
 }
 
+type RowInk = { black: number; opaque: number };
+
+function rowInk(rgba: Buffer, size: number, y: number): RowInk {
+  let black = 0;
+  let opaque = 0;
+  for (let x = 0; x < size; x++) {
+    const offset = (y * size + x) * 4;
+    if (rgba[offset + 3]! < 30) continue;
+    opaque++;
+    if (isNearBlack(rgba[offset]!, rgba[offset + 1]!, rgba[offset + 2]!)) black++;
+  }
+  return { black, opaque };
+}
+
 /**
- * OCAD icon bitmaps often pad the top/bottom with solid black rows that look
- * fine on OCAD's dark symbol tree, but show as a black bar on a white UI.
- * Clear those padding rows only — keep real black symbol ink (dots, lines).
+ * OCAD icon bitmaps often pad the top/bottom with black rows (sometimes with
+ * junk palette bytes on the outermost rows). Fine on OCAD's dark tree, but
+ * shows as a black bar on a white UI. Clear those edge pads only — keep real
+ * black symbol ink (dots, vertical lines, outlines in the content area).
  */
 function clearBlackPaddingRows(rgba: Buffer, size: number): void {
-  const rowIsBlackPadding = (y: number): boolean => {
-    let black = 0;
-    let opaque = 0;
+  const isEmpty = (ink: RowInk) => ink.opaque === 0;
+  /** Wide black bar — padding, not a 1–2 px symbol stroke. */
+  const isBlackPad = (ink: RowInk) =>
+    ink.black >= Math.ceil(size * 0.4) && ink.black >= Math.max(1, ink.opaque - 3);
+
+  const uniqueOpaqueColors = (y: number): number => {
+    const colors = new Set<string>();
     for (let x = 0; x < size; x++) {
       const offset = (y * size + x) * 4;
       if (rgba[offset + 3]! < 30) continue;
-      opaque++;
-      if (isNearBlack(rgba[offset]!, rgba[offset + 1]!, rgba[offset + 2]!)) black++;
+      colors.add(`${rgba[offset]},${rgba[offset + 1]},${rgba[offset + 2]}`);
     }
-    if (opaque === 0) return true;
-    return black >= Math.max(opaque - 1, Math.ceil(size * 0.6));
+    return colors.size;
   };
 
-  const clearBlackInRow = (y: number) => {
-    for (let x = 0; x < size; x++) {
-      const offset = (y * size + x) * 4;
-      if (isNearBlack(rgba[offset]!, rgba[offset + 1]!, rgba[offset + 2]!)) {
-        rgba[offset + 3] = 0;
+  /**
+   * Outermost rows sometimes contain high-entropy junk bytes (not real icon art).
+   * Real strokes use few colours; garbage mixes many palette indices.
+   */
+  const isJunkRow = (ink: RowInk, y: number): boolean =>
+    ink.opaque >= 8 && uniqueOpaqueColors(y) >= 4 && ink.black < ink.opaque * 0.85;
+
+  /** Outermost row with leftover non-black bytes sitting on a black pad. */
+  const isJunkEdgeOverPad = (ink: RowInk, inward: RowInk) =>
+    ink.black >= Math.ceil(size * 0.35) && isBlackPad(inward);
+
+  /** True when further inward there is a fully empty gap, then real content. */
+  const hasEmptyGapBeforeContent = (fromY: number, step: number): boolean => {
+    let seenEmpty = false;
+    for (let y = fromY + step; y >= 0 && y < size; y += step) {
+      const ink = rowInk(rgba, size, y);
+      if (isEmpty(ink)) {
+        seenEmpty = true;
+        continue;
       }
+      if (isBlackPad(ink) || isJunkRow(ink, y)) continue;
+      return seenEmpty;
+    }
+    return false;
+  };
+
+  const clearRow = (y: number) => {
+    for (let x = 0; x < size; x++) {
+      rgba[(y * size + x) * 4 + 3] = 0;
     }
   };
 
-  for (let y = 0; y < size; y++) {
-    if (!rowIsBlackPadding(y)) break;
-    clearBlackInRow(y);
-  }
-  for (let y = size - 1; y >= 0; y--) {
-    if (!rowIsBlackPadding(y)) break;
-    clearBlackInRow(y);
-  }
+  const clearFromEdge = (start: number, step: number) => {
+    for (let y = start; y >= 0 && y < size; y += step) {
+      const ink = rowInk(rgba, size, y);
+      if (isEmpty(ink) || isBlackPad(ink) || isJunkRow(ink, y)) {
+        clearRow(y);
+        continue;
+      }
+      const inwardY = y + step;
+      if (inwardY >= 0 && inwardY < size) {
+        const inward = rowInk(rgba, size, inwardY);
+        if (isJunkEdgeOverPad(ink, inward)) {
+          clearRow(y);
+          continue;
+        }
+      }
+      // Detached strip below/above a transparent gap (common OCAD icon footer junk).
+      if (hasEmptyGapBeforeContent(y, step)) {
+        clearRow(y);
+        continue;
+      }
+      break;
+    }
+  };
+
+  clearFromEdge(0, 1);
+  clearFromEdge(size - 1, -1);
 }
 
 /** Decode OCAD IconBits (484 bytes, bottom→top) to RGBA top→bottom. */
