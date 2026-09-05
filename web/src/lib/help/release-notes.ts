@@ -10,6 +10,7 @@ export const releaseNotes: ReleaseNote[] = [
     date: "2026-09-05",
     title: "Fältredigering — CAD-ordning, frihand och hjälp",
     items: [
+      "Cirkel- och ellipsläget ritar nu riktiga cirklar/ellipser (fixade vända Bézier-handtag som gav öglor)",
       "Incheckade fältredigeringar som admin ska godkänna visar en jämförelsekarta där raderade, ändrade och nya objekt markeras",
       "Papperskorgen (radera objekt) ligger sist bland CAD-ikonerna",
       "Klicka linje-/ytaverktyget igen för att växla ritläge: vanlig → rektangel (R) → cirkel (C) → ellips (E) → Bézier (B) → frihand (F)",

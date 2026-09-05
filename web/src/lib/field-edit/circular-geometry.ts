@@ -46,19 +46,19 @@ export function circleBezierFromDiameter(
   const cy = (a[1] + b[1]) / 2;
   const k = BEZIER_CIRCLE_KAPPA * r;
 
-  // Anchors at diameter ends and perpendicular extremes (CCW from a).
+  // Anchors at diameter ends and perpendicular extremes (a → +n → b → −n = CW).
   const anchors: [number, number][] = [
     [a[0], a[1]],
     [cx + nx * r, cy + ny * r],
     [b[0], b[1]],
     [cx - nx * r, cy - ny * r],
   ];
-  // Unit tangents CCW at each anchor (perpendicular to outward radius).
+  // Unit tangents in travel direction (CW) at each anchor.
   const tangents: [number, number][] = [
     [nx, ny],
-    [-ux, -uy],
-    [-nx, -ny],
     [ux, uy],
+    [-nx, -ny],
+    [-ux, -uy],
   ];
 
   const controls: BezierSegmentControls[] = [];
@@ -96,19 +96,19 @@ export function ellipseBezierFromAxes(
   const kx = BEZIER_CIRCLE_KAPPA * rx;
   const ky = BEZIER_CIRCLE_KAPPA * ry;
 
-  // Anchors: major ends + minor extremes (CCW from majorA).
+  // Anchors: major ends + minor extremes (majorA → +n → majorB → −n = CW).
   const anchors: [number, number][] = [
     [majorA[0], majorA[1]],
     [cx + nx * ry, cy + ny * ry],
     [majorB[0], majorB[1]],
     [cx - nx * ry, cy - ny * ry],
   ];
-  // Tangent scaled by axis radii (ellipse parametric derivative at 0, π/2, …).
+  // Tangents in travel direction (CW), scaled by kappa · opposite axis.
   const tangents: [number, number][] = [
     [nx * ky, ny * ky],
-    [-ux * kx, -uy * kx],
-    [-nx * ky, -ny * ky],
     [ux * kx, uy * kx],
+    [-nx * ky, -ny * ky],
+    [-ux * kx, -uy * kx],
   ];
 
   const controls: BezierSegmentControls[] = [];
