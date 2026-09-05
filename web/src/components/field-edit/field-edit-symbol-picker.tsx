@@ -213,7 +213,6 @@ export function FieldEditSymbolPicker({
         <div className="absolute bottom-full left-0 z-50 mb-1 w-full min-w-[min(100%,20rem)] max-w-[24rem] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl sm:min-w-[20rem]">
           <div className="border-b border-slate-100 p-2">
             <input
-              ref={searchRef}
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
