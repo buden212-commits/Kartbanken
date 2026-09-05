@@ -524,8 +524,9 @@ export async function HelpPageContent() {
 
           <h3 className="font-medium text-slate-900">Snappning</h3>
           <p>
-            Slå på snappning och ange tolerans i meter. Brytpunkter fästs då mot linjer, hörn och
-            punktobjekt när du ritar eller redigerar.
+            Slå på snappning och ange tolerans i meter. Brytpunkter fästs då bara mot objekt med
+            samma symbol som du ritar eller flyttar (t.ex. höjdkurva mot höjdkurva). När du ritar
+            kan du även snappa mot startpunkten på det objekt du håller på att skapa.
           </p>
 
           <h3 className="font-medium text-slate-900">CAD-verktyg</h3>
@@ -545,7 +546,8 @@ export async function HelpPageContent() {
           <h3 className="font-medium text-slate-900">Spara och checka in</h3>
           <HelpList
             items={[
-              "Ändringar sparas lokalt i webbläsaren tills du checkar in — en kort toast visas uppe på kartan",
+              "Nya objekt du ritar kan markeras med välj-verktyget och redigeras vidare (brytpunkter, CAD)",
+                  "Ändringar sparas lokalt i webbläsaren tills du checkar in — en kort toast visas uppe på kartan",
               "Vid nätverksfel behålls arbetet lokalt",
               "«Checka in» visar en sammanfattning — därefter väntar admin-godkännande innan ny version skapas",
               "Avslutade fältredigeringar ingår i utcheckningshistoriken",

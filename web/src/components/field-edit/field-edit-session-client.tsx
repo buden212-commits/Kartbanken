@@ -48,7 +48,13 @@ import {
   hitTestFieldEditObjects,
   hitTestFieldEditVertex,
 } from "@/lib/field-edit/hit-test";
-import type { FieldEditObjectEntry } from "@/lib/field-edit/object-index";
+import {
+  addIndexFromSyntheticObjectId,
+  isSyntheticAddObjectId,
+  mergeFieldEditObjectsWithAdds,
+  syntheticAddObjectId,
+  type FieldEditObjectEntry,
+} from "@/lib/field-edit/object-index";
 import {
   clearLocalFieldEditOps,
   loadLocalFieldEditOps,
@@ -281,8 +287,38 @@ export function FieldEditSessionClient({
     pointsAtDown: number;
   } | null>(null);
   opsRef.current = ops;
+  const editableObjects = useMemo(
+    () => mergeFieldEditObjectsWithAdds(objects, ops.adds),
+    [objects, ops.adds],
+  );
+
+  const selectNewestAdd = useCallback((previousAddsLength: number) => {
+    setTool("select");
+    setMapMode("draw");
+    setSelectedObjectIndex(syntheticAddObjectId(previousAddsLength));
+    setSelectedVertexIndex(null);
+    setBezierEdit(null);
+    setCadVertexTool("off");
+    setCadCutTool("off");
+    setInfo("Nytt objekt markerat — du kan flytta brytpunkter eller använda CAD-verktygen.");
+  }, []);
+
   const editorSettingsRef = useRef(editorSettings);
   editorSettingsRef.current = editorSettings;
+  const toolRef = useRef(tool);
+  toolRef.current = tool;
+  const symbolNumberRef = useRef(symbolNumber);
+  symbolNumberRef.current = symbolNumber;
+  const selectedObjectIndexRef = useRef(selectedObjectIndex);
+  selectedObjectIndexRef.current = selectedObjectIndex;
+  const draftPointsRef = useRef(draftPoints);
+  draftPointsRef.current = draftPoints;
+  const bezierDraftAnchorsRef = useRef(bezierDraftAnchors);
+  bezierDraftAnchorsRef.current = bezierDraftAnchors;
+  const rectangularGestureRef = useRef(rectangularGesture);
+  rectangularGestureRef.current = rectangularGesture;
+  const cutDraftPointsRef = useRef(cutDraftPoints);
+  cutDraftPointsRef.current = cutDraftPoints;
 
   const clearHoldCycle = useCallback(() => {
     if (holdCycleRef.current?.timer) {
@@ -329,15 +365,60 @@ export function FieldEditSessionClient({
         return { point: geo, snap: null };
       }
       const toleranceMapUnits = metersToMapUnits(settings.snapToleranceM, ocadMapScale);
+      const currentOps = opsRef.current;
+      const currentTool = toolRef.current;
+
+      let matchSymbolNumber: number | null = null;
+      if (
+        currentTool === "addPoint" ||
+        currentTool === "addLine" ||
+        currentTool === "addArea"
+      ) {
+        const sym = symbolNumberRef.current;
+        matchSymbolNumber = sym === "" ? null : Number(sym);
+      } else {
+        const symbolSourceIndex = excludeObjectIndex ?? selectedObjectIndexRef.current;
+        if (symbolSourceIndex != null) {
+          const entry = editableObjects.find((o) => o.i === symbolSourceIndex);
+          if (entry) {
+            matchSymbolNumber =
+              currentOps.modifies.find((m) => m.objectIndex === symbolSourceIndex)
+                ?.symbolNumber ?? entry.s;
+          }
+        }
+      }
+
+      const extraVertices: [number, number][] = [];
+      const pushUnique = (vertex: [number, number]) => {
+        if (extraVertices.some((v) => v[0] === vertex[0] && v[1] === vertex[1])) return;
+        extraVertices.push(vertex);
+      };
+      if (currentTool === "addLine" || currentTool === "addArea") {
+        const draftStart = draftPointsRef.current[0];
+        if (draftStart) pushUnique(draftStart);
+        const bezierStart = bezierDraftAnchorsRef.current[0];
+        if (bezierStart) pushUnique(bezierStart);
+        const rect = rectangularGestureRef.current;
+        if (rect.phase !== "idle" && "p0" in rect) {
+          pushUnique(rect.p0);
+        }
+      }
+      if (currentTool === "select") {
+        const cutStart = cutDraftPointsRef.current[0];
+        if (cutStart) pushUnique(cutStart);
+      }
+
       const snap = snapGeoPoint(geo, {
-        objects,
-        ops: opsRef.current,
+        objects: editableObjects,
+        ops: currentOps,
         toleranceMapUnits,
         excludeObjectIndex,
+        matchSymbolNumber,
+        extraVertices,
       });
       return { point: snap?.point ?? geo, snap };
     },
-    [objects, ocadMapScale],
+    [editableObjects, ocadMapScale],
   );
 
   const addKind: FieldEditGeometryKind | null =
@@ -660,6 +741,70 @@ export function FieldEditSessionClient({
       vertexKinds?: FieldEditVertexKind[],
       holes?: [number, number][][] | null,
     ) => {
+      if (isSyntheticAddObjectId(objectIndex)) {
+        const addIndex = addIndexFromSyntheticObjectId(objectIndex);
+        updateOps((current) => {
+          const existing = current.adds[addIndex];
+          if (!existing) return current;
+          const adds = current.adds.slice();
+          if (existing.kind === "point") {
+            const pt = coordinates[0] ?? [existing.x, existing.y];
+            adds[addIndex] = {
+              kind: "point",
+              x: pt[0],
+              y: pt[1],
+              symbolNumber: existing.symbolNumber,
+            };
+          } else if (existing.kind === "line") {
+            let resolvedKinds = vertexKinds;
+            if (resolvedKinds && resolvedKinds.length !== coordinates.length) {
+              resolvedKinds = vertexKindsForStoredCoordinates(
+                coordinates,
+                resolvedKinds,
+                "line",
+              );
+            }
+            adds[addIndex] = {
+              kind: "line",
+              coordinates,
+              symbolNumber: existing.symbolNumber,
+              ...(resolvedKinds
+                ? { vertexKinds: resolvedKinds }
+                : existing.vertexKinds && existing.vertexKinds.length === coordinates.length
+                  ? { vertexKinds: existing.vertexKinds }
+                  : {}),
+            };
+          } else {
+            let resolvedKinds = vertexKinds;
+            if (resolvedKinds && resolvedKinds.length !== coordinates.length) {
+              resolvedKinds = vertexKindsForStoredCoordinates(
+                coordinates,
+                resolvedKinds,
+                "area",
+              );
+            }
+            const resolvedHoles =
+              holes === null
+                ? undefined
+                : holes !== undefined
+                  ? holes
+                  : existing.holes;
+            adds[addIndex] = {
+              kind: "area",
+              ring: coordinates,
+              symbolNumber: existing.symbolNumber,
+              ...(resolvedKinds
+                ? { vertexKinds: resolvedKinds }
+                : existing.vertexKinds && existing.vertexKinds.length === coordinates.length
+                  ? { vertexKinds: existing.vertexKinds }
+                  : {}),
+              ...(resolvedHoles && resolvedHoles.length > 0 ? { holes: resolvedHoles } : {}),
+            };
+          }
+          return { ...current, adds };
+        });
+        return;
+      }
       const obj = objects.find((entry) => entry.i === objectIndex);
       if (!obj) return;
       updateOps((current) => {
@@ -705,6 +850,17 @@ export function FieldEditSessionClient({
 
   const upsertModifySymbol = useCallback(
     (objectIndex: number, nextSymbolNumber: number) => {
+      if (isSyntheticAddObjectId(objectIndex)) {
+        const addIndex = addIndexFromSyntheticObjectId(objectIndex);
+        updateOps((current) => {
+          const existing = current.adds[addIndex];
+          if (!existing) return current;
+          const adds = current.adds.slice();
+          adds[addIndex] = { ...existing, symbolNumber: nextSymbolNumber };
+          return { ...current, adds };
+        });
+        return;
+      }
       const obj = objects.find((entry) => entry.i === objectIndex);
       if (!obj) return;
       updateOps((current) => {
@@ -736,6 +892,32 @@ export function FieldEditSessionClient({
   const deleteSelectedObject = useCallback(() => {
     if (selectedObjectIndex == null) return;
     const index = selectedObjectIndex;
+    if (isSyntheticAddObjectId(index)) {
+      const addIndex = addIndexFromSyntheticObjectId(index);
+      updateOps((current) => {
+        if (addIndex < 0 || addIndex >= current.adds.length) return current;
+        const adds = current.adds.filter((_, i) => i !== addIndex);
+        return { ...current, adds };
+      });
+      setSelectedObjectIndex(null);
+      setSelectedVertexIndex(null);
+      setBezierEdit(null);
+      setCadVertexTool("off");
+      setCadCutTool("off");
+      setMergeObjectIndices((prev) =>
+        prev
+          .map((id) => {
+            if (!isSyntheticAddObjectId(id)) return id;
+            const idx = addIndexFromSyntheticObjectId(id);
+            if (idx === addIndex) return null;
+            if (idx > addIndex) return syntheticAddObjectId(idx - 1);
+            return id;
+          })
+          .filter((id): id is number => id != null),
+      );
+      setInfo("Nytt objekt borttaget.");
+      return;
+    }
     updateOps((current) => {
       const deletes = current.deletes.includes(index)
         ? current.deletes.filter((id) => id !== index)
@@ -791,11 +973,12 @@ export function FieldEditSessionClient({
 
   const objectSymbolAndKind = useCallback(
     (objectIndex: number) => {
-      const obj = objects.find((entry) => entry.i === objectIndex);
+      const obj = editableObjects.find((entry) => entry.i === objectIndex);
       if (!obj || (obj.t !== "line" && obj.t !== "area")) return null;
-      const symbol =
-        opsRef.current.modifies.find((m) => m.objectIndex === objectIndex)?.symbolNumber ??
-        obj.s;
+      const symbol = isSyntheticAddObjectId(objectIndex)
+        ? obj.s
+        : opsRef.current.modifies.find((m) => m.objectIndex === objectIndex)?.symbolNumber ??
+          obj.s;
       return {
         symbolNumber: symbol,
         kind: geometryKindFromType(obj.t),
@@ -803,7 +986,7 @@ export function FieldEditSessionClient({
         obj,
       };
     },
-    [objects],
+    [editableObjects],
   );
 
   const toggleMerge = useCallback(() => {
@@ -906,28 +1089,63 @@ export function FieldEditSessionClient({
 
     const mergedCoords = merged;
     const count = mergeObjectIndices.length;
+    let nextSelectedIndex = selectedObjectIndex;
     updateOps((current) => {
-      const existing = current.modifies.find((m) => m.objectIndex === selectedObjectIndex);
+      let adds = current.adds.slice();
+      let modifies = current.modifies.slice();
+      let deletes = current.deletes.slice();
+
+      // Remove other members first (highest synthetic index first so indices stay valid).
+      const syntheticOthers = others
+        .filter((idx) => isSyntheticAddObjectId(idx))
+        .map((idx) => addIndexFromSyntheticObjectId(idx))
+        .sort((a, b) => b - a);
+      for (const addIndex of syntheticOthers) {
+        if (addIndex >= 0 && addIndex < adds.length) adds.splice(addIndex, 1);
+      }
+      for (const idx of others) {
+        if (isSyntheticAddObjectId(idx)) continue;
+        modifies = modifies.filter((m) => m.objectIndex !== idx);
+        if (!deletes.includes(idx)) deletes.push(idx);
+      }
+
+      if (isSyntheticAddObjectId(selectedObjectIndex)) {
+        const primaryAddIndex = addIndexFromSyntheticObjectId(selectedObjectIndex);
+        const removedAbove = syntheticOthers.filter((i) => i < primaryAddIndex).length;
+        const adjusted = primaryAddIndex - removedAbove;
+        const existing = adds[adjusted];
+        if (existing && existing.kind === "line") {
+          adds[adjusted] = {
+            kind: "line",
+            coordinates: mergedCoords,
+            symbolNumber: existing.symbolNumber,
+          };
+        } else if (existing && existing.kind === "area") {
+          adds[adjusted] = {
+            kind: "area",
+            ring: mergedCoords,
+            symbolNumber: existing.symbolNumber,
+          };
+        }
+        nextSelectedIndex = syntheticAddObjectId(adjusted);
+        deletes = deletes.filter((id) => id !== selectedObjectIndex && id >= 0);
+        return { ...current, adds, modifies, deletes };
+      }
+
+      const existing = modifies.find((m) => m.objectIndex === selectedObjectIndex);
       const nextModify: FieldEditModify = {
         objectIndex: selectedObjectIndex,
         symbolNumber: existing?.symbolNumber ?? primary.symbolNumber,
         geometryKind: primary.kind,
         coordinates: mergedCoords,
       };
-      let modifies = existing
-        ? current.modifies.map((m) =>
-            m.objectIndex === selectedObjectIndex ? nextModify : m,
-          )
-        : [...current.modifies, nextModify];
-      modifies = modifies.filter((m) => !others.includes(m.objectIndex));
-      const deletes = [...current.deletes];
-      for (const idx of others) {
-        if (!deletes.includes(idx)) deletes.push(idx);
-      }
-      // Ensure primary is not marked deleted.
-      const cleanedDeletes = deletes.filter((id) => id !== selectedObjectIndex);
-      return { ...current, modifies, deletes: cleanedDeletes };
+      modifies = existing
+        ? modifies.map((m) => (m.objectIndex === selectedObjectIndex ? nextModify : m))
+        : [...modifies, nextModify];
+      deletes = deletes.filter((id) => id !== selectedObjectIndex);
+      return { ...current, adds, modifies, deletes };
     });
+    setSelectedObjectIndex(nextSelectedIndex);
     setMergeActive(false);
     setMergeObjectIndices([]);
     setSelectedVertexIndex(null);
@@ -951,7 +1169,7 @@ export function FieldEditSessionClient({
       useHoles: boolean;
     }) => {
       if (selectedObjectIndex == null) return;
-      const obj = objects.find((entry) => entry.i === selectedObjectIndex);
+      const obj = editableObjects.find((entry) => entry.i === selectedObjectIndex);
       if (!obj) return;
       const objectSymbol =
         opsRef.current.modifies.find((m) => m.objectIndex === selectedObjectIndex)
@@ -991,11 +1209,12 @@ export function FieldEditSessionClient({
       partB: [number, number][],
       preferSmallerSelection: boolean,
     ) => {
-      const obj = objects.find((entry) => entry.i === objectIndex);
+      const obj = editableObjects.find((entry) => entry.i === objectIndex);
       if (!obj) return;
-      const symbol =
-        opsRef.current.modifies.find((m) => m.objectIndex === objectIndex)?.symbolNumber ??
-        obj.s;
+      const symbol = isSyntheticAddObjectId(objectIndex)
+        ? obj.s
+        : opsRef.current.modifies.find((m) => m.objectIndex === objectIndex)?.symbolNumber ??
+          obj.s;
       let keep = partA;
       let added = partB;
       if (preferSmallerSelection && objectType === "area") {
@@ -1024,12 +1243,12 @@ export function FieldEditSessionClient({
           : "Ytan delad i två objekt (mindre delen vald).",
       );
     },
-    [objects, updateOps, upsertModify],
+    [editableObjects, updateOps, upsertModify],
   );
 
   const finishCut = useCallback(() => {
     if (selectedObjectIndex == null) return;
-    const obj = objects.find((entry) => entry.i === selectedObjectIndex);
+    const obj = editableObjects.find((entry) => entry.i === selectedObjectIndex);
     if (!obj) return;
     const coords =
       resolveObjectCoordinates(selectedObjectIndex, obj.v, opsRef.current) ?? obj.v;
@@ -1080,7 +1299,7 @@ export function FieldEditSessionClient({
     setCadCutTool("off");
     setCutDraftPoints([]);
     if (selectedObjectIndex == null) return;
-    const obj = objects.find((entry) => entry.i === selectedObjectIndex);
+    const obj = editableObjects.find((entry) => entry.i === selectedObjectIndex);
     if (!obj || (obj.t !== "line" && obj.t !== "area")) return;
     const coords =
       resolveObjectCoordinates(selectedObjectIndex, obj.v, opsRef.current) ?? obj.v;
@@ -1102,7 +1321,7 @@ export function FieldEditSessionClient({
     setInfo(
       "Bézier-läge: dra de orangefärgade kontrollpunkterna (P1/P2) för att forma bågen, sedan «Tillämpa kurva».",
     );
-  }, [objects, selectedObjectIndex]);
+  }, [editableObjects, selectedObjectIndex]);
 
   const applyBezierEdit = useCallback(() => {
     if (!bezierEdit) return;
@@ -1178,7 +1397,7 @@ export function FieldEditSessionClient({
         }
 
         if (selectedObjectIndex != null) {
-          const obj = objects.find((o) => o.i === selectedObjectIndex);
+          const obj = editableObjects.find((o) => o.i === selectedObjectIndex);
           const coords =
             resolveObjectCoordinates(selectedObjectIndex, obj?.v ?? [], ops) ?? [];
           const handleCoords =
@@ -1342,7 +1561,7 @@ export function FieldEditSessionClient({
           }
         }
 
-        const hits = hitTestFieldEditObjects(objects, geo, hitDistance).filter(
+        const hits = hitTestFieldEditObjects(editableObjects, geo, hitDistance).filter(
           (entry) => !ops.deletes.includes(entry.i),
         );
         if (hits.length === 0) {
@@ -1441,20 +1660,45 @@ export function FieldEditSessionClient({
       }
 
       if (tool === "delete") {
-        const hit = hitTestFieldEditObject(objects, geo, hitDistance);
+        const hit = hitTestFieldEditObject(editableObjects, geo, hitDistance);
         if (!hit) {
           setError("Inget objekt hittades — zooma in och försök igen");
           return;
         }
-        updateOps((current) => {
-          const deletes = current.deletes.includes(hit.i)
-            ? current.deletes.filter((id) => id !== hit.i)
-            : [...current.deletes.filter((id) => id !== hit.i), hit.i];
-          const modifies = current.modifies.filter((m) => m.objectIndex !== hit.i);
-          return { ...current, deletes, modifies };
-        });
-        if (selectedObjectIndex === hit.i) {
-          setSelectedObjectIndex(null);
+        if (isSyntheticAddObjectId(hit.i)) {
+          const addIndex = addIndexFromSyntheticObjectId(hit.i);
+          updateOps((current) => {
+            if (addIndex < 0 || addIndex >= current.adds.length) return current;
+            return { ...current, adds: current.adds.filter((_, idx) => idx !== addIndex) };
+          });
+          const remapSynthetic = (id: number | null): number | null => {
+            if (id == null || !isSyntheticAddObjectId(id)) return id;
+            const idx = addIndexFromSyntheticObjectId(id);
+            if (idx === addIndex) return null;
+            if (idx > addIndex) return syntheticAddObjectId(idx - 1);
+            return id;
+          };
+          setSelectedObjectIndex((prev) => remapSynthetic(prev));
+          setMergeObjectIndices((prev) =>
+            prev
+              .map((id) => remapSynthetic(id))
+              .filter((id): id is number => id != null),
+          );
+        } else {
+          updateOps((current) => {
+            const deletes = current.deletes.includes(hit.i)
+              ? current.deletes.filter((id) => id !== hit.i)
+              : [...current.deletes.filter((id) => id !== hit.i), hit.i];
+            const modifies = current.modifies.filter((m) => m.objectIndex !== hit.i);
+            return { ...current, deletes, modifies };
+          });
+          if (selectedObjectIndex === hit.i) {
+            setSelectedObjectIndex(null);
+            setSelectedVertexIndex(null);
+            setBezierEdit(null);
+          }
+        }
+        if (isSyntheticAddObjectId(hit.i) && selectedObjectIndex === hit.i) {
           setSelectedVertexIndex(null);
           setBezierEdit(null);
         }
@@ -1463,7 +1707,7 @@ export function FieldEditSessionClient({
       }
 
       if (tool === "addPoint") {
-        const hit = hitTestFieldEditObject(objects, geo, hitDistance);
+        const hit = hitTestFieldEditObject(editableObjects, geo, hitDistance);
         if (hit && !ops.deletes.includes(hit.i)) {
           if (pickSymbolFromObject(hit, "point")) return;
         }
@@ -1485,7 +1729,7 @@ export function FieldEditSessionClient({
 
       if (tool === "addLine" || tool === "addArea") {
         const kind = tool === "addLine" ? "line" : "area";
-        const hit = hitTestFieldEditObject(objects, geo, hitDistance);
+        const hit = hitTestFieldEditObject(editableObjects, geo, hitDistance);
         if (hit && !ops.deletes.includes(hit.i)) {
           const noDraftYet =
             draftPoints.length === 0 &&
@@ -1636,7 +1880,7 @@ export function FieldEditSessionClient({
       draftPoints.length,
       mergeActive,
       objectSymbolAndKind,
-      objects,
+      editableObjects,
       ops,
       pickSymbolFromObject,
       rectangularDrawMode,
@@ -1922,7 +2166,7 @@ export function FieldEditSessionClient({
         _svg
       ) {
         cutLineDragRef.current = null;
-        const obj = objects.find((o) => o.i === selectedObjectIndex);
+        const obj = editableObjects.find((o) => o.i === selectedObjectIndex);
         if (obj?.t === "line") {
           const coords =
             resolveObjectCoordinates(selectedObjectIndex, obj.v, opsRef.current) ??
@@ -2015,6 +2259,7 @@ export function FieldEditSessionClient({
         setError("Rita klart rektangeln först (två sidor).");
         return;
       }
+      const nextAddIndex = opsRef.current.adds.length;
       if (tool === "addLine") {
         updateOps((current) => ({
           ...current,
@@ -2044,9 +2289,10 @@ export function FieldEditSessionClient({
       }
       setRectangularGesture({ phase: "idle" });
       setError(null);
-      setInfo("Rektangel skapad.");
+      selectNewestAdd(nextAddIndex);
       return;
     }
+    const nextAddIndex = opsRef.current.adds.length;
     if (tool === "addLine") {
       let coordinates: [number, number][];
       if (bezierDrawMode) {
@@ -2142,7 +2388,7 @@ export function FieldEditSessionClient({
     freehandDrawingRef.current = false;
     freehandPointerDownRef.current = null;
     setError(null);
-    setInfo(freehandDrawMode ? "Frihandsobjekt skapat." : null);
+    selectNewestAdd(nextAddIndex);
   }, [
     bezierDraftAnchors,
     bezierDraftControls,
@@ -2156,6 +2402,7 @@ export function FieldEditSessionClient({
     rectangularCornersFromGesture,
     rectangularDrawMode,
     rectangularGesture,
+    selectNewestAdd,
     symbolNumber,
     tool,
     updateOps,
@@ -2188,7 +2435,7 @@ export function FieldEditSessionClient({
             __html: fieldEditOverlaySvg({
               transform,
               selectionGeometry: selection.geometry,
-              objects,
+              objects: editableObjects,
               ops,
               selectedObjectIndex,
               selectedVertexIndex,
@@ -2266,7 +2513,7 @@ export function FieldEditSessionClient({
     },
     [
       selection.geometry,
-      objects,
+      editableObjects,
       ops,
       selectedObjectIndex,
       selectedVertexIndex,
@@ -2294,9 +2541,9 @@ export function FieldEditSessionClient({
   const selectedObject = useMemo(
     () =>
       selectedObjectIndex != null
-        ? objects.find((entry) => entry.i === selectedObjectIndex) ?? null
+        ? editableObjects.find((entry) => entry.i === selectedObjectIndex) ?? null
         : null,
-    [objects, selectedObjectIndex],
+    [editableObjects, selectedObjectIndex],
   );
 
   function handleOpenReview() {
@@ -2357,7 +2604,7 @@ export function FieldEditSessionClient({
     const addKindForTool: FieldEditGeometryKind | null =
       next === "addPoint" ? "point" : next === "addLine" ? "line" : next === "addArea" ? "area" : null;
     if (addKindForTool && selectedObjectIndex != null) {
-      const obj = objects.find((entry) => entry.i === selectedObjectIndex);
+      const obj = editableObjects.find((entry) => entry.i === selectedObjectIndex);
       if (obj && !ops.deletes.includes(obj.i)) {
         const sym = symbolFromMapObject(obj, addKindForTool);
         if (sym != null) {

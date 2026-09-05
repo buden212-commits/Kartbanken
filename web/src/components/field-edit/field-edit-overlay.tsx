@@ -5,7 +5,10 @@ import {
 import type { BezierSegmentControls } from "@/lib/field-edit/geometry-tools";
 import { sampleBezierPolyline } from "@/lib/field-edit/geometry-tools";
 import type { SnapResult } from "@/lib/field-edit/snap";
-import type { FieldEditObjectEntry } from "@/lib/field-edit/object-index";
+import {
+  resolveSyntheticAddVertexKinds,
+  type FieldEditObjectEntry,
+} from "@/lib/field-edit/object-index";
 import type { FieldEditOps, FieldEditVertexKind } from "@/lib/field-edit/types";
 import { resolveObjectCoordinates, resolveObjectVertexKinds } from "@/lib/field-edit/types";
 import { verticesForHandles } from "@/lib/field-edit/vertices";
@@ -392,7 +395,9 @@ export function fieldEditOverlaySvg(options: {
     const coords = resolveObjectCoordinates(obj.i, obj.v, ops);
     if (!coords || coords.length === 0) continue;
     const handleCoords = obj.t === "area" ? verticesForHandles(coords, obj.t) : coords;
-    const kinds = resolveObjectVertexKinds(obj.i, handleCoords.length, ops);
+    const kinds =
+      resolveSyntheticAddVertexKinds(obj.i, handleCoords.length, ops.adds) ??
+      resolveObjectVertexKinds(obj.i, handleCoords.length, ops);
     parts.push(vertexHandlesSvg(handleCoords, transform, selectedVertexIndex, HANDLE_SIZE, kinds));
   }
 

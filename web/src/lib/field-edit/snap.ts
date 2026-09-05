@@ -9,6 +9,9 @@ import { closedRing, verticesForHandles } from "./vertices";
 
 export type SnapTargetKind = "vertex" | "segment" | "point";
 
+/** Sentinel objectIndex for snap targets that belong to the in-progress draft. */
+export const DRAFT_SNAP_OBJECT_INDEX = Number.MIN_SAFE_INTEGER;
+
 export type SnapResult = {
   point: [number, number];
   kind: SnapTargetKind;
@@ -27,6 +30,11 @@ function collectPolylineVertices(
   if (entry.t === "area") return verticesForHandles(coords, entry.t);
   if (entry.t === "line") return coords;
   return [];
+}
+
+function effectiveSymbolNumber(entry: FieldEditObjectEntry, ops: FieldEditOps): number {
+  const mod = ops.modifies.find((m) => m.objectIndex === entry.i);
+  return mod?.symbolNumber ?? entry.s;
 }
 
 function snapPriority(kind: SnapTargetKind): number {
@@ -48,9 +56,20 @@ export function snapGeoPoint(
     ops: FieldEditOps;
     toleranceMapUnits: number;
     excludeObjectIndex?: number | null;
+    /** Only snap to objects with this OCAD symbol number (e.g. contour → contour). */
+    matchSymbolNumber?: number | null;
+    /** Extra vertices (e.g. draft start) that are always eligible snap targets. */
+    extraVertices?: [number, number][];
   },
 ): SnapResult | null {
-  const { objects, ops, toleranceMapUnits, excludeObjectIndex = null } = options;
+  const {
+    objects,
+    ops,
+    toleranceMapUnits,
+    excludeObjectIndex = null,
+    matchSymbolNumber = null,
+    extraVertices = [],
+  } = options;
   if (!(toleranceMapUnits > 0)) return null;
 
   let best: SnapCandidate | null = null;
@@ -67,9 +86,24 @@ export function snapGeoPoint(
     }
   };
 
+  for (const vertex of extraVertices) {
+    consider({
+      point: vertex,
+      kind: "vertex",
+      objectIndex: DRAFT_SNAP_OBJECT_INDEX,
+      distance: distance2d(point, vertex),
+    });
+  }
+
+  // Without a symbol filter we only allow draft extras — never snap across symbols.
+  if (matchSymbolNumber == null || !Number.isFinite(matchSymbolNumber)) {
+    return best;
+  }
+
   for (const entry of objects) {
     if (entry.i === excludeObjectIndex) continue;
     if (ops.deletes.includes(entry.i)) continue;
+    if (effectiveSymbolNumber(entry, ops) !== matchSymbolNumber) continue;
 
     if (entry.t === "point" || entry.t === "text") {
       const distance = distance2d(point, entry.c);

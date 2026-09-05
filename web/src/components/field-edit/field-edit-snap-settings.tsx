@@ -17,7 +17,7 @@ export function FieldEditSnapSettings({ settings, onChange }: Props) {
           onChange={(e) => onChange({ ...settings, snapEnabled: e.target.checked })}
           className="h-5 w-5"
         />
-        Snappa mot objekt
+        Snappa mot samma symbol
       </label>
       <label className="flex min-h-11 items-center gap-2 text-slate-600">
         Tolerans
