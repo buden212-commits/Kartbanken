@@ -11,7 +11,7 @@ export const releaseNotes: ReleaseNote[] = [
     title: "Fältredigering — Fyll yta, CAD-ordning, frihand och hjälp",
     items: [
       "Fyll yta ligger i CAD-verktyg (inte i kartverktygsraden): välj ytsymbol, aktivera och klicka i omslutet tomt område",
-      "Fyll yta går nu ända ut till begränsande linjer/ytor (tidigare stannade den en bit innan)",
+      "Fyll yta bygger ytan av brytpunkterna i de omslutande objekten (plus skärningspunkter) — utan glapp innan gränsen",
       "GPS-spår i fältredigering: välj linje eller yta och symbol först — därefter GPS-ikonen. Punkter klickas alltid ut manuellt",
       "Borttaget meddelande «Ny yta saknar hörn inom området» — det blockerade ofta giltiga ytor (t.ex. cirklar) utan att hjälpa",
       "Borttagen hjälptext under symbolväljaren på kartan («Klicka ett kartobjekt…») — funktionen att kopiera symbol från kartobjekt finns kvar",

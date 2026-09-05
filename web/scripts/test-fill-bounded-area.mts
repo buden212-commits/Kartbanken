@@ -39,11 +39,45 @@ if (enclosed.ok) {
   assert.equal(enclosed.holes.length, 0);
   const xs = enclosed.ring.map((p) => p[0]);
   const ys = enclosed.ring.map((p) => p[1]);
-  // Must reach the real barrier (20/80), not stop a cell inside.
-  assert.ok(Math.min(...xs) <= 20.75, `minX ${Math.min(...xs)} inset`);
-  assert.ok(Math.max(...xs) >= 79.25, `maxX ${Math.max(...xs)} inset`);
-  assert.ok(Math.min(...ys) <= 20.75, `minY ${Math.min(...ys)} inset`);
-  assert.ok(Math.max(...ys) >= 79.25, `maxY ${Math.max(...ys)} inset`);
+  // Exact barrier vertices — not a raster inset.
+  assert.ok(Math.min(...xs) === 20, `minX ${Math.min(...xs)}`);
+  assert.ok(Math.max(...xs) === 80, `maxX ${Math.max(...xs)}`);
+  assert.ok(Math.min(...ys) === 20, `minY ${Math.min(...ys)}`);
+  assert.ok(Math.max(...ys) === 80, `maxY ${Math.max(...ys)}`);
+  for (const corner of [
+    [20, 20],
+    [80, 20],
+    [80, 80],
+    [20, 80],
+  ] as [number, number][]) {
+    assert.ok(
+      enclosed.ring.some((p) => p[0] === corner[0] && p[1] === corner[1]),
+      `missing corner ${corner}`,
+    );
+  }
+}
+
+// Intermediate vertices on the bounding polyline must be kept.
+const withBreaks: [number, number][] = [
+  [20, 20],
+  [50, 20],
+  [80, 20],
+  [80, 80],
+  [20, 80],
+  [20, 20],
+];
+const breaks = fillBoundedArea({
+  click: [50, 50],
+  viewport,
+  barriers: [{ symbolNumber: 401000, type: "line", coordinates: withBreaks }],
+  maxGridSize: 128,
+});
+assert.equal(breaks.ok, true, breaks.ok ? "" : breaks.message);
+if (breaks.ok) {
+  assert.ok(
+    breaks.ring.some((p) => p[0] === 50 && p[1] === 20),
+    "missing intermediate vertex (50,20)",
+  );
 }
 
 // Open U-shape — not enclosed
@@ -89,6 +123,8 @@ const withHole = fillBoundedArea({
 assert.equal(withHole.ok, true, withHole.ok ? "" : withHole.message);
 if (withHole.ok) {
   assert.ok(withHole.holes.length >= 1, "expected at least one hole");
+  assert.ok(Math.min(...withHole.ring.map((p) => p[0])) === 10);
+  assert.ok(Math.max(...withHole.ring.map((p) => p[0])) === 90);
 }
 
 // Contours ignored — square made of contour symbol should not enclose

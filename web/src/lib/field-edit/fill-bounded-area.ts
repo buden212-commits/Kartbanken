@@ -1,9 +1,9 @@
 /**
- * Fill Bounded Area (OCAD-style): flood-fill empty space enclosed by line/area
- * objects within the current map viewport.
+ * Fill Bounded Area (OCAD-style).
  *
- * Orienteering symbol sets: contours, north lines and course-planning symbols
- * are ignored as barriers.
+ * Enclosure is verified with a viewport-limited flood fill. The result ring is
+ * then taken from a planar face walk over barrier polylines so every vertex
+ * comes from the bounding objects (plus intersection points where they cross).
  */
 
 import { pointInPolygon } from "@/lib/checkout/overlap";
@@ -13,7 +13,6 @@ export type FillBoundedBarrier = {
   symbolNumber: number;
   type: "line" | "area";
   coordinates: [number, number][];
-  /** Existing holes on area objects — also act as barriers. */
   holes?: [number, number][][];
 };
 
@@ -25,11 +24,7 @@ export type FillBoundedViewport = {
 };
 
 export type FillBoundedAreaResult =
-  | {
-      ok: true;
-      ring: [number, number][];
-      holes: [number, number][][];
-    }
+  | { ok: true; ring: [number, number][]; holes: [number, number][][] }
   | {
       ok: false;
       reason:
@@ -41,20 +36,18 @@ export type FillBoundedAreaResult =
       message: string;
     };
 
-/** ISOM / ISSprOM majors ignored as boundaries (contours, north lines, courses). */
+type Pt = [number, number];
+
+/** ISOM / ISSprOM majors ignored as boundaries. */
 export function isFillBoundedIgnoredSymbol(symbolNumber: number): boolean {
   const major = Math.floor(Math.abs(symbolNumber) / 1000);
-  // Contours & form lines
   if (major >= 101 && major <= 103) return true;
-  // Magnetic north lines in common OCAD templates (601 is spot height in ISOM 2017 —
-  // point objects are skipped as barriers anyway).
   if (major === 601) return true;
-  // Course planning / overprint
   if (major >= 700 && major <= 799) return true;
   return false;
 }
 
-function ringBbox(ring: [number, number][]): [number, number, number, number] {
+function ringBbox(ring: Pt[]): [number, number, number, number] {
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
@@ -81,6 +74,80 @@ function bboxOverlapsViewport(
   );
 }
 
+function dist2(a: Pt, b: Pt): number {
+  const dx = a[0] - b[0];
+  const dy = a[1] - b[1];
+  return dx * dx + dy * dy;
+}
+
+function almostEqualPt(a: Pt, b: Pt, eps2: number): boolean {
+  return dist2(a, b) <= eps2;
+}
+
+function shoelaceSigned(ring: Pt[]): number {
+  const closed = closedRing(ring);
+  if (closed.length < 4) return 0;
+  let sum = 0;
+  for (let i = 0; i < closed.length - 1; i++) {
+    const [x1, y1] = closed[i]!;
+    const [x2, y2] = closed[i + 1]!;
+    sum += x1 * y2 - x2 * y1;
+  }
+  return sum / 2;
+}
+
+function shoelaceAbs(ring: Pt[]): number {
+  return Math.abs(shoelaceSigned(ring));
+}
+
+function centroidOfRing(ring: Pt[]): Pt {
+  const closed = closedRing(ring);
+  const n = Math.max(1, closed.length - 1);
+  let sx = 0;
+  let sy = 0;
+  for (let i = 0; i < n; i++) {
+    sx += closed[i]![0];
+    sy += closed[i]![1];
+  }
+  return [sx / n, sy / n];
+}
+
+function segmentIntersection(a1: Pt, a2: Pt, b1: Pt, b2: Pt): Pt | null {
+  const dax = a2[0] - a1[0];
+  const day = a2[1] - a1[1];
+  const dbx = b2[0] - b1[0];
+  const dby = b2[1] - b1[1];
+  const den = dax * dby - day * dbx;
+  if (Math.abs(den) < 1e-14) return null;
+  const t = ((b1[0] - a1[0]) * dby - (b1[1] - a1[1]) * dbx) / den;
+  const u = ((b1[0] - a1[0]) * day - (b1[1] - a1[1]) * dax) / den;
+  if (t < -1e-9 || t > 1 + 1e-9 || u < -1e-9 || u > 1 + 1e-9) return null;
+  return [a1[0] + t * dax, a1[1] + t * day];
+}
+
+function pointOnSegment(p: Pt, a: Pt, b: Pt, eps: number): boolean {
+  const abx = b[0] - a[0];
+  const aby = b[1] - a[1];
+  const apx = p[0] - a[0];
+  const apy = p[1] - a[1];
+  const len2 = abx * abx + aby * aby;
+  if (len2 < 1e-18) return dist2(p, a) <= eps * eps;
+  const cross = abx * apy - aby * apx;
+  if (Math.abs(cross) > eps * Math.sqrt(len2)) return false;
+  const dot = apx * abx + apy * aby;
+  if (dot < -eps * Math.sqrt(len2)) return false;
+  if (dot > len2 + eps * Math.sqrt(len2)) return false;
+  return true;
+}
+
+function paramOnSegment(p: Pt, a: Pt, b: Pt): number {
+  const abx = b[0] - a[0];
+  const aby = b[1] - a[1];
+  const len2 = abx * abx + aby * aby;
+  if (len2 < 1e-18) return 0;
+  return ((p[0] - a[0]) * abx + (p[1] - a[1]) * aby) / len2;
+}
+
 function rasterizeSegment(
   grid: Uint8Array,
   w: number,
@@ -102,7 +169,6 @@ function rasterizeSegment(
   for (;;) {
     if (ix0 >= 0 && iy0 >= 0 && ix0 < w && iy0 < h) {
       grid[iy0 * w + ix0] = 1;
-      // Thin 4-neighbour thicken seals pinholes without eating a full extra cell diagonally.
       if (ix0 + 1 < w) grid[iy0 * w + ix0 + 1] = 1;
       if (ix0 > 0) grid[iy0 * w + ix0 - 1] = 1;
       if (iy0 + 1 < h) grid[(iy0 + 1) * w + ix0] = 1;
@@ -110,11 +176,20 @@ function rasterizeSegment(
     }
     if (ix0 === ix1 && iy0 === iy1) break;
     const e2 = 2 * err;
-    if (e2 > -dy) {
+    const stepX = e2 > -dy;
+    const stepY = e2 < dx;
+    // Seal diagonal steps so 4-connected flood cannot leak through corners.
+    if (stepX && stepY) {
+      const nx = ix0 + sx;
+      const ny = iy0 + sy;
+      if (nx >= 0 && nx < w && iy0 >= 0 && iy0 < h) grid[iy0 * w + nx] = 1;
+      if (ix0 >= 0 && ix0 < w && ny >= 0 && ny < h) grid[ny * w + ix0] = 1;
+    }
+    if (stepX) {
       err -= dy;
       ix0 += sx;
     }
-    if (e2 < dx) {
+    if (stepY) {
       err += dx;
       iy0 += sy;
     }
@@ -125,22 +200,14 @@ function rasterizePolyline(
   grid: Uint8Array,
   w: number,
   h: number,
-  coords: [number, number][],
+  coords: Pt[],
   toGridX: (x: number) => number,
   toGridY: (y: number) => number,
 ): void {
   for (let i = 0; i < coords.length - 1; i++) {
     const a = coords[i]!;
     const b = coords[i + 1]!;
-    rasterizeSegment(
-      grid,
-      w,
-      h,
-      toGridX(a[0]),
-      toGridY(a[1]),
-      toGridX(b[0]),
-      toGridY(b[1]),
-    );
+    rasterizeSegment(grid, w, h, toGridX(a[0]), toGridY(a[1]), toGridX(b[0]), toGridY(b[1]));
   }
 }
 
@@ -148,7 +215,7 @@ function fillPolygonCells(
   grid: Uint8Array,
   w: number,
   h: number,
-  ring: [number, number][],
+  ring: Pt[],
   toGridX: (x: number) => number,
   toGridY: (y: number) => number,
   fromGridX: (ix: number) => number,
@@ -170,371 +237,341 @@ function fillPolygonCells(
   }
 }
 
-
-function centroidOfRing(ring: [number, number][]): [number, number] {
-  const closed = closedRing(ring);
-  if (closed.length < 2) return [0, 0];
-  let sx = 0;
-  let sy = 0;
-  const n = closed.length - 1; // skip duplicate close
-  for (let i = 0; i < n; i++) {
-    sx += closed[i]![0];
-    sy += closed[i]![1];
+function floodEnclosed(
+  barrier: Uint8Array,
+  gw: number,
+  gh: number,
+  cx: number,
+  cy: number,
+):
+  | { ok: true; fillCount: number }
+  | { ok: false; reason: "click_on_barrier" | "not_enclosed" | "too_small" } {
+  if (barrier[cy * gw + cx] === 1) return { ok: false, reason: "click_on_barrier" };
+  const filled = new Uint8Array(gw * gh);
+  const stackX = [cx];
+  const stackY = [cy];
+  let touchedBorder = false;
+  let fillCount = 0;
+  while (stackX.length > 0) {
+    const x = stackX.pop()!;
+    const y = stackY.pop()!;
+    if (x < 0 || y < 0 || x >= gw || y >= gh) {
+      touchedBorder = true;
+      continue;
+    }
+    const idx = y * gw + x;
+    if (filled[idx] || barrier[idx]) continue;
+    filled[idx] = 1;
+    fillCount++;
+    if (x === 0 || y === 0 || x === gw - 1 || y === gh - 1) touchedBorder = true;
+    stackX.push(x + 1, x - 1, x, x);
+    stackY.push(y, y, y + 1, y - 1);
   }
-  return [sx / Math.max(1, n), sy / Math.max(1, n)];
+  if (touchedBorder) return { ok: false, reason: "not_enclosed" };
+  if (fillCount < 4) return { ok: false, reason: "too_small" };
+  return { ok: true, fillCount };
 }
 
-function shoelaceAbs(pts: [number, number][]): number {
-  if (pts.length < 3) return 0;
-  let sum = 0;
-  for (let i = 0; i < pts.length; i++) {
-    const [x1, y1] = pts[i]!;
-    const [x2, y2] = pts[(i + 1) % pts.length]!;
-    sum += x1 * y2 - x2 * y1;
-  }
-  return Math.abs(sum) / 2;
-}
+type RawSeg = { a: Pt; b: Pt; chain: Pt[] };
 
-/** Trace exterior + hole contours of a binary fill mask (Moore neighbourhood). */
-function traceContours(
-  mask: Uint8Array,
-  w: number,
-  h: number,
-  fromGridX: (ix: number) => number,
-  fromGridY: (iy: number) => number,
-): { ring: [number, number][]; holes: [number, number][][] } | null {
-  const visited = new Uint8Array(w * h);
-  const N8: [number, number][] = [
-    [1, 0],
-    [1, -1],
-    [0, -1],
-    [-1, -1],
-    [-1, 0],
-    [-1, 1],
-    [0, 1],
-    [1, 1],
-  ];
-
-  function isFilled(ix: number, iy: number): boolean {
-    if (ix < 0 || iy < 0 || ix >= w || iy >= h) return false;
-    return mask[iy * w + ix] === 1;
-  }
-
-  function traceFrom(startX: number, startY: number): [number, number][] | null {
-    const points: [number, number][] = [];
-    let cx = startX;
-    let cy = startY;
-    let startDir = -1;
-    for (let d = 0; d < 8; d++) {
-      const [dx, dy] = N8[d]!;
-      if (!isFilled(cx + dx, cy + dy)) {
-        startDir = d;
-        break;
-      }
-    }
-    if (startDir < 0) return null;
-    let dir = startDir;
-    const maxSteps = w * h * 4;
-    for (let step = 0; step < maxSteps; step++) {
-      points.push([fromGridX(cx), fromGridY(cy)]);
-      visited[cy * w + cx] = 1;
-      let found = false;
-      for (let k = 0; k < 8; k++) {
-        const nd = (dir + 6 + k) % 8;
-        const [dx, dy] = N8[nd]!;
-        const nx = cx + dx;
-        const ny = cy + dy;
-        if (isFilled(nx, ny)) {
-          cx = nx;
-          cy = ny;
-          dir = nd;
-          found = true;
-          break;
-        }
-      }
-      if (!found) break;
-      if (cx === startX && cy === startY && points.length > 2) break;
-    }
-    if (points.length < 3) return null;
-    const dedup: [number, number][] = [];
-    for (const p of points) {
-      const last = dedup[dedup.length - 1];
-      if (!last || last[0] !== p[0] || last[1] !== p[1]) dedup.push(p);
-    }
-    if (dedup.length >= 2) {
-      const a = dedup[0]!;
-      const b = dedup[dedup.length - 1]!;
-      if (a[0] === b[0] && a[1] === b[1]) dedup.pop();
-    }
-    return dedup.length >= 3 ? dedup : null;
-  }
-
-  type Contour = { points: [number, number][]; area: number };
-  const contours: Contour[] = [];
-
-  for (let iy = 0; iy < h; iy++) {
-    for (let ix = 0; ix < w; ix++) {
-      if (!isFilled(ix, iy) || visited[iy * w + ix]) continue;
-      const edge =
-        !isFilled(ix - 1, iy) ||
-        !isFilled(ix + 1, iy) ||
-        !isFilled(ix, iy - 1) ||
-        !isFilled(ix, iy + 1);
-      if (!edge) continue;
-      const pts = traceFrom(ix, iy);
-      if (!pts) continue;
-      contours.push({ points: pts, area: shoelaceAbs(pts) });
-    }
-  }
-
-  if (contours.length === 0) return null;
-  contours.sort((a, b) => b.area - a.area);
-  const outer = contours[0]!;
-  if (outer.area < 1e-6) return null;
-
-  const outerClosed = closedRing(outer.points);
-  const holes: [number, number][][] = [];
-  for (let i = 1; i < contours.length; i++) {
-    const c = contours[i]!;
-    if (c.area < outer.area * 0.0001) continue;
-    const sample = c.points[0]!;
-    if (pointInPolygon(sample[0], sample[1], outerClosed)) {
-      holes.push(closedRing(c.points));
-    }
-  }
-
-  return { ring: outerClosed, holes };
-}
-
-function douglasPeucker(
-  points: [number, number][],
-  epsilon: number,
-): [number, number][] {
-  if (points.length <= 2) {
-    return points.map(([x, y]) => [x, y] as [number, number]);
-  }
-  const first = points[0]!;
-  const last = points[points.length - 1]!;
-  let maxDist = 0;
-  let maxIdx = 0;
-  const dx = last[0] - first[0];
-  const dy = last[1] - first[1];
-  const len = Math.hypot(dx, dy);
-  for (let i = 1; i < points.length - 1; i++) {
-    const p = points[i]!;
-    let dist: number;
-    if (len < 1e-12) {
-      dist = Math.hypot(p[0] - first[0], p[1] - first[1]);
-    } else {
-      dist =
-        Math.abs(dy * p[0] - dx * p[1] + last[0] * first[1] - last[1] * first[0]) /
-        len;
-    }
-    if (dist > maxDist) {
-      maxDist = dist;
-      maxIdx = i;
-    }
-  }
-  if (maxDist > epsilon) {
-    const left = douglasPeucker(points.slice(0, maxIdx + 1), epsilon);
-    const right = douglasPeucker(points.slice(maxIdx), epsilon);
-    return [...left.slice(0, -1), ...right];
-  }
-  return [first, last];
-}
-
-function simplifyClosedRing(
-  ring: [number, number][],
-  epsilon: number,
-): [number, number][] {
-  const open =
-    ring.length >= 2 &&
-    ring[0]![0] === ring[ring.length - 1]![0] &&
-    ring[0]![1] === ring[ring.length - 1]![1]
-      ? ring.slice(0, -1)
-      : ring.slice();
-  if (open.length < 3) return closedRing(ring);
-  const simplified = douglasPeucker(open, epsilon);
-  if (simplified.length < 3) return closedRing(ring);
-  return closedRing(simplified);
-}
-
-
-type BarrierSegment = {
-  a: [number, number];
-  b: [number, number];
+type GraphNode = {
+  id: number;
+  p: Pt;
+  out: GraphHalfEdge[];
 };
 
-function collectBarrierSegments(barriers: FillBoundedBarrier[]): BarrierSegment[] {
-  const segments: BarrierSegment[] = [];
-  const addPolyline = (coords: [number, number][]) => {
+type GraphHalfEdge = {
+  id: number;
+  from: number;
+  to: number;
+  /** Chain from `from`→`to`, excluding `from`, including `to`. */
+  chain: Pt[];
+  twin: number;
+  angle: number;
+};
+
+function collectRawSegments(barriers: FillBoundedBarrier[]): RawSeg[] {
+  const segs: RawSeg[] = [];
+  const addPolyline = (coords: Pt[]) => {
     for (let i = 0; i < coords.length - 1; i++) {
       const a = coords[i]!;
       const b = coords[i + 1]!;
       if (a[0] === b[0] && a[1] === b[1]) continue;
-      segments.push({ a: [a[0], a[1]], b: [b[0], b[1]] });
+      segs.push({
+        a: [a[0], a[1]],
+        b: [b[0], b[1]],
+        chain: [
+          [a[0], a[1]],
+          [b[0], b[1]],
+        ],
+      });
     }
   };
-  for (const barrier of barriers) {
-    if (barrier.type === "line") {
-      addPolyline(barrier.coordinates);
+  for (const b of barriers) {
+    if (b.type === "line") {
+      addPolyline(b.coordinates);
     } else {
-      addPolyline(closedRing(barrier.coordinates));
-      for (const hole of barrier.holes ?? []) {
-        addPolyline(closedRing(hole));
+      addPolyline(closedRing(b.coordinates));
+      for (const hole of b.holes ?? []) addPolyline(closedRing(hole));
+    }
+  }
+  return segs;
+}
+
+function splitSegmentsAtIntersections(raw: RawSeg[], snapEps: number): RawSeg[] {
+  const n = raw.length;
+  const splits: { t: number; p: Pt }[][] = Array.from({ length: n }, () => []);
+
+  const addSplit = (i: number, p: Pt) => {
+    const seg = raw[i]!;
+    const t = paramOnSegment(p, seg.a, seg.b);
+    if (t <= 1e-9 || t >= 1 - 1e-9) return;
+    const list = splits[i]!;
+    if (list.some((s) => Math.abs(s.t - t) < 1e-9)) return;
+    list.push({ t, p: [p[0], p[1]] });
+  };
+
+  for (let i = 0; i < n; i++) {
+    const A = raw[i]!;
+    for (let j = i + 1; j < n; j++) {
+      const B = raw[j]!;
+      const hit = segmentIntersection(A.a, A.b, B.a, B.b);
+      if (hit) {
+        addSplit(i, hit);
+        addSplit(j, hit);
       }
     }
   }
-  return segments;
-}
 
-function nearestPointOnSegment(
-  px: number,
-  py: number,
-  ax: number,
-  ay: number,
-  bx: number,
-  by: number,
-): { x: number; y: number; dist2: number } {
-  const abx = bx - ax;
-  const aby = by - ay;
-  const len2 = abx * abx + aby * aby;
-  if (len2 < 1e-18) {
-    const dx = px - ax;
-    const dy = py - ay;
-    return { x: ax, y: ay, dist2: dx * dx + dy * dy };
+  for (let i = 0; i < n; i++) {
+    const A = raw[i]!;
+    for (let j = 0; j < n; j++) {
+      if (i === j) continue;
+      const B = raw[j]!;
+      if (pointOnSegment(A.a, B.a, B.b, snapEps)) addSplit(j, A.a);
+      if (pointOnSegment(A.b, B.a, B.b, snapEps)) addSplit(j, A.b);
+    }
   }
-  let t = ((px - ax) * abx + (py - ay) * aby) / len2;
-  if (t < 0) t = 0;
-  else if (t > 1) t = 1;
-  const x = ax + t * abx;
-  const y = ay + t * aby;
-  const dx = px - x;
-  const dy = py - y;
-  return { x, y, dist2: dx * dx + dy * dy };
+
+  const out: RawSeg[] = [];
+  for (let i = 0; i < n; i++) {
+    const seg = raw[i]!;
+    const list = splits[i]!.slice().sort((u, v) => u.t - v.t);
+    if (list.length === 0) {
+      out.push(seg);
+      continue;
+    }
+    const pts: Pt[] = [seg.a, ...list.map((s) => s.p), seg.b];
+    for (let k = 0; k < pts.length - 1; k++) {
+      const a = pts[k]!;
+      const b = pts[k + 1]!;
+      if (almostEqualPt(a, b, snapEps * snapEps)) continue;
+      const chain: Pt[] = [[a[0], a[1]]];
+      const ta = paramOnSegment(a, seg.a, seg.b);
+      const tb = paramOnSegment(b, seg.a, seg.b);
+      for (const c of seg.chain) {
+        const tc = paramOnSegment(c, seg.a, seg.b);
+        if (tc > ta + 1e-9 && tc < tb - 1e-9) chain.push([c[0], c[1]]);
+      }
+      chain.push([b[0], b[1]]);
+      out.push({ a, b, chain });
+    }
+  }
+  return out;
 }
 
-function nearestOnBarriers(
-  px: number,
-  py: number,
-  segments: BarrierSegment[],
-): { x: number; y: number; dist2: number } | null {
-  let best: { x: number; y: number; dist2: number } | null = null;
+function buildArrangement(
+  segments: RawSeg[],
+  snapEps: number,
+): { nodes: GraphNode[]; halfEdges: GraphHalfEdge[] } | null {
+  if (segments.length === 0) return null;
+  const eps2 = snapEps * snapEps;
+  const nodes: GraphNode[] = [];
+
+  const findOrAdd = (p: Pt): number => {
+    for (const n of nodes) {
+      if (almostEqualPt(n.p, p, eps2)) return n.id;
+    }
+    const id = nodes.length;
+    nodes.push({ id, p: [p[0], p[1]], out: [] });
+    return id;
+  };
+
+  const halfEdges: GraphHalfEdge[] = [];
+  const addDirected = (from: number, to: number, chain: Pt[]): number => {
+    const a = nodes[from]!.p;
+    const b = nodes[to]!.p;
+    const angle = Math.atan2(b[1] - a[1], b[0] - a[0]);
+    const id = halfEdges.length;
+    halfEdges.push({
+      id,
+      from,
+      to,
+      chain: chain.map(([x, y]) => [x, y] as Pt),
+      twin: -1,
+      angle,
+    });
+    return id;
+  };
+
   for (const seg of segments) {
-    const hit = nearestPointOnSegment(px, py, seg.a[0], seg.a[1], seg.b[0], seg.b[1]);
-    if (!best || hit.dist2 < best.dist2) best = hit;
+    const from = findOrAdd(seg.a);
+    const to = findOrAdd(seg.b);
+    if (from === to) continue;
+
+    const forward = seg.chain.slice(1).map(([x, y]) => [x, y] as Pt);
+    if (forward.length === 0) forward.push([nodes[to]!.p[0], nodes[to]!.p[1]]);
+    forward[forward.length - 1] = [nodes[to]!.p[0], nodes[to]!.p[1]];
+
+    const reverse = [...seg.chain].reverse().slice(1).map(([x, y]) => [x, y] as Pt);
+    if (reverse.length === 0) reverse.push([nodes[from]!.p[0], nodes[from]!.p[1]]);
+    reverse[reverse.length - 1] = [nodes[from]!.p[0], nodes[from]!.p[1]];
+
+    const h0 = addDirected(from, to, forward);
+    const h1 = addDirected(to, from, reverse);
+    halfEdges[h0]!.twin = h1;
+    halfEdges[h1]!.twin = h0;
   }
-  return best;
+
+  if (halfEdges.length < 6) return null;
+
+  for (const node of nodes) {
+    node.out = halfEdges.filter((h) => h.from === node.id);
+    node.out.sort((a, b) => a.angle - b.angle);
+  }
+  return { nodes, halfEdges };
 }
 
-/** Insert points so consecutive vertices are at most `step` apart. */
-function densifyOpenRing(
-  ring: [number, number][],
-  step: number,
-): [number, number][] {
-  if (ring.length < 2 || !(step > 0)) {
-    return ring.map(([x, y]) => [x, y] as [number, number]);
-  }
-  const open =
-    ring.length >= 2 &&
-    ring[0]![0] === ring[ring.length - 1]![0] &&
-    ring[0]![1] === ring[ring.length - 1]![1]
-      ? ring.slice(0, -1)
-      : ring.slice();
-  if (open.length < 2) return open.map(([x, y]) => [x, y] as [number, number]);
+function nextHalfEdge(
+  nodes: GraphNode[],
+  halfEdges: GraphHalfEdge[],
+  h: GraphHalfEdge,
+): GraphHalfEdge | null {
+  const twin = halfEdges[h.twin];
+  if (!twin) return null;
+  const node = nodes[h.to]!;
+  if (node.out.length === 0) return null;
+  const idx = node.out.findIndex((e) => e.id === twin.id);
+  if (idx < 0) return null;
+  const nextIdx = (idx - 1 + node.out.length) % node.out.length;
+  return node.out[nextIdx] ?? null;
+}
 
-  const out: [number, number][] = [];
-  for (let i = 0; i < open.length; i++) {
-    const a = open[i]!;
-    const b = open[(i + 1) % open.length]!;
-    out.push([a[0], a[1]]);
-    const dist = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    const n = Math.floor(dist / step);
-    for (let k = 1; k < n; k++) {
-      const t = k / n;
-      out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+function walkFace(
+  nodes: GraphNode[],
+  halfEdges: GraphHalfEdge[],
+  startId: number,
+  visited: Uint8Array,
+): Pt[] | null {
+  let h = halfEdges[startId];
+  if (!h) return null;
+  const ring: Pt[] = [];
+  const start = startId;
+  let guard = 0;
+  const maxGuard = halfEdges.length + 2;
+  do {
+    if (visited[h.id]) return null;
+    visited[h.id] = 1;
+    const fromPt = nodes[h.from]!.p;
+    if (ring.length === 0) ring.push([fromPt[0], fromPt[1]]);
+    for (const p of h.chain) {
+      const last = ring[ring.length - 1]!;
+      if (!almostEqualPt(last, p, 1e-24)) ring.push([p[0], p[1]]);
     }
-  }
-  return out;
+    const next = nextHalfEdge(nodes, halfEdges, h);
+    if (!next) return null;
+    h = next;
+    guard++;
+    if (guard > maxGuard) return null;
+  } while (h.id !== start);
+
+  if (ring.length < 3) return null;
+  return closedRing(ring);
 }
 
-/**
- * Pull a raster contour out to the real barrier geometry so the fill meets
- * the bounding objects instead of stopping at cell centres inside them.
- */
-function snapRingToBarriers(
-  ring: [number, number][],
-  segments: BarrierSegment[],
-  maxDist: number,
-  densifyStep: number,
-): [number, number][] {
-  if (segments.length === 0 || ring.length < 3) return closedRing(ring);
-  const maxDist2 = maxDist * maxDist;
-  const dense = densifyOpenRing(ring, densifyStep);
-  const snapped: [number, number][] = [];
-  for (const p of dense) {
-    const hit = nearestOnBarriers(p[0], p[1], segments);
-    if (hit && hit.dist2 <= maxDist2) {
-      snapped.push([hit.x, hit.y]);
+function extractFaces(nodes: GraphNode[], halfEdges: GraphHalfEdge[]): Pt[][] {
+  const visited = new Uint8Array(halfEdges.length);
+  const faces: Pt[][] = [];
+  for (const h of halfEdges) {
+    if (visited[h.id]) continue;
+    const face = walkFace(nodes, halfEdges, h.id, visited);
+    if (!face || face.length < 4) continue;
+    if (shoelaceAbs(face) < 1e-12) continue;
+    faces.push(face);
+  }
+  return faces;
+}
+
+function pickFaceContainingClick(faces: Pt[][], click: Pt): Pt[] | null {
+  const containing = faces.filter((f) => pointInPolygon(click[0], click[1], f));
+  if (containing.length === 0) return null;
+
+  // Smallest face that contains the click (tightest enclosure).
+  // A lone cycle yields two opposite walks with equal area — either is fine;
+  // prefer CCW (positive shoelace) for stable output.
+  let bestArea = Infinity;
+  for (const f of containing) {
+    const a = shoelaceAbs(f);
+    if (a < bestArea) bestArea = a;
+  }
+  const tied = containing.filter((f) => shoelaceAbs(f) <= bestArea * 1.001);
+  if (tied.length === 0) return null;
+
+  // When a clearly larger face also contains the click (e.g. outer + hole
+  // components), keep only the smallest band. If several share that area
+  // (opposite windings), prefer positive orientation.
+  for (const f of tied) {
+    if (shoelaceSigned(f) > 0) return f;
+  }
+  return tied[0] ?? null;
+}
+
+function holesFromEnclosedObjects(
+  usable: FillBoundedBarrier[],
+  outer: Pt[],
+  click: Pt,
+): Pt[][] {
+  const holes: Pt[][] = [];
+  const outerArea = shoelaceAbs(outer);
+  for (const b of usable) {
+    if (b.type === "area") {
+      const areaRing = closedRing(b.coordinates);
+      if (areaRing.length < 4) continue;
+      if (pointInPolygon(click[0], click[1], areaRing)) continue;
+      const c = centroidOfRing(areaRing);
+      if (!pointInPolygon(c[0], c[1], outer)) continue;
+      if (shoelaceAbs(areaRing) >= outerArea * 0.95) continue;
+      holes.push(areaRing);
     } else {
-      snapped.push([p[0], p[1]]);
+      const coords = b.coordinates;
+      if (coords.length < 4) continue;
+      const openDist = Math.hypot(
+        coords[0]![0] - coords[coords.length - 1]![0],
+        coords[0]![1] - coords[coords.length - 1]![1],
+      );
+      const [minX, minY, maxX, maxY] = ringBbox(coords);
+      const diag = Math.hypot(maxX - minX, maxY - minY);
+      if (openDist > Math.max(1e-6, diag * 0.02)) continue;
+      const lineRing = closedRing(coords);
+      if (pointInPolygon(click[0], click[1], lineRing)) continue;
+      const c = centroidOfRing(lineRing);
+      if (!pointInPolygon(c[0], c[1], outer)) continue;
+      if (shoelaceAbs(lineRing) >= outerArea * 0.9) continue;
+      if (shoelaceAbs(lineRing) < 1e-8) continue;
+      holes.push(lineRing);
     }
   }
-  // Drop consecutive duplicates after snap
-  const dedup: [number, number][] = [];
-  for (const p of snapped) {
-    const last = dedup[dedup.length - 1];
-    if (!last || Math.hypot(last[0] - p[0], last[1] - p[1]) > 1e-6) {
-      dedup.push(p);
-    }
-  }
-  if (dedup.length >= 2) {
-    const a = dedup[0]!;
-    const b = dedup[dedup.length - 1]!;
-    if (Math.hypot(a[0] - b[0], a[1] - b[1]) <= 1e-6) dedup.pop();
-  }
-  return closedRing(dedup.length >= 3 ? dedup : ring);
+  return holes;
 }
 
 /**
- * Expand the flood-fill mask by one cell into neighbouring barrier cells so
- * contour tracing sits on the barrier raster instead of one cell inside.
- */
-function dilateFillIntoBarriers(
-  filled: Uint8Array,
-  barrier: Uint8Array,
-  w: number,
-  h: number,
-): Uint8Array {
-  const out = filled.slice();
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      if (filled[y * w + x] !== 1) continue;
-      const neighbors: [number, number][] = [
-        [x + 1, y],
-        [x - 1, y],
-        [x, y + 1],
-        [x, y - 1],
-      ];
-      for (const [nx, ny] of neighbors) {
-        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-        const nidx = ny * w + nx;
-        if (barrier[nidx] === 1) out[nidx] = 1;
-      }
-    }
-  }
-  return out;
-}
-
-/**
- * Compute a filled area from a click inside a region bounded by barriers.
- * If the flood reaches the viewport edge the region is not fully enclosed.
+ * Fill the enclosed empty region under `click`.
+ * Result vertices are taken from the bounding objects (and crossings).
  */
 export function fillBoundedArea(input: {
-  click: [number, number];
+  click: Pt;
   viewport: FillBoundedViewport;
   barriers: FillBoundedBarrier[];
-  /** Max grid dimension on the longest side (default 384). */
   maxGridSize?: number;
 }): FillBoundedAreaResult {
   const { click, viewport, barriers } = input;
@@ -590,7 +627,6 @@ export function fillBoundedArea(input: {
     gh = maxGrid;
     gw = Math.max(32, Math.round(maxGrid * aspect));
   }
-
   const cellW = width / gw;
   const cellH = height / gh;
   const toGridX = (x: number) => (x - viewport.minX) / cellW;
@@ -598,15 +634,14 @@ export function fillBoundedArea(input: {
   const fromGridX = (ix: number) => viewport.minX + (ix + 0.5) * cellW;
   const fromGridY = (iy: number) => viewport.minY + (iy + 0.5) * cellH;
 
-  const barrier = new Uint8Array(gw * gh);
-
+  const barrierGrid = new Uint8Array(gw * gh);
   for (const b of usable) {
     if (b.type === "line") {
-      rasterizePolyline(barrier, gw, gh, b.coordinates, toGridX, toGridY);
+      rasterizePolyline(barrierGrid, gw, gh, b.coordinates, toGridX, toGridY);
     } else {
-      rasterizePolyline(barrier, gw, gh, closedRing(b.coordinates), toGridX, toGridY);
+      rasterizePolyline(barrierGrid, gw, gh, closedRing(b.coordinates), toGridX, toGridY);
       fillPolygonCells(
-        barrier,
+        barrierGrid,
         gw,
         gh,
         b.coordinates,
@@ -616,9 +651,9 @@ export function fillBoundedArea(input: {
         fromGridY,
       );
       for (const hole of b.holes ?? []) {
-        rasterizePolyline(barrier, gw, gh, closedRing(hole), toGridX, toGridY);
+        rasterizePolyline(barrierGrid, gw, gh, closedRing(hole), toGridX, toGridY);
         fillPolygonCells(
-          barrier,
+          barrierGrid,
           gw,
           gh,
           hole,
@@ -640,39 +675,46 @@ export function fillBoundedArea(input: {
       message: "Klicka inne i den synliga kartvyn.",
     };
   }
-  if (barrier[cy * gw + cx] === 1) {
+
+  const flood = floodEnclosed(barrierGrid, gw, gh, cx, cy);
+  if (!flood.ok) {
+    if (flood.reason === "click_on_barrier") {
+      return {
+        ok: false,
+        reason: "click_on_barrier",
+        message: "Klicka i ett tomt område, inte på en linje eller yta.",
+      };
+    }
+    if (flood.reason === "not_enclosed") {
+      return {
+        ok: false,
+        reason: "not_enclosed",
+        message:
+          "Området är inte helt omslutet av objekt i den synliga vyn. Zooma in eller stäng luckor.",
+      };
+    }
     return {
       ok: false,
-      reason: "click_on_barrier",
-      message: "Klicka i ett tomt område, inte på en linje eller yta.",
+      reason: "too_small",
+      message: "Ytan blev för liten — zooma in och försök igen.",
     };
   }
 
-  const filled = new Uint8Array(gw * gh);
-  const stackX = [cx];
-  const stackY = [cy];
-  let touchedBorder = false;
-  let fillCount = 0;
-
-  while (stackX.length > 0) {
-    const x = stackX.pop()!;
-    const y = stackY.pop()!;
-    if (x < 0 || y < 0 || x >= gw || y >= gh) {
-      touchedBorder = true;
-      continue;
-    }
-    const idx = y * gw + x;
-    if (filled[idx] || barrier[idx]) continue;
-    filled[idx] = 1;
-    fillCount++;
-    if (x === 0 || y === 0 || x === gw - 1 || y === gh - 1) {
-      touchedBorder = true;
-    }
-    stackX.push(x + 1, x - 1, x, x);
-    stackY.push(y, y, y + 1, y - 1);
+  const snapEps = Math.max(cellW, cellH) * 0.25;
+  const raw = collectRawSegments(usable);
+  const split = splitSegmentsAtIntersections(raw, snapEps);
+  const graph = buildArrangement(split, snapEps);
+  if (!graph) {
+    return {
+      ok: false,
+      reason: "too_small",
+      message: "Kunde inte bygga omslutningen — zooma in och försök igen.",
+    };
   }
 
-  if (touchedBorder) {
+  const faces = extractFaces(graph.nodes, graph.halfEdges);
+  const face = pickFaceContainingClick(faces, click);
+  if (!face || face.length < 4) {
     return {
       ok: false,
       reason: "not_enclosed",
@@ -680,8 +722,7 @@ export function fillBoundedArea(input: {
         "Området är inte helt omslutet av objekt i den synliga vyn. Zooma in eller stäng luckor.",
     };
   }
-
-  if (fillCount < 4) {
+  if (shoelaceAbs(face) < 1e-8) {
     return {
       ok: false,
       reason: "too_small",
@@ -689,72 +730,8 @@ export function fillBoundedArea(input: {
     };
   }
 
-  // Grow fill onto adjacent barrier cells so the traced contour isn't inset.
-  const contourMask = dilateFillIntoBarriers(filled, barrier, gw, gh);
-  const contours = traceContours(contourMask, gw, gh, fromGridX, fromGridY);
-  if (!contours) {
-    return {
-      ok: false,
-      reason: "too_small",
-      message: "Kunde inte skapa ytans kontur — zooma in och försök igen.",
-    };
-  }
-
-  const segments = collectBarrierSegments(usable);
-  const cellSize = Math.max(cellW, cellH);
-  // Snap outward to real barrier geometry (raster centres sit inside the wall).
-  const snapDist = cellSize * 5;
-  const densifyStep = cellSize * 0.5;
-  const snappedRing = snapRingToBarriers(
-    contours.ring,
-    segments,
-    snapDist,
-    densifyStep,
-  );
-  const simplifyEps = cellSize * 0.35;
-  const ring = simplifyClosedRing(snappedRing, simplifyEps);
-  if (ring.length < 4) {
-    return {
-      ok: false,
-      reason: "too_small",
-      message: "Ytan blev för liten — zooma in och försök igen.",
-    };
-  }
-
-  // Prefer real enclosed objects as holes (more accurate than noisy raster holes).
-  const holes: [number, number][][] = [];
-  for (const b of usable) {
-    if (b.type === "area") {
-      const areaRing = closedRing(b.coordinates);
-      if (areaRing.length < 4) continue;
-      // Click is outside the object, but object sits inside the filled outer ring.
-      if (pointInPolygon(click[0], click[1], areaRing)) continue;
-      const [cx, cy] = centroidOfRing(areaRing);
-      if (!pointInPolygon(cx, cy, ring)) continue;
-      holes.push(simplifyClosedRing(areaRing, simplifyEps));
-      for (const inner of b.holes ?? []) {
-        // Existing holes in barrier areas are solid barriers already; skip as fill-holes.
-      }
-    } else if (b.type === "line") {
-      const lineRing = closedRing(b.coordinates);
-      if (lineRing.length < 4) continue;
-      // Only closed lines (start≈end already handled by closedRing if ≥3 unique).
-      const openLen =
-        Math.hypot(
-          b.coordinates[0]![0] - b.coordinates[b.coordinates.length - 1]![0],
-          b.coordinates[0]![1] - b.coordinates[b.coordinates.length - 1]![1],
-        );
-      if (openLen > cellSize) continue; // not a closed loop
-      if (pointInPolygon(click[0], click[1], lineRing)) continue;
-      const [cx, cy] = centroidOfRing(lineRing);
-      if (!pointInPolygon(cx, cy, ring)) continue;
-      // Ignore huge "holes" that are basically the same as outer.
-      if (shoelaceAbs(lineRing) >= shoelaceAbs(ring) * 0.9) continue;
-      holes.push(simplifyClosedRing(lineRing, simplifyEps));
-    }
-  }
-
-  return { ok: true, ring, holes };
+  const holes = holesFromEnclosedObjects(usable, face, click);
+  return { ok: true, ring: face, holes };
 }
 
 /** Visible geo bounds from the four corners of an SVG element's screen box. */
