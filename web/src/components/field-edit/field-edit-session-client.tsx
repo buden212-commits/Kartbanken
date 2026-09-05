@@ -3292,9 +3292,6 @@ export function FieldEditSessionClient({
               favorites={favorites}
               onToggleFavorite={(sym) => toggleFavorite(addKind, sym)}
             />
-            <p className="mt-1 text-[11px] leading-snug text-slate-500">
-              Klicka ett kartobjekt på kartan för att kopiera dess symbol.
-            </p>
           </div>
         )}
       </>
