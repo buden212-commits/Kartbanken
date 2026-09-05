@@ -414,7 +414,7 @@ export function ImportPartialMapPreview({ previewUrl, analysis, mode, title, are
         )}
       </div>
       <div
-        className={`relative flex h-[min(70dvh,560px)] min-h-[280px] items-center justify-center overflow-hidden ${
+        className={`relative flex h-[min(70svh,560px)] min-h-[280px] items-center justify-center overflow-hidden ${
           showMapBackground ? "bg-white" : "bg-slate-100"
         }`}
       >

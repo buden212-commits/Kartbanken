@@ -2920,7 +2920,7 @@ export function FieldEditSessionClient({
         gpsTrackFollow={gpsTrackFollow}
         mapToolbarOverlay={mapToolbarOverlay}
         secondaryHeaderContent={secondaryHeaderContent}
-        viewportClassName="h-[min(82dvh,780px)] min-h-[300px] sm:h-[min(70dvh,560px)] sm:min-h-[280px]"
+        viewportClassName="h-[min(82svh,780px)] min-h-[300px] sm:h-[min(70svh,560px)] sm:min-h-[280px]"
       />
 
       <details className="rounded-xl border border-slate-200 bg-slate-50 sm:hidden">

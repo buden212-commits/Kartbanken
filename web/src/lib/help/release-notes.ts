@@ -18,6 +18,7 @@ export const releaseNotes: ReleaseNote[] = [
       "Snappning bara mot samma symbol (t.ex. höjdkurva→höjdkurva) och mot startpunkten när du ritar",
       "Symbolväljaren visar OCAD-ikoner/färger (som teckenförklaringen) och har sökfält",
       "Symbolikonerna har inte längre ett svart streck längst ned (även vattenytor m.m.)",
+      "Kartan hoppar inte längre när du scrollar sidan i mobilen",
     ],
   },
   {

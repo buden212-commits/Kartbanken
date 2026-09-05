@@ -498,6 +498,7 @@ export async function HelpPageContent() {
               "När du ritar linje/yta: «Klar» (bock) och «Avbryt ritning» (kryss) i kartmenyn — Klar visar antal brytpunkter",
               "Ångra upp till 10 steg via knappen under Navigera eller Ctrl/Cmd+Z",
               "«Min position» och «GPS-spår» fungerar på georefererade kartor — spela in stigar med telefonens GPS",
+              "Kartans höjd är stabil i mobil — den hoppar inte när adressfältet visas eller döljs vid scroll",
             ]}
           />
 

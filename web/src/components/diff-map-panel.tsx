@@ -114,7 +114,7 @@ type Props = {
   mapToolbarOverlay?: ReactNode;
   /** Omit outer border/radius when nested inside another panel. */
   unboxed?: boolean;
-  /** CSS classes for the map viewport height (default: min 70dvh). */
+  /** CSS classes for the map viewport height (default: min 70svh — stable on mobile scroll). */
   viewportClassName?: string;
   showLayerPanel?: boolean;
   /** Called when OCAD map scale is read from preview metadata. */
@@ -280,7 +280,7 @@ export function DiffMapPanel({
   secondaryHeaderContent,
   mapToolbarOverlay,
   unboxed = false,
-  viewportClassName = "h-[min(70dvh,560px)] min-h-[280px]",
+  viewportClassName = "h-[min(70svh,560px)] min-h-[280px]",
   showLayerPanel = true,
   onOcadMapScale,
   onOcadCrsReady,
