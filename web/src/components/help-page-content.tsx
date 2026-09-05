@@ -509,6 +509,7 @@ export async function HelpPageContent() {
               "Klicka ett befintligt kartobjekt när du skapar nytt — då kopieras dess symbol",
               "Nya och ändrade objekt visas med riktig OCAD-symbol i editorn",
               "Favoritsymboler per geometrityp — sparas på ditt konto och föreslås först i listan",
+              "Symbolväljaren visar OCAD-ikoner och färger (som i teckenförklaringen) plus sökfält",
             ]}
           />
 

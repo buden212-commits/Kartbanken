@@ -16,6 +16,7 @@ export const releaseNotes: ReleaseNote[] = [
       "Symbolväljaren visas bara en gång (nere på kartan) — den dubbla överst är borttagen",
       "Nya objekt som du ritar kan markeras och redigeras direkt på kartan (som befintliga objekt)",
       "Snappning bara mot samma symbol (t.ex. höjdkurva→höjdkurva) och mot startpunkten när du ritar",
+      "Symbolväljaren visar OCAD-ikoner/färger (som teckenförklaringen) och har sökfält",
     ],
   },
   {

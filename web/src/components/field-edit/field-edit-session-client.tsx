@@ -30,11 +30,13 @@ import {
 } from "@/components/field-edit/field-edit-toolbar";
 import {
   buildSymbolGroups,
+  buildSymbolGroupsFromCatalog,
   defaultSymbolForKind,
   FieldEditSymbolPicker,
   symbolFromMapObject,
   type SymbolGroups,
 } from "@/components/field-edit/field-edit-symbol-picker";
+import type { FieldEditSymbolCatalogEntry } from "@/lib/field-edit/symbol-catalog";
 import type { CheckoutSelection } from "@/lib/checkout/types";
 import {
   emptyFieldEditFavorites,
@@ -497,13 +499,24 @@ export function FieldEditSessionClient({
       })
       .catch(() => {});
 
-    fetchPreviewText(`/api/maps/${mapSlug}/field-edits/${sessionId}/preview`)
-      .then((svg) => {
-        const layers = parseOcadLayersFromSvg(svg);
-        const groups = buildSymbolGroups(layers);
+    fetch(`/api/maps/${mapSlug}/field-edits/${sessionId}/symbols`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!Array.isArray(data.symbols)) throw new Error("symbols missing");
+        const groups = buildSymbolGroupsFromCatalog(
+          data.symbols as FieldEditSymbolCatalogEntry[],
+        );
         setSymbolGroups(groups);
       })
-      .catch(() => {});
+      .catch(() => {
+        // Fallback without icons if catalogue endpoint fails.
+        fetchPreviewText(`/api/maps/${mapSlug}/field-edits/${sessionId}/preview`)
+          .then((svg) => {
+            const layers = parseOcadLayersFromSvg(svg);
+            setSymbolGroups(buildSymbolGroups(layers));
+          })
+          .catch(() => {});
+      });
 
     fetch("/api/user/field-edit-favorites")
       .then((res) => res.json())
