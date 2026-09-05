@@ -131,13 +131,18 @@ type Props = {
     requestId: number;
   } | null;
   /**
-   * Kartförslag GPS-spår: håll skala 1:50 och centrera på senaste position var 10:e sekund.
+   * GPS-spår (förslag/fältredigering): håll skala 1:50, centrera var 10:e sekund,
+   * och visa samma noggrannhetsfärgade GPS-markör som «Min position».
    */
   gpsTrackFollow?: {
     active: boolean;
     mapCoordRef: MutableRefObject<[number, number] | null>;
     /** Ökas när spårning startar eller första GPS-fix kommer. */
     recenterToken: number;
+    /** Senaste noggrannhet i meter — styr markörfärg (röd om osäker). */
+    accuracyMeters?: number | null;
+    /** Ökas när live-position/noggrannhet ska ritas om. */
+    markerToken?: number;
   } | null;
 };
 
@@ -1208,10 +1213,20 @@ export function DiffMapPanel({
   }, [ocadCrs, onOcadCrsReady]);
 
   const gpsMarker = useMemo(() => {
-    if (!gpsFix || !fullViewBox || !viewportRef.current) return null;
+    if (!fullViewBox || !viewportRef.current) return null;
+
+    const trackActive = Boolean(gpsTrackFollow?.active);
+    const trackCoord = trackActive ? gpsTrackFollow?.mapCoordRef.current ?? null : null;
+    const mapCoord = trackCoord ?? gpsFix?.mapCoord ?? null;
+    if (!mapCoord) return null;
+
+    const accuracyMeters = trackActive
+      ? (gpsTrackFollow?.accuracyMeters ?? null)
+      : (gpsFix?.accuracyMeters ?? null);
+
     const viewport = viewportRef.current;
     const rect = viewport.getBoundingClientRect();
-    const [svgX, svgY] = geoToSvgUserPoint(gpsFix.mapCoord, rootTransform);
+    const [svgX, svgY] = geoToSvgUserPoint(mapCoord, rootTransform);
     const [baseX, baseY] = mapPointToScreen(
       svgX,
       svgY,
@@ -1221,16 +1236,29 @@ export function DiffMapPanel({
     );
     const x = pan.x + baseX * zoom;
     const y = pan.y + baseY * zoom;
+    const resolvedAccuracy = accuracyMeters ?? gpsFix?.accuracyMeters ?? 25;
 
     return {
       x,
       y,
-      uncertain: gpsFix.accuracyMeters > GPS_UNCERTAIN_ACCURACY_M,
+      uncertain: resolvedAccuracy > GPS_UNCERTAIN_ACCURACY_M,
     };
-  }, [fullViewBox, gpsFix, pan.x, pan.y, rootTransform, zoom]);
+  }, [
+    fullViewBox,
+    gpsFix,
+    gpsTrackFollow?.accuracyMeters,
+    gpsTrackFollow?.active,
+    gpsTrackFollow?.mapCoordRef,
+    gpsTrackFollow?.markerToken,
+    pan.x,
+    pan.y,
+    rootTransform,
+    zoom,
+  ]);
 
   const gpsAccuracyUncertain = Boolean(
-    gpsFix && gpsFix.accuracyMeters > GPS_UNCERTAIN_ACCURACY_M,
+    gpsMarker?.uncertain ||
+      (gpsFix && gpsFix.accuracyMeters > GPS_UNCERTAIN_ACCURACY_M),
   );
 
   const highlightShape = focusTarget ? buildHighlightShape(focusTarget, rootTransform) : null;

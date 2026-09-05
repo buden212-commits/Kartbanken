@@ -113,6 +113,10 @@ export function useGpsTrackRecording({
           : GPS_TRACK_MAX_ACCURACY_M;
 
       gpsLastAccuracyRef.current = accuracyMeters;
+      // Always update live position for the accuracy-colored map marker,
+      // even when the sample is filtered out of the recorded track.
+      gpsLatestMapCoordRef.current = mapCoord;
+      scheduleGpsUiUpdate();
 
       const lastSample = gpsSamplesRef.current.at(-1) ?? null;
       const evaluation = evaluateGpsSample(
@@ -132,20 +136,16 @@ export function useGpsTrackRecording({
       if (!evaluation.accepted) {
         if (evaluation.reason === "jump") {
           gpsRejectedJumpsRef.current += 1;
-          scheduleGpsUiUpdate();
         }
         return;
       }
 
       gpsSamplesRef.current = [...gpsSamplesRef.current, evaluation.sample];
-      gpsLatestMapCoordRef.current = evaluation.sample.mapCoord;
       const isFirstSample = gpsSamplesRef.current.length === 1;
       if (isFirstSample) {
         setGpsTrackingRecenterToken((token) => token + 1);
-        scheduleGpsUiUpdate();
         scheduleGpsLineRender(true);
       } else {
-        scheduleGpsUiUpdate();
         scheduleGpsLineRender();
       }
       setGpsTrackSummary(null);
@@ -288,8 +288,10 @@ export function useGpsTrackRecording({
       active: gpsTracking,
       mapCoordRef: gpsLatestMapCoordRef,
       recenterToken: gpsTrackingRecenterToken,
+      accuracyMeters: gpsLiveAccuracyM,
+      markerToken: gpsSampleCount + (gpsLiveAccuracyM ?? 0),
     }),
-    [gpsTracking, gpsTrackingRecenterToken],
+    [gpsTracking, gpsTrackingRecenterToken, gpsLiveAccuracyM, gpsSampleCount],
   );
 
   const canUseGpsTracking = isGeoreferencedCrs(ocadCrs);
@@ -300,6 +302,7 @@ export function useGpsTrackRecording({
     gpsLiveCoordinates,
     gpsTrackingStatus,
     gpsTrackSummary,
+    gpsLiveAccuracyM,
     canUseGpsTracking,
     startGpsTracking,
     stopGpsTracking,

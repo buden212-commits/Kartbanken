@@ -250,6 +250,9 @@ type ToolbarsProps = {
   onMapModeChange: (mode: "draw" | "navigate") => void;
   gpsTracking: boolean;
   canUseGpsTracking: boolean;
+  /** True when line/area + symbol are chosen (or tracking already active). */
+  gpsReadyForDrawing: boolean;
+  gpsButtonTitle: string;
   onGpsToggle: () => void;
   canUndo: boolean;
   onUndo: () => void;
@@ -273,6 +276,8 @@ export function FieldEditMapToolbars({
   onMapModeChange,
   gpsTracking,
   canUseGpsTracking,
+  gpsReadyForDrawing,
+  gpsButtonTitle,
   onGpsToggle,
   canUndo,
   onUndo,
@@ -288,10 +293,7 @@ export function FieldEditMapToolbars({
   onCancelDraft,
 }: ToolbarsProps) {
   const gpsLabel = gpsTracking ? "Sluta spåra" : "GPS-spår";
-  const gpsTitle =
-    canUseGpsTracking || gpsTracking
-      ? gpsLabel
-      : "GPS-spårning kräver georefererad karta";
+  const gpsTitle = gpsButtonTitle || gpsLabel;
 
   return (
     <div
@@ -394,7 +396,7 @@ export function FieldEditMapToolbars({
           active={gpsTracking}
           activeClass={iconBtnTracking}
           inactiveClass={iconBtnGpsInactive}
-          disabled={!canUseGpsTracking && !gpsTracking}
+          disabled={(!gpsReadyForDrawing && !gpsTracking) || (!canUseGpsTracking && !gpsTracking)}
           onClick={onGpsToggle}
         >
           <MapGpsToolIcon />

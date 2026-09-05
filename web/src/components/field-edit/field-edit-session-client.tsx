@@ -465,6 +465,7 @@ export function FieldEditSessionClient({
     gpsTrackFollow,
     gpsLiveCoordinates,
     gpsTrackingStatus,
+    gpsLiveAccuracyM,
     canUseGpsTracking,
     toggleGpsTracking,
     cancelGpsTracking,
@@ -472,7 +473,7 @@ export function FieldEditSessionClient({
     ocadCrs,
     ocadMapScale,
     onTrackStart: () => {
-      setTool("addLine");
+      // Keep current line/area tool + symbol; only clear conflicting draw modes.
       setMapMode("navigate");
       setDraftPoints([]);
       setBezierDraftAnchors([]);
@@ -482,6 +483,9 @@ export function FieldEditSessionClient({
       setRectangularDrawMode(false);
       setCircleDrawMode(false);
       setEllipseDrawMode(false);
+      setFreehandDrawMode(false);
+      freehandDrawingRef.current = false;
+      freehandPointerDownRef.current = null;
       setRectangularGesture({ phase: "idle" });
       setCircleGesture({ phase: "idle" });
       setEllipseGesture({ phase: "idle" });
@@ -492,6 +496,7 @@ export function FieldEditSessionClient({
     },
     onTrackComplete: (coordinates) => {
       setDraftPoints(coordinates);
+      setMapMode("draw");
       setError(null);
     },
     onTrackError: (message) => setError(message),
@@ -3127,13 +3132,51 @@ export function FieldEditSessionClient({
     setSnapPreview(null);
   }, [bezierGesture.phase, circleGesture.phase, ellipseGesture.phase, rectangularGesture.phase]);
 
+  const gpsReadyForDrawing =
+    canUseGpsTracking &&
+    (tool === "addLine" || tool === "addArea") &&
+    symbolNumber !== "";
+
+  const gpsButtonTitle = useMemo(() => {
+    if (gpsTracking) return "Sluta spåra";
+    if (!canUseGpsTracking) return "GPS-spår kräver georefererad karta";
+    if (tool === "addPoint") {
+      return "Punktsymboler placeras genom att klicka på kartan";
+    }
+    if (tool !== "addLine" && tool !== "addArea") {
+      return "Välj linje eller yta och en symbol innan GPS-spår";
+    }
+    if (symbolNumber === "") return "Välj symbol innan du startar GPS-spår";
+    return tool === "addArea"
+      ? "GPS-spår — ritar yta medan du går"
+      : "GPS-spår — ritar linje medan du går";
+  }, [canUseGpsTracking, gpsTracking, symbolNumber, tool]);
+
   const handleGpsToggle = useCallback(() => {
+    if (gpsTracking) {
+      toggleGpsTracking();
+      return;
+    }
+    if (tool === "addPoint") {
+      setInfo("Punkter klickas ut manuellt på kartan — GPS-spår gäller linje och yta.");
+      return;
+    }
+    if (tool !== "addLine" && tool !== "addArea") {
+      setInfo("Välj linje eller yta och en symbol först, sedan GPS-spår.");
+      return;
+    }
+    if (symbolNumber === "") {
+      setInfo("Välj symbol innan du startar GPS-spår.");
+      return;
+    }
     toggleGpsTracking();
-  }, [toggleGpsTracking]);
+  }, [gpsTracking, symbolNumber, toggleGpsTracking, tool]);
 
   const toolHint = useMemo(() => {
     if (gpsTracking) {
-      return `GPS-spårning — gå längs spåret du vill rita. Minst ${GPS_TRACK_MIN_DISTANCE_M} m mellan punkter. Klicka «Sluta spåra» när du är klar, välj linjesymbol och klicka «Klar».`;
+      return tool === "addArea"
+        ? `GPS-spår (yta) — gå runt ytan. Minst ${GPS_TRACK_MIN_DISTANCE_M} m mellan brytpunkter. Klicka «Sluta spåra», sedan «Klar».`
+        : `GPS-spår (linje) — gå längs linjen. Minst ${GPS_TRACK_MIN_DISTANCE_M} m mellan brytpunkter. Klicka «Sluta spåra», sedan «Klar».`;
     }
     if (tool === "select") {
       return "Tryck på ett objekt för att markera det. Vid överlapp: håll kvar — efter 1 sekund markeras nästa, och så vidare. Dra brytpunkter eller använd CAD-verktygen nedan. Snappning hjälper dig träffa befintliga linjer och hörn.";
@@ -3175,7 +3218,7 @@ export function FieldEditSessionClient({
       return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan hörn runt ytan (minst 3). Klicka ytaverktyget igen för att växla läge (R → C → E → B → F).";
     }
     if (tool === "addPoint") {
-      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan där punkten ska ligga.";
+      return "Välj punktsymbol — klicka sedan där punkten ska ligga (GPS-spår gäller inte punkter).";
     }
     return null;
   }, [
@@ -3264,6 +3307,8 @@ export function FieldEditSessionClient({
           onMapModeChange={setMapMode}
           gpsTracking={gpsTracking}
           canUseGpsTracking={canUseGpsTracking}
+          gpsReadyForDrawing={gpsReadyForDrawing}
+          gpsButtonTitle={gpsButtonTitle}
           onGpsToggle={handleGpsToggle}
           canUndo={opsHistory.length > 1}
           onUndo={undo}
@@ -3306,6 +3351,8 @@ export function FieldEditSessionClient({
       gpsTracking,
       mapMode,
       canUseGpsTracking,
+      gpsReadyForDrawing,
+      gpsButtonTitle,
       handleGpsToggle,
       showDraftActions,
       draftPointCount,
@@ -3330,7 +3377,15 @@ export function FieldEditSessionClient({
         <span>{syncLabel}</span>
       </div>
       {gpsTrackingStatus && (
-        <p className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 sm:text-sm">
+        <p
+          className={`rounded-lg border px-3 py-2 text-xs sm:text-sm ${
+            gpsTracking &&
+            gpsLiveAccuracyM != null &&
+            gpsLiveAccuracyM > 20
+              ? "border-red-200 bg-red-50 text-red-700"
+              : "border-ifk-blue/30 bg-ifk-blue/5 text-ifk-blue"
+          }`}
+        >
           {gpsTrackingStatus}
           {!gpsTracking && draftPoints.length >= 2 && tool === "addLine" && (
             <> Välj linjesymbol och klicka «Klar».</>

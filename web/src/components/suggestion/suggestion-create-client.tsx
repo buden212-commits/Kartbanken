@@ -74,10 +74,13 @@ type CreateMapPanelProps = {
   onOcadMapScale: (scale: number) => void;
   onOcadLayersReady: (layers: OcadMapLayer[]) => void;
   gpsTrackingStatus: string | null;
+  gpsLiveAccuracyM: number | null;
   gpsTrackFollow: {
     active: boolean;
     mapCoordRef: MutableRefObject<[number, number] | null>;
     recenterToken: number;
+    accuracyMeters?: number | null;
+    markerToken?: number;
   };
   mapToolbarOverlay: React.ReactNode;
 };
@@ -99,6 +102,7 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
   onOcadMapScale,
   onOcadLayersReady,
   gpsTrackingStatus,
+  gpsLiveAccuracyM,
   gpsTrackFollow,
   mapToolbarOverlay,
 }: CreateMapPanelProps) {
@@ -150,7 +154,15 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
       secondaryHeaderContent={
         <div className="space-y-2 border-b border-slate-200 bg-slate-50 px-3 py-2 sm:px-4">
           {gpsTrackingStatus && (
-            <p className="rounded-lg border border-ifk-blue/30 bg-ifk-blue/5 px-3 py-2 text-xs text-ifk-blue">
+            <p
+              className={`rounded-lg border px-3 py-2 text-xs ${
+                gpsTrackFollow.active &&
+                gpsLiveAccuracyM != null &&
+                gpsLiveAccuracyM > 20
+                  ? "border-red-200 bg-red-50 text-red-700"
+                  : "border-ifk-blue/30 bg-ifk-blue/5 text-ifk-blue"
+              }`}
+            >
               {gpsTrackingStatus}
             </p>
           )}
@@ -293,6 +305,8 @@ export function SuggestionCreateClient({
           : GPS_TRACK_MAX_ACCURACY_M;
 
       gpsLastAccuracyRef.current = accuracyMeters;
+      gpsLatestMapCoordRef.current = mapCoord;
+      scheduleGpsUiUpdate();
 
       const lastSample = gpsSamplesRef.current.at(-1) ?? null;
       const evaluation = evaluateGpsSample(
@@ -312,20 +326,16 @@ export function SuggestionCreateClient({
       if (!evaluation.accepted) {
         if (evaluation.reason === "jump") {
           gpsRejectedJumpsRef.current += 1;
-          scheduleGpsUiUpdate();
         }
         return;
       }
 
       gpsSamplesRef.current = [...gpsSamplesRef.current, evaluation.sample];
-      gpsLatestMapCoordRef.current = evaluation.sample.mapCoord;
       const isFirstSample = gpsSamplesRef.current.length === 1;
       if (isFirstSample) {
         setGpsTrackingRecenterToken((token) => token + 1);
-        scheduleGpsUiUpdate();
         scheduleGpsLineRender(true);
       } else {
-        scheduleGpsUiUpdate();
         scheduleGpsLineRender();
       }
       setGeometry(null);
@@ -590,8 +600,10 @@ export function SuggestionCreateClient({
       active: gpsTracking,
       mapCoordRef: gpsLatestMapCoordRef,
       recenterToken: gpsTrackingRecenterToken,
+      accuracyMeters: gpsLiveAccuracyM,
+      markerToken: gpsSampleCount + (gpsLiveAccuracyM ?? 0),
     }),
-    [gpsTracking, gpsTrackingRecenterToken],
+    [gpsTracking, gpsTrackingRecenterToken, gpsLiveAccuracyM, gpsSampleCount],
   );
 
   const canUseGpsTracking = isGeoreferencedCrs(ocadCrs);
@@ -753,6 +765,7 @@ export function SuggestionCreateClient({
           onOcadMapScale={handleOcadMapScale}
           onOcadLayersReady={handleOcadLayersReady}
           gpsTrackingStatus={gpsTrackingStatus}
+          gpsLiveAccuracyM={gpsLiveAccuracyM}
           gpsTrackFollow={gpsTrackFollow}
           mapToolbarOverlay={mapToolbarOverlay}
         />

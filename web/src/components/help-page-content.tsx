@@ -492,7 +492,9 @@ export async function HelpPageContent() {
           <HelpList
             items={[
               "Startar i Navigera (panorera/zooma) — byt till Rita när du ska redigera",
-              "Verktyg som flytande ikoner på kartan: punkt → linje → yta → radera → GPS (samma ordning som i «Föreslå ändring»)",
+              "Verktyg som flytande ikoner på kartan: punkt → linje → yta → radera → GPS (GPS aktiveras efter linje/yta + vald symbol)",
+              "Välj linje eller yta och symbol först — därefter «GPS-spår» för att rita medan du går (samma minimiavstånd mellan brytpunkter som i kartförslag)",
+              "Punktsymboler placeras alltid genom att klicka på kartan — GPS-spår gäller bara linje och yta",
               "Klicka linje- eller ytaverktyget igen för att växla vanlig → rektangel (R) → cirkel (C) → ellips (E) → Bézier (B) → frihand (F) → vanlig",
               "Rektangelritning: dra längsta sidan, sedan vinkelrätt; streckad förhandsvisning; klicka för att avsluta",
               "Cirkel: dra diametern från kant till kant, släpp för att skapa (som i OCAD)",
