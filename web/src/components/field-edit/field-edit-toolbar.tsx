@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  CadFillBoundedAreaIcon,
   MapAreaToolIcon,
   MapCancelDraftIcon,
   MapDeleteToolIcon,
@@ -267,10 +266,6 @@ type ToolbarsProps = {
   draftPointCount?: number;
   onFinishDraft?: () => void;
   onCancelDraft?: () => void;
-  /** OCAD-style Fill Bounded Area — click empty enclosed space to fill. */
-  fillBoundedActive?: boolean;
-  fillBoundedBusy?: boolean;
-  onFillBoundedToggle?: () => void;
 };
 
 export function FieldEditMapToolbars({
@@ -296,9 +291,6 @@ export function FieldEditMapToolbars({
   draftPointCount = 0,
   onFinishDraft,
   onCancelDraft,
-  fillBoundedActive = false,
-  fillBoundedBusy = false,
-  onFillBoundedToggle,
 }: ToolbarsProps) {
   const gpsLabel = gpsTracking ? "Sluta spåra" : "GPS-spår";
   const gpsTitle = gpsButtonTitle || gpsLabel;
@@ -429,25 +421,6 @@ export function FieldEditMapToolbars({
             onClick={onCancelDraft}
           >
             <MapCancelDraftIcon />
-          </IconToolbarButton>
-        </MapToolbarPanel>
-      )}
-      {onFillBoundedToggle && (
-        <MapToolbarPanel label="CAD">
-          <IconToolbarButton
-            label={
-              fillBoundedBusy
-                ? "Fyll yta — beräknar…"
-                : fillBoundedActive
-                  ? "Fyll yta (aktiv) — klicka i omslutet tomt område; klicka igen för att stänga"
-                  : "Fyll yta — fyll omslutet tomt område med vald ytsymbol"
-            }
-            active={fillBoundedActive || fillBoundedBusy}
-            activeClass={iconBtnActiveAdd}
-            disabled={drawDisabled || fillBoundedBusy}
-            onClick={onFillBoundedToggle}
-          >
-            <CadFillBoundedAreaIcon />
           </IconToolbarButton>
         </MapToolbarPanel>
       )}

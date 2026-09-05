@@ -20,6 +20,7 @@ import {
   type BezierSegmentControls,
 } from "@/lib/field-edit/geometry-tools";
 import { FieldEditCadPanel, type CadCutTool, type CadVertexTool } from "@/components/field-edit/field-edit-cad-panel";
+import { CadFillBoundedAreaIcon } from "@/components/map-draw-tool-icons";
 import { FieldEditReviewDialog } from "@/components/field-edit/field-edit-review-dialog";
 import { FieldEditSnapSettings } from "@/components/field-edit/field-edit-snap-settings";
 import {
@@ -3484,9 +3485,6 @@ export function FieldEditSessionClient({
           draftPointCount={draftPointCount}
           onFinishDraft={finishDraft}
           onCancelDraft={cancelDraft}
-          fillBoundedActive={fillBoundedActive}
-          fillBoundedBusy={fillBoundedBusy}
-          onFillBoundedToggle={toggleFillBounded}
         />
         {addKind && (
           <div
@@ -3603,6 +3601,43 @@ export function FieldEditSessionClient({
         <FieldEditSnapSettings settings={editorSettings} onChange={updateEditorSettings} />
       </div>
 
+      {(fillBoundedActive || tool === "select") &&
+        !(selectedObject && tool === "select" && !ops.deletes.includes(selectedObject.i)) && (
+        <div className="rounded-xl border border-ifk-blue/20 bg-ifk-blue/5 px-3 py-3 sm:px-4">
+          <div className="mb-2 text-sm font-semibold text-slate-900">CAD-verktyg</div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              title={
+                fillBoundedBusy
+                  ? "Fyll yta — beräknar…"
+                  : fillBoundedActive
+                    ? "Fyll yta (aktiv) — klicka i omslutet tomt område; klicka igen för att stänga"
+                    : "Fyll yta — fyll omslutet tomt område med vald ytsymbol"
+              }
+              aria-label="Fyll yta"
+              aria-pressed={fillBoundedActive || fillBoundedBusy}
+              disabled={fillBoundedBusy || gpsTracking}
+              onClick={toggleFillBounded}
+              className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border-2 transition sm:h-10 sm:w-10 ${
+                fillBoundedActive || fillBoundedBusy
+                  ? "border-emerald-600 bg-emerald-600 text-white"
+                  : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+              } disabled:cursor-not-allowed disabled:opacity-50`}
+            >
+              <CadFillBoundedAreaIcon />
+            </button>
+            <p className="min-w-0 flex-1 text-xs text-slate-600 sm:text-sm">
+              {fillBoundedBusy
+                ? "Beräknar omslutningen…"
+                : fillBoundedActive
+                  ? "Välj ytsymbol nere på kartan, zooma in och klicka i tomt omslutet område."
+                  : "Fyll yta: fyll automatiskt ett område som omsluts av linjer/ytor."}
+            </p>
+          </div>
+        </div>
+      )}
+
       {selectedObject && tool === "select" && !ops.deletes.includes(selectedObject.i) && (
         <>
           <details className="rounded-xl border border-ifk-blue/20 bg-ifk-blue/5 sm:hidden">
@@ -3648,6 +3683,9 @@ export function FieldEditSessionClient({
               onApplyMerge={applyMerge}
               onCancelMerge={cancelMerge}
               onFillOrBorder={applyFillOrBorder}
+              fillBoundedActive={fillBoundedActive}
+              fillBoundedBusy={fillBoundedBusy}
+              onFillBoundedToggle={toggleFillBounded}
             />
           </details>
           <div className="hidden sm:block">
@@ -3690,6 +3728,9 @@ export function FieldEditSessionClient({
               onApplyMerge={applyMerge}
               onCancelMerge={cancelMerge}
               onFillOrBorder={applyFillOrBorder}
+              fillBoundedActive={fillBoundedActive}
+              fillBoundedBusy={fillBoundedBusy}
+              onFillBoundedToggle={toggleFillBounded}
             />
           </div>
         </>

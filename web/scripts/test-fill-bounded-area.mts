@@ -37,6 +37,13 @@ assert.equal(enclosed.ok, true, enclosed.ok ? "" : enclosed.message);
 if (enclosed.ok) {
   assert.ok(enclosed.ring.length >= 4);
   assert.equal(enclosed.holes.length, 0);
+  const xs = enclosed.ring.map((p) => p[0]);
+  const ys = enclosed.ring.map((p) => p[1]);
+  // Must reach the real barrier (20/80), not stop a cell inside.
+  assert.ok(Math.min(...xs) <= 20.75, `minX ${Math.min(...xs)} inset`);
+  assert.ok(Math.max(...xs) >= 79.25, `maxX ${Math.max(...xs)} inset`);
+  assert.ok(Math.min(...ys) <= 20.75, `minY ${Math.min(...ys)} inset`);
+  assert.ok(Math.max(...ys) >= 79.25, `maxY ${Math.max(...ys)} inset`);
 }
 
 // Open U-shape — not enclosed

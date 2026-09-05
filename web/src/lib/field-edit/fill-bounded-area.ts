@@ -102,9 +102,11 @@ function rasterizeSegment(
   for (;;) {
     if (ix0 >= 0 && iy0 >= 0 && ix0 < w && iy0 < h) {
       grid[iy0 * w + ix0] = 1;
-      // Thicken slightly so tiny raster gaps don't leak.
+      // Thin 4-neighbour thicken seals pinholes without eating a full extra cell diagonally.
       if (ix0 + 1 < w) grid[iy0 * w + ix0 + 1] = 1;
+      if (ix0 > 0) grid[iy0 * w + ix0 - 1] = 1;
       if (iy0 + 1 < h) grid[(iy0 + 1) * w + ix0] = 1;
+      if (iy0 > 0) grid[(iy0 - 1) * w + ix0] = 1;
     }
     if (ix0 === ix1 && iy0 === iy1) break;
     const e2 = 2 * err;
@@ -166,6 +168,20 @@ function fillPolygonCells(
       }
     }
   }
+}
+
+
+function centroidOfRing(ring: [number, number][]): [number, number] {
+  const closed = closedRing(ring);
+  if (closed.length < 2) return [0, 0];
+  let sx = 0;
+  let sy = 0;
+  const n = closed.length - 1; // skip duplicate close
+  for (let i = 0; i < n; i++) {
+    sx += closed[i]![0];
+    sy += closed[i]![1];
+  }
+  return [sx / Math.max(1, n), sy / Math.max(1, n)];
 }
 
 function shoelaceAbs(pts: [number, number][]): number {
@@ -343,6 +359,173 @@ function simplifyClosedRing(
   return closedRing(simplified);
 }
 
+
+type BarrierSegment = {
+  a: [number, number];
+  b: [number, number];
+};
+
+function collectBarrierSegments(barriers: FillBoundedBarrier[]): BarrierSegment[] {
+  const segments: BarrierSegment[] = [];
+  const addPolyline = (coords: [number, number][]) => {
+    for (let i = 0; i < coords.length - 1; i++) {
+      const a = coords[i]!;
+      const b = coords[i + 1]!;
+      if (a[0] === b[0] && a[1] === b[1]) continue;
+      segments.push({ a: [a[0], a[1]], b: [b[0], b[1]] });
+    }
+  };
+  for (const barrier of barriers) {
+    if (barrier.type === "line") {
+      addPolyline(barrier.coordinates);
+    } else {
+      addPolyline(closedRing(barrier.coordinates));
+      for (const hole of barrier.holes ?? []) {
+        addPolyline(closedRing(hole));
+      }
+    }
+  }
+  return segments;
+}
+
+function nearestPointOnSegment(
+  px: number,
+  py: number,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+): { x: number; y: number; dist2: number } {
+  const abx = bx - ax;
+  const aby = by - ay;
+  const len2 = abx * abx + aby * aby;
+  if (len2 < 1e-18) {
+    const dx = px - ax;
+    const dy = py - ay;
+    return { x: ax, y: ay, dist2: dx * dx + dy * dy };
+  }
+  let t = ((px - ax) * abx + (py - ay) * aby) / len2;
+  if (t < 0) t = 0;
+  else if (t > 1) t = 1;
+  const x = ax + t * abx;
+  const y = ay + t * aby;
+  const dx = px - x;
+  const dy = py - y;
+  return { x, y, dist2: dx * dx + dy * dy };
+}
+
+function nearestOnBarriers(
+  px: number,
+  py: number,
+  segments: BarrierSegment[],
+): { x: number; y: number; dist2: number } | null {
+  let best: { x: number; y: number; dist2: number } | null = null;
+  for (const seg of segments) {
+    const hit = nearestPointOnSegment(px, py, seg.a[0], seg.a[1], seg.b[0], seg.b[1]);
+    if (!best || hit.dist2 < best.dist2) best = hit;
+  }
+  return best;
+}
+
+/** Insert points so consecutive vertices are at most `step` apart. */
+function densifyOpenRing(
+  ring: [number, number][],
+  step: number,
+): [number, number][] {
+  if (ring.length < 2 || !(step > 0)) {
+    return ring.map(([x, y]) => [x, y] as [number, number]);
+  }
+  const open =
+    ring.length >= 2 &&
+    ring[0]![0] === ring[ring.length - 1]![0] &&
+    ring[0]![1] === ring[ring.length - 1]![1]
+      ? ring.slice(0, -1)
+      : ring.slice();
+  if (open.length < 2) return open.map(([x, y]) => [x, y] as [number, number]);
+
+  const out: [number, number][] = [];
+  for (let i = 0; i < open.length; i++) {
+    const a = open[i]!;
+    const b = open[(i + 1) % open.length]!;
+    out.push([a[0], a[1]]);
+    const dist = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    const n = Math.floor(dist / step);
+    for (let k = 1; k < n; k++) {
+      const t = k / n;
+      out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+    }
+  }
+  return out;
+}
+
+/**
+ * Pull a raster contour out to the real barrier geometry so the fill meets
+ * the bounding objects instead of stopping at cell centres inside them.
+ */
+function snapRingToBarriers(
+  ring: [number, number][],
+  segments: BarrierSegment[],
+  maxDist: number,
+  densifyStep: number,
+): [number, number][] {
+  if (segments.length === 0 || ring.length < 3) return closedRing(ring);
+  const maxDist2 = maxDist * maxDist;
+  const dense = densifyOpenRing(ring, densifyStep);
+  const snapped: [number, number][] = [];
+  for (const p of dense) {
+    const hit = nearestOnBarriers(p[0], p[1], segments);
+    if (hit && hit.dist2 <= maxDist2) {
+      snapped.push([hit.x, hit.y]);
+    } else {
+      snapped.push([p[0], p[1]]);
+    }
+  }
+  // Drop consecutive duplicates after snap
+  const dedup: [number, number][] = [];
+  for (const p of snapped) {
+    const last = dedup[dedup.length - 1];
+    if (!last || Math.hypot(last[0] - p[0], last[1] - p[1]) > 1e-6) {
+      dedup.push(p);
+    }
+  }
+  if (dedup.length >= 2) {
+    const a = dedup[0]!;
+    const b = dedup[dedup.length - 1]!;
+    if (Math.hypot(a[0] - b[0], a[1] - b[1]) <= 1e-6) dedup.pop();
+  }
+  return closedRing(dedup.length >= 3 ? dedup : ring);
+}
+
+/**
+ * Expand the flood-fill mask by one cell into neighbouring barrier cells so
+ * contour tracing sits on the barrier raster instead of one cell inside.
+ */
+function dilateFillIntoBarriers(
+  filled: Uint8Array,
+  barrier: Uint8Array,
+  w: number,
+  h: number,
+): Uint8Array {
+  const out = filled.slice();
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (filled[y * w + x] !== 1) continue;
+      const neighbors: [number, number][] = [
+        [x + 1, y],
+        [x - 1, y],
+        [x, y + 1],
+        [x, y - 1],
+      ];
+      for (const [nx, ny] of neighbors) {
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        const nidx = ny * w + nx;
+        if (barrier[nidx] === 1) out[nidx] = 1;
+      }
+    }
+  }
+  return out;
+}
+
 /**
  * Compute a filled area from a click inside a region bounded by barriers.
  * If the flood reaches the viewport edge the region is not fully enclosed.
@@ -506,7 +689,9 @@ export function fillBoundedArea(input: {
     };
   }
 
-  const contours = traceContours(filled, gw, gh, fromGridX, fromGridY);
+  // Grow fill onto adjacent barrier cells so the traced contour isn't inset.
+  const contourMask = dilateFillIntoBarriers(filled, barrier, gw, gh);
+  const contours = traceContours(contourMask, gw, gh, fromGridX, fromGridY);
   if (!contours) {
     return {
       ok: false,
@@ -515,8 +700,19 @@ export function fillBoundedArea(input: {
     };
   }
 
-  const simplifyEps = Math.max(cellW, cellH) * 0.75;
-  const ring = simplifyClosedRing(contours.ring, simplifyEps);
+  const segments = collectBarrierSegments(usable);
+  const cellSize = Math.max(cellW, cellH);
+  // Snap outward to real barrier geometry (raster centres sit inside the wall).
+  const snapDist = cellSize * 5;
+  const densifyStep = cellSize * 0.5;
+  const snappedRing = snapRingToBarriers(
+    contours.ring,
+    segments,
+    snapDist,
+    densifyStep,
+  );
+  const simplifyEps = cellSize * 0.35;
+  const ring = simplifyClosedRing(snappedRing, simplifyEps);
   if (ring.length < 4) {
     return {
       ok: false,
@@ -525,10 +721,38 @@ export function fillBoundedArea(input: {
     };
   }
 
-  const holes = contours.holes
-    .map((hole) => simplifyClosedRing(hole, simplifyEps))
-    .filter((hole) => hole.length >= 4)
-    .filter((hole) => pointInPolygon(hole[0]![0], hole[0]![1], ring));
+  // Prefer real enclosed objects as holes (more accurate than noisy raster holes).
+  const holes: [number, number][][] = [];
+  for (const b of usable) {
+    if (b.type === "area") {
+      const areaRing = closedRing(b.coordinates);
+      if (areaRing.length < 4) continue;
+      // Click is outside the object, but object sits inside the filled outer ring.
+      if (pointInPolygon(click[0], click[1], areaRing)) continue;
+      const [cx, cy] = centroidOfRing(areaRing);
+      if (!pointInPolygon(cx, cy, ring)) continue;
+      holes.push(simplifyClosedRing(areaRing, simplifyEps));
+      for (const inner of b.holes ?? []) {
+        // Existing holes in barrier areas are solid barriers already; skip as fill-holes.
+      }
+    } else if (b.type === "line") {
+      const lineRing = closedRing(b.coordinates);
+      if (lineRing.length < 4) continue;
+      // Only closed lines (start≈end already handled by closedRing if ≥3 unique).
+      const openLen =
+        Math.hypot(
+          b.coordinates[0]![0] - b.coordinates[b.coordinates.length - 1]![0],
+          b.coordinates[0]![1] - b.coordinates[b.coordinates.length - 1]![1],
+        );
+      if (openLen > cellSize) continue; // not a closed loop
+      if (pointInPolygon(click[0], click[1], lineRing)) continue;
+      const [cx, cy] = centroidOfRing(lineRing);
+      if (!pointInPolygon(cx, cy, ring)) continue;
+      // Ignore huge "holes" that are basically the same as outer.
+      if (shoelaceAbs(lineRing) >= shoelaceAbs(ring) * 0.9) continue;
+      holes.push(simplifyClosedRing(lineRing, simplifyEps));
+    }
+  }
 
   return { ok: true, ring, holes };
 }

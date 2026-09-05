@@ -9,6 +9,7 @@ import {
   CadCutAreaIcon,
   CadCutHoleIcon,
   CadCutLineIcon,
+  CadFillBoundedAreaIcon,
   CadFillOrBorderIcon,
   CadMergeIcon,
   CadMeasureIcon,
@@ -96,6 +97,9 @@ type Props = {
     targetKind: FieldEditGeometryKind;
     useHoles: boolean;
   }) => void;
+  fillBoundedActive?: boolean;
+  fillBoundedBusy?: boolean;
+  onFillBoundedToggle?: () => void;
 };
 
 const LONG_PRESS_MS = 480;
@@ -237,6 +241,9 @@ export function FieldEditCadPanel({
   onApplyMerge,
   onCancelMerge,
   onFillOrBorder,
+  fillBoundedActive = false,
+  fillBoundedBusy = false,
+  onFillBoundedToggle,
 }: Props) {
   const [showSymbolPicker, setShowSymbolPicker] = useState(false);
   const [fillBorderOpen, setFillBorderOpen] = useState(false);
@@ -254,7 +261,7 @@ export function FieldEditCadPanel({
   const currentSymbol = currentModify?.symbolNumber ?? selectedObject.s;
   const isLineOrArea = selectedObject.t === "line" || selectedObject.t === "area";
   const cutActive = cutTool !== "off";
-  const editLocked = bezierActive || cutActive || mergeActive || fillBorderOpen;
+  const editLocked = bezierActive || cutActive || mergeActive || fillBorderOpen || fillBoundedActive;
 
   const rawCoords =
     resolveObjectCoordinates(selectedObject.i, selectedObject.v, ops) ?? selectedObject.v;
@@ -392,6 +399,12 @@ export function FieldEditCadPanel({
         : cutTool === "cutHole"
           ? "Klipp hål: klicka hörnen för hålet (≥3), sedan «Tillämpa klipp»."
           : null;
+
+  const fillBoundedHint = fillBoundedActive
+    ? fillBoundedBusy
+      ? "Fyll yta — beräknar omslutningen…"
+      : "Fyll yta: välj ytsymbol (nere på kartan), zooma in och klicka i tomt omslutet område. Konturer/nordlinjer/banor ignoreras."
+    : null;
 
   const mergeHint = mergeActive
     ? selectedObject.t === "line"
@@ -650,16 +663,41 @@ export function FieldEditCadPanel({
               label="Sammanfoga (merge)"
               active={mergeActive}
               activeClass="border-teal-600 bg-teal-600 text-white"
-              disabled={bezierActive || cutActive || fillBorderOpen}
+              disabled={bezierActive || cutActive || fillBorderOpen || fillBoundedActive || fillBoundedBusy}
               onClick={() => {
                 onVertexToolChange("off");
                 onCutToolChange("off");
                 if (fillBorderOpen) closeFillBorder();
+                if (fillBoundedActive && onFillBoundedToggle) onFillBoundedToggle();
                 onToggleMerge();
               }}
             >
               <CadMergeIcon />
             </CadIconButton>
+
+            {onFillBoundedToggle && (
+              <CadIconButton
+                label={
+                  fillBoundedBusy
+                    ? "Fyll yta — beräknar…"
+                    : fillBoundedActive
+                      ? "Fyll yta (aktiv) — klicka i omslutet tomt område; klicka igen för att stänga"
+                      : "Fyll yta — fyll omslutet tomt område med vald ytsymbol"
+                }
+                active={fillBoundedActive || fillBoundedBusy}
+                activeClass={iconActiveAdd}
+                disabled={bezierActive || cutActive || mergeActive || fillBorderOpen || fillBoundedBusy}
+                onClick={() => {
+                  onVertexToolChange("off");
+                  onCutToolChange("off");
+                  if (fillBorderOpen) closeFillBorder();
+                  if (mergeActive) onCancelMerge();
+                  onFillBoundedToggle();
+                }}
+              >
+                <CadFillBoundedAreaIcon />
+              </CadIconButton>
+            )}
 
             <CadIconButton
               label="Vänd riktning"
@@ -961,6 +999,9 @@ export function FieldEditCadPanel({
         </p>
       )}
 
+      {fillBoundedHint && (
+        <p className="text-xs text-slate-600">{fillBoundedHint}</p>
+      )}
       {mergeHint && (
         <p className="text-xs text-slate-600">{mergeHint}</p>
       )}
