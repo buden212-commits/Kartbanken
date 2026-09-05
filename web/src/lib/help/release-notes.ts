@@ -10,6 +10,7 @@ export const releaseNotes: ReleaseNote[] = [
     date: "2026-09-05",
     title: "Fältredigering — CAD-ordning, frihand och hjälp",
     items: [
+      "Symbolväljaren nere på kartan är smalare (15 % marginal på varje sida) så mer av kartan syns bakom",
       "Symbolväljarens sökfält öppnar inte längre tangentbordet automatiskt i mobilen — det visas först när du trycker i sökrutan",
       "Ritverktyget (punkt/linje/yta) ligger kvar efter att du ritat — byt till «Välj / redigera» när du vill redigera vidare",
       "Cirkel- och ellipsläget ritar nu riktiga cirklar/ellipser (fixade vända Bézier-handtag som gav öglor)",
