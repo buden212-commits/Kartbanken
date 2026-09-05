@@ -110,6 +110,18 @@ function RectangularModeBadge() {
   );
 }
 
+function FreehandModeBadge() {
+  return (
+    <span
+      aria-hidden="true"
+      className="pointer-events-none absolute bottom-0.5 right-0.5 text-[10px] font-bold leading-none text-white"
+      style={{ textShadow: "0 0 2px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.7)" }}
+    >
+      F
+    </span>
+  );
+}
+
 function DraftCountBadge({ count }: { count: number }) {
   const label = count > 99 ? "99+" : String(count);
   return (
@@ -224,6 +236,7 @@ type ToolbarsProps = {
   onUndo: () => void;
   bezierDrawMode: boolean;
   rectangularDrawMode: boolean;
+  freehandDrawMode: boolean;
   onCycleLineAreaDrawMode: (tool: "addLine" | "addArea") => void;
   showDraftActions?: boolean;
   draftPointCount?: number;
@@ -244,6 +257,7 @@ export function FieldEditMapToolbars({
   onUndo,
   bezierDrawMode,
   rectangularDrawMode,
+  freehandDrawMode,
   onCycleLineAreaDrawMode,
   showDraftActions = false,
   draftPointCount = 0,
@@ -267,17 +281,26 @@ export function FieldEditMapToolbars({
       <MapToolbarPanel label="Verktyg">
         {DRAW_TOOLS.map((drawTool) => {
           const supportsDrawModes = drawTool === "addLine" || drawTool === "addArea";
-          const showBezierBadge = supportsDrawModes && bezierDrawMode && tool === drawTool;
+          const showFreehandBadge =
+            supportsDrawModes && freehandDrawMode && tool === drawTool;
+          const showBezierBadge =
+            supportsDrawModes && bezierDrawMode && tool === drawTool && !freehandDrawMode;
           const showRectBadge =
-            supportsDrawModes && rectangularDrawMode && tool === drawTool && !bezierDrawMode;
+            supportsDrawModes &&
+            rectangularDrawMode &&
+            tool === drawTool &&
+            !bezierDrawMode &&
+            !freehandDrawMode;
           let modeHint = "";
           if (supportsDrawModes) {
-            if (bezierDrawMode && tool === drawTool) {
-              modeHint = " (Bézier — håll inne: vanlig → rektangel → Bézier)";
+            if (freehandDrawMode && tool === drawTool) {
+              modeHint = " (frihand — håll inne: vanlig → rektangel → Bézier → frihand)";
+            } else if (bezierDrawMode && tool === drawTool) {
+              modeHint = " (Bézier — håll inne: vanlig → rektangel → Bézier → frihand)";
             } else if (rectangularDrawMode && tool === drawTool) {
-              modeHint = " (rektangel — håll inne: vanlig → rektangel → Bézier)";
+              modeHint = " (rektangel — håll inne: vanlig → rektangel → Bézier → frihand)";
             } else {
-              modeHint = " (håll inne: vanlig → rektangel → Bézier)";
+              modeHint = " (håll inne: vanlig → rektangel → Bézier → frihand)";
             }
           }
           const label = `${FIELD_EDIT_TOOL_LABELS[drawTool]}${modeHint}`;
@@ -296,7 +319,9 @@ export function FieldEditMapToolbars({
                   : undefined
               }
               badge={
-                showBezierBadge ? (
+                showFreehandBadge ? (
+                  <FreehandModeBadge />
+                ) : showBezierBadge ? (
                   <BezierModeBadge />
                 ) : showRectBadge ? (
                   <RectangularModeBadge />

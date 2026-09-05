@@ -4,12 +4,15 @@ export type FieldEditEditorSettings = {
   snapToleranceM: number;
   /** Corridor half-width for «Förenkla» (meters on each side of the line). */
   simplifyToleranceM: number;
+  /** Freehand smoothing (1=least, 3=most), OCAD-style. */
+  freehandSmoothingFactor: 1 | 2 | 3;
 };
 
 export const DEFAULT_FIELD_EDIT_EDITOR_SETTINGS: FieldEditEditorSettings = {
   snapEnabled: true,
   snapToleranceM: 1.5,
   simplifyToleranceM: 2,
+  freehandSmoothingFactor: 2,
 };
 
 const STORAGE_KEY = "kartbanken-field-edit-editor-settings";
@@ -33,6 +36,12 @@ export function loadFieldEditEditorSettings(): FieldEditEditorSettings {
         typeof parsed.simplifyToleranceM === "number" && parsed.simplifyToleranceM > 0
           ? parsed.simplifyToleranceM
           : DEFAULT_FIELD_EDIT_EDITOR_SETTINGS.simplifyToleranceM,
+      freehandSmoothingFactor:
+        parsed.freehandSmoothingFactor === 1 ||
+        parsed.freehandSmoothingFactor === 2 ||
+        parsed.freehandSmoothingFactor === 3
+          ? parsed.freehandSmoothingFactor
+          : DEFAULT_FIELD_EDIT_EDITOR_SETTINGS.freehandSmoothingFactor,
     };
   } catch {
     return DEFAULT_FIELD_EDIT_EDITOR_SETTINGS;

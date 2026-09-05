@@ -90,6 +90,12 @@ import {
   rectangularLineCoords,
 } from "@/lib/field-edit/rectangular-geometry";
 import {
+  freehandMinSampleDistanceM,
+  maybeAppendFreehandPoint,
+  smoothFreehandPolyline,
+  type FreehandSmoothingFactor,
+} from "@/lib/field-edit/freehand-geometry";
+import {
   countFieldEditChanges,
   cycleVertexKind,
   hasFieldEditChanges,
@@ -197,6 +203,7 @@ export function FieldEditSessionClient({
   } | null>(null);
   const [bezierDrawMode, setBezierDrawMode] = useState(false);
   const [rectangularDrawMode, setRectangularDrawMode] = useState(false);
+  const [freehandDrawMode, setFreehandDrawMode] = useState(false);
   const [rectangularGesture, setRectangularGesture] = useState<RectangularDrawGesture>({
     phase: "idle",
   });
@@ -266,6 +273,13 @@ export function FieldEditSessionClient({
   } | null>(null);
   const advanceHoldCycleRef = useRef<() => void>(() => {});
   const opsRef = useRef(ops);
+  const freehandDrawingRef = useRef(false);
+  const finishDraftRef = useRef<() => void>(() => {});
+  const freehandPointerDownRef = useRef<{
+    clientX: number;
+    clientY: number;
+    pointsAtDown: number;
+  } | null>(null);
   opsRef.current = ops;
   const editorSettingsRef = useRef(editorSettings);
   editorSettingsRef.current = editorSettings;
@@ -1579,6 +1593,31 @@ export function FieldEditSessionClient({
           return;
         }
 
+        if (freehandDrawMode) {
+          freehandPointerDownRef.current = {
+            clientX: e.clientX,
+            clientY: e.clientY,
+            pointsAtDown: draftPoints.length,
+          };
+          freehandDrawingRef.current = true;
+          const factor = editorSettingsRef.current.freehandSmoothingFactor;
+          const minDist = metersToMapUnits(
+            freehandMinSampleDistanceM(factor),
+            ocadMapScale,
+          );
+          setDraftPoints((prev) => {
+            const next = maybeAppendFreehandPoint(prev, geo, minDist);
+            return next ?? prev;
+          });
+          setError(null);
+          setInfo(
+            draftPoints.length >= 2
+              ? "Frihand: fortsätt dra, eller klicka igen / «Klar» för att avsluta."
+              : "Frihand: dra längs linjen. Klicka igen eller «Klar» när du är färdig.",
+          );
+          return;
+        }
+
         setDraftPoints((prev) => [...prev, geo]);
         setError(null);
         setInfo(null);
@@ -1611,6 +1650,9 @@ export function FieldEditSessionClient({
       gpsTracking,
       hitDistance,
       vertexHitDistance,
+      freehandDrawMode,
+      draftPoints.length,
+      ocadMapScale,
     ],
   );
 
@@ -1648,6 +1690,24 @@ export function FieldEditSessionClient({
           };
           pendingVertexDragRef.current = null;
         }
+      }
+
+      if (
+        freehandDrawMode &&
+        freehandDrawingRef.current &&
+        (tool === "addLine" || tool === "addArea")
+      ) {
+        const factor = editorSettingsRef.current.freehandSmoothingFactor;
+        const minDist = metersToMapUnits(
+          freehandMinSampleDistanceM(factor),
+          ocadMapScale,
+        );
+        setDraftPoints((prev) => {
+          const next = maybeAppendFreehandPoint(prev, rawGeo, minDist);
+          return next ?? prev;
+        });
+        setSnapPreview(null);
+        return;
       }
 
       if (
@@ -1766,6 +1826,8 @@ export function FieldEditSessionClient({
       bezierGesture,
       clearHoldCycle,
       editorSettings.snapEnabled,
+      freehandDrawMode,
+      ocadMapScale,
       rectangularDrawMode,
       rectangularGesture,
       resolveSnapPoint,
@@ -1779,6 +1841,28 @@ export function FieldEditSessionClient({
     (_e?: React.PointerEvent, _svg?: SVGSVGElement) => {
       clearHoldCycle();
       pendingVertexDragRef.current = null;
+
+      if (freehandDrawMode && (tool === "addLine" || tool === "addArea")) {
+        const wasDrawing = freehandDrawingRef.current;
+        freehandDrawingRef.current = false;
+        const down = freehandPointerDownRef.current;
+        freehandPointerDownRef.current = null;
+        if (wasDrawing && down && _e) {
+          const moved = Math.hypot(_e.clientX - down.clientX, _e.clientY - down.clientY);
+          // Short second click finishes (OCAD freehand).
+          if (moved < 10 && down.pointsAtDown >= 2) {
+            finishDraftRef.current();
+            setSnapPreview(null);
+            return;
+          }
+        }
+        if (draftPoints.length >= 2) {
+          setInfo('Frihand: fortsätt dra, eller klicka igen / «Klar» för att avsluta.');
+        }
+        setSnapPreview(null);
+        // Fall through only when not handling freehand exclusively — return to avoid other modes.
+        return;
+      }
 
       if (
         rectangularDrawMode &&
@@ -1913,7 +1997,7 @@ export function FieldEditSessionClient({
       dragBezierControlRef.current = null;
       setSnapPreview(null);
     },
-    [applySplitParts, bezierDrawMode, bezierGesture, cadCutTool, clearHoldCycle, hitDistance, objects, rectangularDrawMode, rectangularGesture, resolveSnapPoint, selectedObjectIndex, tool],
+    [applySplitParts, bezierDrawMode, bezierGesture, cadCutTool, clearHoldCycle, draftPoints.length, freehandDrawMode, hitDistance, objects, rectangularDrawMode, rectangularGesture, resolveSnapPoint, selectedObjectIndex, tool],
   );
 
   const finishDraft = useCallback(() => {
@@ -1985,7 +2069,14 @@ export function FieldEditSessionClient({
           setError("Linjen behöver minst 2 punkter");
           return;
         }
-        coordinates = draftPoints;
+        coordinates = freehandDrawMode
+          ? smoothFreehandPolyline(
+              draftPoints,
+              editorSettings.freehandSmoothingFactor,
+              ocadMapScale,
+              2,
+            )
+          : draftPoints;
       }
       updateOps((current) => ({
         ...current,
@@ -2024,7 +2115,14 @@ export function FieldEditSessionClient({
           setError("Ytan behöver minst 3 hörn");
           return;
         }
-        ring = draftPoints;
+        ring = freehandDrawMode
+          ? smoothFreehandPolyline(
+              draftPoints,
+              editorSettings.freehandSmoothingFactor,
+              ocadMapScale,
+              3,
+            )
+          : draftPoints;
       }
       updateOps((current) => ({
         ...current,
@@ -2041,7 +2139,10 @@ export function FieldEditSessionClient({
     setDraftPoints([]);
     clearBezierDraft();
     clearRectangularGesture();
+    freehandDrawingRef.current = false;
+    freehandPointerDownRef.current = null;
     setError(null);
+    setInfo(freehandDrawMode ? "Frihandsobjekt skapat." : null);
   }, [
     bezierDraftAnchors,
     bezierDraftControls,
@@ -2049,6 +2150,9 @@ export function FieldEditSessionClient({
     clearBezierDraft,
     clearRectangularGesture,
     draftPoints,
+    editorSettings.freehandSmoothingFactor,
+    freehandDrawMode,
+    ocadMapScale,
     rectangularCornersFromGesture,
     rectangularDrawMode,
     rectangularGesture,
@@ -2056,11 +2160,14 @@ export function FieldEditSessionClient({
     tool,
     updateOps,
   ]);
+  finishDraftRef.current = finishDraft;
 
   const cancelDraft = useCallback(() => {
     setDraftPoints([]);
     clearBezierDraft();
     clearRectangularGesture();
+    freehandDrawingRef.current = false;
+    freehandPointerDownRef.current = null;
   }, [clearBezierDraft, clearRectangularGesture]);
 
   const drawPointerHandlers = useMemo<MapDrawPointerHandlers>(
@@ -2269,6 +2376,9 @@ export function FieldEditSessionClient({
     if (next !== "addLine" && next !== "addArea") {
       setBezierDrawMode(false);
       setRectangularDrawMode(false);
+      setFreehandDrawMode(false);
+      freehandDrawingRef.current = false;
+      freehandPointerDownRef.current = null;
     }
     if (next !== "select") setSelectedObjectIndex(null);
   }
@@ -2278,12 +2388,14 @@ export function FieldEditSessionClient({
       cancelGpsTracking();
     }
     const onThisTool = tool === forTool;
-    // Cycle: vanlig → rektangel → Bézier → vanlig
-    let next: "normal" | "rectangular" | "bezier";
+    // Cycle: vanlig → rektangel → Bézier → frihand → vanlig
+    let next: "normal" | "rectangular" | "bezier" | "freehand";
     if (!onThisTool) {
       next = "rectangular";
-    } else if (bezierDrawMode) {
+    } else if (freehandDrawMode) {
       next = "normal";
+    } else if (bezierDrawMode) {
+      next = "freehand";
     } else if (rectangularDrawMode) {
       next = "bezier";
     } else {
@@ -2295,11 +2407,14 @@ export function FieldEditSessionClient({
     setDraftPoints([]);
     clearBezierDraft();
     clearRectangularGesture();
+    freehandDrawingRef.current = false;
+    freehandPointerDownRef.current = null;
     setSelectedObjectIndex(null);
     setSelectedVertexIndex(null);
     setBezierEdit(null);
     setBezierDrawMode(next === "bezier");
     setRectangularDrawMode(next === "rectangular");
+    setFreehandDrawMode(next === "freehand");
     setError(null);
     if (next === "rectangular") {
       setInfo(
@@ -2307,11 +2422,15 @@ export function FieldEditSessionClient({
       );
     } else if (next === "bezier") {
       setInfo(
-        "Bézier-ritning: tryck ner på brytpunkt och dra mot P1, sedan tryck på P2 och släpp på nästa brytpunkt. Håll inne verktyget igen för vanlig ritning.",
+        "Bézier-ritning: tryck ner på brytpunkt och dra mot P1, sedan tryck på P2 och släpp på nästa brytpunkt. Håll inne verktyget igen för frihand.",
+      );
+    } else if (next === "freehand") {
+      setInfo(
+        "Frihand: tryck kort och dra längs linjen (eller ytan). Klicka igen eller «Klar» för att avsluta. Utjämning 1–3 under snappning. Håll inne verktyget för vanlig ritning.",
       );
     } else {
       setInfo(
-        "Vanlig ritning: klicka brytpunkter. Håll inne verktyget för rektangel eller Bézier.",
+        "Vanlig ritning: klicka brytpunkter. Håll inne verktyget: vanlig → rektangel (R) → Bézier (B) → frihand (F).",
       );
     }
   }
@@ -2343,28 +2462,34 @@ export function FieldEditSessionClient({
       return "Tryck på ett objekt för att markera det. Vid överlapp: håll kvar — efter 1 sekund markeras nästa, och så vidare. Dra brytpunkter eller använd CAD-verktygen nedan. Snappning hjälper dig träffa befintliga linjer och hörn.";
     }
     if (tool === "addLine") {
+      if (freehandDrawMode) {
+        return "Frihandslinje: tryck och dra längs linjen. Klicka igen eller «Klar» för att avsluta. Utjämning 1–3 under snappning. Håll inne linjeverktyget för vanlig ritning.";
+      }
       if (bezierDrawMode) {
-        return "Bézier-linje: tryck ner på brytpunkt → dra mot P1 → släpp; tryck på P2 → släpp på nästa brytpunkt. Håll inne linjeverktyget för att växla läge.";
+        return "Bézier-linje: tryck ner på brytpunkt → dra mot P1 → släpp; tryck på P2 → släpp på nästa brytpunkt. Håll inne linjeverktyget för frihand.";
       }
       if (rectangularDrawMode) {
         return "Rektangelläge: dra längsta sidan → släpp → dra vinkelrätt till tredje hörnet → klicka för att avsluta. Håll inne linjeverktyget för Bézier.";
       }
-      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan punkter längs linjen. Håll inne linjeverktyget: vanlig → rektangel (R) → Bézier (B).";
+      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan punkter längs linjen. Håll inne linjeverktyget: vanlig → rektangel (R) → Bézier (B) → frihand (F).";
     }
     if (tool === "addArea") {
+      if (freehandDrawMode) {
+        return "Frihandsytan: tryck och dra runt ytan. Klicka igen eller «Klar» för att avsluta (minst 3 punkter). Håll inne ytaverktyget för vanlig ritning.";
+      }
       if (bezierDrawMode) {
-        return "Bézier-yta: samma gest som linje (P0→P1, P2→P3). Minst 3 brytpunkter. Håll inne ytaverktyget för att växla läge.";
+        return "Bézier-yta: samma gest som linje (P0→P1, P2→P3). Minst 3 brytpunkter. Håll inne ytaverktyget för frihand.";
       }
       if (rectangularDrawMode) {
         return "Rektangelläge: dra längsta sidan → släpp → dra vinkelrätt till tredje hörnet → klicka för att avsluta. Håll inne ytaverktyget för Bézier.";
       }
-      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan hörn runt ytan (minst 3). Håll inne ytaverktyget: vanlig → rektangel (R) → Bézier (B).";
+      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan hörn runt ytan (minst 3). Håll inne ytaverktyget: vanlig → rektangel (R) → Bézier (B) → frihand (F).";
     }
     if (tool === "addPoint") {
       return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan där punkten ska ligga.";
     }
     return null;
-  }, [bezierDrawMode, gpsTracking, rectangularDrawMode, tool]);
+  }, [bezierDrawMode, freehandDrawMode, gpsTracking, rectangularDrawMode, tool]);
 
   const hasLocalBackup = loadLocalFieldEditOps(sessionId) != null;
   const counts = useMemo(() => countFieldEditChanges(ops), [ops]);
@@ -2437,6 +2562,7 @@ export function FieldEditSessionClient({
           onUndo={undo}
           bezierDrawMode={bezierDrawMode}
           rectangularDrawMode={rectangularDrawMode}
+          freehandDrawMode={freehandDrawMode}
           onCycleLineAreaDrawMode={cycleLineAreaDrawMode}
           showDraftActions={showDraftActions}
           draftPointCount={draftPointCount}
@@ -2479,6 +2605,7 @@ export function FieldEditSessionClient({
       draftPointCount,
       bezierDrawMode,
       rectangularDrawMode,
+      freehandDrawMode,
       finishDraft,
       cancelDraft,
       opsHistory.length,
