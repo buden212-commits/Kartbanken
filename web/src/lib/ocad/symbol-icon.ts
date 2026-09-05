@@ -25,6 +25,48 @@ function paletteColor(index: number): readonly [number, number, number] {
   return ICON_V9_PALETTE[clamped] ?? [255, 255, 255];
 }
 
+function isNearBlack(r: number, g: number, b: number): boolean {
+  return r < 40 && g < 40 && b < 40;
+}
+
+/**
+ * OCAD icon bitmaps often pad the top/bottom with solid black rows that look
+ * fine on OCAD's dark symbol tree, but show as a black bar on a white UI.
+ * Clear those padding rows only — keep real black symbol ink (dots, lines).
+ */
+function clearBlackPaddingRows(rgba: Buffer, size: number): void {
+  const rowIsBlackPadding = (y: number): boolean => {
+    let black = 0;
+    let opaque = 0;
+    for (let x = 0; x < size; x++) {
+      const offset = (y * size + x) * 4;
+      if (rgba[offset + 3]! < 30) continue;
+      opaque++;
+      if (isNearBlack(rgba[offset]!, rgba[offset + 1]!, rgba[offset + 2]!)) black++;
+    }
+    if (opaque === 0) return true;
+    return black >= Math.max(opaque - 1, Math.ceil(size * 0.6));
+  };
+
+  const clearBlackInRow = (y: number) => {
+    for (let x = 0; x < size; x++) {
+      const offset = (y * size + x) * 4;
+      if (isNearBlack(rgba[offset]!, rgba[offset + 1]!, rgba[offset + 2]!)) {
+        rgba[offset + 3] = 0;
+      }
+    }
+  };
+
+  for (let y = 0; y < size; y++) {
+    if (!rowIsBlackPadding(y)) break;
+    clearBlackInRow(y);
+  }
+  for (let y = size - 1; y >= 0; y--) {
+    if (!rowIsBlackPadding(y)) break;
+    clearBlackInRow(y);
+  }
+}
+
 /** Decode OCAD IconBits (484 bytes, bottom→top) to RGBA top→bottom. */
 export function ocadIconBitsToRgba(iconBits: ArrayLike<number>): Buffer {
   const size = OCAD_SYMBOL_ICON_SIZE;
@@ -41,6 +83,7 @@ export function ocadIconBitsToRgba(iconBits: ArrayLike<number>): Buffer {
       rgba[offset + 3] = transparent ? 0 : 255;
     }
   }
+  clearBlackPaddingRows(rgba, size);
   return rgba;
 }
 

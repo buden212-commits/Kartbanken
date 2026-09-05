@@ -17,6 +17,7 @@ export const releaseNotes: ReleaseNote[] = [
       "Nya objekt som du ritar kan markeras och redigeras direkt på kartan (som befintliga objekt)",
       "Snappning bara mot samma symbol (t.ex. höjdkurva→höjdkurva) och mot startpunkten när du ritar",
       "Symbolväljaren visar OCAD-ikoner/färger (som teckenförklaringen) och har sökfält",
+      "Symbolikonerna har inte längre ett svart streck längst ned",
     ],
   },
   {

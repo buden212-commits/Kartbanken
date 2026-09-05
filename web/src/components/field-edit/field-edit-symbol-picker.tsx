@@ -92,7 +92,7 @@ function SymbolIcon({
         alt=""
         width={size}
         height={size}
-        className="shrink-0 rounded-sm border border-slate-200 bg-white object-contain"
+        className="shrink-0 rounded-sm bg-white object-contain"
         style={{ width: size, height: size, imageRendering: "pixelated" }}
         draggable={false}
       />
