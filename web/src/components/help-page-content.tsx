@@ -551,8 +551,9 @@ export async function HelpPageContent() {
           <h3 className="font-medium text-slate-900">Spara och checka in</h3>
           <HelpList
             items={[
-              "Nya objekt du ritar kan markeras med välj-verktyget och redigeras vidare (brytpunkter, CAD)",
-                  "Ändringar sparas lokalt i webbläsaren tills du checkar in — en kort toast visas uppe på kartan",
+              "Ritverktyget (punkt/linje/yta) ligger kvar efter att du ritat — byt till «Välj / redigera» när du vill ändra brytpunkter eller använda CAD",
+              "Nya objekt du ritat kan markeras med välj-verktyget och redigeras vidare (brytpunkter, CAD)",
+              "Ändringar sparas lokalt i webbläsaren tills du checkar in — en kort toast visas uppe på kartan",
               "Vid nätverksfel behålls arbetet lokalt",
               "«Checka in» visar en sammanfattning — därefter väntar admin-godkännande med jämförelsekarta innan ny version skapas",
               "Avslutade fältredigeringar ingår i utcheckningshistoriken",

@@ -314,15 +314,14 @@ export function FieldEditSessionClient({
     [objects, ops.adds],
   );
 
-  const selectNewestAdd = useCallback((previousAddsLength: number) => {
-    setTool("select");
-    setMapMode("draw");
-    setSelectedObjectIndex(syntheticAddObjectId(previousAddsLength));
+  /** Efter tillagt objekt: behåll ritverktyget så man kan fortsätta rita. */
+  const afterAddObject = useCallback(() => {
+    setSelectedObjectIndex(null);
     setSelectedVertexIndex(null);
     setBezierEdit(null);
     setCadVertexTool("off");
     setCadCutTool("off");
-    setInfo("Nytt objekt markerat — du kan flytta brytpunkter eller använda CAD-verktygen.");
+    setInfo("Objekt tillagt — fortsätt rita, eller byt till «Välj / redigera» för att ändra.");
   }, []);
 
   const editorSettingsRef = useRef(editorSettings);
@@ -785,7 +784,6 @@ export function FieldEditSessionClient({
         setError("Kurvan gav för få punkter");
         return false;
       }
-      const nextAddIndex = opsRef.current.adds.length;
       if (forTool === "addLine") {
         updateOps((current) => ({
           ...current,
@@ -812,10 +810,10 @@ export function FieldEditSessionClient({
         }));
       }
       setError(null);
-      selectNewestAdd(nextAddIndex);
+      afterAddObject();
       return true;
     },
-    [selectNewestAdd, symbolNumber, updateOps],
+    [afterAddObject, symbolNumber, updateOps],
   );
 
   const undo = useCallback(() => {
@@ -2610,7 +2608,6 @@ export function FieldEditSessionClient({
         setError("Rita klart rektangeln först (två sidor).");
         return;
       }
-      const nextAddIndex = opsRef.current.adds.length;
       if (tool === "addLine") {
         updateOps((current) => ({
           ...current,
@@ -2640,10 +2637,9 @@ export function FieldEditSessionClient({
       }
       setRectangularGesture({ phase: "idle" });
       setError(null);
-      selectNewestAdd(nextAddIndex);
+      afterAddObject();
       return;
     }
-    const nextAddIndex = opsRef.current.adds.length;
     if (tool === "addLine") {
       let coordinates: [number, number][];
       if (bezierDrawMode) {
@@ -2741,7 +2737,7 @@ export function FieldEditSessionClient({
     freehandDrawingRef.current = false;
     freehandPointerDownRef.current = null;
     setError(null);
-    selectNewestAdd(nextAddIndex);
+    afterAddObject();
   }, [
     bezierDraftAnchors,
     bezierDraftControls,
@@ -2762,7 +2758,7 @@ export function FieldEditSessionClient({
     rectangularCornersFromGesture,
     rectangularDrawMode,
     rectangularGesture,
-    selectNewestAdd,
+    afterAddObject,
     symbolNumber,
     tool,
     updateOps,

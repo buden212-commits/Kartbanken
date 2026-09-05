@@ -10,6 +10,7 @@ export const releaseNotes: ReleaseNote[] = [
     date: "2026-09-05",
     title: "Fältredigering — CAD-ordning, frihand och hjälp",
     items: [
+      "Ritverktyget (punkt/linje/yta) ligger kvar efter att du ritat — byt till «Välj / redigera» när du vill redigera vidare",
       "Cirkel- och ellipsläget ritar nu riktiga cirklar/ellipser (fixade vända Bézier-handtag som gav öglor)",
       "Incheckade fältredigeringar som admin ska godkänna visar en jämförelsekarta där raderade, ändrade och nya objekt markeras",
       "Papperskorgen (radera objekt) ligger sist bland CAD-ikonerna",
@@ -18,7 +19,7 @@ export const releaseNotes: ReleaseNote[] = [
       "Frihandsläge (F): tryck och dra; klicka igen eller «Klar» för att avsluta",
       "Frihandsutjämning 1–3 (OCAD-stil) under snappningsinställningarna",
       "Symbolväljaren visas bara en gång (nere på kartan) — den dubbla överst är borttagen",
-      "Nya objekt som du ritar kan markeras och redigeras direkt på kartan (som befintliga objekt)",
+      "Nya objekt kan markeras med «Välj / redigera» och redigeras vidare (brytpunkter, CAD)",
       "Snappning bara mot samma symbol (t.ex. höjdkurva→höjdkurva) och mot startpunkten när du ritar",
       "Symbolväljaren visar OCAD-ikoner/färger (som teckenförklaringen) och har sökfält",
       "Symbolikonerna har inte längre ett svart streck längst ned (även vattenytor m.m.)",
