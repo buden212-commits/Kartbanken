@@ -2572,7 +2572,7 @@ export function FieldEditSessionClient({
         {addKind && (
           <div
             data-map-toolbar
-            className="pointer-events-auto absolute inset-x-2 bottom-2 z-40 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur sm:hidden"
+            className="pointer-events-auto absolute inset-x-2 bottom-2 z-40 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur"
             onPointerDown={stopFieldEditToolbarPointer}
           >
             <FieldEditSymbolPicker
@@ -2621,16 +2621,6 @@ export function FieldEditSessionClient({
         <span className="hidden sm:inline">·</span>
         <span>{syncLabel}</span>
       </div>
-      {addKind && (
-        <FieldEditSymbolPicker
-          groups={symbolGroups}
-          kind={addKind}
-          value={symbolNumber}
-          onChange={setSymbolNumber}
-          favorites={favorites}
-          onToggleFavorite={(sym) => toggleFavorite(addKind, sym)}
-        />
-      )}
       {gpsTrackingStatus && (
         <p className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 sm:text-sm">
           {gpsTrackingStatus}

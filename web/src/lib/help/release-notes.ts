@@ -13,6 +13,7 @@ export const releaseNotes: ReleaseNote[] = [
       "Papperskorgen (radera objekt) ligger sist bland CAD-ikonerna",
       "Frihandsläge (F): håll inne linje- eller ytaverktyget — vanlig → rektangel (R) → Bézier (B) → frihand (F); tryck och dra, klicka igen eller «Klar» för att avsluta",
       "Frihandsutjämning 1–3 (OCAD-stil) under snappningsinställningarna",
+      "Symbolväljaren visas bara en gång (nere på kartan) — den dubbla överst är borttagen",
     ],
   },
   {
