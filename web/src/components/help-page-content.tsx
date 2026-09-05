@@ -531,7 +531,7 @@ export async function HelpPageContent() {
           <h3 className="font-medium text-slate-900">CAD-verktyg</h3>
           <HelpList
             items={[
-              "Ikoner: byt symbol, radera, mät, vänd riktning, förenkla, mjuka hörn, Bézier",
+              "Ikoner: byt symbol, mät, vänd riktning, förenkla, mjuka hörn, Bézier — papperskorgen (radera objekt) sist",
               "Klipp: klipp linje (klick delar, dra tar bort bit), dela yta med klipplinje kant→kant, klipp hål i yta",
               "Sammanfoga: markera flera objekt med samma symbol — linjer med nära ändpunkter eller överlappande ytor — sedan Tillämpa",
               "Fyll / kant / duplicera: välj symbol — samma typ kopierar, yta+linje = kant, linje+yta = fyll; kryssa i «Använd hål» för hål",

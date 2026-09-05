@@ -433,18 +433,6 @@ export function FieldEditCadPanel({
         </CadIconButton>
 
         <CadIconButton
-          label="Radera objekt"
-          disabled={bezierActive || mergeActive || fillBorderOpen}
-          inactiveClass={iconDanger}
-          onClick={() => {
-            if (!confirm("Radera valt objekt?")) return;
-            onDelete();
-          }}
-        >
-          <MapTrashToolIcon />
-        </CadIconButton>
-
-        <CadIconButton
           label="Fyll / kant / duplicera"
           active={fillBorderOpen}
           activeClass="border-sky-600 bg-sky-600 text-white"
@@ -768,6 +756,20 @@ export function FieldEditCadPanel({
             </CadIconButton>
           </>
         )}
+
+        <span className="mx-0.5 hidden h-8 w-px bg-slate-200 sm:inline-block" aria-hidden />
+
+        <CadIconButton
+          label="Radera objekt"
+          disabled={bezierActive || mergeActive || fillBorderOpen}
+          inactiveClass={iconDanger}
+          onClick={() => {
+            if (!confirm("Radera valt objekt?")) return;
+            onDelete();
+          }}
+        >
+          <MapTrashToolIcon />
+        </CadIconButton>
       </div>
 
       {showSymbolPicker && !bezierActive && !cutActive && !mergeActive && !fillBorderOpen && (

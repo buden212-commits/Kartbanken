@@ -7,6 +7,13 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-09-05",
+    title: "Fältredigering — CAD-ordning och hjälp",
+    items: [
+      "Papperskorgen (radera objekt) ligger sist bland CAD-ikonerna",
+    ],
+  },
+  {
     date: "2026-09-04",
     title: "Fältredigering, CAD-klipp, sammanfoga, fyll/kant, rektangel och webbplatsikon",
     items: [
