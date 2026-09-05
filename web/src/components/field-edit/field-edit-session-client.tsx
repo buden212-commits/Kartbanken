@@ -3281,7 +3281,7 @@ export function FieldEditSessionClient({
         {addKind && (
           <div
             data-map-toolbar
-            className="pointer-events-auto absolute inset-x-2 bottom-2 z-40 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur"
+            className="pointer-events-auto absolute bottom-2 left-[15%] right-[15%] z-40 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur"
             onPointerDown={stopFieldEditToolbarPointer}
           >
             <FieldEditSymbolPicker
