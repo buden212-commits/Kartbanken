@@ -41,7 +41,9 @@ export default async function FieldEditSessionPage({ params }: PageProps) {
     if (!isAdmin && !isOwner) {
       redirect(`/maps/${slug}`);
     }
-    let summary = buildFieldEditReviewSummary(parseFieldEditOps(checkout.editOpsJson));
+    const ops = parseFieldEditOps(checkout.editOpsJson);
+    const selection = parseSelectionJson(checkout.selectionJson);
+    let summary = buildFieldEditReviewSummary(ops);
     if (checkout.diffSummaryJson) {
       try {
         summary = JSON.parse(checkout.diffSummaryJson) as typeof summary;
@@ -63,6 +65,8 @@ export default async function FieldEditSessionPage({ params }: PageProps) {
             mapTitle={map.title}
             sessionId={checkout.id}
             summary={summary}
+            selection={selection}
+            ops={ops}
             ownerLabel={checkout.user.name ?? checkout.user.email}
             isAdmin={isAdmin}
             isOwner={isOwner}

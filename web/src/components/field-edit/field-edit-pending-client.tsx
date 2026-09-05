@@ -3,13 +3,18 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { FieldEditReviewMap } from "@/components/field-edit/field-edit-review-map";
+import type { CheckoutSelection } from "@/lib/checkout/types";
 import type { FieldEditReviewSummary } from "@/lib/field-edit/review-summary";
+import type { FieldEditOps } from "@/lib/field-edit/types";
 
 type Props = {
   mapSlug: string;
   mapTitle: string;
   sessionId: string;
   summary: FieldEditReviewSummary;
+  selection: CheckoutSelection;
+  ops: FieldEditOps;
   ownerLabel: string;
   isAdmin: boolean;
   isOwner: boolean;
@@ -20,6 +25,8 @@ export function FieldEditPendingClient({
   mapTitle,
   sessionId,
   summary,
+  selection,
+  ops,
   ownerLabel,
   isAdmin,
   isOwner,
@@ -68,7 +75,7 @@ export function FieldEditPendingClient({
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4">
+    <div className="space-y-4">
       <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4">
         <h2 className="text-lg font-semibold text-amber-950">Väntar på admin-godkännande</h2>
         <p className="mt-1 text-sm text-amber-900">
@@ -93,11 +100,13 @@ export function FieldEditPendingClient({
         </div>
       </div>
 
-      <ul className="max-h-72 space-y-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
-        {summary.changes.map((change, index) => (
-          <li key={`${change.kind}-${index}`}>{change.label}</li>
-        ))}
-      </ul>
+      <FieldEditReviewMap
+        mapSlug={mapSlug}
+        sessionId={sessionId}
+        selection={selection}
+        ops={ops}
+        summary={summary}
+      />
 
       {error && (
         <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">

@@ -416,7 +416,7 @@ export async function HelpPageContent() {
               <HelpList
                 items={[
                   "Avbryt utcheckning eller fältredigering (tvinga avbryt) med valfri anledning om arbetet behöver stoppas",
-                  "Godkänn incheckade fältredigeringar under Admin → Utcheckningar (jämförelse visas först för användaren)",
+                  "Godkänn incheckade fältredigeringar under Admin → Utcheckningar — granskningen visar jämförelsekarta med röd/gul/grön markering av ändringarna",
                   "Bekräfta och integrera efter att användaren bekräftat diff",
                   "Bekräfta granskning (kryssruta) innan integration genomförs",
                   "Vid full uppladdning av hel karta blockeras uppladdning vid aktiva utcheckningar och fältredigeringar — admin kan bekräfta undantag",
@@ -551,7 +551,7 @@ export async function HelpPageContent() {
               "Nya objekt du ritar kan markeras med välj-verktyget och redigeras vidare (brytpunkter, CAD)",
                   "Ändringar sparas lokalt i webbläsaren tills du checkar in — en kort toast visas uppe på kartan",
               "Vid nätverksfel behålls arbetet lokalt",
-              "«Checka in» visar en sammanfattning — därefter väntar admin-godkännande innan ny version skapas",
+              "«Checka in» visar en sammanfattning — därefter väntar admin-godkännande med jämförelsekarta innan ny version skapas",
               "Avslutade fältredigeringar ingår i utcheckningshistoriken",
             ]}
           />
@@ -562,7 +562,7 @@ export async function HelpPageContent() {
               <HelpList
                 items={[
                   "Tilldela rättigheten under Admin → Användare → Redigera",
-                  "Godkänn incheckade fältredigeringar under Admin → Utcheckningar",
+                  "Godkänn incheckade fältredigeringar under Admin → Utcheckningar — jämförelsekartan visar raderade (rött), ändrade (gult) och nya (grönt) objekt",
                   "Avbryt aktiva sessioner från områdessidan vid behov",
                 ]}
               />
@@ -1136,7 +1136,7 @@ export async function HelpPageContent() {
                 Fältredigering låter dig redigera kartobjekt direkt i webbläsaren (utan OCAD) inom
                 ett utcheckat område på max 1 km². Administratörer har alltid tillgång; övriga får
                 rättigheten under Admin → Användare. Efter «Checka in» godkänner en administratör
-                ändringarna innan en ny version skapas. Se kapitlet{" "}
+                ändringarna i en jämförelsekarta innan en ny version skapas. Se kapitlet{" "}
                 <a href="#faltredigering" className="link-primary">
                   Fältredigering
                 </a>

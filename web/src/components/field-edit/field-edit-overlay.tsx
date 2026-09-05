@@ -7,6 +7,7 @@ import { sampleBezierPolyline } from "@/lib/field-edit/geometry-tools";
 import type { SnapResult } from "@/lib/field-edit/snap";
 import {
   resolveSyntheticAddVertexKinds,
+  syntheticAddObjectId,
   type FieldEditObjectEntry,
 } from "@/lib/field-edit/object-index";
 import type { FieldEditOps, FieldEditVertexKind } from "@/lib/field-edit/types";
@@ -471,6 +472,123 @@ export function fieldEditOverlaySvg(options: {
 
   if (snapPreview) {
     parts.push(snapIndicatorSvg(snapPreview, transform));
+  }
+
+  return parts.join("");
+}
+
+/** Read-only comparison overlay for admin/user review of submitted field edits. */
+export function fieldEditReviewOverlaySvg(options: {
+  transform: SvgRootTransform;
+  selectionGeometry: CheckoutSelectionGeometry;
+  objects: FieldEditObjectEntry[];
+  ops: FieldEditOps;
+  symbolPreviewInner?: string;
+  maskedObjectIndices?: number[];
+  highlightObjectIndex?: number | null;
+}): string {
+  const {
+    transform,
+    selectionGeometry,
+    objects,
+    ops,
+    symbolPreviewInner = "",
+    maskedObjectIndices = [],
+    highlightObjectIndex = null,
+  } = options;
+
+  const base = fieldEditOverlaySvg({
+    transform,
+    selectionGeometry,
+    objects,
+    ops,
+    selectedObjectIndex: null,
+    selectedVertexIndex: null,
+    draftPoints: [],
+    draftKind: null,
+    symbolPreviewInner,
+    maskedObjectIndices,
+  });
+
+  const byIndex = new Map(objects.map((o) => [o.i, o]));
+  const parts: string[] = [base];
+
+  for (const objectIndex of ops.deletes) {
+    const obj = byIndex.get(objectIndex);
+    if (!obj) continue;
+    if (obj.t === "area" && obj.v.length >= 3) {
+      parts.push(
+        `<polygon points="${ringToSvgPoints(obj.v, transform)}" fill="rgba(220,38,38,0.12)" stroke="#dc2626" stroke-width="2.5" stroke-dasharray="6 4" pointer-events="none" />`,
+      );
+    } else if (obj.t === "line" && obj.v.length >= 2) {
+      parts.push(dashedLineSvg(obj.v, transform, "#dc2626", 3));
+    }
+  }
+
+  for (const modify of ops.modifies) {
+    const coords = modify.coordinates;
+    if (modify.geometryKind === "area" && coords.length >= 3) {
+      parts.push(
+        `<polygon points="${ringToSvgPoints(coords, transform)}" fill="rgba(217,119,6,0.12)" stroke="#d97706" stroke-width="2.5" stroke-dasharray="6 4" pointer-events="none" />`,
+      );
+    } else if (modify.geometryKind === "line" && coords.length >= 2) {
+      parts.push(dashedLineSvg(coords, transform, "#d97706", 3));
+    } else if (modify.geometryKind === "point" && coords.length >= 1) {
+      const [x, y] = geoToSvgUserPoint(coords[0]!, transform);
+      parts.push(
+        `<circle cx="${x}" cy="${y}" r="12" fill="none" stroke="#d97706" stroke-width="2.5" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" pointer-events="none" />`,
+      );
+    }
+  }
+
+  for (const add of ops.adds) {
+    if (add.kind === "area" && add.ring.length >= 3) {
+      parts.push(
+        `<polygon points="${ringToSvgPoints(add.ring, transform)}" fill="rgba(22,163,74,0.12)" stroke="#16a34a" stroke-width="2.5" stroke-dasharray="6 4" pointer-events="none" />`,
+      );
+    } else if (add.kind === "line" && add.coordinates.length >= 2) {
+      parts.push(dashedLineSvg(add.coordinates, transform, "#16a34a", 3));
+    } else if (add.kind === "point") {
+      const [x, y] = geoToSvgUserPoint([add.x, add.y], transform);
+      parts.push(
+        `<circle cx="${x}" cy="${y}" r="12" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" pointer-events="none" />`,
+      );
+    }
+  }
+
+  if (highlightObjectIndex != null) {
+    const obj = byIndex.get(highlightObjectIndex);
+    let focusPoint: [number, number] | null = null;
+    if (obj) {
+      const coords = resolveObjectCoordinates(highlightObjectIndex, obj.v, ops);
+      if (coords && coords.length > 0) {
+        focusPoint =
+          coords.length === 1
+            ? coords[0]!
+            : [
+                coords.reduce((s, p) => s + p[0], 0) / coords.length,
+                coords.reduce((s, p) => s + p[1], 0) / coords.length,
+              ];
+      } else if (ops.deletes.includes(highlightObjectIndex)) {
+        focusPoint = obj.c;
+      }
+    } else {
+      for (const [addIndex, add] of ops.adds.entries()) {
+        if (syntheticAddObjectId(addIndex) !== highlightObjectIndex) continue;
+        focusPoint =
+          add.kind === "point"
+            ? [add.x, add.y]
+            : add.kind === "line"
+              ? (add.coordinates[0] ?? null)
+              : (add.ring[0] ?? null);
+      }
+    }
+    if (focusPoint) {
+      const [cx, cy] = geoToSvgUserPoint(focusPoint, transform);
+      parts.push(
+        `<circle cx="${cx}" cy="${cy}" r="22" fill="none" stroke="#2563eb" stroke-width="3" vector-effect="non-scaling-stroke" pointer-events="none" />`,
+      );
+    }
   }
 
   return parts.join("");

@@ -1,4 +1,5 @@
 import { requireFieldEdit } from "@/lib/auth/api";
+import { canAdmin } from "@/lib/auth/permissions";
 import { getCheckoutById } from "@/lib/checkout/repository";
 import { CheckoutMode, CheckoutStatus } from "@/lib/checkout/types";
 import { loadScopedFieldEditObjects } from "@/lib/field-edit/object-index";
@@ -25,8 +26,16 @@ export async function GET(_request: Request, { params }: RouteParams) {
   if (!checkout || checkout.mode !== CheckoutMode.FIELD_EDIT) {
     return NextResponse.json({ error: "Fältredigering hittades inte" }, { status: 404 });
   }
-  if (checkout.status !== CheckoutStatus.ACTIVE) {
+  const isActive = checkout.status === CheckoutStatus.ACTIVE;
+  const isPending = checkout.status === CheckoutStatus.PENDING_ADMIN_CONFIRM;
+  if (!isActive && !isPending) {
     return NextResponse.json({ error: "Fältredigeringen är inte aktiv" }, { status: 409 });
+  }
+  if (isPending) {
+    const isOwner = checkout.userId === session.user.id;
+    if (!canAdmin(session.user.role) && !isOwner) {
+      return NextResponse.json({ error: "Ingen behörighet" }, { status: 403 });
+    }
   }
 
   const version = await prisma.mapVersion.findUnique({

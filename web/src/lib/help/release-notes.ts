@@ -10,6 +10,7 @@ export const releaseNotes: ReleaseNote[] = [
     date: "2026-09-05",
     title: "Fältredigering — CAD-ordning, frihand och hjälp",
     items: [
+      "Incheckade fältredigeringar som admin ska godkänna visar en jämförelsekarta där raderade, ändrade och nya objekt markeras",
       "Papperskorgen (radera objekt) ligger sist bland CAD-ikonerna",
       "Frihandsläge (F): håll inne linje- eller ytaverktyget — vanlig → rektangel (R) → Bézier (B) → frihand (F); tryck och dra, klicka igen eller «Klar» för att avsluta",
       "Frihandsutjämning 1–3 (OCAD-stil) under snappningsinställningarna",

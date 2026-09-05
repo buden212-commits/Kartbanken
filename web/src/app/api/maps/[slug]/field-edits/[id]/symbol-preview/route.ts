@@ -1,4 +1,5 @@
 import { requireFieldEdit } from "@/lib/auth/api";
+import { canAdmin } from "@/lib/auth/permissions";
 import { getCheckoutById } from "@/lib/checkout/repository";
 import { CheckoutMode, CheckoutStatus } from "@/lib/checkout/types";
 import { buildFieldEditSymbolPreview, type FieldEditDraftPreview } from "@/lib/field-edit/symbol-preview";
@@ -47,8 +48,16 @@ export async function POST(request: Request, { params }: RouteParams) {
   if (!checkout || checkout.mode !== CheckoutMode.FIELD_EDIT) {
     return NextResponse.json({ error: "Fältredigering hittades inte" }, { status: 404 });
   }
-  if (checkout.status !== CheckoutStatus.ACTIVE) {
+  const isActive = checkout.status === CheckoutStatus.ACTIVE;
+  const isPending = checkout.status === CheckoutStatus.PENDING_ADMIN_CONFIRM;
+  if (!isActive && !isPending) {
     return NextResponse.json({ error: "Fältredigeringen är inte aktiv" }, { status: 409 });
+  }
+  if (isPending) {
+    const isOwner = checkout.userId === session.user.id;
+    if (!canAdmin(session.user.role) && !isOwner) {
+      return NextResponse.json({ error: "Ingen behörighet" }, { status: 403 });
+    }
   }
   if (!checkout.exportStoragePath) {
     return NextResponse.json({ error: "Delkarta saknas" }, { status: 404 });
@@ -65,9 +74,12 @@ export async function POST(request: Request, { params }: RouteParams) {
   }
 
   const record = body as Record<string, unknown>;
-  const ops = parseFieldEditOps(JSON.stringify(record.ops ?? {}));
+  // Pending review always uses stored ops — do not trust client-supplied edits.
+  const ops = isPending
+    ? parseFieldEditOps(checkout.editOpsJson)
+    : parseFieldEditOps(JSON.stringify(record.ops ?? {}));
 
-  const draft = parseDraft(record);
+  const draft = isPending ? null : parseDraft(record);
 
   try {
     const subsetBuffer = await readStoredFile(checkout.exportStoragePath);
