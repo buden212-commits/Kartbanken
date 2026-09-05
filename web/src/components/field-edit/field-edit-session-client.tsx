@@ -3085,27 +3085,27 @@ export function FieldEditSessionClient({
     setError(null);
     if (next === "rectangular") {
       setInfo(
-        "Rektangelläge: dra längsta sidan → släpp → dra vinkelrätt → klicka för att avsluta. Håll inne verktyget igen för cirkel.",
+        "Rektangelläge (R): dra längsta sidan → släpp → dra vinkelrätt → klicka för att avsluta. Klicka linje-/ytaverktyget igen för cirkel.",
       );
     } else if (next === "circle") {
       setInfo(
-        "Cirkelläge: dra diametern från kant till kant, släpp för att skapa. Håll inne verktyget igen för ellips.",
+        "Cirkelläge (C): dra diametern från kant till kant, släpp för att skapa. Klicka verktyget igen för ellips.",
       );
     } else if (next === "ellipse") {
       setInfo(
-        "Ellipsläge: dra längsta axeln → släpp → dra kortare axeln vinkelrätt genom centrum → släpp. Håll inne verktyget igen för Bézier.",
+        "Ellipsläge (E): dra längsta axeln → släpp → dra kortare axeln vinkelrätt genom centrum → släpp. Klicka verktyget igen för Bézier.",
       );
     } else if (next === "bezier") {
       setInfo(
-        "Bézier-ritning: tryck ner på brytpunkt och dra mot P1, sedan tryck på P2 och släpp på nästa brytpunkt. Håll inne verktyget igen för frihand.",
+        "Bézier-läge (B): tryck ner på brytpunkt och dra mot P1, sedan tryck på P2 och släpp på nästa brytpunkt. Klicka verktyget igen för frihand.",
       );
     } else if (next === "freehand") {
       setInfo(
-        "Frihand: tryck kort och dra längs linjen (eller ytan). Klicka igen eller «Klar» för att avsluta. Utjämning 1–3 under snappning. Håll inne verktyget för vanlig ritning.",
+        "Frihandsläge (F): tryck kort och dra längs linjen (eller ytan). Klicka igen eller «Klar» för att avsluta. Utjämning 1–3 under snappning. Klicka verktyget igen för vanlig ritning.",
       );
     } else {
       setInfo(
-        "Vanlig ritning: klicka brytpunkter. Håll inne verktyget: vanlig → rektangel (R) → cirkel (C) → ellips (E) → Bézier (B) → frihand (F).",
+        "Vanlig ritning: klicka brytpunkter. Klicka linje-/ytaverktyget igen för att växla läge (R → C → E → B → F).",
       );
     }
   }
@@ -3144,39 +3144,39 @@ export function FieldEditSessionClient({
     }
     if (tool === "addLine") {
       if (freehandDrawMode) {
-        return "Frihandslinje: tryck och dra längs linjen. Klicka igen eller «Klar» för att avsluta. Utjämning 1–3 under snappning. Håll inne linjeverktyget för vanlig ritning.";
+        return "Frihandslinje: tryck och dra längs linjen. Klicka igen eller «Klar» för att avsluta. Utjämning 1–3 under snappning. Klicka linjeverktyget igen för vanlig ritning.";
       }
       if (bezierDrawMode) {
-        return "Bézier-linje: tryck ner på brytpunkt → dra mot P1 → släpp; tryck på P2 → släpp på nästa brytpunkt. Håll inne linjeverktyget för frihand.";
+        return "Bézier-linje: tryck ner på brytpunkt → dra mot P1 → släpp; tryck på P2 → släpp på nästa brytpunkt. Klicka linjeverktyget igen för frihand.";
       }
       if (ellipseDrawMode) {
-        return "Ellipsläge: dra längsta axeln → släpp → dra kortare axeln vinkelrätt genom centrum → släpp. Håll inne linjeverktyget för Bézier.";
+        return "Ellipsläge: dra längsta axeln → släpp → dra kortare axeln vinkelrätt genom centrum → släpp. Klicka linjeverktyget igen för Bézier.";
       }
       if (circleDrawMode) {
-        return "Cirkelläge: dra diametern från kant till kant, släpp för att skapa. Håll inne linjeverktyget för ellips.";
+        return "Cirkelläge: dra diametern från kant till kant, släpp för att skapa. Klicka linjeverktyget igen för ellips.";
       }
       if (rectangularDrawMode) {
-        return "Rektangelläge: dra längsta sidan → släpp → dra vinkelrätt till tredje hörnet → klicka för att avsluta. Håll inne linjeverktyget för cirkel.";
+        return "Rektangelläge: dra längsta sidan → släpp → dra vinkelrätt till tredje hörnet → klicka för att avsluta. Klicka linjeverktyget igen för cirkel.";
       }
-      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan punkter längs linjen. Håll inne linjeverktyget: vanlig → rektangel (R) → cirkel (C) → ellips (E) → Bézier (B) → frihand (F).";
+      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan punkter längs linjen. Klicka linjeverktyget igen för att växla läge (R → C → E → B → F).";
     }
     if (tool === "addArea") {
       if (freehandDrawMode) {
-        return "Frihandsytan: tryck och dra runt ytan. Klicka igen eller «Klar» för att avsluta (minst 3 punkter). Håll inne ytaverktyget för vanlig ritning.";
+        return "Frihandsytan: tryck och dra runt ytan. Klicka igen eller «Klar» för att avsluta (minst 3 punkter). Klicka ytaverktyget igen för vanlig ritning.";
       }
       if (bezierDrawMode) {
-        return "Bézier-yta: samma gest som linje (P0→P1, P2→P3). Minst 3 brytpunkter. Håll inne ytaverktyget för frihand.";
+        return "Bézier-yta: samma gest som linje (P0→P1, P2→P3). Minst 3 brytpunkter. Klicka ytaverktyget igen för frihand.";
       }
       if (ellipseDrawMode) {
-        return "Ellipsläge: dra längsta axeln → släpp → dra kortare axeln vinkelrätt genom centrum → släpp. Håll inne ytaverktyget för Bézier.";
+        return "Ellipsläge: dra längsta axeln → släpp → dra kortare axeln vinkelrätt genom centrum → släpp. Klicka ytaverktyget igen för Bézier.";
       }
       if (circleDrawMode) {
-        return "Cirkelläge: dra diametern från kant till kant, släpp för att skapa. Håll inne ytaverktyget för ellips.";
+        return "Cirkelläge: dra diametern från kant till kant, släpp för att skapa. Klicka ytaverktyget igen för ellips.";
       }
       if (rectangularDrawMode) {
-        return "Rektangelläge: dra längsta sidan → släpp → dra vinkelrätt till tredje hörnet → klicka för att avsluta. Håll inne ytaverktyget för cirkel.";
+        return "Rektangelläge: dra längsta sidan → släpp → dra vinkelrätt till tredje hörnet → klicka för att avsluta. Klicka ytaverktyget igen för cirkel.";
       }
-      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan hörn runt ytan (minst 3). Håll inne ytaverktyget: vanlig → rektangel (R) → cirkel (C) → ellips (E) → Bézier (B) → frihand (F).";
+      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan hörn runt ytan (minst 3). Klicka ytaverktyget igen för att växla läge (R → C → E → B → F).";
     }
     if (tool === "addPoint") {
       return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan där punkten ska ligga.";

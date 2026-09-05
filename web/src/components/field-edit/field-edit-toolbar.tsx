@@ -90,8 +90,7 @@ function BezierModeBadge() {
   return (
     <span
       aria-hidden="true"
-      className="pointer-events-none absolute bottom-0.5 right-0.5 text-[10px] font-bold leading-none text-white"
-      style={{ textShadow: "0 0 2px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.7)" }}
+      className="pointer-events-none absolute -bottom-0.5 -right-0.5 rounded bg-slate-900/85 px-0.5 text-[9px] font-bold leading-tight text-white"
     >
       B
     </span>
@@ -102,8 +101,7 @@ function RectangularModeBadge() {
   return (
     <span
       aria-hidden="true"
-      className="pointer-events-none absolute bottom-0.5 right-0.5 text-[10px] font-bold leading-none text-white"
-      style={{ textShadow: "0 0 2px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.7)" }}
+      className="pointer-events-none absolute -bottom-0.5 -right-0.5 rounded bg-slate-900/85 px-0.5 text-[9px] font-bold leading-tight text-white"
     >
       R
     </span>
@@ -114,8 +112,7 @@ function FreehandModeBadge() {
   return (
     <span
       aria-hidden="true"
-      className="pointer-events-none absolute bottom-0.5 right-0.5 text-[10px] font-bold leading-none text-white"
-      style={{ textShadow: "0 0 2px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.7)" }}
+      className="pointer-events-none absolute -bottom-0.5 -right-0.5 rounded bg-slate-900/85 px-0.5 text-[9px] font-bold leading-tight text-white"
     >
       F
     </span>
@@ -126,8 +123,7 @@ function CircleModeBadge() {
   return (
     <span
       aria-hidden="true"
-      className="pointer-events-none absolute bottom-0.5 right-0.5 text-[10px] font-bold leading-none text-white"
-      style={{ textShadow: "0 0 2px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.7)" }}
+      className="pointer-events-none absolute -bottom-0.5 -right-0.5 rounded bg-slate-900/85 px-0.5 text-[9px] font-bold leading-tight text-white"
     >
       C
     </span>
@@ -138,8 +134,7 @@ function EllipseModeBadge() {
   return (
     <span
       aria-hidden="true"
-      className="pointer-events-none absolute bottom-0.5 right-0.5 text-[10px] font-bold leading-none text-white"
-      style={{ textShadow: "0 0 2px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.7)" }}
+      className="pointer-events-none absolute -bottom-0.5 -right-0.5 rounded bg-slate-900/85 px-0.5 text-[9px] font-bold leading-tight text-white"
     >
       E
     </span>
@@ -339,17 +334,19 @@ export function FieldEditMapToolbars({
           let modeHint = "";
           if (supportsDrawModes) {
             if (freehandDrawMode && tool === drawTool) {
-              modeHint = ` (frihand — håll inne: ${cycleHint})`;
+              modeHint = ` (frihand — klicka igen: ${cycleHint})`;
             } else if (bezierDrawMode && tool === drawTool) {
-              modeHint = ` (Bézier — håll inne: ${cycleHint})`;
+              modeHint = ` (Bézier — klicka igen: ${cycleHint})`;
             } else if (ellipseDrawMode && tool === drawTool) {
-              modeHint = ` (ellips — håll inne: ${cycleHint})`;
+              modeHint = ` (ellips — klicka igen: ${cycleHint})`;
             } else if (circleDrawMode && tool === drawTool) {
-              modeHint = ` (cirkel — håll inne: ${cycleHint})`;
+              modeHint = ` (cirkel — klicka igen: ${cycleHint})`;
             } else if (rectangularDrawMode && tool === drawTool) {
-              modeHint = ` (rektangel — håll inne: ${cycleHint})`;
+              modeHint = ` (rektangel — klicka igen: ${cycleHint})`;
+            } else if (tool === drawTool) {
+              modeHint = ` (klicka igen: ${cycleHint})`;
             } else {
-              modeHint = ` (håll inne: ${cycleHint})`;
+              modeHint = ` (klicka igen när aktiv: ${cycleHint})`;
             }
           }
           const label = `${FIELD_EDIT_TOOL_LABELS[drawTool]}${modeHint}`;
@@ -361,7 +358,14 @@ export function FieldEditMapToolbars({
               activeClass={activeClassForTool(drawTool)}
               inactiveClass={drawTool === "delete" ? iconBtnDeleteInactive : iconBtnInactive}
               disabled={drawDisabled}
-              onClick={() => onToolChange(drawTool)}
+              onClick={() => {
+                // Already on line/area tool → cycle draw properties (R/C/E/B/F).
+                if (supportsDrawModes && tool === drawTool) {
+                  onCycleLineAreaDrawMode(drawTool);
+                  return;
+                }
+                onToolChange(drawTool);
+              }}
               onLongPress={
                 supportsDrawModes
                   ? () => onCycleLineAreaDrawMode(drawTool)
