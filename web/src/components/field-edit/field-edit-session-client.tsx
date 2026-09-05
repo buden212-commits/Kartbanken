@@ -110,6 +110,11 @@ import {
   type FreehandSmoothingFactor,
 } from "@/lib/field-edit/freehand-geometry";
 import {
+  fillBoundedArea,
+  visibleGeoBoundsFromSvg,
+  type FillBoundedBarrier,
+} from "@/lib/field-edit/fill-bounded-area";
+import {
   countFieldEditChanges,
   cycleVertexKind,
   hasFieldEditChanges,
@@ -245,6 +250,10 @@ export function FieldEditSessionClient({
   const [cutDraftPoints, setCutDraftPoints] = useState<[number, number][]>([]);
   const [mergeActive, setMergeActive] = useState(false);
   const [mergeObjectIndices, setMergeObjectIndices] = useState<number[]>([]);
+  const [fillBoundedActive, setFillBoundedActive] = useState(false);
+  const [fillBoundedBusy, setFillBoundedBusy] = useState(false);
+  const fillBoundedActiveRef = useRef(false);
+  fillBoundedActiveRef.current = fillBoundedActive;
   const cutLineDragRef = useRef<{
     segmentIndex: number;
     point: [number, number];
@@ -455,7 +464,15 @@ export function FieldEditSessionClient({
   );
 
   const addKind: FieldEditGeometryKind | null =
-    tool === "addPoint" ? "point" : tool === "addLine" ? "line" : tool === "addArea" ? "area" : null;
+    fillBoundedActive
+      ? "area"
+      : tool === "addPoint"
+        ? "point"
+        : tool === "addLine"
+          ? "line"
+          : tool === "addArea"
+            ? "area"
+            : null;
 
   const draftKind: "line" | "area" | null =
     tool === "addLine" ? "line" : tool === "addArea" ? "area" : null;
@@ -777,6 +794,139 @@ export function FieldEditSessionClient({
     },
     [scheduleServerSync],
   );
+
+  const toggleFillBounded = useCallback(() => {
+    if (gpsTracking) {
+      setInfo("Avsluta GPS-spår innan du använder Fyll yta.");
+      return;
+    }
+    setFillBoundedActive((prev) => {
+      const next = !prev;
+      if (next) {
+        setTool("select");
+        setMapMode("draw");
+        setDraftPoints([]);
+        setBezierDrawMode(false);
+        setRectangularDrawMode(false);
+        setCircleDrawMode(false);
+        setEllipseDrawMode(false);
+        setFreehandDrawMode(false);
+        setMergeActive(false);
+        setMergeObjectIndices([]);
+        setCadVertexTool("off");
+        setCadCutTool("off");
+        setCutDraftPoints([]);
+        setSelectedObjectIndex(null);
+        setSelectedVertexIndex(null);
+        setBezierEdit(null);
+        setError(null);
+        setInfo(
+          "Fyll yta: välj ytsymbol, zooma in så att området syns tydligt, klicka i tomt omslutet område. Konturer/nordlinjer/banor ignoreras.",
+        );
+      } else {
+        setInfo(null);
+      }
+      return next;
+    });
+  }, [gpsTracking]);
+
+  const applyFillBoundedAt = useCallback(
+    (geo: [number, number], svg: SVGSVGElement) => {
+      if (fillBoundedBusy) return;
+      if (symbolNumber === "") {
+        setError("Välj en ytsymbol innan du fyller.");
+        return;
+      }
+      const viewport = visibleGeoBoundsFromSvg(
+        svg,
+        screenToSvgPoint,
+        (pt) => svgUserToGeoPoint(pt, rootTransformRef.current),
+      );
+      if (!viewport) {
+        setError("Kunde inte läsa kartvyn — zooma in och försök igen.");
+        return;
+      }
+
+      setFillBoundedBusy(true);
+      setInfo("Fyller yta…");
+      setError(null);
+
+      // Yield so the busy toast can paint before the (potentially heavy) flood-fill.
+      window.setTimeout(() => {
+        try {
+          const deleted = new Set(opsRef.current.deletes);
+          const barriers: FillBoundedBarrier[] = [];
+          for (const obj of editableObjects) {
+            if (deleted.has(obj.i)) continue;
+            if (obj.t !== "line" && obj.t !== "area") continue;
+            const coords =
+              resolveObjectCoordinates(obj.i, obj.v, opsRef.current) ?? obj.v;
+            if (!coords || coords.length < 2) continue;
+            const barrier: FillBoundedBarrier = {
+              symbolNumber: obj.s,
+              type: obj.t,
+              coordinates: coords.map(([x, y]) => [x, y] as [number, number]),
+            };
+            if (obj.t === "area") {
+              const holes = resolveObjectHoles(obj.i, opsRef.current);
+              if (holes && holes.length > 0) {
+                barrier.holes = holes.map((h) =>
+                  h.map(([x, y]) => [x, y] as [number, number]),
+                );
+              }
+            }
+            barriers.push(barrier);
+          }
+
+          const result = fillBoundedArea({
+            click: geo,
+            viewport,
+            barriers,
+          });
+
+          if (!result.ok) {
+            setError(result.message);
+            setInfo(null);
+            return;
+          }
+
+          updateOps((current) => ({
+            ...current,
+            adds: [
+              ...current.adds,
+              {
+                kind: "area" as const,
+                ring: result.ring,
+                symbolNumber: Number(symbolNumber),
+                ...(result.holes.length > 0 ? { holes: result.holes } : {}),
+              },
+            ],
+          }));
+          afterAddObject();
+          const holeNote =
+            result.holes.length > 0
+              ? ` med ${result.holes.length} hål`
+              : "";
+          setInfo(`Yta fylld${holeNote}. Klicka igen för fler, eller stäng Fyll yta.`);
+          setError(null);
+        } catch (err) {
+          console.error(err);
+          setError("Kunde inte fylla ytan — zooma in och försök igen.");
+          setInfo(null);
+        } finally {
+          setFillBoundedBusy(false);
+        }
+      }, 20);
+    },
+    [
+      afterAddObject,
+      editableObjects,
+      fillBoundedBusy,
+      symbolNumber,
+      updateOps,
+    ],
+  );
+
 
   const commitCurveRing = useCallback(
     (ring: [number, number][], forTool: "addLine" | "addArea") => {
@@ -1513,6 +1663,11 @@ export function FieldEditSessionClient({
       const { point: geo, snap } = resolveSnapPoint(rawGeo, excludeIndex);
       setSnapPreview(snap);
 
+      if (fillBoundedActiveRef.current) {
+        applyFillBoundedAt(geo, svg);
+        return;
+      }
+
       if (tool === "select") {
         if (bezierEdit && bezierEdit.objectIndex === selectedObjectIndex) {
           const closed = bezierEdit.objectType === "area";
@@ -2050,6 +2205,7 @@ export function FieldEditSessionClient({
       }
     },
     [
+      applyFillBoundedAt,
       bezierDraftAnchors,
       bezierDrawMode,
       bezierEdit,
@@ -3010,6 +3166,7 @@ export function FieldEditSessionClient({
     if (gpsTracking) {
       cancelGpsTracking();
     }
+    setFillBoundedActive(false);
     const addKindForTool: FieldEditGeometryKind | null =
       next === "addPoint" ? "point" : next === "addLine" ? "line" : next === "addArea" ? "area" : null;
     if (addKindForTool && selectedObjectIndex != null) {
@@ -3173,6 +3330,11 @@ export function FieldEditSessionClient({
   }, [gpsTracking, symbolNumber, toggleGpsTracking, tool]);
 
   const toolHint = useMemo(() => {
+    if (fillBoundedActive) {
+      return fillBoundedBusy
+        ? "Fyll yta — beräknar omslutningen…"
+        : "Fyll yta: klicka i ett tomt omslutet område. Konturer, nordlinjer och banor ignoreras. Zooma in för bästa resultat.";
+    }
     if (gpsTracking) {
       return tool === "addArea"
         ? `GPS-spår (yta) — gå runt ytan. Minst ${GPS_TRACK_MIN_DISTANCE_M} m mellan brytpunkter. Klicka «Sluta spåra», sedan «Klar».`
@@ -3221,7 +3383,7 @@ export function FieldEditSessionClient({
       return "Välj punktsymbol — klicka sedan där punkten ska ligga (GPS-spår gäller inte punkter).";
     }
     return null;
-  }, [
+  }, [fillBoundedActive, fillBoundedBusy, 
     bezierDrawMode,
     circleDrawMode,
     ellipseDrawMode,
@@ -3322,6 +3484,9 @@ export function FieldEditSessionClient({
           draftPointCount={draftPointCount}
           onFinishDraft={finishDraft}
           onCancelDraft={cancelDraft}
+          fillBoundedActive={fillBoundedActive}
+          fillBoundedBusy={fillBoundedBusy}
+          onFillBoundedToggle={toggleFillBounded}
         />
         {addKind && (
           <div

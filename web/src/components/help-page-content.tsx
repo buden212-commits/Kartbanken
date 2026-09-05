@@ -544,6 +544,7 @@ export async function HelpPageContent() {
               "Klipp: klipp linje (klick delar, dra tar bort bit), dela yta med klipplinje kant→kant, klipp hål i yta",
               "Sammanfoga: markera flera objekt med samma symbol — linjer med nära ändpunkter eller överlappande ytor — sedan Tillämpa",
               "Fyll / kant / duplicera: välj symbol — samma typ kopierar, yta+linje = kant, linje+yta = fyll; kryssa i «Använd hål» för hål",
+              "Fyll yta: separat CAD-ikon — välj ytsymbol, aktivera verktyget och klicka i tomt omslutet område; objekt inuti blir hål. Konturer, nordlinjer och banor ignoreras. Om området inte är omslutet visas ett meddelande",
               "Förenkla: buffert ± meter — tar bort brytpunkter på nästan rak linje; ny punkt där linjen tangerar kanten",
               "Bézier: dra kontrollpunkterna P1/P2 för att forma kurvan, sedan «Tillämpa kurva»",
               "Frihand: klicka linje/yta tills F visas — tryck och dra; klicka igen eller «Klar» avslutar. Utjämning 1–3 under snappning",

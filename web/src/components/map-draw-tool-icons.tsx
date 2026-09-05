@@ -450,6 +450,36 @@ export function CadFillOrBorderIcon() {
 }
 
 /** @deprecated Use CadAddNormalVertexIcon */
+
+/** CAD: Fill Bounded Area — paint-bucket into enclosed empty space. */
+export function CadFillBoundedAreaIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className="h-5 w-5">
+      <path
+        d="M4 14.5 V8.5 L10 3.5 L16 8.5 V14.5"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M6.2 14.5h7.6v2.2H6.2z"
+        fill="currentColor"
+        fillOpacity="0.4"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12.5 9.2c0 1.1-.9 1.6-1.5 2.4-.3.4-.5.7-.5 1.1"
+        stroke="currentColor"
+        strokeWidth="1.35"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+
 export function CadAddVertexIcon() {
   return <CadAddNormalVertexIcon />;
 }
