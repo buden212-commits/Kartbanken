@@ -12,6 +12,39 @@ import {
 
 export const COURSE_MAX_OBJECTS = Number(process.env.COURSE_MAX_OBJECTS ?? 500);
 
+function validateCutouts(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!Array.isArray(value)) return false;
+  if (value.length > 4) return false;
+  return value.every((item) => {
+    if (!item || typeof item !== "object") return false;
+    const r = item as Record<string, unknown>;
+    const angleRad = Number(r.angleRad);
+    if (!Number.isFinite(angleRad)) return false;
+    if (r.spanRad === undefined) return true;
+    const spanRad = Number(r.spanRad);
+    return Number.isFinite(spanRad) && spanRad > 0 && spanRad <= Math.PI;
+  });
+}
+
+function validateLegGaps(value: unknown, max: number): boolean {
+  if (value === undefined) return true;
+  if (!Array.isArray(value)) return false;
+  if (value.length > max) return false;
+  return value.every((item) => {
+    if (!item || typeof item !== "object") return false;
+    const r = item as Record<string, unknown>;
+    const distance = Number(r.distance);
+    const length = Number(r.length);
+    return (
+      Number.isFinite(distance) &&
+      distance >= 0 &&
+      Number.isFinite(length) &&
+      length > 0
+    );
+  });
+}
+
 export function validateGeometry(
   objectType: CourseObjectTypeValue,
   geometry: unknown,
@@ -22,18 +55,24 @@ export function validateGeometry(
   if (objectType === CourseObjectType.POINT || objectType === CourseObjectType.TEXT) {
     if (g.type !== "Point" || !Array.isArray(g.coordinates)) return false;
     const [x, y] = g.coordinates as number[];
-    return Number.isFinite(x) && Number.isFinite(y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+    if (!validateCutouts(g.cutouts)) return false;
+    if (!validateLegGaps(g.legGaps, 4)) return false;
+    if (!validateLegGaps(g.incomingLegGaps, 4)) return false;
+    return true;
   }
 
   if (objectType === CourseObjectType.LINE) {
     if (g.type !== "LineString" || !Array.isArray(g.coordinates)) return false;
-    return (g.coordinates as unknown[]).every(
+    const coordsOk = (g.coordinates as unknown[]).every(
       (c) =>
         Array.isArray(c) &&
         c.length >= 2 &&
         Number.isFinite(c[0]) &&
         Number.isFinite(c[1]),
     );
+    if (!coordsOk) return false;
+    return validateLegGaps(g.gaps, 8);
   }
 
   if (objectType === CourseObjectType.AREA) {

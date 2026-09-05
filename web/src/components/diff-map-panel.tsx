@@ -114,6 +114,8 @@ type Props = {
   mapToolbarOverlay?: ReactNode;
   /** Omit outer border/radius when nested inside another panel. */
   unboxed?: boolean;
+  /** CSS classes for the map viewport height (default: min 70svh — stable on mobile scroll). */
+  viewportClassName?: string;
   showLayerPanel?: boolean;
   /** Called when OCAD map scale is read from preview metadata. */
   onOcadMapScale?: (scale: number) => void;
@@ -129,13 +131,18 @@ type Props = {
     requestId: number;
   } | null;
   /**
-   * Kartförslag GPS-spår: håll skala 1:50 och centrera på senaste position var 10:e sekund.
+   * GPS-spår (förslag/fältredigering): håll skala 1:50, centrera var 10:e sekund,
+   * och visa samma noggrannhetsfärgade GPS-markör som «Min position».
    */
   gpsTrackFollow?: {
     active: boolean;
     mapCoordRef: MutableRefObject<[number, number] | null>;
     /** Ökas när spårning startar eller första GPS-fix kommer. */
     recenterToken: number;
+    /** Senaste noggrannhet i meter — styr markörfärg (röd om osäker). */
+    accuracyMeters?: number | null;
+    /** Ökas när live-position/noggrannhet ska ritas om. */
+    markerToken?: number;
   } | null;
 };
 
@@ -278,6 +285,7 @@ export function DiffMapPanel({
   secondaryHeaderContent,
   mapToolbarOverlay,
   unboxed = false,
+  viewportClassName = "h-[min(70svh,560px)] min-h-[280px]",
   showLayerPanel = true,
   onOcadMapScale,
   onOcadCrsReady,
@@ -430,6 +438,21 @@ export function DiffMapPanel({
     const timer = window.setTimeout(() => setSlowLoad(true), 8000);
     return () => window.clearTimeout(timer);
   }, [loading]);
+
+  // Safety net: if the network hang never resolves, surface a recoverable error.
+  useEffect(() => {
+    if (!loading) return;
+    const timer = window.setTimeout(() => {
+      setLoading((stillLoading) => {
+        if (!stillLoading) return stillLoading;
+        setError(
+          "Kartladdningen tar ovanligt lång tid. Kontrollera nätverket och försök igen.",
+        );
+        return false;
+      });
+    }, 120_000);
+    return () => window.clearTimeout(timer);
+  }, [loading, reloadKey]);
 
   const retryPreviewLoad = useCallback(() => {
     clearPreviewCache(previewUrl);
@@ -1190,10 +1213,20 @@ export function DiffMapPanel({
   }, [ocadCrs, onOcadCrsReady]);
 
   const gpsMarker = useMemo(() => {
-    if (!gpsFix || !fullViewBox || !viewportRef.current) return null;
+    if (!fullViewBox || !viewportRef.current) return null;
+
+    const trackActive = Boolean(gpsTrackFollow?.active);
+    const trackCoord = trackActive ? gpsTrackFollow?.mapCoordRef.current ?? null : null;
+    const mapCoord = trackCoord ?? gpsFix?.mapCoord ?? null;
+    if (!mapCoord) return null;
+
+    const accuracyMeters = trackActive
+      ? (gpsTrackFollow?.accuracyMeters ?? null)
+      : (gpsFix?.accuracyMeters ?? null);
+
     const viewport = viewportRef.current;
     const rect = viewport.getBoundingClientRect();
-    const [svgX, svgY] = geoToSvgUserPoint(gpsFix.mapCoord, rootTransform);
+    const [svgX, svgY] = geoToSvgUserPoint(mapCoord, rootTransform);
     const [baseX, baseY] = mapPointToScreen(
       svgX,
       svgY,
@@ -1203,16 +1236,29 @@ export function DiffMapPanel({
     );
     const x = pan.x + baseX * zoom;
     const y = pan.y + baseY * zoom;
+    const resolvedAccuracy = accuracyMeters ?? gpsFix?.accuracyMeters ?? 25;
 
     return {
       x,
       y,
-      uncertain: gpsFix.accuracyMeters > GPS_UNCERTAIN_ACCURACY_M,
+      uncertain: resolvedAccuracy > GPS_UNCERTAIN_ACCURACY_M,
     };
-  }, [fullViewBox, gpsFix, pan.x, pan.y, rootTransform, zoom]);
+  }, [
+    fullViewBox,
+    gpsFix,
+    gpsTrackFollow?.accuracyMeters,
+    gpsTrackFollow?.active,
+    gpsTrackFollow?.mapCoordRef,
+    gpsTrackFollow?.markerToken,
+    pan.x,
+    pan.y,
+    rootTransform,
+    zoom,
+  ]);
 
   const gpsAccuracyUncertain = Boolean(
-    gpsFix && gpsFix.accuracyMeters > GPS_UNCERTAIN_ACCURACY_M,
+    gpsMarker?.uncertain ||
+      (gpsFix && gpsFix.accuracyMeters > GPS_UNCERTAIN_ACCURACY_M),
   );
 
   const highlightShape = focusTarget ? buildHighlightShape(focusTarget, rootTransform) : null;
@@ -1335,7 +1381,7 @@ export function DiffMapPanel({
       <div
         ref={viewportRef}
         className={`relative min-h-0 touch-none overflow-hidden bg-white select-none ${
-          fullscreen ? "flex-1" : "h-[min(70dvh,560px)] min-h-[280px]"
+          fullscreen ? "flex-1" : viewportClassName
         } ${
           exportMode
             ? "cursor-default"

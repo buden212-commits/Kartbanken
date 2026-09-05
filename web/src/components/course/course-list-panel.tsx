@@ -11,7 +11,6 @@ type Props = {
   courses: CourseSummary[];
   sessionUserId: string;
   isAdmin: boolean;
-  publishedVersionId: string | null;
 };
 
 const iconBtn =
@@ -77,7 +76,6 @@ export function CourseListPanel({
   courses,
   sessionUserId,
   isAdmin,
-  publishedVersionId,
 }: Props) {
   const router = useRouter();
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -101,30 +99,7 @@ export function CourseListPanel({
 
   return (
     <section className="mt-10">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-medium text-slate-900">Banor ({courses.length})</h2>
-        {publishedVersionId ? (
-          <Link
-            href={`/maps/${mapSlug}/bana`}
-            className="rounded-lg bg-ifk-blue px-4 py-2 text-sm font-medium text-white transition hover:bg-ifk-blue/90"
-          >
-            Lägg bana
-          </Link>
-        ) : (
-          <span
-            title="Kräver en publicerad kartversion"
-            className="cursor-not-allowed rounded-lg bg-slate-200 px-4 py-2 text-sm font-medium text-slate-500"
-          >
-            Lägg bana
-          </span>
-        )}
-      </div>
-      <p className="mt-1 text-sm text-slate-600">
-        Egna och publika banor på denna kartfil. Overlay påverkar aldrig kartfilen.
-        {publishedVersionId
-          ? " Banor ritas mot den publicerade kartversionen."
-          : " Publicera en kartversion för att lägga banor."}
-      </p>
+      <h2 className="text-lg font-medium text-slate-900">Banor ({courses.length})</h2>
 
       {error && (
         <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">

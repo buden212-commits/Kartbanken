@@ -88,7 +88,11 @@ type Props = {
   onOcadVersionChange?: (version: OcadExportVersion) => void;
 
   sourceOcadVersionLabel?: string;
-
+  hideOcadVersion?: boolean;
+  createButtonLabel?: string;
+  createLoadingLabel?: string;
+  areaHint?: string | null;
+  polygonOnly?: boolean;
 };
 
 
@@ -206,10 +210,14 @@ export function CheckoutMapPanel({
   onOcadVersionChange,
 
   sourceOcadVersionLabel,
-
+  hideOcadVersion = false,
+  createButtonLabel = "Checka ut område",
+  createLoadingLabel = "Skapar utcheckning…",
+  areaHint = null,
+  polygonOnly = false,
 }: Props) {
 
-  const [tool, setTool] = useState<DrawTool>("rectangle");
+  const [tool, setTool] = useState<DrawTool>(polygonOnly ? "polygon" : "rectangle");
 
   const [draftBbox, setDraftBbox] = useState<Bbox | null>(null);
 
@@ -537,6 +545,7 @@ export function CheckoutMapPanel({
 
       <span className="text-sm font-medium text-slate-700">Verktyg:</span>
 
+      {!polygonOnly && (
       <button
 
         type="button"
@@ -566,6 +575,7 @@ export function CheckoutMapPanel({
         Rektangel
 
       </button>
+      )}
 
       <button
 
@@ -680,89 +690,52 @@ export function CheckoutMapPanel({
         <div className="space-y-2 border-b border-emerald-100 bg-emerald-50 px-3 py-2">
 
           <p className="text-sm text-emerald-800">
-
             Område valt (
-
             {confirmedSelection.selectionType === CheckoutSelectionType.BBOX
-
               ? "rektangel"
-
               : "polygon"}
-
             ).
-
+            {areaHint ? ` ${areaHint}` : ""}
           </p>
 
-          {onCreateCheckout && onOcadVersionChange && (
-
+          {onCreateCheckout && (
             <div className="flex flex-wrap items-end gap-3">
-
-              <div>
-
-                <label htmlFor="checkout-ocad-version" className="text-xs font-medium text-slate-700">
-
-                  OCAD-format för utcheckning
-
-                </label>
-
-                <select
-
-                  id="checkout-ocad-version"
-
-                  value={ocadVersion}
-
-                  onChange={(e) =>
-
-                    onOcadVersionChange(Number(e.target.value) as OcadExportVersion)
-
-                  }
-
-                  className="form-select mt-1 min-w-[140px]"
-
-                >
-
-                  {OCAD_EXPORT_VERSIONS.map((opt) => (
-
-                    <option key={opt.value} value={opt.value}>
-
-                      {opt.label}
-
-                    </option>
-
-                  ))}
-
-                </select>
-
-                {sourceOcadVersionLabel && (
-
-                  <p className="mt-1 text-xs text-slate-500">
-
-                    Källkarta: {sourceOcadVersionLabel}
-
-                  </p>
-
-                )}
-
-              </div>
+              {!hideOcadVersion && onOcadVersionChange && (
+                <div>
+                  <label htmlFor="checkout-ocad-version" className="text-xs font-medium text-slate-700">
+                    OCAD-format för utcheckning
+                  </label>
+                  <select
+                    id="checkout-ocad-version"
+                    value={ocadVersion}
+                    onChange={(e) =>
+                      onOcadVersionChange(Number(e.target.value) as OcadExportVersion)
+                    }
+                    className="form-select mt-1 min-w-[140px]"
+                  >
+                    {OCAD_EXPORT_VERSIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  {sourceOcadVersionLabel && (
+                    <p className="mt-1 text-xs text-slate-500">
+                      Källkarta: {sourceOcadVersionLabel}
+                    </p>
+                  )}
+                </div>
+              )}
 
               <button
-
                 type="button"
-
                 disabled={disabled || createLoading}
-
                 onClick={onCreateCheckout}
-
                 className="shrink-0 rounded-md bg-ifk-blue px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-
               >
-
-                {createLoading ? "Skapar utcheckning…" : "Checka ut område"}
-
+                {createLoading ? createLoadingLabel : createButtonLabel}
               </button>
-
             </div>
-
           )}
 
         </div>

@@ -301,7 +301,7 @@ export function ImportPartialMapPreview({ previewUrl, analysis, mode, title, are
         setStatus("ready");
       })
       .catch((err) => {
-        if (cancelled) return;
+        if (cancelled || controller.signal.aborted) return;
         setError(err instanceof Error ? err.message : "Kunde inte ladda kartbild");
         setStatus("error");
       });
@@ -414,7 +414,7 @@ export function ImportPartialMapPreview({ previewUrl, analysis, mode, title, are
         )}
       </div>
       <div
-        className={`relative flex h-[min(70dvh,560px)] min-h-[280px] items-center justify-center overflow-hidden ${
+        className={`relative flex h-[min(70svh,560px)] min-h-[280px] items-center justify-center overflow-hidden ${
           showMapBackground ? "bg-white" : "bg-slate-100"
         }`}
       >

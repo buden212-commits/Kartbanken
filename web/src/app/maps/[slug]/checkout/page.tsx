@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { canCheckout } from "@/lib/auth/permissions";
-import { findActiveCheckoutsForMap, getHeadVersionId } from "@/lib/checkout/repository";
+import { findActiveAreaLocksForMap, getHeadVersionId } from "@/lib/checkout/repository";
 import { serializeCheckoutResponse } from "@/lib/checkout/repository";
 import { CheckoutPageClient } from "@/components/checkout-page-client";
 import { HelpLinkIcon } from "@/components/help-link-icon";
@@ -42,7 +42,7 @@ export default async function CheckoutCreatePage({ params }: PageProps) {
     }
   }
 
-  const checkouts = await findActiveCheckoutsForMap(map.id);
+  const checkouts = await findActiveAreaLocksForMap(map.id);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">

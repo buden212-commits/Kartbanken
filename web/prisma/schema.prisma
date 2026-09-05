@@ -21,6 +21,8 @@ model User {
   lastLoginAt        DateTime?
   receiveNotifications Boolean       @default(false)
   receiveOcdAttachment Boolean       @default(false)
+  canFieldEdit         Boolean       @default(false)
+  fieldEditFavoriteSymbols String?
   mustChangePassword   Boolean       @default(false)
   passwordExpiresAt    DateTime?
   createdAt          DateTime      @default(now())
@@ -29,6 +31,7 @@ model User {
   sessions           Session[]
   checkouts          MapCheckout[] @relation("CheckoutUser")
   cancelledCheckouts MapCheckout[] @relation("CheckoutCancelledBy")
+  checkinsSubmitted  MapCheckout[] @relation("CheckoutCheckedInBy")
   courses            Course[]
   suggestionsCreated MapSuggestion[] @relation("SuggestionAuthor")
   suggestionsReviewed MapSuggestion[] @relation("SuggestionReviewer")
@@ -99,6 +102,15 @@ model MapVersion {
   isRecommended    Boolean  @default(false)
   isPublished      Boolean  @default(false)
   previewSvgPath   String?
+  tileStatus       String   @default("PENDING")
+  tileError        String?
+  tileManifestPath String?
+  tileBuildTotal   Int?
+  tileBuildDone    Int?
+  tileBuildCurrentZ Int?
+  tileBuildMaxZPregen Int?
+  tileBuildStartedAt DateTime?
+  tileBuildStage   Int?
   objectCount      Int?
   parseStatus      String   @default("PENDING")
   parseError       String?
@@ -121,6 +133,7 @@ model MapCheckout {
   selectionJson       String
   exportStoragePath   String?
   checkinStoragePath  String?
+  checkedInById       String?
   diffSummaryJson     String?
   userConfirmedAt     DateTime?
   adminConfirmedAt    DateTime?
@@ -132,12 +145,15 @@ model MapCheckout {
   integrationComment  String?
   reminderSentAt      DateTime?
   exportOcadVersion   Int       @default(12)
+  mode                String    @default("OCAD_DESKTOP")
+  editOpsJson         String?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
   mapFile           MapFile     @relation(fields: [mapFileId], references: [id], onDelete: Cascade)
   baseVersion       MapVersion  @relation("CheckoutBaseVersion", fields: [baseVersionId], references: [id])
   user              User        @relation("CheckoutUser", fields: [userId], references: [id])
+  checkedInBy       User?       @relation("CheckoutCheckedInBy", fields: [checkedInById], references: [id])
   integratedVersion MapVersion? @relation("CheckoutIntegratedVersion", fields: [integratedVersionId], references: [id])
   cancelledBy       User?       @relation("CheckoutCancelledBy", fields: [cancelledById], references: [id])
   suggestions       MapSuggestion[]

@@ -6,6 +6,7 @@ export type HelpSectionId =
   | "omraden"
   | "versioner"
   | "checkout"
+  | "faltredigering"
   | "bana"
   | "kartforslag"
   | "publicering"
@@ -23,6 +24,7 @@ export const helpSectionLabels: Record<HelpSectionId, string> = {
   omraden: "Områden",
   versioner: "Versionshantering",
   checkout: "Checka ut och in",
+  faltredigering: "Fältredigering",
   bana: "Lägg bana",
   kartforslag: "Kartförslag",
   publicering: "Publicering",
