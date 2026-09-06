@@ -9,6 +9,15 @@ import {
   isControlNumberObject,
 } from "./control-numbers";
 import {
+  mapIncomingLegGapsToShortenedLine,
+  mapLegGapsToShortenedLine,
+  mergeLegGapsForRender,
+  renderLineSegmentsWithGapsSvg,
+  renderPointWithCutoutsSvg,
+  renderStartTriangleWithCutoutsSvg,
+  supportsPointCutouts,
+} from "./cutouts";
+import {
   COURSE_LEG_SYMBOLS,
   getPointSymbolLegGap,
   IOF_CONTROL_RADIUS,
@@ -19,6 +28,7 @@ import {
   renderLineSymbolSvg,
   renderPointSymbolSvg,
   renderTextSymbolSvg,
+  IOF_SYMBOL_STROKE,
 } from "./symbols";
 
 export function objectCentroid(geometry: CourseGeometry): [number, number] {
@@ -92,13 +102,17 @@ export function translateGeometry(
   }
   if (geometry.type === "LineString") {
     return {
-      type: "LineString",
-      coordinates: geometry.coordinates.map(([x, y]) => [x + dx, y + dy]),
+      ...geometry,
+      coordinates: geometry.coordinates.map(
+        ([x, y]) => [x + dx, y + dy] as [number, number],
+      ),
     };
   }
   return {
-    type: "Polygon",
-    coordinates: [geometry.coordinates[0]!.map(([x, y]) => [x + dx, y + dy])],
+    ...geometry,
+    coordinates: [
+      geometry.coordinates[0]!.map(([x, y]) => [x + dx, y + dy] as [number, number]),
+    ],
   };
 }
 
@@ -289,7 +303,36 @@ export function renderObjectSvg(
   }
 
   if (geometry.type === "Point" && obj.objectType !== "TEXT") {
-    const [cx, cy] = geoToSvgUserPoint(geometry.coordinates, transform);
+    const centerGeo = geometry.coordinates;
+    const [cx, cy] = geoToSvgUserPoint(centerGeo, transform);
+    if (
+      geometry.cutouts?.length &&
+      supportsPointCutouts(obj.symbolNr)
+    ) {
+      if (obj.symbolNr === 701) {
+        return renderStartTriangleWithCutoutsSvg(
+          centerGeo,
+          options?.headingRad ?? -Math.PI / 2,
+          geometry.cutouts,
+          transform,
+          IOF_MAGENTA,
+          options?.selected ? IOF_SYMBOL_STROKE * 1.4 : IOF_SYMBOL_STROKE,
+          opacity,
+        );
+      }
+      return renderPointWithCutoutsSvg(
+        obj.symbolNr,
+        centerGeo,
+        transform,
+        geometry.cutouts,
+        {
+          opacity,
+          selected: options?.selected,
+          controlNumber: options?.skipText ? undefined : options?.controlNumber,
+          textRotationDeg: options?.textRotationDeg,
+        },
+      );
+    }
     return renderPointSymbolSvg(obj.symbolNr, cx, cy, {
       opacity,
       selected: options?.selected,
@@ -300,6 +343,95 @@ export function renderObjectSvg(
   }
 
   if (geometry.type === "LineString") {
+    const [start, end] = [
+      geometry.coordinates[0],
+      geometry.coordinates[geometry.coordinates.length - 1],
+    ];
+    if (
+      geometry.coordinates.length === 2 &&
+      start &&
+      end &&
+      geometry.gaps?.length
+    ) {
+      const [x1, y1] = geoToSvgUserPoint(start, transform);
+      const [x2, y2] = geoToSvgUserPoint(end, transform);
+      const color = IOF_MAGENTA;
+      const strokeW = options?.selected ? IOF_LINE_WIDTH * 1.4 : IOF_LINE_WIDTH;
+      let dashArray: string | undefined;
+      if (obj.symbolNr === 707) {
+        dashArray = `${mmToOcadUnits(2)} ${mmToOcadUnits(0.5)}`;
+      }
+      const geoLen = distance2d(start, end);
+      const scaledGaps = geometry.gaps.map((g) => ({
+        distance: (g.distance / geoLen) * Math.hypot(x2 - x1, y2 - y1),
+        length: (g.length / geoLen) * Math.hypot(x2 - x1, y2 - y1),
+      }));
+      return renderLineSegmentsWithGapsSvg(
+        x1,
+        y1,
+        x2,
+        y2,
+        scaledGaps,
+        color,
+        strokeW,
+        opacity,
+        dashArray,
+      );
+    }
+
+    if (geometry.coordinates.length > 2 && geometry.gaps?.length) {
+      const cum = cumulativeLineLengths(geometry.coordinates);
+      const totalLen = cum[cum.length - 1] ?? 0;
+      const color = IOF_MAGENTA;
+      const strokeW = options?.selected ? IOF_LINE_WIDTH * 1.4 : IOF_LINE_WIDTH;
+      let dashArray: string | undefined;
+      if (obj.symbolNr === 707) {
+        dashArray = `${mmToOcadUnits(2)} ${mmToOcadUnits(0.5)}`;
+      }
+      const parts: string[] = [];
+      for (let i = 0; i < geometry.coordinates.length - 1; i++) {
+        const a = geometry.coordinates[i]!;
+        const b = geometry.coordinates[i + 1]!;
+        const segStart = cum[i] ?? 0;
+        const segLen = (cum[i + 1] ?? 0) - segStart;
+        const segGaps = geometry.gaps
+          .map((g) => ({
+            distance: g.distance - segStart,
+            length: g.length,
+          }))
+          .filter((g) => g.distance + g.length > 0 && g.distance < segLen)
+          .map((g) => ({
+            distance: Math.max(0, g.distance),
+            length: Math.min(g.length, segLen - Math.max(0, g.distance)),
+          }));
+        const [x1, y1] = geoToSvgUserPoint(a, transform);
+        const [x2, y2] = geoToSvgUserPoint(b, transform);
+        const geoSegLen = distance2d(a, b);
+        const svgSegLen = Math.hypot(x2 - x1, y2 - y1);
+        const mappedGaps =
+          geoSegLen > 0
+            ? segGaps.map((g) => ({
+                distance: (g.distance / geoSegLen) * svgSegLen,
+                length: (g.length / geoSegLen) * svgSegLen,
+              }))
+            : [];
+        parts.push(
+          renderLineSegmentsWithGapsSvg(
+            x1,
+            y1,
+            x2,
+            y2,
+            mappedGaps,
+            color,
+            strokeW,
+            opacity,
+            dashArray,
+          ),
+        );
+      }
+      return parts.join("\n");
+    }
+
     const points = geometryToSvgPoints(geometry, transform);
     return renderLineSymbolSvg(obj.symbolNr, points, {
       opacity,
@@ -328,6 +460,14 @@ export function renderObjectSvg(
   return "";
 }
 
+function cumulativeLineLengths(coordinates: [number, number][]): number[] {
+  const cum: number[] = [0];
+  for (let i = 1; i < coordinates.length; i++) {
+    cum.push(cum[i - 1]! + distance2d(coordinates[i - 1]!, coordinates[i]!));
+  }
+  return cum;
+}
+
 /** Auto-draw magenta legs between sequential start/control/finish points. */
 export function renderCourseLegsSvg(
   objects: Array<CourseObjectDto | EditorObject>,
@@ -340,7 +480,7 @@ export function renderCourseLegsSvg(
     .sort((a, b) => a.sortOrder - b.sortOrder)
     .filter(
       (o) =>
-        o.objectType === "POINT" &&
+        o.objectType === CourseObjectType.POINT &&
         o.geometry.type === "Point" &&
         COURSE_LEG_SYMBOLS.has(o.symbolNr),
     );
@@ -352,14 +492,59 @@ export function renderCourseLegsSvg(
     const a = sorted[i]!;
     const b = sorted[i + 1]!;
     if (a.geometry.type !== "Point" || b.geometry.type !== "Point") continue;
-    const [x1, y1] = geoToSvgUserPoint(a.geometry.coordinates, transform);
-    const [x2, y2] = geoToSvgUserPoint(b.geometry.coordinates, transform);
+    const aCoord = a.geometry.coordinates;
+    const bCoord = b.geometry.coordinates;
+    const fullLenGeo = distance2d(aCoord, bCoord);
+    const [x1, y1] = geoToSvgUserPoint(aCoord, transform);
+    const [x2, y2] = geoToSvgUserPoint(bCoord, transform);
     const gapStart = getPointSymbolLegGap(a.symbolNr);
     const gapEnd = getPointSymbolLegGap(b.symbolNr);
     const shortened = shortenLineSegment(x1, y1, x2, y2, gapStart, gapEnd);
     if (!shortened) continue;
+
+    const geoShortLen = Math.max(0, fullLenGeo - gapStart - gapEnd);
+    const svgShortLen = Math.hypot(
+      shortened.x2 - shortened.x1,
+      shortened.y2 - shortened.y1,
+    );
+    const legGapsGeo =
+      a.geometry.legGaps && geoShortLen > 0
+        ? mapLegGapsToShortenedLine(
+            fullLenGeo,
+            gapStart,
+            gapEnd,
+            a.geometry.legGaps,
+          )
+        : [];
+    const incomingGapsGeo =
+      b.geometry.incomingLegGaps && geoShortLen > 0
+        ? mapIncomingLegGapsToShortenedLine(
+            fullLenGeo,
+            gapStart,
+            gapEnd,
+            b.geometry.incomingLegGaps,
+          )
+        : [];
+    const mergedGapsGeo = mergeLegGapsForRender(legGapsGeo, incomingGapsGeo);
+    const svgGaps =
+      geoShortLen > 0 && svgShortLen > 0 && mergedGapsGeo.length
+        ? mergedGapsGeo.map((g) => ({
+            distance: (g.distance / geoShortLen) * svgShortLen,
+            length: (g.length / geoShortLen) * svgShortLen,
+          }))
+        : undefined;
+
     segments.push(
-      `<line x1="${shortened.x1}" y1="${shortened.y1}" x2="${shortened.x2}" y2="${shortened.y2}" stroke="${IOF_MAGENTA}" stroke-opacity="${opacity}" stroke-width="${IOF_LINE_WIDTH}"/>`,
+      renderLineSegmentsWithGapsSvg(
+        shortened.x1,
+        shortened.y1,
+        shortened.x2,
+        shortened.y2,
+        svgGaps,
+        IOF_MAGENTA,
+        IOF_LINE_WIDTH,
+        opacity,
+      ),
     );
   }
   return segments.join("\n");

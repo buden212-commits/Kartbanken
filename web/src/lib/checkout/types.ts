@@ -1,3 +1,10 @@
+export const CheckoutMode = {
+  OCAD_DESKTOP: "OCAD_DESKTOP",
+  FIELD_EDIT: "FIELD_EDIT",
+} as const;
+
+export type CheckoutMode = (typeof CheckoutMode)[keyof typeof CheckoutMode];
+
 export const CheckoutStatus = {
   ACTIVE: "ACTIVE",
   CHECKED_IN: "CHECKED_IN",
@@ -143,6 +150,16 @@ export function parseSelectionJson(raw: string): CheckoutSelection {
 
 export function serializeSelection(selection: CheckoutSelection): string {
   return JSON.stringify(selection);
+}
+
+export function checkoutModeLabel(mode: CheckoutMode): string {
+  switch (mode) {
+    case CheckoutMode.FIELD_EDIT:
+      return "Fältredigering";
+    case CheckoutMode.OCAD_DESKTOP:
+    default:
+      return "OCAD-utcheckning";
+  }
 }
 
 export function checkoutStatusLabel(status: CheckoutStatus): string {

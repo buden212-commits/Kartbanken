@@ -12,10 +12,20 @@ flowchart TB
 
   subgraph parallel ["Parallella flöden"]
     B --> G[Checka ut / in]
+    B --> FE[Fältredigering]
     B --> H[Lägg bana]
     F --> I[Kartförslag]
     B --> J[Verifiera filer]
   end
+`;
+
+export const fieldEditFlow = `
+flowchart TD
+  A[Fältredigering på områdessidan] --> B[Rita polygon max 1 km²]
+  B --> C[Redigera i webben]
+  C --> D[Checka in — sammanfattning]
+  D --> E[Admin godkänner]
+  E --> F[Ny opublicerad version]
 `;
 
 export const accountRegistration = `

@@ -18,8 +18,16 @@
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "env:sync-local": "tsx scripts/sync-local-env.mts",
+    "docs:screenshots": "tsx scripts/capture-course-screenshots.mts",
+    "docs:pdf": "tsx ../docs/generate-kursmaterial-pdf.mts",
+    "sync:course-material": "tsx scripts/sync-course-material.mts",
+    "prebuild": "tsx scripts/sync-course-material.mts",
     "deploy:prod": "tsx scripts/deploy-prod.mts",
     "check:help": "tsx scripts/check-help-updated.mts",
+    "check:help:deploy": "tsx scripts/check-help-deploy.mts",
+    "deploy:check": "tsx scripts/pre-deploy.mts",
+    "deploy": "npm run deploy:check && npx vercel deploy --prod --yes",
+    "deploy:preview": "npm run deploy:check && npx vercel deploy --yes",
     "licenses:notices": "tsx scripts/generate-third-party-notices.mts",
     "hooks:install": "tsx ../scripts/setup-git-hooks.mts",
     "postinstall": "prisma generate"
@@ -34,6 +42,7 @@
     "bcryptjs": "^3.0.3",
     "geotiff": "^3.0.5",
     "jspdf": "^4.2.1",
+    "marked": "^16.4.2",
     "mermaid": "^11.16.1",
     "next": "16.2.12",
     "next-auth": "^5.0.0-beta.32",
@@ -42,7 +51,7 @@
     "proj4": "^2.21.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "sharp": "^0.35.3"
+    "sharp": "0.34.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -54,9 +63,14 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
+    "playwright": "^1.62.1",
     "prisma": "^5.22.0",
     "tailwindcss": "^4",
     "tsx": "^4.23.1",
     "typescript": "^5"
+  },
+  "optionalDependencies": {
+    "@img/sharp-libvips-linux-x64": "1.2.4",
+    "@img/sharp-linux-x64": "0.34.5"
   }
 }

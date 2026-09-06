@@ -18,6 +18,13 @@ export default async function HelpHubPage() {
       badge: null,
     },
     {
+      href: "/hjalp/sjalvstudier",
+      title: "Självstudier",
+      description:
+        "Kursmaterial med övningar och användarfall — uppdelat för läsare, redaktörer och administratörer.",
+      badge: null,
+    },
+    {
       href: "/hjalp/buggar",
       title: "Rapportera bugg",
       description:

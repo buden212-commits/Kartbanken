@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 import type { Feature, Geometry } from "geojson";
+import { extractObjectVertices } from "@/lib/field-edit/vertices";
 import type { NormalizedOcadObject, OcadObjectType, OcadParseSummary } from "./types";
 
 type OcadObjectProperties = {
@@ -101,6 +102,8 @@ export function normalizeFromGeoJson(
     const text = feature.properties?.text?.trim() || undefined;
     const coords = flattenCoordinates(feature.geometry);
     const type = geometryTypeFromFeature(feature);
+    const vertices = extractObjectVertices(feature.geometry);
+    const minVertexCount = type === "line" ? 2 : type === "area" ? 3 : 0;
 
     objects.push({
       objectIndex,
@@ -110,8 +113,8 @@ export function normalizeFromGeoJson(
       centroid: computeCentroid(coords),
       bbox: computeBbox(coords),
       geometryHash: hashGeometry(feature.geometry, symbolNumber, text),
-      ...(type === "line" && coords.length >= 2
-        ? { vertices: coords.map(([x, y]) => [x, y] as [number, number]) }
+      ...(vertices.length >= minVertexCount && (type === "line" || type === "area")
+        ? { vertices }
         : {}),
       text,
     });

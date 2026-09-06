@@ -46,6 +46,24 @@ export function canAdminConfirmIntegration(role: RoleType): boolean {
   return role === Role.ADMIN;
 }
 
+/** In-browser field editing (OCAD light). Admins always; others when granted by admin. */
+export function canFieldEdit(
+  role: RoleType,
+  granted?: boolean,
+): boolean {
+  if (!canDownload(role)) return false;
+  return role === Role.ADMIN || granted === true;
+}
+
+export type FieldEditCapableUser = {
+  role: RoleType;
+  canFieldEdit?: boolean;
+};
+
+export function userCanFieldEdit(user: FieldEditCapableUser): boolean {
+  return canFieldEdit(user.role, user.canFieldEdit);
+}
+
 /** All approved users (Reader+) can create courses (COURSE-16). */
 export function canCreateCourse(role: RoleType): boolean {
   return canDownload(role);
@@ -110,7 +128,7 @@ export function roleLabel(role: RoleType): string {
 export function roleDescription(role: RoleType): string {
   switch (role) {
     case Role.ADMIN:
-      return "Allt redaktör kan, plus skapa områden, redigera områdesnamn, radera områden, godkänna konton, avbryta utcheckningar, integrera incheckningar och hantera systeminställningar.";
+      return "Allt redaktör kan, plus skapa områden, redigera områdesnamn, radera områden, godkänna konton, avbryta utcheckningar, integrera incheckningar, tilldela fältredigering och hantera systeminställningar.";
     case Role.EDITOR:
       return "Allt läsare kan, plus ladda upp versioner, publicera/avpublicera, se opublicerade versioner och checka ut/in områden för OCAD-redigering.";
     case Role.READER:

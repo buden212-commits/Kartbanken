@@ -1,4 +1,4 @@
-import { findActiveCheckoutsForMap } from "@/lib/checkout/repository";
+import { findActiveAreaLocksForMap } from "@/lib/checkout/repository";
 import { canAdmin } from "@/lib/auth/permissions";
 import type { Role as RoleType } from "@/lib/roles";
 
@@ -44,18 +44,22 @@ export async function checkVersionUploadGuards(
     };
   }
 
-  const activeCheckouts = await findActiveCheckoutsForMap(mapFileId);
+  const activeCheckouts = await findActiveAreaLocksForMap(mapFileId);
   if (activeCheckouts.length === 0) {
     return { ok: true };
   }
 
   if (!options.forceDespiteCheckouts) {
     const isAdmin = canAdmin(options.role);
+    const lockLabel =
+      activeCheckouts.length === 1
+        ? "1 aktiv utcheckning eller fältredigering"
+        : `${activeCheckouts.length} aktiva utcheckningar eller fältredigeringar`;
     return {
       ok: false,
       error: isAdmin
-        ? `Det finns ${activeCheckouts.length === 1 ? "1 aktiv utcheckning" : `${activeCheckouts.length} aktiva utcheckningar`}. Bekräfta att du vill ladda upp hel karta ändå.`
-        : `Det finns ${activeCheckouts.length === 1 ? "1 aktiv utcheckning" : `${activeCheckouts.length} aktiva utcheckningar`}. Vänta tills de är integrerade eller avbrutna innan du laddar upp en hel karta.`,
+        ? `Det finns ${lockLabel}. Bekräfta att du vill ladda upp hel karta ändå.`
+        : `Det finns ${lockLabel}. Vänta tills de är integrerade eller avbrutna innan du laddar upp en hel karta.`,
       code: isAdmin ? "ACTIVE_CHECKOUTS_ADMIN" : "ACTIVE_CHECKOUTS",
       activeCheckoutCount: activeCheckouts.length,
     };

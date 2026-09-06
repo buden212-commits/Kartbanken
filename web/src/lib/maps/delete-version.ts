@@ -18,6 +18,7 @@ export async function deleteMapVersion(versionId: string): Promise<DeleteVersion
       versionNumber: true,
       storagePath: true,
       previewSvgPath: true,
+      tileManifestPath: true,
     },
   });
 
@@ -83,7 +84,11 @@ export async function deleteMapVersion(versionId: string): Promise<DeleteVersion
     select: { id: true, summaryJson: true },
   });
 
-  const storagePaths: (string | null | undefined)[] = [version.storagePath, version.previewSvgPath];
+  const storagePaths: (string | null | undefined)[] = [
+    version.storagePath,
+    version.previewSvgPath,
+    version.tileManifestPath,
+  ];
   for (const diff of diffs) {
     storagePaths.push(...collectLayerPathsFromSummary(diff.summaryJson));
   }
