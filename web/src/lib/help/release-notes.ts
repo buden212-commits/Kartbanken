@@ -7,6 +7,15 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-09-06",
+    title: "Fältredigering — ritlägesordning, lägesbokstav och symbolväljare",
+    items: [
+      "Ritlägesordning vid klick på linje/yta: vanlig → frihand (F) → ellips (E) → cirkel (C) → rektangel (R) → Bézier (B)",
+      "Lägesbokstaven (F/E/C/R/B) visas som stor skuggad bokstav bakom verktygsikonen",
+      "Symbolväljaren nere på kartan är mer kompakt på desktop och lämnar plats för ritverktygen till höger",
+    ],
+  },
+  {
     date: "2026-09-05",
     title: "Fältredigering — Fyll yta, CAD-ordning, frihand och hjälp",
     items: [

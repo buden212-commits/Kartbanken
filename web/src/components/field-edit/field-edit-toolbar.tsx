@@ -86,57 +86,15 @@ function ToolbarTooltip({ label }: { label: string }) {
   );
 }
 
-function BezierModeBadge() {
+/** Large watermark letter behind the tool glyph (F/E/C/R/B). */
+function ModeLetterBackdrop({ letter }: { letter: string }) {
   return (
     <span
       aria-hidden="true"
-      className="pointer-events-none absolute -bottom-0.5 -right-0.5 rounded bg-slate-900/85 px-0.5 text-[9px] font-bold leading-tight text-white"
+      className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center select-none text-[1.95rem] font-black leading-none tracking-tight text-current opacity-[0.22] sm:text-[1.75rem]"
+      style={{ textShadow: "0 1px 0 rgba(255,255,255,0.55)" }}
     >
-      B
-    </span>
-  );
-}
-
-function RectangularModeBadge() {
-  return (
-    <span
-      aria-hidden="true"
-      className="pointer-events-none absolute -bottom-0.5 -right-0.5 rounded bg-slate-900/85 px-0.5 text-[9px] font-bold leading-tight text-white"
-    >
-      R
-    </span>
-  );
-}
-
-function FreehandModeBadge() {
-  return (
-    <span
-      aria-hidden="true"
-      className="pointer-events-none absolute -bottom-0.5 -right-0.5 rounded bg-slate-900/85 px-0.5 text-[9px] font-bold leading-tight text-white"
-    >
-      F
-    </span>
-  );
-}
-
-function CircleModeBadge() {
-  return (
-    <span
-      aria-hidden="true"
-      className="pointer-events-none absolute -bottom-0.5 -right-0.5 rounded bg-slate-900/85 px-0.5 text-[9px] font-bold leading-tight text-white"
-    >
-      C
-    </span>
-  );
-}
-
-function EllipseModeBadge() {
-  return (
-    <span
-      aria-hidden="true"
-      className="pointer-events-none absolute -bottom-0.5 -right-0.5 rounded bg-slate-900/85 px-0.5 text-[9px] font-bold leading-tight text-white"
-    >
-      E
+      {letter}
     </span>
   );
 }
@@ -214,8 +172,8 @@ function IconToolbarButton({
       onPointerCancel={clearLongPressTimer}
       className={`${iconBtnBase} ${active ? activeClass : inactiveClass}`}
     >
-      {children}
       {badge}
+      <span className="relative z-10 inline-flex items-center justify-center">{children}</span>
       <ToolbarTooltip label={label} />
     </button>
   );
@@ -332,7 +290,7 @@ export function FieldEditMapToolbars({
             !bezierDrawMode &&
             !freehandDrawMode;
           const cycleHint =
-            "vanlig → rektangel (R) → cirkel (C) → ellips (E) → Bézier (B) → frihand (F)";
+            "vanlig → frihand (F) → ellips (E) → cirkel (C) → rektangel (R) → Bézier (B)";
           let modeHint = "";
           if (supportsDrawModes) {
             if (freehandDrawMode && tool === drawTool) {
@@ -375,15 +333,15 @@ export function FieldEditMapToolbars({
               }
               badge={
                 showFreehandBadge ? (
-                  <FreehandModeBadge />
+                  <ModeLetterBackdrop letter="F" />
                 ) : showBezierBadge ? (
-                  <BezierModeBadge />
+                  <ModeLetterBackdrop letter="B" />
                 ) : showEllipseBadge ? (
-                  <EllipseModeBadge />
+                  <ModeLetterBackdrop letter="E" />
                 ) : showCircleBadge ? (
-                  <CircleModeBadge />
+                  <ModeLetterBackdrop letter="C" />
                 ) : showRectBadge ? (
-                  <RectangularModeBadge />
+                  <ModeLetterBackdrop letter="R" />
                 ) : null
               }
             >

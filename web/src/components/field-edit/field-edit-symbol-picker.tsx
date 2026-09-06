@@ -185,14 +185,20 @@ export function FieldEditSymbolPicker({
   }
 
   return (
-    <div ref={rootRef} className="relative flex w-full flex-col gap-1 sm:w-auto sm:min-w-[260px]">
-      <span className="text-sm text-slate-600">{GROUP_LABELS[kind]}-symbol</span>
+    <div
+      ref={rootRef}
+      className="relative flex w-full flex-col gap-1 sm:flex-row sm:items-center sm:gap-2"
+    >
+      <span className="shrink-0 text-xs font-medium text-slate-500 sm:text-[13px]">
+        {GROUP_LABELS[kind]}
+      </span>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="form-select flex min-h-11 w-full items-center gap-2 text-left sm:min-h-9"
+        className="form-select flex min-h-10 w-full items-center gap-2 text-left text-sm sm:min-h-8 sm:min-w-0 sm:flex-1"
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-label={`${GROUP_LABELS[kind]}-symbol`}
       >
         {selected ? (
           <>
@@ -275,7 +281,7 @@ export function FieldEditSymbolPicker({
         <button
           type="button"
           onClick={() => onToggleFavorite(value)}
-          className="self-start text-xs font-medium text-ifk-blue hover:underline"
+          className="shrink-0 self-start text-xs font-medium text-ifk-blue hover:underline sm:self-center sm:whitespace-nowrap"
         >
           {isFavorite ? "Ta bort favorit" : "Spara som favorit"}
         </button>

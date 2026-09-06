@@ -3206,22 +3206,22 @@ export function FieldEditSessionClient({
       cancelGpsTracking();
     }
     const onThisTool = tool === forTool;
-    // Cycle: vanlig → rektangel → cirkel → ellips → Bézier → frihand → vanlig
+    // Cycle: vanlig → frihand → ellips → cirkel → rektangel → Bézier → vanlig
     let next: "normal" | "rectangular" | "circle" | "ellipse" | "bezier" | "freehand";
     if (!onThisTool) {
-      next = "rectangular";
-    } else if (freehandDrawMode) {
-      next = "normal";
-    } else if (bezierDrawMode) {
       next = "freehand";
-    } else if (ellipseDrawMode) {
+    } else if (bezierDrawMode) {
+      next = "normal";
+    } else if (rectangularDrawMode) {
       next = "bezier";
     } else if (circleDrawMode) {
-      next = "ellipse";
-    } else if (rectangularDrawMode) {
-      next = "circle";
-    } else {
       next = "rectangular";
+    } else if (ellipseDrawMode) {
+      next = "circle";
+    } else if (freehandDrawMode) {
+      next = "ellipse";
+    } else {
+      next = "freehand";
     }
 
     setTool(forTool);
@@ -3242,29 +3242,29 @@ export function FieldEditSessionClient({
     setEllipseDrawMode(next === "ellipse");
     setFreehandDrawMode(next === "freehand");
     setError(null);
-    if (next === "rectangular") {
+    if (next === "freehand") {
       setInfo(
-        "Rektangelläge (R): dra längsta sidan → släpp → dra vinkelrätt → klicka för att avsluta. Klicka linje-/ytaverktyget igen för cirkel.",
-      );
-    } else if (next === "circle") {
-      setInfo(
-        "Cirkelläge (C): dra diametern från kant till kant, släpp för att skapa. Klicka verktyget igen för ellips.",
+        "Frihandsläge (F): tryck kort och dra längs linjen (eller ytan). Klicka igen eller «Klar» för att avsluta. Utjämning 1–3 under snappning. Klicka verktyget igen för ellips.",
       );
     } else if (next === "ellipse") {
       setInfo(
-        "Ellipsläge (E): dra längsta axeln → släpp → dra kortare axeln vinkelrätt genom centrum → släpp. Klicka verktyget igen för Bézier.",
+        "Ellipsläge (E): dra längsta axeln → släpp → dra kortare axeln vinkelrätt genom centrum → släpp. Klicka verktyget igen för cirkel.",
+      );
+    } else if (next === "circle") {
+      setInfo(
+        "Cirkelläge (C): dra diametern från kant till kant, släpp för att skapa. Klicka verktyget igen för rektangel.",
+      );
+    } else if (next === "rectangular") {
+      setInfo(
+        "Rektangelläge (R): dra längsta sidan → släpp → dra vinkelrätt → klicka för att avsluta. Klicka linje-/ytaverktyget igen för Bézier.",
       );
     } else if (next === "bezier") {
       setInfo(
-        "Bézier-läge (B): tryck ner på brytpunkt och dra mot P1, sedan tryck på P2 och släpp på nästa brytpunkt. Klicka verktyget igen för frihand.",
-      );
-    } else if (next === "freehand") {
-      setInfo(
-        "Frihandsläge (F): tryck kort och dra längs linjen (eller ytan). Klicka igen eller «Klar» för att avsluta. Utjämning 1–3 under snappning. Klicka verktyget igen för vanlig ritning.",
+        "Bézier-läge (B): tryck ner på brytpunkt och dra mot P1, sedan tryck på P2 och släpp på nästa brytpunkt. Klicka verktyget igen för vanlig ritning.",
       );
     } else {
       setInfo(
-        "Vanlig ritning: klicka brytpunkter. Klicka linje-/ytaverktyget igen för att växla läge (R → C → E → B → F).",
+        "Vanlig ritning: klicka brytpunkter. Klicka linje-/ytaverktyget igen för att växla läge (F → E → C → R → B).",
       );
     }
   }
@@ -3346,39 +3346,39 @@ export function FieldEditSessionClient({
     }
     if (tool === "addLine") {
       if (freehandDrawMode) {
-        return "Frihandslinje: tryck och dra längs linjen. Klicka igen eller «Klar» för att avsluta. Utjämning 1–3 under snappning. Klicka linjeverktyget igen för vanlig ritning.";
-      }
-      if (bezierDrawMode) {
-        return "Bézier-linje: tryck ner på brytpunkt → dra mot P1 → släpp; tryck på P2 → släpp på nästa brytpunkt. Klicka linjeverktyget igen för frihand.";
+        return "Frihandslinje: tryck och dra längs linjen. Klicka igen eller «Klar» för att avsluta. Utjämning 1–3 under snappning. Klicka linjeverktyget igen för ellips.";
       }
       if (ellipseDrawMode) {
-        return "Ellipsläge: dra längsta axeln → släpp → dra kortare axeln vinkelrätt genom centrum → släpp. Klicka linjeverktyget igen för Bézier.";
+        return "Ellipsläge: dra längsta axeln → släpp → dra kortare axeln vinkelrätt genom centrum → släpp. Klicka linjeverktyget igen för cirkel.";
       }
       if (circleDrawMode) {
-        return "Cirkelläge: dra diametern från kant till kant, släpp för att skapa. Klicka linjeverktyget igen för ellips.";
+        return "Cirkelläge: dra diametern från kant till kant, släpp för att skapa. Klicka linjeverktyget igen för rektangel.";
       }
       if (rectangularDrawMode) {
-        return "Rektangelläge: dra längsta sidan → släpp → dra vinkelrätt till tredje hörnet → klicka för att avsluta. Klicka linjeverktyget igen för cirkel.";
+        return "Rektangelläge: dra längsta sidan → släpp → dra vinkelrätt till tredje hörnet → klicka för att avsluta. Klicka linjeverktyget igen för Bézier.";
       }
-      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan punkter längs linjen. Klicka linjeverktyget igen för att växla läge (R → C → E → B → F).";
+      if (bezierDrawMode) {
+        return "Bézier-linje: tryck ner på brytpunkt → dra mot P1 → släpp; tryck på P2 → släpp på nästa brytpunkt. Klicka linjeverktyget igen för vanlig ritning.";
+      }
+      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan punkter längs linjen. Klicka linjeverktyget igen för att växla läge (F → E → C → R → B).";
     }
     if (tool === "addArea") {
       if (freehandDrawMode) {
-        return "Frihandsytan: tryck och dra runt ytan. Klicka igen eller «Klar» för att avsluta (minst 3 punkter). Klicka ytaverktyget igen för vanlig ritning.";
-      }
-      if (bezierDrawMode) {
-        return "Bézier-yta: samma gest som linje (P0→P1, P2→P3). Minst 3 brytpunkter. Klicka ytaverktyget igen för frihand.";
+        return "Frihandsytan: tryck och dra runt ytan. Klicka igen eller «Klar» för att avsluta (minst 3 punkter). Klicka ytaverktyget igen för ellips.";
       }
       if (ellipseDrawMode) {
-        return "Ellipsläge: dra längsta axeln → släpp → dra kortare axeln vinkelrätt genom centrum → släpp. Klicka ytaverktyget igen för Bézier.";
+        return "Ellipsläge: dra längsta axeln → släpp → dra kortare axeln vinkelrätt genom centrum → släpp. Klicka ytaverktyget igen för cirkel.";
       }
       if (circleDrawMode) {
-        return "Cirkelläge: dra diametern från kant till kant, släpp för att skapa. Klicka ytaverktyget igen för ellips.";
+        return "Cirkelläge: dra diametern från kant till kant, släpp för att skapa. Klicka ytaverktyget igen för rektangel.";
       }
       if (rectangularDrawMode) {
-        return "Rektangelläge: dra längsta sidan → släpp → dra vinkelrätt till tredje hörnet → klicka för att avsluta. Klicka ytaverktyget igen för cirkel.";
+        return "Rektangelläge: dra längsta sidan → släpp → dra vinkelrätt till tredje hörnet → klicka för att avsluta. Klicka ytaverktyget igen för Bézier.";
       }
-      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan hörn runt ytan (minst 3). Klicka ytaverktyget igen för att växla läge (R → C → E → B → F).";
+      if (bezierDrawMode) {
+        return "Bézier-yta: samma gest som linje (P0→P1, P2→P3). Minst 3 brytpunkter. Klicka ytaverktyget igen för vanlig ritning.";
+      }
+      return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan hörn runt ytan (minst 3). Klicka ytaverktyget igen för att växla läge (F → E → C → R → B).";
     }
     if (tool === "addPoint") {
       return "Välj punktsymbol — klicka sedan där punkten ska ligga (GPS-spår gäller inte punkter).";
@@ -3489,7 +3489,7 @@ export function FieldEditSessionClient({
         {addKind && (
           <div
             data-map-toolbar
-            className="pointer-events-auto absolute bottom-2 left-[15%] right-[15%] z-40 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-lg backdrop-blur"
+            className="pointer-events-auto absolute bottom-2 left-3 right-14 z-40 rounded-xl border border-slate-200 bg-white/95 p-1.5 shadow-lg backdrop-blur sm:left-1/2 sm:right-auto sm:w-[min(22rem,calc(100%-7.5rem))] sm:-translate-x-1/2 sm:p-1.5 md:w-[min(20rem,calc(100%-8rem))]"
             onPointerDown={stopFieldEditToolbarPointer}
           >
             <FieldEditSymbolPicker

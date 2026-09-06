@@ -495,7 +495,8 @@ export async function HelpPageContent() {
               "Verktyg som flytande ikoner på kartan: punkt → linje → yta → radera → GPS (GPS aktiveras efter linje/yta + vald symbol)",
               "Välj linje eller yta och symbol först — därefter «GPS-spår» för att rita medan du går (samma minimiavstånd mellan brytpunkter som i kartförslag)",
               "Punktsymboler placeras alltid genom att klicka på kartan — GPS-spår gäller bara linje och yta",
-              "Klicka linje- eller ytaverktyget igen för att växla vanlig → rektangel (R) → cirkel (C) → ellips (E) → Bézier (B) → frihand (F) → vanlig",
+              "Klicka linje- eller ytaverktyget igen för att växla vanlig → frihand (F) → ellips (E) → cirkel (C) → rektangel (R) → Bézier (B) → vanlig",
+              "Aktivt läge visas med stor bokstav (F/E/C/R/B) bakom verktygsikonen",
               "Rektangelritning: dra längsta sidan, sedan vinkelrätt; streckad förhandsvisning; klicka för att avsluta",
               "Cirkel: dra diametern från kant till kant, släpp för att skapa (som i OCAD)",
               "Ellips: dra längsta axeln, släpp, sedan kortare axeln vinkelrätt genom centrum och släpp",
@@ -514,7 +515,7 @@ export async function HelpPageContent() {
               "Klicka ett befintligt kartobjekt när du skapar nytt — då kopieras dess symbol",
               "Nya och ändrade objekt visas med riktig OCAD-symbol i editorn",
               "Favoritsymboler per geometrityp — sparas på ditt konto och föreslås först i listan",
-              "Symbolväljaren nere på kartan lämnar marginaler så mer av kartan syns bakom",
+              "Symbolväljaren nere på kartan är kompakt och lämnar plats för ritverktygen till höger",
               "Symbolväljaren visar OCAD-ikoner och färger (som i teckenförklaringen) plus sökfält",
               "I mobilen öppnas tangentbordet först när du trycker i sökfältet — inte automatiskt när du öppnar symbollistan",
             ]}
