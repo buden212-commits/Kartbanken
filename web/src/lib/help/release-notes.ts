@@ -14,6 +14,7 @@ export const releaseNotes: ReleaseNote[] = [
       "Exporterar objekt i det valda utsnittet med färger, förenklade symboler och georeferering när kartan har EPSG",
       "Obs: komplexa streck/strukturer/sammansatta punktsymboler förenklas jämfört med OCAD",
       "Nytt produktblad för Fältredigering under Hjälp — översikt att dela eller skriva ut",
+      "Produktbladet visar skärmdumpar från själva programmet (välj område, editor, GPS/position, incheckning)",
     ],
   },
   {

@@ -30,7 +30,8 @@
     "deploy:preview": "npm run deploy:check && npx vercel deploy --yes",
     "licenses:notices": "tsx scripts/generate-third-party-notices.mts",
     "hooks:install": "tsx ../scripts/setup-git-hooks.mts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "docs:product-shots": "tsx scripts/capture-field-edit-product-shots.mts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

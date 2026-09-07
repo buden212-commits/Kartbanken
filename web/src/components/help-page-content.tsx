@@ -461,7 +461,7 @@ export async function HelpPageContent() {
             <a href="/produkt/faltredigering" className="link-primary">
               produktbladet för Fältredigering
             </a>{" "}
-            (översikt att dela eller skriva ut).
+            (säljande översikt med skärmdumpar från programmet — att dela eller skriva ut).
           </p>
           <p>
             Fältredigering är separat från både{" "}

@@ -8,22 +8,32 @@ import "./field-editor-product-sheet.css";
 
 const FEATURES = [
   {
-    title: "Rita som i OCAD",
-    body: "Punkt, linje och yta — plus frihand, cirkel, ellips, rektangel och Bézier. Riktiga OCAD-symboler med sök och favoriter.",
-    image: "/produkt/faltredigering/rita.jpg",
-    imageAlt: "Surfplatta i skogen med kartredigering på skärmen",
+    title: "Reservera området",
+    body: "Rita en polygon (max 1 km²) kring det du ska jobba med. Bara utcheckat område laddas i editorn — du ser låsta ytor och kan fortsätta senare.",
+    image: "/produkt/faltredigering/ui-skapa-karta.png",
+    imageAlt: "Skärmdump: välja område med polygon på kartan före fältredigering",
+    caption: "Bild — Starta fältredigering: rita polygon och bekräfta området",
   },
   {
-    title: "GPS i terrängen",
-    body: "Spåra stigar och ytor medan du går. Min position på georefererade kartor — byggd för telefonen ute i skogen.",
-    image: "/produkt/faltredigering/gps.jpg",
-    imageAlt: "Mobil med GPS-spår på orienteringskarta i skogen",
+    title: "Rita som i OCAD",
+    body: "Punkt, linje och yta — plus frihand, cirkel, ellips, rektangel och Bézier. Riktiga OCAD-symboler, snappning och CAD-verktyg som Fyll yta.",
+    image: "/produkt/faltredigering/ui-rita-karta.png",
+    imageAlt: "Skärmdump: fältredigeraren med kartan, ritverktyg och CAD-panelen",
+    caption: "Bild — Editorn: verktygsrad, snappning och CAD (bl.a. Fyll yta)",
+  },
+  {
+    title: "GPS och position",
+    body: "Min position på georefererade kartor. Spåra stigar och ytor medan du går — byggd för telefon och surfplatta ute i terrängen.",
+    image: "/produkt/faltredigering/ui-editor-karta.png",
+    imageAlt: "Skärmdump: fältredigeraren med zoom, Hela kartan och Min position",
+    caption: "Bild — Kartvy med zoom, Hela kartan och Min position",
   },
   {
     title: "Incheckning med koll",
     body: "Spara lokalt, checka in och låt admin godkänna. Jämförelsekartan visar raderat, ändrat och nytt innan det blir ny version.",
-    image: "/produkt/faltredigering/incheckning.jpg",
-    imageAlt: "Kartläggare granskar jämförelsekarta på laptop",
+    image: "/produkt/faltredigering/ui-incheckning-karta.png",
+    imageAlt: "Skärmdump: granskning med jämförelsekarta och sammanfattning av ändringar",
+    caption: "Bild — Granskning: jämförelse före admin-godkännande",
   },
 ] as const;
 
@@ -43,7 +53,7 @@ function useReveal() {
           }
         }
       },
-      { threshold: 0.18, rootMargin: "0px 0px -8% 0px" },
+      { threshold: 0.14, rootMargin: "0px 0px -6% 0px" },
     );
     nodes.forEach((node) => observer.observe(node));
     return () => observer.disconnect();
@@ -142,33 +152,30 @@ export function FieldEditorProductSheet() {
         </p>
       </section>
 
-      {/* Feature sections — one job each */}
+      {/* Feature sections with real UI screenshots */}
       {FEATURES.map((feature, index) => {
         const imageLeft = index % 2 === 1;
         return (
-          <section
-            key={feature.title}
-            className="fe-section border-t border-slate-200/80"
-          >
-            <div
-              className={`mx-auto grid max-w-6xl items-center gap-10 px-5 py-16 sm:px-8 sm:py-24 lg:grid-cols-2 lg:gap-16 ${
-                imageLeft ? "" : ""
-              }`}
-            >
-              <div
+          <section key={feature.title} className="fe-section border-t border-slate-200/80">
+            <div className="mx-auto grid max-w-6xl items-center gap-10 px-5 py-16 sm:px-8 sm:py-24 lg:grid-cols-2 lg:gap-14">
+              <figure
                 data-reveal
-                className={`relative aspect-[4/3] overflow-hidden rounded-sm ${
-                  imageLeft ? "lg:order-1" : "lg:order-2"
-                }`}
+                className={imageLeft ? "lg:order-1" : "lg:order-2"}
               >
-                <Image
-                  src={feature.image}
-                  alt={feature.imageAlt}
-                  fill
-                  className="object-cover"
-                  sizes="(max-width: 1024px) 100vw, 50vw"
-                />
-              </div>
+                <div className="overflow-hidden rounded-sm border border-slate-200/90 bg-white shadow-[0_12px_40px_-24px_rgba(10,36,56,0.45)]">
+                  <Image
+                    src={feature.image}
+                    alt={feature.imageAlt}
+                    width={2200}
+                    height={1600}
+                    className="h-auto w-full"
+                    sizes="(max-width: 1024px) 100vw, 50vw"
+                  />
+                </div>
+                <figcaption className="mt-3 text-sm text-[var(--fe-ink-soft)]">
+                  {feature.caption}
+                </figcaption>
+              </figure>
               <div
                 data-reveal="late"
                 className={imageLeft ? "lg:order-2" : "lg:order-1"}
@@ -188,7 +195,7 @@ export function FieldEditorProductSheet() {
         );
       })}
 
-      {/* Capability strip — not cards, just a clean list */}
+      {/* Capability strip */}
       <section className="fe-section border-t border-slate-200/80 bg-[linear-gradient(180deg,#e8f4fc_0%,#f3f7fb_100%)]">
         <div className="mx-auto max-w-4xl px-5 py-20 sm:px-8 sm:py-24">
           <h2
@@ -208,10 +215,7 @@ export function FieldEditorProductSheet() {
               "Ångra upp till tio steg, favoritsymboler per konto",
               "Behörighet styrs per användare — admin godkänner alltid",
             ].map((item) => (
-              <li
-                key={item}
-                className="py-4 text-base text-[var(--fe-ink)] sm:text-lg"
-              >
+              <li key={item} className="py-4 text-base text-[var(--fe-ink)] sm:text-lg">
                 {item}
               </li>
             ))}

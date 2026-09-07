@@ -14,7 +14,7 @@ export default async function HelpHubPage() {
       href: "/produkt/faltredigering",
       title: "Produktblad — Fältredigering",
       description:
-        "Säljande översikt: redigera kartan i fält utan OCAD, GPS-spår, CAD-verktyg och incheckning.",
+        "Säljande översikt med skärmdumpar från programmet: område, editor, GPS och incheckning.",
       badge: "Nytt",
     },
     {
