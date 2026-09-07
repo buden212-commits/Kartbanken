@@ -457,6 +457,13 @@ export async function HelpPageContent() {
             kartversion.
           </p>
           <p>
+            Se även{" "}
+            <a href="/produkt/faltredigering" className="link-primary">
+              produktbladet för Fältredigering
+            </a>{" "}
+            (översikt att dela eller skriva ut).
+          </p>
+          <p>
             Fältredigering är separat från både{" "}
             <a href="#checkout" className="link-primary">
               OCAD-utcheckning

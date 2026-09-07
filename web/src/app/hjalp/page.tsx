@@ -11,6 +11,13 @@ export default async function HelpHubPage() {
 
   const cards = [
     {
+      href: "/produkt/faltredigering",
+      title: "Produktblad — Fältredigering",
+      description:
+        "Säljande översikt: redigera kartan i fält utan OCAD, GPS-spår, CAD-verktyg och incheckning.",
+      badge: "Nytt",
+    },
+    {
       href: "/hjalp/guide",
       title: "Användarguide",
       description:
