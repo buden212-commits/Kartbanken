@@ -7,6 +7,15 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-09-07",
+    title: "Export till OpenOrienteering Mapper (.omap)",
+    items: [
+      "Nytt utdataformat vid «Exportera utsnitt»: OpenOrienteering Mapper (.omap) — native fil för Mapper 0.9.6+",
+      "Exporterar objekt i det valda utsnittet med färger, förenklade symboler och georeferering när kartan har EPSG",
+      "Obs: komplexa streck/strukturer/sammansatta punktsymboler förenklas jämfört med OCAD",
+    ],
+  },
+  {
     date: "2026-09-06",
     title: "Fältredigering — ritlägesordning, lägesbokstav och symbolväljare",
     items: [

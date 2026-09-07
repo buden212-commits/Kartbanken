@@ -248,6 +248,14 @@ export function formatAuditActivity(action: string, metadataRaw: string | null):
       if (ref && epsg) return `GeoTIFF exporterad — ${ref}, ${epsg}`;
       return ref ? `GeoTIFF exporterad — ${ref}` : "GeoTIFF exporterad";
     }
+    case "MAP_OMAP_EXPORT": {
+      const ref = mapRef(metadata);
+      const count = metadata?.objectCount;
+      if (ref && typeof count === "number") {
+        return `Mapper (.omap) exporterad — ${ref}, ${count} objekt`;
+      }
+      return ref ? `Mapper (.omap) exporterad — ${ref}` : "Mapper (.omap) exporterad";
+    }
     default:
       return action;
   }

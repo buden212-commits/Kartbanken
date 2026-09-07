@@ -24,6 +24,7 @@ import { formatMapDisplayScale, maxZoomForMapScale } from "@/lib/ocad/map-displa
 import {
   createExportFrame,
   downloadMapOcd,
+  downloadMapOmap,
   downloadMapPdf,
   downloadMapGeoTiff,
   exportFrameBbox,
@@ -602,6 +603,16 @@ export function DiffMapPanel({
           }
           if (suggestionWarnings) {
             window.alert(suggestionWarnings);
+          }
+        } else if (exportSettings.outputFormat === "omap") {
+          const { warnings } = await downloadMapOmap(
+            mapSlug,
+            versionId,
+            exportFrame,
+            `${safeTitle}-${exportSettings.scale}`,
+          );
+          if (warnings) {
+            window.alert(warnings);
           }
         } else if (exportSettings.outputFormat === "geotiff") {
           if (!fullSvgText) return;

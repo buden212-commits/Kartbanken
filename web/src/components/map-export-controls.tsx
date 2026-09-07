@@ -45,13 +45,17 @@ export function MapExportControls({
       ? exporting
         ? "Exporterar…"
         : "Ladda ner OCD"
-      : settings.outputFormat === "geotiff"
+      : settings.outputFormat === "omap"
         ? exporting
           ? "Exporterar…"
-          : "Ladda ner GeoTIFF"
-        : exporting
-          ? "Exporterar…"
-          : "Ladda ner PDF";
+          : "Ladda ner Mapper (.omap)"
+        : settings.outputFormat === "geotiff"
+          ? exporting
+            ? "Exporterar…"
+            : "Ladda ner GeoTIFF"
+          : exporting
+            ? "Exporterar…"
+            : "Ladda ner PDF";
 
   return (
     <div className="border-b border-slate-200 bg-ifk-blue-muted px-4 py-3">
@@ -74,6 +78,7 @@ export function MapExportControls({
           >
             <option value="pdf">PDF</option>
             <option value="ocd">OCAD (.ocd)</option>
+            <option value="omap">OpenOrienteering Mapper (.omap)</option>
             <option value="geotiff">GeoTIFF (.tif)</option>
           </select>
         </div>
@@ -199,6 +204,8 @@ export function MapExportControls({
           (settings.includeSuggestions
             ? " OCD-exporten sparar enbart kartförslagens markeringar som OCAD-objekt inom ramen — du väljer symbol/lager i dialogen (OCAD 12/2018). Grundkartan ingår inte."
             : " OCD-exporten sparar objekt inom ramen och behåller symboler och inställningar från originalfilen.")}
+        {settings.outputFormat === "omap" &&
+          " Mapper-export (.omap) skapar en native OpenOrienteering Mapper-fil för utsnittet. Symboler förenklas (färger/linjer/ytor behålls); öppna i Mapper 0.9.6 eller senare."}
         {settings.outputFormat === "geotiff" &&
           " GeoTIFF sparas med kartans projicerade koordinatsystem (EPSG) för det valda utsnittet."}
         {showSuggestionOption &&
