@@ -16,7 +16,7 @@ const FEATURES = [
   },
   {
     title: "Rita som i OCAD",
-    body: "Punkt, linje och yta — plus frihand, cirkel, ellips, rektangel och Bézier. Riktiga OCAD-symboler, snappning och CAD-verktyg som Fyll yta.",
+    body: "Punkt, linje och yta — plus frihand, cirkel, ellips, rektangel och Bézier. Riktiga OCAD-symboler, snappning och en full CAD-panel för valt objekt.",
     image: "/produkt/faltredigering/ui-rita-karta.png",
     imageAlt: "Skärmdump: fältredigeraren med kartan, ritverktyg och CAD-panelen",
     caption: "Bild — Editorn: verktygsrad, snappning och CAD (bl.a. Fyll yta)",
@@ -195,7 +195,7 @@ export function FieldEditorProductSheet() {
         );
       })}
 
-      {/* Capability strip */}
+      {/* CAD + capability */}
       <section className="fe-section border-t border-slate-200/80 bg-[linear-gradient(180deg,#e8f4fc_0%,#f3f7fb_100%)]">
         <div className="mx-auto max-w-4xl px-5 py-20 sm:px-8 sm:py-24">
           <h2
@@ -203,17 +203,45 @@ export function FieldEditorProductSheet() {
             className="text-center text-[clamp(1.75rem,3.5vw,2.6rem)] leading-tight font-bold tracking-tight"
             style={{ fontFamily: "var(--fe-display)" }}
           >
-            Byggd för kartläggare
+            Byggd för kartritare
           </h2>
+          <p
+            data-reveal="late"
+            className="mx-auto mt-5 max-w-2xl text-center text-base leading-relaxed text-[var(--fe-ink-soft)] sm:text-lg"
+          >
+            Markera en linje eller yta så öppnas CAD-panelen — samma typ av verktyg som i OCAD,
+            anpassade för pekskärm i fält.
+          </p>
+
+          <figure data-reveal="later" className="mx-auto mt-12 max-w-3xl">
+            <div className="overflow-hidden rounded-sm border border-slate-200/90 bg-white p-3 shadow-[0_12px_40px_-24px_rgba(10,36,56,0.45)] sm:p-5">
+              <Image
+                src="/produkt/faltredigering/ui-cad-verktyg.png"
+                alt="Skärmdump: CAD-panelen för vald linje med brytpunkts-, klipp-, förenkla- och Bézier-verktyg"
+                width={1600}
+                height={320}
+                className="h-auto w-full"
+                sizes="(max-width: 768px) 100vw, 48rem"
+              />
+            </div>
+            <figcaption className="mt-3 text-center text-sm text-[var(--fe-ink-soft)]">
+              Bild — CAD för vald linje: brytpunkter, klipp, sammanfoga, förenkla, mjuka hörn och
+              Bézier
+            </figcaption>
+          </figure>
+
           <ul
             data-reveal="late"
             className="mt-12 space-y-0 divide-y divide-slate-300/70 border-y border-slate-300/70"
           >
             {[
-              "CAD-verktyg: klipp, sammanfoga, fyll yta, förenkla, Bézier",
-              "Snappning mot samma symbol — som i OCAD",
-              "Ångra upp till tio steg, favoritsymboler per konto",
-              "Behörighet styrs per användare — admin godkänner alltid",
+              "Byt symbol, fyll/kant/duplicera och mät längd eller yta direkt på valt objekt",
+              "Brytpunkter: lägg till, radera och växla typ (normal, hörn, streck) — även massändring",
+              "Klipp linje, dela yta eller klipp hål; sammanfoga linjer och ytor med samma symbol",
+              "Förenkla med buffert (± m), mjuka hörn, Bézier-kurva och vänd riktning",
+              "Fyll yta fyller automatiskt ett område som omsluts av linjer och ytor",
+              "Snappning mot samma symbol, ångra upp till tio steg, favoritsymboler per konto",
+              "Behörighet styrs per användare — admin godkänner alltid innan ny version",
             ].map((item) => (
               <li key={item} className="py-4 text-base text-[var(--fe-ink)] sm:text-lg">
                 {item}

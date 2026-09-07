@@ -15,6 +15,7 @@ export const releaseNotes: ReleaseNote[] = [
       "Obs: komplexa streck/strukturer/sammansatta punktsymboler förenklas jämfört med OCAD",
       "Nytt produktblad för Fältredigering under Hjälp — översikt att dela eller skriva ut",
       "Produktbladet visar skärmdumpar från själva programmet (välj område, editor, GPS/position, incheckning)",
+      "Produktbladet beskriver CAD-panelen mer i detalj (brytpunkter, klipp, sammanfoga, förenkla, Bézier m.m.)",
     ],
   },
   {
