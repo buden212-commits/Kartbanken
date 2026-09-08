@@ -11,6 +11,7 @@ export const releaseNotes: ReleaseNote[] = [
     title: "Fältredigering — utbredning, Bézier och skärmfasta markörer",
     items: [
       "Kartvyn i fältredigering anpassas till det utcheckade området — «Hela kartan» fylls utan stora vita marginaler",
+      "Vid val av område startar verktyget i Panorera — byt till Polygon när du ska rita",
       "Bézier-läge (B): tryck-håll på brytpunkt, dra radien/tangenten och släpp — upprepa vid varje brytpunkt",
       "Hjälplinjen förhandsvisar den böjda linjen medan du drar (fungerar med mus och pekskärm)",
       "Kort tryck utan drag ger skarp brytpunkt; längre drag ger mjukare kurva",

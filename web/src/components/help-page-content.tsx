@@ -355,7 +355,7 @@ export async function HelpPageContent() {
               <HelpList
                 items={[
                   "Öppna området och klicka Checka ut område (knappen bredvid karttiteln)",
-                  "Välj verktyg: rektangel eller polygon",
+                  "Välj verktyg: Panorera (standard), rektangel eller polygon",
                   "Rita området på kartan och bekräfta urvalet — kartan använder tiles för smidigare zoom/pan (särskilt på stora kartor); första gången kan tiles byggas en stund med räknare (X av Y rutor)",
                   "Klicka Checka ut område — du kommer till utcheckningssidan",
                   "Välj OCAD-format (t.ex. OCAD 12 eller OCAD 2018) — måste matcha din OCAD-installation",
@@ -489,6 +489,7 @@ export async function HelpPageContent() {
           <HelpList
             items={[
               "Rita en polygon kring området (max 1 km²) — bara det området laddas i editorn",
+              "Startar i Panorera — byt till Polygon när du ska rita området",
               "Kartvyn anpassas till utcheckningen — «Hela kartan» visar området utan stora vita marginaler",
               "Utcheckat område markeras med röd begränsningslinje (ingen fyllnadsyta)",
               "Lämna och fortsätt senare via «Fortsätt» i Aktiva utcheckningar eller på fältredigeringssidan",
