@@ -489,6 +489,7 @@ export async function HelpPageContent() {
           <HelpList
             items={[
               "Rita en polygon kring området (max 1 km²) — bara det området laddas i editorn",
+              "Kartvyn anpassas till utcheckningen — «Hela kartan» visar området utan stora vita marginaler",
               "Utcheckat område markeras med röd begränsningslinje (ingen fyllnadsyta)",
               "Lämna och fortsätt senare via «Fortsätt» i Aktiva utcheckningar eller på fältredigeringssidan",
               "Administratör kan avbryta sessioner från områdessidan — samma som vanliga utcheckningar",

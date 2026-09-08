@@ -41,6 +41,7 @@ import {
 } from "@/components/field-edit/field-edit-symbol-picker";
 import type { FieldEditSymbolCatalogEntry } from "@/lib/field-edit/symbol-catalog-shared";
 import type { CheckoutSelection } from "@/lib/checkout/types";
+import { bboxFromGeometry } from "@/lib/checkout/overlap";
 import {
   emptyFieldEditFavorites,
   parseFieldEditFavorites,
@@ -3727,6 +3728,19 @@ export function FieldEditSessionClient({
     </div>
   );
 
+  const selectionFitBbox = useMemo(() => {
+    const bbox = bboxFromGeometry(selection.geometry);
+    return {
+      bbox: [bbox.minX, bbox.minY, bbox.maxX, bbox.maxY] as [
+        number,
+        number,
+        number,
+        number,
+      ],
+      requestId: 1,
+    };
+  }, [selection.geometry]);
+
   return (
     <div className="flex flex-col gap-3 sm:gap-4">
       <DiffMapPanel
@@ -3735,6 +3749,7 @@ export function FieldEditSessionClient({
         mapSlug={mapSlug}
         versionId={sessionId}
         exportEnabled={false}
+        fitGeoBbox={selectionFitBbox}
         interactionMode={gpsTracking || mapMode === "navigate" ? "navigate" : "draw"}
         drawPointerHandlers={isDrawInteraction ? drawPointerHandlers : undefined}
         onDrawInterrupt={handleDrawInterrupt}

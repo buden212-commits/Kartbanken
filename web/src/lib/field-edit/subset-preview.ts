@@ -1,6 +1,11 @@
 import { exportCheckoutSubset } from "@/lib/ocad/subset-export";
 import { generateAndStorePreviewSvg } from "@/lib/ocad/svg";
 import { parseSelectionJson } from "@/lib/checkout/types";
+import {
+  applySelectionViewBoxToPreviewSvg,
+  previewRootTransformFromObjectBounds,
+  selectionToPreviewSvgBounds,
+} from "@/lib/field-edit/preview-extent";
 import { prisma } from "@/lib/prisma";
 import { buildCheckoutExportPath, readStoredFile, uploadFile } from "@/lib/storage";
 
@@ -34,7 +39,25 @@ export async function generateFieldEditSubset(
   const storedRef = await uploadFile(exportPath, subset.buffer);
 
   const previewPath = buildFieldEditPreviewPath(mapFileId, checkoutId);
-  await generateAndStorePreviewSvg(subset.buffer, previewPath);
+  // Object bounds drive the OCAD Y-flip transform; selection bounds set the viewBox
+  // so «Hela kartan» fits the utcheckade området without empty white margins.
+  await generateAndStorePreviewSvg(subset.buffer, previewPath, {
+    viewBoundsFromSelection: (objectBounds) => {
+      const transform = previewRootTransformFromObjectBounds(objectBounds);
+      return selectionToPreviewSvgBounds(selection.geometry, transform);
+    },
+  });
+
+  // Ensure stored preview viewBox matches selection (covers generator fallbacks).
+  try {
+    const previewSvg = (await readStoredFile(previewPath)).toString("utf-8");
+    const clipped = applySelectionViewBoxToPreviewSvg(previewSvg, selection.geometry);
+    if (clipped !== previewSvg) {
+      await uploadFile(previewPath, Buffer.from(clipped, "utf-8"));
+    }
+  } catch {
+    // Preview already stored; serve path can repair later.
+  }
 
   await prisma.mapCheckout.update({
     where: { id: checkoutId },
