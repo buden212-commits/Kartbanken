@@ -13,7 +13,7 @@ export const releaseNotes: ReleaseNote[] = [
       "Bézier-läge (B): tryck-håll på brytpunkt, dra radien/tangenten och släpp — upprepa vid varje brytpunkt",
       "Hjälplinjen förhandsvisar den böjda linjen medan du drar (fungerar med mus och pekskärm)",
       "Kort tryck utan drag ger skarp brytpunkt; längre drag ger mjukare kurva",
-      "Brytpunkter, GPS-spårpunkter, snäppmarkörer och andra ritmarkörer behåller samma storlek på skärmen oavsett utsnittets storlek",
+      "Brytpunkter, GPS-spårpunkter, snäppmarkörer och andra ritmarkörer behåller samma storlek på skärmen oavsett utsnittets storlek — även när du zoomar",
       "Kartans egna OCAD-symboler påverkas inte — bara det du ritar och redigerar ovanpå kartan",
     ],
   },
