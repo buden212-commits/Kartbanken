@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DiffMapPanel, type MapDrawPointerHandlers } from "@/components/diff-map-panel";
 import { fieldEditOverlaySvg } from "@/components/field-edit/field-edit-overlay";
+import { fieldEditScreenMarkersSvg } from "@/components/field-edit/field-edit-screen-markers";
 import {
   closedRing,
   applyVertexMove,
@@ -1681,6 +1682,7 @@ export function FieldEditSessionClient({
       if (!pt) return;
       const objectTol = mapHitTolerance(svg, hitDistance);
       const vertexTol = mapHitTolerance(svg, vertexHitDistance);
+      svgUnitsPerPxRef.current = svgUnitsPerScreenPxFromElement(svg) ?? svgUnitsPerPxRef.current;
       const rawGeo = svgUserToGeoPoint(pt, rootTransformRef.current);
       const excludeIndex =
         tool === "select" && selectedObjectIndex != null ? selectedObjectIndex : null;
@@ -2966,9 +2968,8 @@ export function FieldEditSessionClient({
   );
 
   const renderSvgOverlay = useCallback(
-    (transform: SvgRootTransform, view?: { svgUnitsPerPx: number }) => {
+    (transform: SvgRootTransform) => {
       rootTransformRef.current = transform;
-      svgUnitsPerPxRef.current = view?.svgUnitsPerPx ?? 1;
       return (
         <g
           dangerouslySetInnerHTML={{
@@ -2981,12 +2982,10 @@ export function FieldEditSessionClient({
               selectedVertexIndex,
               draftPoints,
               draftKind,
-              svgUnitsPerPx: view?.svgUnitsPerPx ?? 1,
               gpsLivePoints: gpsLiveCoordinates,
               symbolPreviewInner: symbolPreview.svgInner,
               maskedObjectIndices: symbolPreview.maskedIndices,
               draftHasSymbolPreview,
-              snapPreview,
               bezierEdit:
                 bezierEdit && bezierEdit.objectIndex === selectedObjectIndex
                   ? {
@@ -3103,7 +3102,6 @@ export function FieldEditSessionClient({
       gpsLiveCoordinates,
       symbolPreview,
       draftHasSymbolPreview,
-      snapPreview,
       bezierEdit,
       bezierDrawMode,
       cadCutTool,
@@ -3120,6 +3118,145 @@ export function FieldEditSessionClient({
       bezierDraftControls,
       bezierDraftOutHandles,
       bezierGesture,
+      tool,
+    ],
+  );
+
+  const renderScreenOverlay = useCallback(
+    ({
+      projectGeo,
+    }: {
+      projectGeo: (geo: [number, number]) => { x: number; y: number } | null;
+    }) => (
+      <g
+        data-field-edit-screen-markers="1"
+        dangerouslySetInnerHTML={{
+          __html: fieldEditScreenMarkersSvg({
+            projectGeo,
+            objects: editableObjects,
+            ops,
+            selectedObjectIndex,
+            selectedVertexIndex,
+            draftPoints,
+            draftKind,
+            gpsLivePoints: gpsLiveCoordinates,
+            maskedObjectIndices: symbolPreview.maskedIndices,
+            draftHasSymbolPreview,
+            snapPreview,
+            bezierEdit:
+              bezierEdit && bezierEdit.objectIndex === selectedObjectIndex
+                ? {
+                    anchors: bezierEdit.anchors,
+                    controls: bezierEdit.controls,
+                    closed: bezierEdit.objectType === "area",
+                  }
+                : null,
+            bezierDraw:
+              bezierDrawMode && (tool === "addLine" || tool === "addArea")
+                ? {
+                    anchors: bezierDraftAnchors,
+                    controls: bezierDraftControls,
+                    live:
+                      bezierGesture.phase === "drag_handle"
+                        ? {
+                            anchor: bezierGesture.anchor,
+                            handle: bezierGesture.handle,
+                            prevOutHandle:
+                              bezierDraftOutHandles.length > 0
+                                ? bezierDraftOutHandles[bezierDraftOutHandles.length - 1]!
+                                : null,
+                          }
+                        : null,
+                  }
+                : null,
+            cutDraftPoints: cadCutTool !== "off" ? cutDraftPoints : [],
+            rectangularDraw: (() => {
+              if (!rectangularDrawMode || (tool !== "addLine" && tool !== "addArea")) {
+                return null;
+              }
+              const g = rectangularGesture;
+              if (g.phase === "drag_edge1" || g.phase === "await_edge2") {
+                return {
+                  solid: [g.p0, g.p1] as [number, number][],
+                  dashed: [] as [number, number][],
+                  fill: false,
+                };
+              }
+              if (g.phase === "drag_edge2" || g.phase === "ready") {
+                return {
+                  solid: [g.p0, g.p1, g.p2] as [number, number][],
+                  dashed: [g.p2, g.p3, g.p0] as [number, number][],
+                  fill: tool === "addArea",
+                };
+              }
+              return null;
+            })(),
+            curveDraw: (() => {
+              if (
+                (!circleDrawMode && !ellipseDrawMode) ||
+                (tool !== "addLine" && tool !== "addArea")
+              ) {
+                return null;
+              }
+              if (circleDrawMode && circleGesture.phase === "drag_diameter") {
+                return {
+                  ring: [] as [number, number][],
+                  fill: false,
+                  axesSolid: [circleGesture.a, circleGesture.b] as [number, number][],
+                };
+              }
+              if (ellipseDrawMode) {
+                const g = ellipseGesture;
+                if (g.phase === "drag_major" || g.phase === "await_minor") {
+                  return {
+                    ring: [] as [number, number][],
+                    fill: false,
+                    axesSolid: [g.a, g.b] as [number, number][],
+                  };
+                }
+                if (g.phase === "drag_minor") {
+                  const minor = ellipseMinorAxisEnds(g.a, g.b, g.q);
+                  return {
+                    ring: [] as [number, number][],
+                    fill: false,
+                    axesSolid: [g.a, g.b] as [number, number][],
+                    axesDashed: minor
+                      ? ([minor[0], minor[1]] as [number, number][])
+                      : undefined,
+                  };
+                }
+              }
+              return null;
+            })(),
+          }),
+        }}
+      />
+    ),
+    [
+      editableObjects,
+      ops,
+      selectedObjectIndex,
+      selectedVertexIndex,
+      draftPoints,
+      draftKind,
+      gpsLiveCoordinates,
+      symbolPreview.maskedIndices,
+      draftHasSymbolPreview,
+      snapPreview,
+      bezierEdit,
+      bezierDrawMode,
+      bezierDraftAnchors,
+      bezierDraftControls,
+      bezierDraftOutHandles,
+      bezierGesture,
+      cadCutTool,
+      cutDraftPoints,
+      rectangularDrawMode,
+      rectangularGesture,
+      circleDrawMode,
+      circleGesture,
+      ellipseDrawMode,
+      ellipseGesture,
       tool,
     ],
   );
@@ -3602,6 +3739,7 @@ export function FieldEditSessionClient({
         drawPointerHandlers={isDrawInteraction ? drawPointerHandlers : undefined}
         onDrawInterrupt={handleDrawInterrupt}
         renderSvgOverlay={renderSvgOverlay}
+        renderScreenOverlay={renderScreenOverlay}
         onOcadCrsReady={setOcadCrs}
         onOcadMapScale={setOcadMapScale}
         gpsTrackFollow={gpsTrackFollow}

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DiffMapPanel } from "@/components/diff-map-panel";
 import { fieldEditReviewOverlaySvg } from "@/components/field-edit/field-edit-overlay";
+import { fieldEditReviewScreenMarkersSvg } from "@/components/field-edit/field-edit-screen-markers";
 import type { CheckoutSelection } from "@/lib/checkout/types";
 import {
   mergeFieldEditObjectsWithAdds,
@@ -162,7 +163,7 @@ export function FieldEditReviewMap({
   );
 
   const renderSvgOverlay = useCallback(
-    (transform: SvgRootTransform, view?: { svgUnitsPerPx: number }) => (
+    (transform: SvgRootTransform) => (
       <g
         dangerouslySetInnerHTML={{
           __html: fieldEditReviewOverlaySvg({
@@ -172,13 +173,31 @@ export function FieldEditReviewMap({
             ops,
             symbolPreviewInner: symbolPreview.svgInner,
             maskedObjectIndices: symbolPreview.maskedIndices,
-            highlightObjectIndex: selectedChange?.objectIndex ?? null,
-            svgUnitsPerPx: view?.svgUnitsPerPx ?? 1,
           }),
         }}
       />
     ),
-    [selection.geometry, editableObjects, ops, symbolPreview, selectedChange?.objectIndex],
+    [selection.geometry, editableObjects, ops, symbolPreview],
+  );
+
+  const renderScreenOverlay = useCallback(
+    ({
+      projectGeo,
+    }: {
+      projectGeo: (geo: [number, number]) => { x: number; y: number } | null;
+    }) => (
+      <g
+        dangerouslySetInnerHTML={{
+          __html: fieldEditReviewScreenMarkersSvg({
+            projectGeo,
+            objects: editableObjects,
+            ops,
+            highlightObjectIndex: selectedChange?.objectIndex ?? null,
+          }),
+        }}
+      />
+    ),
+    [editableObjects, ops, selectedChange?.objectIndex],
   );
 
   return (
@@ -230,6 +249,7 @@ export function FieldEditReviewMap({
         onClearFocus={() => setSelectedIndex(null)}
         onObjectClick={setSelectedIndex}
         renderSvgOverlay={renderSvgOverlay}
+        renderScreenOverlay={renderScreenOverlay}
         viewportClassName="h-[min(70svh,560px)] min-h-[280px]"
       />
 

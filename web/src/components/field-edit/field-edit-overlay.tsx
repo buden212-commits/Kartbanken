@@ -4,15 +4,9 @@ import {
 } from "@/lib/checkout/types";
 import type { BezierSegmentControls } from "@/lib/field-edit/geometry-tools";
 import { sampleBezierPolyline } from "@/lib/field-edit/geometry-tools";
-import type { SnapResult } from "@/lib/field-edit/snap";
-import {
-  resolveSyntheticAddVertexKinds,
-  syntheticAddObjectId,
-  type FieldEditObjectEntry,
-} from "@/lib/field-edit/object-index";
-import type { FieldEditOps, FieldEditVertexKind } from "@/lib/field-edit/types";
-import { resolveObjectCoordinates, resolveObjectVertexKinds } from "@/lib/field-edit/types";
-import { verticesForHandles } from "@/lib/field-edit/vertices";
+import type { FieldEditObjectEntry } from "@/lib/field-edit/object-index";
+import type { FieldEditOps } from "@/lib/field-edit/types";
+import { resolveObjectCoordinates } from "@/lib/field-edit/types";
 import {
   geoBboxToSvgUser,
   geoToSvgUserPoint,
@@ -21,21 +15,6 @@ import {
 
 /** Screen pixels (non-scaling-stroke) for checkout boundary outline. */
 const SELECTION_BOUNDARY_STROKE_PX = 2;
-/** Desired on-screen size (CSS px) for vertex/draft handles. */
-const HANDLE_SIZE_PX = 6;
-const GPS_HANDLE_SIZE_PX = 5;
-/** Screen pixels (non-scaling-stroke) for handle outline. */
-const HANDLE_STROKE_PX = 1.5;
-const HANDLE_OPACITY = 0.5;
-/** Bézier control handles (P1/P2) — distinct from breakpoints. */
-const CONTROL_SIZE_PX = 8;
-const CONTROL_OPACITY = 0.85;
-
-/** Wrap overlay chrome so geometry is in screen pixels, not map extent units. */
-function screenSpaceGroup(sx: number, sy: number, unitsPerPx: number, inner: string): string {
-  const s = Number.isFinite(unitsPerPx) && unitsPerPx > 0 ? unitsPerPx : 1;
-  return `<g transform="translate(${sx} ${sy}) scale(${s})" pointer-events="none">${inner}</g>`;
-}
 
 function ringToSvgPoints(ring: [number, number][], transform: SvgRootTransform): string {
   return ring
@@ -101,163 +80,10 @@ function maskPointSvg(point: [number, number], transform: SvgRootTransform): str
   return `<circle cx="${x}" cy="${y}" r="30" fill="#ffffff" stroke="#ffffff" stroke-width="8" pointer-events="none" />`;
 }
 
-function vertexRole(
-  index: number,
-  count: number,
-): "first" | "last" | "middle" {
-  if (count <= 1) return "middle";
-  if (index === 0) return "first";
-  if (index === count - 1) return "last";
-  return "middle";
-}
-
-function singleVertexHandleSvg(
-  sx: number,
-  sy: number,
-  role: "first" | "last" | "middle",
-  kind: FieldEditVertexKind,
-  selected: boolean,
-  handleSizePx: number,
-  unitsPerPx: number,
-): string {
-  const fill = selected ? "#2563eb" : "#ffffff";
-  const stroke = selected ? "#1d4ed8" : "#64748b";
-  const size = selected ? handleSizePx * 1.15 : handleSizePx;
-  const common =
-    `fill="${fill}" fill-opacity="${HANDLE_OPACITY}" stroke="${stroke}" stroke-opacity="${HANDLE_OPACITY}" stroke-width="${HANDLE_STROKE_PX}" vector-effect="non-scaling-stroke" pointer-events="none"`;
-
-  let inner: string;
-  if (kind === "dash") {
-    inner = `<polygon points="0,${-size} ${size},0 0,${size} ${-size},0" ${common} />`;
-  } else if (kind === "corner") {
-    inner = `<rect x="${-size}" y="${-size}" width="${size * 2}" height="${size * 2}" ${common} />`;
-  } else if (role === "first") {
-    const arm = size;
-    inner = `<g pointer-events="none">
-      <line x1="${-arm}" y1="${-arm}" x2="${arm}" y2="${arm}" stroke="${stroke}" stroke-opacity="${HANDLE_OPACITY}" stroke-width="${HANDLE_STROKE_PX * 1.4}" vector-effect="non-scaling-stroke" />
-      <line x1="${arm}" y1="${-arm}" x2="${-arm}" y2="${arm}" stroke="${stroke}" stroke-opacity="${HANDLE_OPACITY}" stroke-width="${HANDLE_STROKE_PX * 1.4}" vector-effect="non-scaling-stroke" />
-    </g>`;
-  } else if (role === "last") {
-    inner = `<rect x="${-size}" y="${-size}" width="${size * 2}" height="${size * 2}" ${common} />`;
-  } else {
-    inner = `<circle cx="0" cy="0" r="${size}" ${common} />`;
-  }
-  return screenSpaceGroup(sx, sy, unitsPerPx, inner);
-}
-
-function vertexHandlesSvg(
-  coords: [number, number][],
-  transform: SvgRootTransform,
-  selectedVertex: number | null,
-  unitsPerPx: number,
-  handleSizePx = HANDLE_SIZE_PX,
-  kinds?: FieldEditVertexKind[],
-): string {
-  return coords
-    .map(([x, y], index) => {
-      const [sx, sy] = geoToSvgUserPoint([x, y], transform);
-      const role = vertexRole(index, coords.length);
-      const kind = kinds?.[index] ?? "normal";
-      return singleVertexHandleSvg(
-        sx,
-        sy,
-        role,
-        kind,
-        selectedVertex === index,
-        handleSizePx,
-        unitsPerPx,
-      );
-    })
-    .join("");
-}
-
-function bezierEditSvg(
-  anchors: [number, number][],
-  controls: BezierSegmentControls[],
-  closed: boolean,
-  transform: SvgRootTransform,
-  selectedVertex: number | null,
-  unitsPerPx: number,
-): string {
-  if (anchors.length < 2 || controls.length === 0) return "";
-
-  const sampled = sampleBezierPolyline(anchors, controls, closed, 12);
-  const parts: string[] = [];
-  if (sampled.length >= 2) {
-    parts.push(lineSvg(sampled, transform, "#ea580c", 2.5));
-  }
-
-  const n = anchors.length;
-  for (let i = 0; i < controls.length; i++) {
-    const p0 = anchors[i]!;
-    const p3 = anchors[(i + 1) % n]!;
-    const { p1, p2 } = controls[i]!;
-    const [x0, y0] = geoToSvgUserPoint(p0, transform);
-    const [x1, y1] = geoToSvgUserPoint(p1, transform);
-    const [x2, y2] = geoToSvgUserPoint(p2, transform);
-    const [x3, y3] = geoToSvgUserPoint(p3, transform);
-    const guide =
-      `stroke="#ea580c" stroke-opacity="0.55" stroke-width="1.25" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" fill="none" pointer-events="none"`;
-    parts.push(`<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" ${guide} />`);
-    parts.push(`<line x1="${x3}" y1="${y3}" x2="${x2}" y2="${y2}" ${guide} />`);
-
-    for (const [cx, cy] of [
-      [x1, y1],
-      [x2, y2],
-    ] as const) {
-      const s = CONTROL_SIZE_PX;
-      parts.push(
-        screenSpaceGroup(
-          cx,
-          cy,
-          unitsPerPx,
-          `<polygon points="0,${-s} ${s},0 0,${s} ${-s},0" fill="#ea580c" fill-opacity="${CONTROL_OPACITY}" stroke="#9a3412" stroke-opacity="${CONTROL_OPACITY}" stroke-width="${HANDLE_STROKE_PX}" vector-effect="non-scaling-stroke" pointer-events="none" />`,
-        ),
-      );
-    }
-  }
-
-  parts.push(vertexHandlesSvg(anchors, transform, selectedVertex, unitsPerPx));
-  return parts.join("");
-}
-
-function deleteMarkerSvg(
-  centroid: [number, number],
-  transform: SvgRootTransform,
-  unitsPerPx: number,
-): string {
-  const [x, y] = geoToSvgUserPoint(centroid, transform);
-  return screenSpaceGroup(
-    x,
-    y,
-    unitsPerPx,
-    `<g pointer-events="none"><line x1="-8" y1="-8" x2="8" y2="8" stroke="#dc2626" stroke-width="3" vector-effect="non-scaling-stroke" /><line x1="8" y1="-8" x2="-8" y2="8" stroke="#dc2626" stroke-width="3" vector-effect="non-scaling-stroke" /></g>`,
-  );
-}
-
 function maskObjectSvg(obj: FieldEditObjectEntry, transform: SvgRootTransform): string {
   if (obj.t === "line") return maskLineSvg(obj.v, transform);
   if (obj.t === "area") return maskAreaSvg(obj.v, transform);
   return maskPointSvg(obj.c, transform);
-}
-
-function snapIndicatorSvg(
-  snap: SnapResult,
-  transform: SvgRootTransform,
-  unitsPerPx: number,
-): string {
-  const [x, y] = geoToSvgUserPoint(snap.point, transform);
-  const color = snap.kind === "vertex" ? "#2563eb" : snap.kind === "segment" ? "#7c3aed" : "#0891b2";
-  return screenSpaceGroup(
-    x,
-    y,
-    unitsPerPx,
-    `<g pointer-events="none">
-    <circle cx="0" cy="0" r="14" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke" />
-    <line x1="-10" y1="0" x2="10" y2="0" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke" />
-    <line x1="0" y1="-10" x2="0" y2="10" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke" />
-  </g>`,
-  );
 }
 
 export type BezierEditOverlay = {
@@ -280,18 +106,46 @@ export type BezierDrawOverlay = {
   } | null;
 };
 
+/** Map-space Bézier curve + guide lines (handles rendered in screen overlay). */
+function bezierEditSvg(
+  anchors: [number, number][],
+  controls: BezierSegmentControls[],
+  closed: boolean,
+  transform: SvgRootTransform,
+): string {
+  if (anchors.length < 2 || controls.length === 0) return "";
+
+  const sampled = sampleBezierPolyline(anchors, controls, closed, 12);
+  const parts: string[] = [];
+  if (sampled.length >= 2) {
+    parts.push(lineSvg(sampled, transform, "#ea580c", 2.5));
+  }
+
+  const n = anchors.length;
+  for (let i = 0; i < controls.length; i++) {
+    const p0 = anchors[i]!;
+    const p3 = anchors[(i + 1) % n]!;
+    const { p1, p2 } = controls[i]!;
+    const [x0, y0] = geoToSvgUserPoint(p0, transform);
+    const [x1, y1] = geoToSvgUserPoint(p1, transform);
+    const [x2, y2] = geoToSvgUserPoint(p2, transform);
+    const [x3, y3] = geoToSvgUserPoint(p3, transform);
+    const guide =
+      `stroke="#ea580c" stroke-opacity="0.55" stroke-width="1.25" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" fill="none" pointer-events="none"`;
+    parts.push(`<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" ${guide} />`);
+    parts.push(`<line x1="${x3}" y1="${y3}" x2="${x2}" y2="${y2}" ${guide} />`);
+  }
+
+  return parts.join("");
+}
+
 function bezierDrawDraftSvg(
   draft: BezierDrawOverlay,
   transform: SvgRootTransform,
-  unitsPerPx: number,
 ): string {
   const parts: string[] = [];
   if (draft.anchors.length >= 2 && draft.controls.length > 0) {
-    parts.push(
-      bezierEditSvg(draft.anchors, draft.controls, false, transform, null, unitsPerPx),
-    );
-  } else if (draft.anchors.length >= 1) {
-    parts.push(vertexHandlesSvg(draft.anchors, transform, null, unitsPerPx));
+    parts.push(bezierEditSvg(draft.anchors, draft.controls, false, transform));
   }
 
   const live = draft.live;
@@ -303,45 +157,6 @@ function bezierDrawDraftSvg(
     `stroke="#ea580c" stroke-opacity="0.7" stroke-width="1.5" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" fill="none" pointer-events="none"`;
 
   parts.push(`<line x1="${ax}" y1="${ay}" x2="${hx}" y2="${hy}" ${guide} />`);
-  parts.push(vertexHandlesSvg([live.anchor], transform, 0, unitsPerPx));
-  {
-    const s = CONTROL_SIZE_PX;
-    parts.push(
-      screenSpaceGroup(
-        hx,
-        hy,
-        unitsPerPx,
-        `<polygon points="0,${-s} ${s},0 0,${s} ${-s},0" fill="#ea580c" fill-opacity="${CONTROL_OPACITY}" stroke="#9a3412" stroke-opacity="${CONTROL_OPACITY}" stroke-width="${HANDLE_STROKE_PX}" vector-effect="non-scaling-stroke" pointer-events="none" />`,
-      ),
-    );
-  }
-  {
-    const dx = hx - ax;
-    const dy = hy - ay;
-    const len = Math.hypot(dx, dy);
-    if (len > 8 * unitsPerPx) {
-      // Arrowhead in screen space at handle tip
-      parts.push(
-        screenSpaceGroup(
-          hx,
-          hy,
-          unitsPerPx,
-          (() => {
-            const ux = dx / len;
-            const uy = dy / len;
-            // Local coords: tip at 0,0; arrow points along drag direction in screen px
-            const tipX = 0;
-            const tipY = 0;
-            const backX = -ux * 10;
-            const backY = -uy * 10;
-            const px = -uy * 5;
-            const py = ux * 5;
-            return `<polygon points="${tipX},${tipY} ${backX + px},${backY + py} ${backX - px},${backY - py}" fill="#ea580c" fill-opacity="0.9" pointer-events="none" />`;
-          })(),
-        ),
-      );
-    }
-  }
 
   if (draft.anchors.length >= 1 && live.prevOutHandle) {
     const prev = draft.anchors[draft.anchors.length - 1]!;
@@ -361,6 +176,11 @@ function bezierDrawDraftSvg(
   return parts.join("");
 }
 
+/**
+ * Map-space overlay: selection, masks, symbol preview, draft strokes.
+ * Vertex/snap/delete markers are rendered via `fieldEditScreenMarkersSvg`
+ * outside the CSS zoom transform so they stay screen-sized.
+ */
 export function fieldEditOverlaySvg(options: {
   transform: SvgRootTransform;
   selectionGeometry: CheckoutSelectionGeometry;
@@ -370,13 +190,10 @@ export function fieldEditOverlaySvg(options: {
   selectedVertexIndex: number | null;
   draftPoints: [number, number][];
   draftKind: "line" | "area" | null;
-  /** SVG user units per CSS pixel — keeps handles/markers screen-sized. */
-  svgUnitsPerPx?: number;
   gpsLivePoints?: [number, number][];
   symbolPreviewInner?: string;
   maskedObjectIndices?: number[];
   draftHasSymbolPreview?: boolean;
-  snapPreview?: SnapResult | null;
   bezierEdit?: BezierEditOverlay | null;
   bezierDraw?: BezierDrawOverlay | null;
   cutDraftPoints?: [number, number][];
@@ -386,7 +203,6 @@ export function fieldEditOverlaySvg(options: {
     dashed: [number, number][];
     fill: boolean;
   } | null;
-  /** Circle/ellipse help lines + sampled Bézier ring while drawing. */
   curveDraw?: {
     ring: [number, number][];
     fill: boolean;
@@ -400,15 +216,12 @@ export function fieldEditOverlaySvg(options: {
     objects,
     ops,
     selectedObjectIndex,
-    selectedVertexIndex,
     draftPoints,
     draftKind,
-    svgUnitsPerPx = 1,
     gpsLivePoints = [],
     symbolPreviewInner = "",
     maskedObjectIndices = [],
     draftHasSymbolPreview = false,
-    snapPreview = null,
     bezierEdit = null,
     bezierDraw = null,
     cutDraftPoints = [],
@@ -416,7 +229,6 @@ export function fieldEditOverlaySvg(options: {
     rectangularDraw = null,
     curveDraw = null,
   } = options;
-  const u = svgUnitsPerPx > 0 ? svgUnitsPerPx : 1;
 
   const masked = new Set(maskedObjectIndices);
   const parts: string[] = [selectionBoundarySvg(selectionGeometry, transform)];
@@ -424,9 +236,6 @@ export function fieldEditOverlaySvg(options: {
   for (const obj of objects) {
     if (!masked.has(obj.i)) continue;
     parts.push(maskObjectSvg(obj, transform));
-    if (ops.deletes.includes(obj.i)) {
-      parts.push(deleteMarkerSvg(obj.c, transform, u));
-    }
   }
 
   if (symbolPreviewInner) {
@@ -469,25 +278,13 @@ export function fieldEditOverlaySvg(options: {
           bezierEdit.controls,
           bezierEdit.closed,
           transform,
-          selectedVertexIndex,
-          u,
         ),
       );
-      continue;
     }
-    const coords = resolveObjectCoordinates(obj.i, obj.v, ops);
-    if (!coords || coords.length === 0) continue;
-    const handleCoords = obj.t === "area" ? verticesForHandles(coords, obj.t) : coords;
-    const kinds =
-      resolveSyntheticAddVertexKinds(obj.i, handleCoords.length, ops.adds) ??
-      resolveObjectVertexKinds(obj.i, handleCoords.length, ops);
-    parts.push(
-      vertexHandlesSvg(handleCoords, transform, selectedVertexIndex, u, HANDLE_SIZE_PX, kinds),
-    );
   }
 
   if (bezierDraw) {
-    parts.push(bezierDrawDraftSvg(bezierDraw, transform, u));
+    parts.push(bezierDrawDraftSvg(bezierDraw, transform));
   } else if (rectangularDraw) {
     if (rectangularDraw.fill && rectangularDraw.solid.length + rectangularDraw.dashed.length >= 3) {
       const ring = [...rectangularDraw.solid];
@@ -507,13 +304,6 @@ export function fieldEditOverlaySvg(options: {
     if (rectangularDraw.dashed.length >= 2) {
       parts.push(dashedLineSvg(rectangularDraw.dashed, transform, "#d97706", 2.5));
     }
-    const handles = [
-      ...rectangularDraw.solid,
-      ...rectangularDraw.dashed.slice(1),
-    ];
-    if (handles.length >= 1) {
-      parts.push(vertexHandlesSvg(handles, transform, null, u));
-    }
   } else if (curveDraw) {
     if (curveDraw.fill && curveDraw.ring.length >= 3) {
       parts.push(
@@ -528,16 +318,8 @@ export function fieldEditOverlaySvg(options: {
     if (curveDraw.axesDashed && curveDraw.axesDashed.length >= 2) {
       parts.push(dashedLineSvg(curveDraw.axesDashed, transform, "#ea580c", 2));
     }
-    const axisHandles = [
-      ...(curveDraw.axesSolid ?? []),
-      ...(curveDraw.axesDashed ?? []).slice(1),
-    ];
-    if (axisHandles.length >= 1) {
-      parts.push(vertexHandlesSvg(axisHandles, transform, null, u));
-    }
   } else if (!draftHasSymbolPreview && draftKind === "line" && draftPoints.length >= 1) {
     parts.push(lineSvg(draftPoints, transform, "#16a34a", 2));
-    parts.push(vertexHandlesSvg(draftPoints, transform, null, u));
   }
   if (
     !bezierDraw &&
@@ -554,31 +336,14 @@ export function fieldEditOverlaySvg(options: {
     } else {
       parts.push(lineSvg(draftPoints, transform, "#16a34a", 2));
     }
-    parts.push(vertexHandlesSvg(draftPoints, transform, null, u));
-  } else if (
-    !bezierDraw &&
-    !rectangularDraw &&
-    !curveDraw &&
-    draftHasSymbolPreview &&
-    draftPoints.length >= 1
-  ) {
-    parts.push(vertexHandlesSvg(draftPoints, transform, null, u));
   }
 
   if (gpsLivePoints.length >= 1 && !draftHasSymbolPreview) {
     parts.push(lineSvg(gpsLivePoints, transform, "#16a34a", 3));
-    parts.push(vertexHandlesSvg(gpsLivePoints, transform, null, u, GPS_HANDLE_SIZE_PX));
   }
 
-  if (cutDraftPoints.length >= 1) {
-    if (cutDraftPoints.length >= 2) {
-      parts.push(lineSvg(cutDraftPoints, transform, "#7c3aed", 2.5));
-    }
-    parts.push(vertexHandlesSvg(cutDraftPoints, transform, null, u));
-  }
-
-  if (snapPreview) {
-    parts.push(snapIndicatorSvg(snapPreview, transform, u));
+  if (cutDraftPoints.length >= 2) {
+    parts.push(lineSvg(cutDraftPoints, transform, "#7c3aed", 2.5));
   }
 
   return parts.join("");
@@ -592,8 +357,6 @@ export function fieldEditReviewOverlaySvg(options: {
   ops: FieldEditOps;
   symbolPreviewInner?: string;
   maskedObjectIndices?: number[];
-  highlightObjectIndex?: number | null;
-  svgUnitsPerPx?: number;
 }): string {
   const {
     transform,
@@ -602,10 +365,7 @@ export function fieldEditReviewOverlaySvg(options: {
     ops,
     symbolPreviewInner = "",
     maskedObjectIndices = [],
-    highlightObjectIndex = null,
-    svgUnitsPerPx = 1,
   } = options;
-  const u = svgUnitsPerPx > 0 ? svgUnitsPerPx : 1;
 
   const base = fieldEditOverlaySvg({
     transform,
@@ -618,7 +378,6 @@ export function fieldEditReviewOverlaySvg(options: {
     draftKind: null,
     symbolPreviewInner,
     maskedObjectIndices,
-    svgUnitsPerPx: u,
   });
 
   const byIndex = new Map(objects.map((o) => [o.i, o]));
@@ -644,16 +403,6 @@ export function fieldEditReviewOverlaySvg(options: {
       );
     } else if (modify.geometryKind === "line" && coords.length >= 2) {
       parts.push(dashedLineSvg(coords, transform, "#d97706", 3));
-    } else if (modify.geometryKind === "point" && coords.length >= 1) {
-      const [x, y] = geoToSvgUserPoint(coords[0]!, transform);
-      parts.push(
-        screenSpaceGroup(
-          x,
-          y,
-          u,
-          `<circle cx="0" cy="0" r="12" fill="none" stroke="#d97706" stroke-width="2.5" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" pointer-events="none" />`,
-        ),
-      );
     }
   }
 
@@ -664,56 +413,6 @@ export function fieldEditReviewOverlaySvg(options: {
       );
     } else if (add.kind === "line" && add.coordinates.length >= 2) {
       parts.push(dashedLineSvg(add.coordinates, transform, "#16a34a", 3));
-    } else if (add.kind === "point") {
-      const [x, y] = geoToSvgUserPoint([add.x, add.y], transform);
-      parts.push(
-        screenSpaceGroup(
-          x,
-          y,
-          u,
-          `<circle cx="0" cy="0" r="12" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" pointer-events="none" />`,
-        ),
-      );
-    }
-  }
-
-  if (highlightObjectIndex != null) {
-    const obj = byIndex.get(highlightObjectIndex);
-    let focusPoint: [number, number] | null = null;
-    if (obj) {
-      const coords = resolveObjectCoordinates(highlightObjectIndex, obj.v, ops);
-      if (coords && coords.length > 0) {
-        focusPoint =
-          coords.length === 1
-            ? coords[0]!
-            : [
-                coords.reduce((s, p) => s + p[0], 0) / coords.length,
-                coords.reduce((s, p) => s + p[1], 0) / coords.length,
-              ];
-      } else if (ops.deletes.includes(highlightObjectIndex)) {
-        focusPoint = obj.c;
-      }
-    } else {
-      for (const [addIndex, add] of ops.adds.entries()) {
-        if (syntheticAddObjectId(addIndex) !== highlightObjectIndex) continue;
-        focusPoint =
-          add.kind === "point"
-            ? [add.x, add.y]
-            : add.kind === "line"
-              ? (add.coordinates[0] ?? null)
-              : (add.ring[0] ?? null);
-      }
-    }
-    if (focusPoint) {
-      const [cx, cy] = geoToSvgUserPoint(focusPoint, transform);
-      parts.push(
-        screenSpaceGroup(
-          cx,
-          cy,
-          u,
-          `<circle cx="0" cy="0" r="22" fill="none" stroke="#2563eb" stroke-width="3" vector-effect="non-scaling-stroke" pointer-events="none" />`,
-        ),
-      );
     }
   }
 

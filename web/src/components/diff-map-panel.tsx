@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import type { OcadObjectChange } from "@/lib/ocad/diff-types";
 import type { ChangeType } from "@/lib/ocad/diff-types";
 import { formatChangeCentroid } from "@/lib/ocad/change-utils";
@@ -17,7 +17,7 @@ import {
   mapPointToScreen,
   type SvgRootTransform,
 } from "@/lib/ocad/svg-coords";
-import { svgUnitsPerScreenPx } from "@/lib/ocad/screen-space";
+import { svgUnitsPerScreenPx, svgUnitsPerScreenPxFromElement } from "@/lib/ocad/screen-space";
 import { extractSvgInner, type OcadMapLayer } from "@/lib/ocad/svg-utils";
 import { flattenOcadLayers, initialLayerVisibility } from "@/lib/ocad/layers";
 import { MapLayerPanel } from "@/components/map-layer-panel";
@@ -104,6 +104,14 @@ type Props = {
     rootTransform: SvgRootTransform,
     view?: { svgUnitsPerPx: number },
   ) => ReactNode;
+  /**
+   * Screen-space overlay (outside CSS zoom/pan). Use for handles/markers that must
+   * stay constant size on screen. `projectGeo` returns viewport CSS pixels.
+   */
+  renderScreenOverlay?: (api: {
+    projectGeo: (geo: [number, number]) => { x: number; y: number } | null;
+    rootTransform: SvgRootTransform;
+  }) => ReactNode;
   /** Open/in-progress kartförslag for raster export (PDF/GeoTIFF). Fetched on export if omitted. */
   suggestionOverlays?: SuggestionOverlayItem[];
   /** When "draw", viewport pointer events call drawPointerHandlers instead of pan. */
@@ -274,6 +282,26 @@ function SvgOverlaySafe({
   }
 }
 
+function ScreenOverlaySafe({
+  render,
+  projectGeo,
+  rootTransform,
+}: {
+  render?: (api: {
+    projectGeo: (geo: [number, number]) => { x: number; y: number } | null;
+    rootTransform: SvgRootTransform;
+  }) => ReactNode;
+  projectGeo: (geo: [number, number]) => { x: number; y: number } | null;
+  rootTransform: SvgRootTransform;
+}) {
+  if (!render) return null;
+  try {
+    return render({ projectGeo, rootTransform });
+  } catch {
+    return null;
+  }
+}
+
 export function DiffMapPanel({
   previewUrl,
   title,
@@ -287,6 +315,7 @@ export function DiffMapPanel({
   onClearFocus,
   onObjectClick,
   renderSvgOverlay,
+  renderScreenOverlay,
   suggestionOverlays,
   interactionMode = "navigate",
   drawPointerHandlers,
@@ -1232,6 +1261,28 @@ export function DiffMapPanel({
     onOcadCrsReady?.(ocadCrs);
   }, [ocadCrs, onOcadCrsReady]);
 
+  const projectGeoToViewport = useCallback(
+    (mapCoord: [number, number]): { x: number; y: number } | null => {
+      if (!fullViewBox || !viewportRef.current) return null;
+      const viewport = viewportRef.current;
+      const rect = viewport.getBoundingClientRect();
+      if (rect.width < 1 || rect.height < 1) return null;
+      const [svgX, svgY] = geoToSvgUserPoint(mapCoord, rootTransform);
+      const [baseX, baseY] = mapPointToScreen(
+        svgX,
+        svgY,
+        fullViewBox,
+        rect.width,
+        rect.height,
+      );
+      return {
+        x: pan.x + baseX * zoom,
+        y: pan.y + baseY * zoom,
+      };
+    },
+    [fullViewBox, pan.x, pan.y, rootTransform, zoom],
+  );
+
   const gpsMarker = useMemo(() => {
     if (!fullViewBox || !viewportRef.current) return null;
 
@@ -1244,23 +1295,13 @@ export function DiffMapPanel({
       ? (gpsTrackFollow?.accuracyMeters ?? null)
       : (gpsFix?.accuracyMeters ?? null);
 
-    const viewport = viewportRef.current;
-    const rect = viewport.getBoundingClientRect();
-    const [svgX, svgY] = geoToSvgUserPoint(mapCoord, rootTransform);
-    const [baseX, baseY] = mapPointToScreen(
-      svgX,
-      svgY,
-      fullViewBox,
-      rect.width,
-      rect.height,
-    );
-    const x = pan.x + baseX * zoom;
-    const y = pan.y + baseY * zoom;
+    const projected = projectGeoToViewport(mapCoord);
+    if (!projected) return null;
     const resolvedAccuracy = accuracyMeters ?? gpsFix?.accuracyMeters ?? 25;
 
     return {
-      x,
-      y,
+      x: projected.x,
+      y: projected.y,
       uncertain: resolvedAccuracy > GPS_UNCERTAIN_ACCURACY_M,
     };
   }, [
@@ -1270,10 +1311,7 @@ export function DiffMapPanel({
     gpsTrackFollow?.active,
     gpsTrackFollow?.mapCoordRef,
     gpsTrackFollow?.markerToken,
-    pan.x,
-    pan.y,
-    rootTransform,
-    zoom,
+    projectGeoToViewport,
   ]);
 
   const gpsAccuracyUncertain = Boolean(
@@ -1284,12 +1322,36 @@ export function DiffMapPanel({
   const highlightShape = focusTarget ? buildHighlightShape(focusTarget, rootTransform) : null;
   const exportBbox = exportFrame ? exportFrameBbox(exportFrame) : null;
 
-  const overlaySvgUnitsPerPx = useMemo(() => {
+  const [overlaySvgUnitsPerPx, setOverlaySvgUnitsPerPx] = useState(1);
+
+  const refreshOverlayScale = useCallback(() => {
+    const fromCtm = svgUnitsPerScreenPxFromElement(svgRef.current);
+    if (fromCtm != null && Number.isFinite(fromCtm) && fromCtm > 0) {
+      setOverlaySvgUnitsPerPx((prev) =>
+        Math.abs(prev - fromCtm) / Math.max(prev, 1e-9) > 0.02 ? fromCtm : prev,
+      );
+      return;
+    }
     const viewport = viewportRef.current;
-    const w = viewport?.clientWidth ?? 0;
-    const h = viewport?.clientHeight ?? 0;
-    return svgUnitsPerScreenPx(fullViewBox, w, h, zoom);
-  }, [fullViewBox, zoom, pan.x, pan.y]);
+    const next = svgUnitsPerScreenPx(
+      fullViewBox,
+      viewport?.clientWidth ?? 0,
+      viewport?.clientHeight ?? 0,
+      zoom,
+    );
+    setOverlaySvgUnitsPerPx((prev) =>
+      Math.abs(prev - next) / Math.max(prev, 1e-9) > 0.02 ? next : prev,
+    );
+  }, [fullViewBox, zoom]);
+
+  useLayoutEffect(() => {
+    refreshOverlayScale();
+    const viewport = viewportRef.current;
+    if (!viewport || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => refreshOverlayScale());
+    ro.observe(viewport);
+    return () => ro.disconnect();
+  }, [refreshOverlayScale, svgInner, loading, pan.x, pan.y]);
 
   const infoChange = selectedChange ?? null;
 
@@ -1503,6 +1565,19 @@ export function DiffMapPanel({
               />
             </svg>
           </div>
+        )}
+
+        {svgInner && fullViewBox && renderScreenOverlay && (
+          <svg
+            className="pointer-events-none absolute inset-0 z-[15] h-full w-full overflow-visible"
+            aria-hidden
+          >
+            <ScreenOverlaySafe
+              render={renderScreenOverlay}
+              projectGeo={projectGeoToViewport}
+              rootTransform={rootTransform}
+            />
+          </svg>
         )}
 
         {gpsMarker && (
