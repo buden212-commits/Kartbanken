@@ -8,11 +8,13 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-08",
-    title: "Fältredigering — Bézier-ritning som i OCAD",
+    title: "Fältredigering — Bézier och skärmfasta markörer",
     items: [
       "Bézier-läge (B): tryck-håll på brytpunkt, dra radien/tangenten och släpp — upprepa vid varje brytpunkt",
       "Hjälplinjen förhandsvisar den böjda linjen medan du drar (fungerar med mus och pekskärm)",
       "Kort tryck utan drag ger skarp brytpunkt; längre drag ger mjukare kurva",
+      "Brytpunkter, GPS-spårpunkter, snäppmarkörer och andra ritmarkörer behåller samma storlek på skärmen oavsett utsnittets storlek",
+      "Kartans egna OCAD-symboler påverkas inte — bara det du ritar och redigerar ovanpå kartan",
     ],
   },
   {

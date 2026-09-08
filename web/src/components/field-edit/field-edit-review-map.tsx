@@ -162,7 +162,7 @@ export function FieldEditReviewMap({
   );
 
   const renderSvgOverlay = useCallback(
-    (transform: SvgRootTransform) => (
+    (transform: SvgRootTransform, view?: { svgUnitsPerPx: number }) => (
       <g
         dangerouslySetInnerHTML={{
           __html: fieldEditReviewOverlaySvg({
@@ -173,6 +173,7 @@ export function FieldEditReviewMap({
             symbolPreviewInner: symbolPreview.svgInner,
             maskedObjectIndices: symbolPreview.maskedIndices,
             highlightObjectIndex: selectedChange?.objectIndex ?? null,
+            svgUnitsPerPx: view?.svgUnitsPerPx ?? 1,
           }),
         }}
       />

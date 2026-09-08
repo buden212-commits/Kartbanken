@@ -17,6 +17,7 @@ import {
   mapPointToScreen,
   type SvgRootTransform,
 } from "@/lib/ocad/svg-coords";
+import { svgUnitsPerScreenPx } from "@/lib/ocad/screen-space";
 import { extractSvgInner, type OcadMapLayer } from "@/lib/ocad/svg-utils";
 import { flattenOcadLayers, initialLayerVisibility } from "@/lib/ocad/layers";
 import { MapLayerPanel } from "@/components/map-layer-panel";
@@ -99,7 +100,10 @@ type Props = {
   onClearFocus?: () => void;
   onObjectClick?: (changeIndex: number) => void;
   /** Extra SVG overlay content rendered above map layers (e.g. checkout areas). */
-  renderSvgOverlay?: (rootTransform: SvgRootTransform) => ReactNode;
+  renderSvgOverlay?: (
+    rootTransform: SvgRootTransform,
+    view?: { svgUnitsPerPx: number },
+  ) => ReactNode;
   /** Open/in-progress kartförslag for raster export (PDF/GeoTIFF). Fetched on export if omitted. */
   suggestionOverlays?: SuggestionOverlayItem[];
   /** When "draw", viewport pointer events call drawPointerHandlers instead of pan. */
@@ -253,13 +257,18 @@ function zoomAtPoint(
 function SvgOverlaySafe({
   render,
   rootTransform,
+  svgUnitsPerPx,
 }: {
-  render?: (rootTransform: SvgRootTransform) => ReactNode;
+  render?: (
+    rootTransform: SvgRootTransform,
+    view?: { svgUnitsPerPx: number },
+  ) => ReactNode;
   rootTransform: SvgRootTransform;
+  svgUnitsPerPx: number;
 }) {
   if (!render) return null;
   try {
-    return render(rootTransform);
+    return render(rootTransform, { svgUnitsPerPx });
   } catch {
     return null;
   }
@@ -1275,6 +1284,13 @@ export function DiffMapPanel({
   const highlightShape = focusTarget ? buildHighlightShape(focusTarget, rootTransform) : null;
   const exportBbox = exportFrame ? exportFrameBbox(exportFrame) : null;
 
+  const overlaySvgUnitsPerPx = useMemo(() => {
+    const viewport = viewportRef.current;
+    const w = viewport?.clientWidth ?? 0;
+    const h = viewport?.clientHeight ?? 0;
+    return svgUnitsPerScreenPx(fullViewBox, w, h, zoom);
+  }, [fullViewBox, zoom, pan.x, pan.y]);
+
   const infoChange = selectedChange ?? null;
 
   const toolbarBtn =
@@ -1480,7 +1496,11 @@ export function DiffMapPanel({
                 />
               )}
               <g dangerouslySetInnerHTML={{ __html: svgInner }} />
-              <SvgOverlaySafe render={renderSvgOverlay} rootTransform={rootTransform} />
+              <SvgOverlaySafe
+                render={renderSvgOverlay}
+                rootTransform={rootTransform}
+                svgUnitsPerPx={overlaySvgUnitsPerPx}
+              />
             </svg>
           </div>
         )}

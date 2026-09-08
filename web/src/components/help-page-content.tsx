@@ -532,6 +532,7 @@ export async function HelpPageContent() {
           <HelpList
             items={[
               "Visning: X vid första punkten, punkt i mitten, fyrkant vid sista — mindre och halvtransparenta",
+              "Markörerna (brytpunkter, GPS-punkter, snäpp) behåller samma storlek på skärmen oavsett utsnittets storlek — kartans OCAD-symboler skalas som tidigare",
               "Lägg till normal (cirkel), hörn (kvadrat) eller streck (romb); radera; växla typ normal → streck → hörn",
               "Håll inne lägg till-ikonen för att ändra alla brytpunkter till den typen",
               "Hörn visas som kvadrat och streck som romb på kartan",

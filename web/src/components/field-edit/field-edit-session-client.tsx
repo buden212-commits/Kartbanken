@@ -131,6 +131,10 @@ import {
 } from "@/lib/field-edit/types";
 import { metersToMapUnits, type OcadCrsInfo } from "@/lib/ocad/crs";
 import { screenToSvgPoint } from "@/lib/ocad/map-hit-test";
+import {
+  screenPxToSvgUser,
+  svgUnitsPerScreenPxFromElement,
+} from "@/lib/ocad/screen-space";
 import { parseOcadLayersFromSvg } from "@/lib/ocad/svg-utils";
 import { formatOcadSymbolNumber } from "@/lib/ocad/layers";
 import { fetchPreviewText } from "@/lib/ocad/preview-fetch";
@@ -188,12 +192,17 @@ type EllipseDrawGesture =
   | { phase: "await_minor"; a: [number, number]; b: [number, number] }
   | { phase: "drag_minor"; a: [number, number]; b: [number, number]; q: [number, number] };
 
+/** Hit tolerances in CSS screen pixels (converted to map units at pointer time). */
 const DEFAULT_HIT_DISTANCE = 35;
 const DEFAULT_VERTEX_HIT_DISTANCE = 25;
 const COARSE_HIT_DISTANCE = 50;
 const COARSE_VERTEX_HIT_DISTANCE = 35;
 /** Minimum first-edge length in map units before accepting rectangular base. */
 const RECT_MIN_EDGE = 1e-3;
+
+function mapHitTolerance(svg: SVGSVGElement, screenPx: number): number {
+  return screenPxToSvgUser(screenPx, svgUnitsPerScreenPxFromElement(svg) ?? 1);
+}
 
 export function FieldEditSessionClient({
   mapSlug,
@@ -287,6 +296,7 @@ export function FieldEditSessionClient({
     maskedIndices: [],
   });
   const rootTransformRef = useRef<SvgRootTransform>(IDENTITY_SVG_TRANSFORM);
+  const svgUnitsPerPxRef = useRef(1);
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previewRequestRef = useRef(0);
@@ -535,6 +545,7 @@ export function FieldEditSessionClient({
     setBezierDraftAnchors([]);
     setBezierDraftOutHandles([]);
     setBezierGesture({ phase: "idle" });
+    bezierPointerDownRef.current = null;
   }, []);
 
   const clearRectangularGesture = useCallback(() => {
@@ -1565,7 +1576,11 @@ export function FieldEditSessionClient({
         setInfo("Klipplinjen behöver minst två punkter.");
         return;
       }
-      const result = splitAreaByCutLine(coords, cutDraftPoints, hitDistance);
+      const result = splitAreaByCutLine(
+        coords,
+        cutDraftPoints,
+        screenPxToSvgUser(hitDistance, svgUnitsPerPxRef.current),
+      );
       if (!result) {
         setInfo("Klipplinjen måste börja och sluta nära ytans kant.");
         return;
@@ -1664,6 +1679,8 @@ export function FieldEditSessionClient({
       if (gpsTracking) return;
       const pt = screenToSvgPoint(svg, e.clientX, e.clientY);
       if (!pt) return;
+      const objectTol = mapHitTolerance(svg, hitDistance);
+      const vertexTol = mapHitTolerance(svg, vertexHitDistance);
       const rawGeo = svgUserToGeoPoint(pt, rootTransformRef.current);
       const excludeIndex =
         tool === "select" && selectedObjectIndex != null ? selectedObjectIndex : null;
@@ -1683,7 +1700,7 @@ export function FieldEditSessionClient({
             bezierEdit.controls,
             closed,
             geo,
-            vertexHitDistance,
+            vertexTol,
           );
           if (controlHit) {
             dragBezierControlRef.current = controlHit;
@@ -1693,7 +1710,7 @@ export function FieldEditSessionClient({
           const vertexIndex = hitTestFieldEditVertex(
             bezierEdit.anchors,
             geo,
-            vertexHitDistance,
+            vertexTol,
           );
           if (vertexIndex != null) {
             dragVertexRef.current = {
@@ -1720,7 +1737,7 @@ export function FieldEditSessionClient({
             obj?.t === "line" &&
             handleCoords.length >= 2
           ) {
-            const hit = findLineCutHit(handleCoords, geo, hitDistance);
+            const hit = findLineCutHit(handleCoords, geo, objectTol);
             if (!hit) {
               setInfo("Klicka på linjen för att klippa.");
               return;
@@ -1761,7 +1778,7 @@ export function FieldEditSessionClient({
             const vertexIndex = hitTestFieldEditVertex(
               handleCoords,
               geo,
-              vertexHitDistance,
+              vertexTol,
             );
 
             if (cadVertexTool === "remove") {
@@ -1829,12 +1846,12 @@ export function FieldEditSessionClient({
             const hitPolyline =
               obj.t === "area" ? closedRing(handleCoords) : handleCoords;
             const nearest = nearestPointOnPolyline(geo, hitPolyline);
-            if (!nearest || nearest.distance > hitDistance) {
+            if (!nearest || nearest.distance > objectTol) {
               setInfo(`Klicka närmare linjen för att lägga till en ${addLabel}-brytpunkt.`);
               return;
             }
             const tooClose = handleCoords.some(
-              (v) => distance2d(v, nearest.point) < vertexHitDistance * 0.35,
+              (v) => distance2d(v, nearest.point) < vertexTol * 0.35,
             );
             if (tooClose) {
               setInfo("För nära en befintlig brytpunkt — välj en annan plats.");
@@ -1854,7 +1871,7 @@ export function FieldEditSessionClient({
             return;
           }
 
-          const vertexIndex = hitTestFieldEditVertex(handleCoords, geo, vertexHitDistance);
+          const vertexIndex = hitTestFieldEditVertex(handleCoords, geo, vertexTol);
           if (vertexIndex != null && obj) {
             // Defer drag until the pointer moves — so hold-to-cycle can run on overlaps.
             const startCoords =
@@ -1873,7 +1890,7 @@ export function FieldEditSessionClient({
           }
         }
 
-        const hits = hitTestFieldEditObjects(editableObjects, geo, hitDistance).filter(
+        const hits = hitTestFieldEditObjects(editableObjects, geo, objectTol).filter(
           (entry) => !ops.deletes.includes(entry.i),
         );
         if (hits.length === 0) {
@@ -1972,7 +1989,7 @@ export function FieldEditSessionClient({
       }
 
       if (tool === "delete") {
-        const hit = hitTestFieldEditObject(editableObjects, geo, hitDistance);
+        const hit = hitTestFieldEditObject(editableObjects, geo, objectTol);
         if (!hit) {
           setError("Inget objekt hittades — zooma in och försök igen");
           return;
@@ -2019,7 +2036,7 @@ export function FieldEditSessionClient({
       }
 
       if (tool === "addPoint") {
-        const hit = hitTestFieldEditObject(editableObjects, geo, hitDistance);
+        const hit = hitTestFieldEditObject(editableObjects, geo, objectTol);
         if (hit && !ops.deletes.includes(hit.i)) {
           if (pickSymbolFromObject(hit, "point")) return;
         }
@@ -2041,7 +2058,7 @@ export function FieldEditSessionClient({
 
       if (tool === "addLine" || tool === "addArea") {
         const kind = tool === "addLine" ? "line" : "area";
-        const hit = hitTestFieldEditObject(editableObjects, geo, hitDistance);
+        const hit = hitTestFieldEditObject(editableObjects, geo, objectTol);
         if (hit && !ops.deletes.includes(hit.i)) {
           const noDraftYet =
             draftPoints.length === 0 &&
@@ -2636,7 +2653,7 @@ export function FieldEditSessionClient({
           if (pt) {
             const rawGeo = svgUserToGeoPoint(pt, rootTransformRef.current);
             const { point: geo } = resolveSnapPoint(rawGeo, selectedObjectIndex);
-            const endHit = findLineCutHit(coords, geo, hitDistance);
+            const endHit = findLineCutHit(coords, geo, mapHitTolerance(_svg, hitDistance));
             const moved = Math.hypot(
               _e.clientX - cutDrag.startClientX,
               _e.clientY - cutDrag.startClientY,
@@ -2949,8 +2966,9 @@ export function FieldEditSessionClient({
   );
 
   const renderSvgOverlay = useCallback(
-    (transform: SvgRootTransform) => {
+    (transform: SvgRootTransform, view?: { svgUnitsPerPx: number }) => {
       rootTransformRef.current = transform;
+      svgUnitsPerPxRef.current = view?.svgUnitsPerPx ?? 1;
       return (
         <g
           dangerouslySetInnerHTML={{
@@ -2963,6 +2981,7 @@ export function FieldEditSessionClient({
               selectedVertexIndex,
               draftPoints,
               draftKind,
+              svgUnitsPerPx: view?.svgUnitsPerPx ?? 1,
               gpsLivePoints: gpsLiveCoordinates,
               symbolPreviewInner: symbolPreview.svgInner,
               maskedObjectIndices: symbolPreview.maskedIndices,
