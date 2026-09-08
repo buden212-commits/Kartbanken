@@ -557,7 +557,7 @@ export async function HelpPageContent() {
               "Bézier: dra kontrollpunkterna P1/P2 för att forma kurvan, sedan «Tillämpa kurva»",
               "Frihand: klicka linje/yta tills F visas — tryck och dra; klicka igen eller «Klar» avslutar. Utjämning 1–3 under snappning",
               "Cirkel (C) / ellips (E): klicka linje/yta tills C eller E visas — cirkel: dra diameter och släpp; ellips: längsta axel sedan kortare axel",
-              "Rita ny Bézier: klicka linje-/ytaverktyget tills B visas — tryck brytpunkt→dra P1, tryck P2→släpp nästa brytpunkt",
+              "Rita ny Bézier: klicka linje-/ytaverktyget tills B visas — tryck-håll på brytpunkt, dra radien/tangenten, släpp; upprepa vid varje brytpunkt (hjälplinjen förhandsvisar kurvan)",
             ]}
           />
 

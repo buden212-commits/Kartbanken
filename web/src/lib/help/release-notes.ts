@@ -7,6 +7,15 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-09-08",
+    title: "Fältredigering — Bézier-ritning som i OCAD",
+    items: [
+      "Bézier-läge (B): tryck-håll på brytpunkt, dra radien/tangenten och släpp — upprepa vid varje brytpunkt",
+      "Hjälplinjen förhandsvisar den böjda linjen medan du drar (fungerar med mus och pekskärm)",
+      "Kort tryck utan drag ger skarp brytpunkt; längre drag ger mjukare kurva",
+    ],
+  },
+  {
     date: "2026-09-07",
     title: "Mapper-export och produktblad för Fältredigering",
     items: [

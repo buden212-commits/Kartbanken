@@ -163,6 +163,41 @@ export type BezierSegmentControls = {
   p2: [number, number];
 };
 
+/** Mirror `tip` through `anchor` — OCAD outgoing handle → incoming handle. */
+export function mirrorThroughAnchor(
+  tip: [number, number],
+  anchor: [number, number],
+): [number, number] {
+  return [2 * anchor[0] - tip[0], 2 * anchor[1] - tip[1]];
+}
+
+/**
+ * Build cubic segment controls from per-anchor outgoing handle tips
+ * (press → drag → release at each inflection, like OCAD).
+ * Incoming handle at B is the mirror of B's outgoing tip.
+ */
+export function controlsFromOutgoingHandles(
+  anchors: [number, number][],
+  outHandles: [number, number][],
+  closed: boolean,
+): BezierSegmentControls[] {
+  const n = anchors.length;
+  if (n < 2 || outHandles.length !== n) return [];
+  const segmentCount = closed ? n : n - 1;
+  const controls: BezierSegmentControls[] = [];
+  for (let i = 0; i < segmentCount; i++) {
+    const a = anchors[i]!;
+    const b = anchors[(i + 1) % n]!;
+    const outA = outHandles[i]!;
+    const outB = outHandles[(i + 1) % n]!;
+    controls.push({
+      p1: [outA[0], outA[1]],
+      p2: mirrorThroughAnchor(outB, b),
+    });
+  }
+  return controls;
+}
+
 /** Default P1/P2 on the straight segment (1/3 and 2/3) — drag to bend the curve. */
 export function defaultBezierControlsForPolyline(
   anchors: [number, number][],

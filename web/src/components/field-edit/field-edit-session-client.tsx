@@ -14,6 +14,7 @@ import {
 } from "@/lib/field-edit/vertices";
 import { nearestPointOnPolyline, distance2d } from "@/lib/field-edit/polyline-geometry";
 import {
+  controlsFromOutgoingHandles,
   defaultBezierControlsForPolyline,
   hitTestBezierControl,
   sampleBezierPolyline,
@@ -151,14 +152,11 @@ type Props = {
 
 type BezierDrawGesture =
   | { phase: "idle" }
-  | { phase: "drag_p1"; p0: [number, number]; p1: [number, number] }
-  | { phase: "await_p2"; p0: [number, number]; p1: [number, number] }
   | {
-      phase: "drag_p3";
-      p0: [number, number];
-      p1: [number, number];
-      p2: [number, number];
-      p3: [number, number];
+      /** Press at inflection (`anchor`), drag radius/tangent to `handle`, release. */
+      phase: "drag_handle";
+      anchor: [number, number];
+      handle: [number, number];
     };
 
 type RectangularDrawGesture =
@@ -242,10 +240,18 @@ export function FieldEditSessionClient({
   const [circleGesture, setCircleGesture] = useState<CircleDrawGesture>({ phase: "idle" });
   const [ellipseGesture, setEllipseGesture] = useState<EllipseDrawGesture>({ phase: "idle" });
   const [bezierDraftAnchors, setBezierDraftAnchors] = useState<[number, number][]>([]);
-  const [bezierDraftControls, setBezierDraftControls] = useState<BezierSegmentControls[]>(
+  /** Outgoing handle tip per committed inflection (same length as anchors). */
+  const [bezierDraftOutHandles, setBezierDraftOutHandles] = useState<[number, number][]>(
     [],
   );
   const [bezierGesture, setBezierGesture] = useState<BezierDrawGesture>({ phase: "idle" });
+  const bezierPointerDownRef = useRef<{ clientX: number; clientY: number } | null>(null);
+
+  const bezierDraftControls = useMemo(
+    () =>
+      controlsFromOutgoingHandles(bezierDraftAnchors, bezierDraftOutHandles, false),
+    [bezierDraftAnchors, bezierDraftOutHandles],
+  );
   const [cadVertexTool, setCadVertexTool] = useState<CadVertexTool>("off");
   const [cadCutTool, setCadCutTool] = useState<CadCutTool>("off");
   const [cutDraftPoints, setCutDraftPoints] = useState<[number, number][]>([]);
@@ -495,7 +501,7 @@ export function FieldEditSessionClient({
       setMapMode("navigate");
       setDraftPoints([]);
       setBezierDraftAnchors([]);
-      setBezierDraftControls([]);
+      setBezierDraftOutHandles([]);
       setBezierGesture({ phase: "idle" });
       setBezierDrawMode(false);
       setRectangularDrawMode(false);
@@ -527,7 +533,7 @@ export function FieldEditSessionClient({
 
   const clearBezierDraft = useCallback(() => {
     setBezierDraftAnchors([]);
-    setBezierDraftControls([]);
+    setBezierDraftOutHandles([]);
     setBezierGesture({ phase: "idle" });
   }, []);
 
@@ -2153,25 +2159,15 @@ export function FieldEditSessionClient({
         }
 
         if (bezierDrawMode) {
-          if (bezierGesture.phase === "idle") {
-            const last = bezierDraftAnchors[bezierDraftAnchors.length - 1];
-            // Continue from last breakpoint when a draft already exists.
-            const start = bezierDraftAnchors.length > 0 ? (last as [number, number]) : geo;
-            setBezierGesture({ phase: "drag_p1", p0: start, p1: geo });
-            setError(null);
-            setInfo(null);
-            return;
-          }
-          if (bezierGesture.phase === "await_p2") {
-            setBezierGesture({
-              phase: "drag_p3",
-              p0: bezierGesture.p0,
-              p1: bezierGesture.p1,
-              p2: geo,
-              p3: geo,
-            });
-            return;
-          }
+          // OCAD-style: press at inflection, drag radius/tangent, release.
+          bezierPointerDownRef.current = { clientX: e.clientX, clientY: e.clientY };
+          setBezierGesture({ phase: "drag_handle", anchor: geo, handle: geo });
+          setError(null);
+          setInfo(
+            bezierDraftAnchors.length === 0
+              ? "Bézier: håll inne och dra radien/tangenten, släpp. Upprepa vid nästa brytpunkt."
+              : "Dra radien vid brytpunkten — hjälplinjen visar kurvan. Släpp och fortsätt, eller «Klar».",
+          );
           return;
         }
 
@@ -2370,14 +2366,10 @@ export function FieldEditSessionClient({
       if (
         bezierDrawMode &&
         (tool === "addLine" || tool === "addArea") &&
-        (bezierGesture.phase === "drag_p1" || bezierGesture.phase === "drag_p3")
+        bezierGesture.phase === "drag_handle"
       ) {
         const { point: geo } = resolveSnapPoint(rawGeo, null);
-        if (bezierGesture.phase === "drag_p1") {
-          setBezierGesture({ ...bezierGesture, p1: geo });
-        } else {
-          setBezierGesture({ ...bezierGesture, p3: geo });
-        }
+        setBezierGesture({ ...bezierGesture, handle: geo });
         setSnapPreview(null);
         return;
       }
@@ -2682,24 +2674,31 @@ export function FieldEditSessionClient({
       if (
         bezierDrawMode &&
         (tool === "addLine" || tool === "addArea") &&
-        (bezierGesture.phase === "drag_p1" || bezierGesture.phase === "drag_p3")
+        bezierGesture.phase === "drag_handle"
       ) {
-        if (bezierGesture.phase === "drag_p1") {
-          setBezierGesture({
-            phase: "await_p2",
-            p0: bezierGesture.p0,
-            p1: bezierGesture.p1,
-          });
-          setInfo("Tryck ner på P2 och släpp på nästa brytpunkt.");
-        } else {
-          const { p0, p1, p2, p3 } = bezierGesture;
-          setBezierDraftAnchors((prev) => (prev.length === 0 ? [p0, p3] : [...prev, p3]));
-          setBezierDraftControls((prev) => [...prev, { p1, p2 }]);
-          setBezierGesture({ phase: "idle" });
-          setInfo(
-            "Segment sparat. Fortsätt från sista brytpunkten, eller klicka «Klar» när du är färdig.",
-          );
-        }
+        const { anchor, handle: rawHandle } = bezierGesture;
+        const down = bezierPointerDownRef.current;
+        bezierPointerDownRef.current = null;
+        const screenDrag =
+          down && _e
+            ? Math.hypot(_e.clientX - down.clientX, _e.clientY - down.clientY)
+            : distance2d(anchor, rawHandle);
+        // Short tap (mobile-friendly) → sharp corner; longer drag → curved handle
+        const handle =
+          screenDrag < 12
+            ? ([anchor[0], anchor[1]] as [number, number])
+            : rawHandle;
+        setBezierDraftAnchors((prev) => [...prev, anchor]);
+        setBezierDraftOutHandles((prev) => [...prev, handle]);
+        setBezierGesture({ phase: "idle" });
+        const nextCount = bezierDraftAnchors.length + 1;
+        setInfo(
+          nextCount < 2
+            ? "Första brytpunkten sparad. Tryck-håll-dra vid nästa brytpunkt."
+            : tool === "addArea"
+              ? `${nextCount} brytpunkter. Fortsätt, eller «Klar» (minst 3).`
+              : `${nextCount} brytpunkter. Fortsätt, eller «Klar» när linjen är färdig.`,
+        );
         dragVertexRef.current = null;
         dragBezierControlRef.current = null;
         setSnapPreview(null);
@@ -2847,13 +2846,15 @@ export function FieldEditSessionClient({
     } else if (tool === "addArea") {
       let ring: [number, number][];
       if (bezierDrawMode) {
-        if (bezierDraftAnchors.length < 3 || bezierDraftControls.length < 2) {
-          setError("Ytan behöver minst 3 brytpunkter (två Bézier-segment)");
+        if (bezierDraftAnchors.length < 3 || bezierDraftOutHandles.length < 3) {
+          setError("Ytan behöver minst 3 brytpunkter");
           return;
         }
-        const closing = defaultBezierControlsForPolyline(bezierDraftAnchors, true);
-        const closeSeg = closing[closing.length - 1]!;
-        const controls = [...bezierDraftControls, closeSeg];
+        const controls = controlsFromOutgoingHandles(
+          bezierDraftAnchors,
+          bezierDraftOutHandles,
+          true,
+        );
         const sampled = sampleBezierPolyline(
           bezierDraftAnchors,
           controls,
@@ -2903,6 +2904,7 @@ export function FieldEditSessionClient({
   }, [
     bezierDraftAnchors,
     bezierDraftControls,
+    bezierDraftOutHandles,
     bezierDrawMode,
     circleDrawMode,
     circleGesture,
@@ -2980,20 +2982,18 @@ export function FieldEditSessionClient({
                       anchors: bezierDraftAnchors,
                       controls: bezierDraftControls,
                       live:
-                        bezierGesture.phase === "drag_p1" ||
-                        bezierGesture.phase === "await_p2"
+                        bezierGesture.phase === "drag_handle"
                           ? {
-                              p0: bezierGesture.p0,
-                              p1: bezierGesture.p1,
+                              anchor: bezierGesture.anchor,
+                              handle: bezierGesture.handle,
+                              prevOutHandle:
+                                bezierDraftOutHandles.length > 0
+                                  ? bezierDraftOutHandles[
+                                      bezierDraftOutHandles.length - 1
+                                    ]!
+                                  : null,
                             }
-                          : bezierGesture.phase === "drag_p3"
-                            ? {
-                                p0: bezierGesture.p0,
-                                p1: bezierGesture.p1,
-                                p2: bezierGesture.p2,
-                                p3: bezierGesture.p3,
-                              }
-                            : null,
+                          : null,
                     }
                   : null,
               cutDraftPoints: cadCutTool !== "off" ? cutDraftPoints : [],
@@ -3099,6 +3099,7 @@ export function FieldEditSessionClient({
       ellipseGesture,
       bezierDraftAnchors,
       bezierDraftControls,
+      bezierDraftOutHandles,
       bezierGesture,
       tool,
     ],
@@ -3260,7 +3261,7 @@ export function FieldEditSessionClient({
       );
     } else if (next === "bezier") {
       setInfo(
-        "Bézier-läge (B): tryck ner på brytpunkt och dra mot P1, sedan tryck på P2 och släpp på nästa brytpunkt. Klicka verktyget igen för vanlig ritning.",
+        "Bézier-läge (B): tryck-håll på brytpunkt och dra radien/tangenten, släpp. Upprepa vid varje brytpunkt. Hjälplinjen visar kurvan. Klicka verktyget igen för vanlig ritning.",
       );
     } else {
       setInfo(
@@ -3272,8 +3273,9 @@ export function FieldEditSessionClient({
   const handleDrawInterrupt = useCallback(() => {
     dragVertexRef.current = null;
     dragBezierControlRef.current = null;
-    if (bezierGesture.phase === "drag_p1" || bezierGesture.phase === "drag_p3") {
+    if (bezierGesture.phase === "drag_handle") {
       setBezierGesture({ phase: "idle" });
+      bezierPointerDownRef.current = null;
     }
     if (
       rectangularGesture.phase === "drag_edge1" ||
@@ -3358,7 +3360,7 @@ export function FieldEditSessionClient({
         return "Rektangelläge: dra längsta sidan → släpp → dra vinkelrätt till tredje hörnet → klicka för att avsluta. Klicka linjeverktyget igen för Bézier.";
       }
       if (bezierDrawMode) {
-        return "Bézier-linje: tryck ner på brytpunkt → dra mot P1 → släpp; tryck på P2 → släpp på nästa brytpunkt. Klicka linjeverktyget igen för vanlig ritning.";
+        return "Bézier-linje: tryck-håll på brytpunkt → dra radien/tangenten → släpp. Upprepa vid varje nästa brytpunkt. Hjälplinjen förhandsvisar kurvan. «Klar» när du är färdig. Klicka linjeverktyget igen för vanlig ritning.";
       }
       return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan punkter längs linjen. Klicka linjeverktyget igen för att växla läge (F → E → C → R → B).";
     }
@@ -3376,7 +3378,7 @@ export function FieldEditSessionClient({
         return "Rektangelläge: dra längsta sidan → släpp → dra vinkelrätt till tredje hörnet → klicka för att avsluta. Klicka ytaverktyget igen för Bézier.";
       }
       if (bezierDrawMode) {
-        return "Bézier-yta: samma gest som linje (P0→P1, P2→P3). Minst 3 brytpunkter. Klicka ytaverktyget igen för vanlig ritning.";
+        return "Bézier-yta: tryck-håll på brytpunkt → dra radien → släpp. Minst 3 brytpunkter. Hjälplinjen visar kurvan. Klicka ytaverktyget igen för vanlig ritning.";
       }
       return "Klicka ett kartobjekt för att kopiera symbol, eller välj i listan — klicka sedan hörn runt ytan (minst 3). Klicka ytaverktyget igen för att växla läge (F → E → C → R → B).";
     }

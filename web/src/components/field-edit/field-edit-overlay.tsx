@@ -228,12 +228,14 @@ export type BezierEditOverlay = {
 export type BezierDrawOverlay = {
   anchors: [number, number][];
   controls: BezierSegmentControls[];
-  /** Live segment while gesturing (guides + preview curve). */
+  /**
+   * Live inflection: press at `anchor`, drag to `handle` (outgoing tip).
+   * Optional `prevOutHandle` enables curve preview from the last committed anchor.
+   */
   live?: {
-    p0: [number, number];
-    p1: [number, number];
-    p2?: [number, number];
-    p3?: [number, number];
+    anchor: [number, number];
+    handle: [number, number];
+    prevOutHandle?: [number, number] | null;
   } | null;
 };
 
@@ -253,40 +255,52 @@ function bezierDrawDraftSvg(
   const live = draft.live;
   if (!live) return parts.join("");
 
-  const [x0, y0] = geoToSvgUserPoint(live.p0, transform);
-  const [x1, y1] = geoToSvgUserPoint(live.p1, transform);
+  const [ax, ay] = geoToSvgUserPoint(live.anchor, transform);
+  const [hx, hy] = geoToSvgUserPoint(live.handle, transform);
   const guide =
-    `stroke="#ea580c" stroke-opacity="0.55" stroke-width="1.25" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" fill="none" pointer-events="none"`;
-  parts.push(`<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" ${guide} />`);
-  parts.push(vertexHandlesSvg([live.p0], transform, 0));
+    `stroke="#ea580c" stroke-opacity="0.7" stroke-width="1.5" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" fill="none" pointer-events="none"`;
+
+  // Help line from press (inflection) to release (radius / tangent tip)
+  parts.push(`<line x1="${ax}" y1="${ay}" x2="${hx}" y2="${hy}" ${guide} />`);
+  parts.push(vertexHandlesSvg([live.anchor], transform, 0));
   {
     const s = CONTROL_SIZE;
     parts.push(
-      `<polygon points="${x1},${y1 - s} ${x1 + s},${y1} ${x1},${y1 + s} ${x1 - s},${y1}" fill="#ea580c" fill-opacity="${CONTROL_OPACITY}" stroke="#9a3412" stroke-opacity="${CONTROL_OPACITY}" stroke-width="${HANDLE_STROKE_PX}" vector-effect="non-scaling-stroke" pointer-events="none" />`,
+      `<polygon points="${hx},${hy - s} ${hx + s},${hy} ${hx},${hy + s} ${hx - s},${hy}" fill="#ea580c" fill-opacity="${CONTROL_OPACITY}" stroke="#9a3412" stroke-opacity="${CONTROL_OPACITY}" stroke-width="${HANDLE_STROKE_PX}" vector-effect="non-scaling-stroke" pointer-events="none" />`,
     );
   }
+  {
+    const dx = hx - ax;
+    const dy = hy - ay;
+    const len = Math.hypot(dx, dy);
+    if (len > 8) {
+      const ux = dx / len;
+      const uy = dy / len;
+      const backX = hx - ux * 10;
+      const backY = hy - uy * 10;
+      const px = -uy * 5;
+      const py = ux * 5;
+      parts.push(
+        `<polygon points="${hx},${hy} ${backX + px},${backY + py} ${backX - px},${backY - py}" fill="#ea580c" fill-opacity="0.9" pointer-events="none" />`,
+      );
+    }
+  }
 
-  if (live.p2 && live.p3) {
-    const [x2, y2] = geoToSvgUserPoint(live.p2, transform);
-    const [x3, y3] = geoToSvgUserPoint(live.p3, transform);
-    parts.push(`<line x1="${x3}" y1="${y3}" x2="${x2}" y2="${y2}" ${guide} />`);
-    const sampled = sampleBezierPolyline(
-      [live.p0, live.p3],
-      [{ p1: live.p1, p2: live.p2 }],
-      false,
-      12,
-    );
+  // Preview curved help line from previous inflection → live point
+  if (draft.anchors.length >= 1 && live.prevOutHandle) {
+    const prev = draft.anchors[draft.anchors.length - 1]!;
+    const p1 = live.prevOutHandle;
+    const p2: [number, number] = [
+      2 * live.anchor[0] - live.handle[0],
+      2 * live.anchor[1] - live.handle[1],
+    ];
+    const sampled = sampleBezierPolyline([prev, live.anchor], [{ p1, p2 }], false, 12);
     if (sampled.length >= 2) {
       parts.push(lineSvg(sampled, transform, "#ea580c", 2.5));
     }
-    const s = CONTROL_SIZE;
-    parts.push(
-      `<polygon points="${x2},${y2 - s} ${x2 + s},${y2} ${x2},${y2 + s} ${x2 - s},${y2}" fill="#ea580c" fill-opacity="${CONTROL_OPACITY}" stroke="#9a3412" stroke-opacity="${CONTROL_OPACITY}" stroke-width="${HANDLE_STROKE_PX}" vector-effect="non-scaling-stroke" pointer-events="none" />`,
-    );
-    parts.push(vertexHandlesSvg([live.p3], transform, null));
-  } else {
-    // Only P0–P1 so far: show a straight guide toward the drag
-    parts.push(lineSvg([live.p0, live.p1], transform, "#ea580c", 1.5));
+    // Also show mirrored incoming handle (dashed)
+    const [ix, iy] = geoToSvgUserPoint(p2, transform);
+    parts.push(`<line x1="${ax}" y1="${ay}" x2="${ix}" y2="${iy}" ${guide} />`);
   }
 
   return parts.join("");
