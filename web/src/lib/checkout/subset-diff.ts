@@ -1,5 +1,10 @@
-import { parseSelectionJson } from "./types";
+import { parseSelectionJson, CheckoutSelectionType, type PolygonRing } from "./types";
 import { bboxFromGeometry } from "./overlap";
+import {
+  isLikelyClippedByPolygon,
+  objectCrossesPolygon,
+  objectIntersectsPolygon,
+} from "./import-partial-polygon";
 import { objectCrossesBbox, objectIntersectsBbox } from "./import-partial-analysis";
 import { compareOcadObjects } from "@/lib/ocad/diff";
 import type { OcadDiffResult, OcadObjectChange, SymbolDiffSummary } from "@/lib/ocad/diff-types";
@@ -9,6 +14,7 @@ import {
   type DiffLayerPaths,
 } from "@/lib/ocad/diff-layers";
 import { parseOcadBuffer } from "@/lib/ocad/read";
+import type { NormalizedOcadObject } from "@/lib/ocad/types";
 import { readStoredFile } from "@/lib/storage";
 import { prisma } from "@/lib/prisma";
 import {
@@ -191,9 +197,34 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
     ? exportSummary.objects
     : filterObjectsByIds(headSummary.objects, diffScopeIds);
 
-  const importExtent = selection.importExtent ?? (importPartial ? bboxFromGeometry(selection.geometry) : null);
-  if (importPartial && importExtent) {
+  const importRing: PolygonRing | null =
+    importPartial && selection.importRing && selection.importRing.length >= 3
+      ? selection.importRing
+      : importPartial && selection.geometry.type === CheckoutSelectionType.POLYGON
+        ? selection.geometry.ring
+        : null;
+  const importExtent =
+    selection.importExtent ?? (importPartial ? bboxFromGeometry(selection.geometry) : null);
+
+  if (importPartial && importRing) {
+    baselineObjects = baselineObjects.filter((object) =>
+      objectIntersectsPolygon(object, importRing),
+    );
+  } else if (importPartial && importExtent) {
     baselineObjects = baselineObjects.filter((object) => objectIntersectsBbox(object, importExtent));
+  }
+
+  let checkinObjects: NormalizedOcadObject[] = checkinSummary.objects;
+  const clippedCheckinIndices = new Set<number>();
+  if (importPartial && importRing) {
+    for (const object of checkinObjects) {
+      if (isLikelyClippedByPolygon(object, importRing)) {
+        clippedCheckinIndices.add(object.objectIndex);
+      }
+    }
+    checkinObjects = checkinObjects.filter(
+      (object) => !clippedCheckinIndices.has(object.objectIndex),
+    );
   }
 
   const emptyDiffInput = {
@@ -204,28 +235,28 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
     fileNameA: exportSummary ? "checkout-export.ocd" : headVersion.originalFilename,
     fileNameB: "checkin-subset.ocd",
     objectCountA: baselineObjects.length,
-    objectCountB: checkinSummary.objects.length,
+    objectCountB: checkinObjects.length,
   };
 
   if (exportBuffer && buffersContentEqual(checkinBuffer, exportBuffer)) {
     return buildEmptyCheckoutSubsetDiff(emptyDiffInput);
   }
 
-  if (exportSummary && objectMultisetsEqual(baselineObjects, checkinSummary.objects)) {
+  if (exportSummary && objectMultisetsEqual(baselineObjects, checkinObjects)) {
     return buildEmptyCheckoutSubsetDiff(emptyDiffInput);
   }
 
   if (
     !exportSummary &&
     !headChangedSinceCheckoutDetailed &&
-    objectMultisetsEqual(baselineObjects, checkinSummary.objects)
+    objectMultisetsEqual(baselineObjects, checkinObjects)
   ) {
     return buildEmptyCheckoutSubsetDiff(emptyDiffInput);
   }
 
   const diff = compareOcadObjects(
     baselineObjects,
-    checkinSummary.objects,
+    checkinObjects,
     {
       fileNameA: emptyDiffInput.fileNameA,
       fileNameB: "checkin-subset.ocd",
@@ -237,7 +268,7 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
   if (
     diff.modified === 0 &&
     diff.added + diff.removed > 0 &&
-    objectMultisetsEqual(baselineObjects, checkinSummary.objects)
+    objectMultisetsEqual(baselineObjects, checkinObjects)
   ) {
     return buildEmptyCheckoutSubsetDiff(emptyDiffInput);
   }
@@ -249,16 +280,29 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
   );
 
   let changes = scopedChanges;
-  if (importPartial && importExtent) {
+  if (importPartial && (importRing || importExtent)) {
     const baselineByIndex = new Map(baselineObjects.map((object) => [object.objectIndex, object]));
     const kept: typeof scopedChanges = [];
     for (const change of scopedChanges) {
       if (change.changeType === "added") {
+        if (clippedCheckinIndices.has(change.objectIndex)) {
+          outOfScopeWarnings.push(
+            `Klippt kantobjekt ${change.objectIndex} (${change.symbolName}) hoppades över — behandlas inte som tillägg.`,
+          );
+          continue;
+        }
         kept.push(change);
         continue;
       }
       const baseline = baselineByIndex.get(change.objectIndex);
-      if (baseline && objectCrossesBbox(baseline, importExtent)) {
+      const crosses = baseline
+        ? importRing
+          ? objectCrossesPolygon(baseline, importRing)
+          : importExtent
+            ? objectCrossesBbox(baseline, importExtent)
+            : false
+        : false;
+      if (crosses) {
         outOfScopeWarnings.push(
           `Kantobjekt ${change.objectIndex} (${change.symbolName}) hoppades över — det går utanför importerat område.`,
         );

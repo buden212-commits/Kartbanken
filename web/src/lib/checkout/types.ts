@@ -49,8 +49,10 @@ export type CheckoutSelection = {
   objectIds: string[];
   /** True when checkout was created from an imported partial map (no prior checkout). */
   importPartial?: boolean;
-  /** Unpadded utbredning för den importerade filen (crop/diff). */
+  /** Unpadded utbredning (AABB) för den importerade filen (crop). */
   importExtent?: Bbox;
+  /** Unpadded polygon för importerad delkarta (diff/kantfilter). */
+  importRing?: PolygonRing;
 };
 
 export type CheckoutSelectionInput = {
@@ -89,11 +91,31 @@ export function parseBbox(value: unknown): Bbox | null {
   return { minX, minY, maxX, maxY };
 }
 
-function importFields(record: Record<string, unknown>): Pick<CheckoutSelection, "importPartial" | "importExtent"> {
-  const importExtent = record.importPartial === true ? parseBbox(record.importExtent) ?? undefined : undefined;
+function parsePolygonRing(value: unknown): PolygonRing | null {
+  if (!Array.isArray(value) || value.length < 3) return null;
+  const ring: PolygonRing = [];
+  for (const point of value) {
+    if (!Array.isArray(point) || point.length < 2) return null;
+    const x = Number(point[0]);
+    const y = Number(point[1]);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    ring.push([x, y]);
+  }
+  return ring.length >= 3 ? ring : null;
+}
+
+function importFields(
+  record: Record<string, unknown>,
+): Pick<CheckoutSelection, "importPartial" | "importExtent" | "importRing"> {
+  if (record.importPartial !== true) {
+    return { importPartial: false };
+  }
+  const importExtent = parseBbox(record.importExtent) ?? undefined;
+  const importRing = parsePolygonRing(record.importRing) ?? undefined;
   return {
-    importPartial: record.importPartial === true,
+    importPartial: true,
     ...(importExtent ? { importExtent } : {}),
+    ...(importRing ? { importRing } : {}),
   };
 }
 

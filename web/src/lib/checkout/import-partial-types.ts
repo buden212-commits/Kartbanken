@@ -1,4 +1,4 @@
-import type { Bbox } from "./types";
+import type { Bbox, PolygonRing } from "./types";
 import type { OcadObjectType } from "@/lib/ocad/types";
 import type { ChangeType } from "@/lib/ocad/diff-types";
 
@@ -30,7 +30,10 @@ export type ImportDiffSample = {
 };
 
 export type ImportPartialAnalysis = {
+  /** Omslutande rektangel (för zoom/bakåtkompatibilitet). */
   extent: Bbox;
+  /** Faktiskt jämförelseområde — konkav hull av delkartans objekt. */
+  ring: PolygonRing;
   extentInsideHead: boolean;
   headBounds: Bbox | null;
   symbols: {

@@ -12,9 +12,9 @@ type StepId = "upload" | "symbols" | "extent" | "edges" | "diff" | "confirm";
 const STEPS: { id: StepId; title: string; hint: string }[] = [
   { id: "upload", title: "1. Välj fil", hint: "Ladda upp den redigerade delkartan (.ocd)." },
   { id: "symbols", title: "2. Symboler", hint: "Kontrollera att symbolnumren stämmer med den stora kartan." },
-  { id: "extent", title: "3. Läge", hint: "Ramen ska ligga på rätt ställe på den stora kartan." },
-  { id: "edges", title: "4. Kanter", hint: "Objekt som skär ramen klipps inte — de får inte radera originalet utanför." },
-  { id: "diff", title: "5. Ändringar", hint: "Tillagt, borttaget och ändrat inne i området." },
+  { id: "extent", title: "3. Läge", hint: "Polygonen ska ligga på rätt ställe på den stora kartan." },
+  { id: "edges", title: "4. Kanter", hint: "Objekt som skärs av polygonen jämförs inte — de får inte radera originalet utanför." },
+  { id: "diff", title: "5. Ändringar", hint: "Tillagt, borttaget och ändrat inne i polygonen." },
   { id: "confirm", title: "6. Bekräfta", hint: "Skapar en utcheckning i efterhand. Inget slås ihop förrän du och admin bekräftar." },
 ];
 
@@ -242,17 +242,17 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
 
       {analysis && step === "extent" && (
         <p className="text-sm text-slate-600">
-          Blå ram är delkartans utbredning. Zooma och kontrollera att den ligger rätt. Fil:{" "}
-          <span className="font-medium">{fileName}</span>.
+          Blå polygon är delkartans utbredning (följer objektens form, inte bara en rektangel).
+          Kontrollera att den ligger rätt. Fil: <span className="font-medium">{fileName}</span>.
         </p>
       )}
 
       {analysis && step === "edges" && (
         <div className="space-y-2 text-sm text-slate-600">
           <p>
-            Orange/rött = kantobjekt som skär eller slutar vid ramen ({analysis.edgeCount} visade).
-            Rött betyder troligen klippt ({analysis.likelyClippedCount} st).{" "}
-            {analysis.interiorCount} objekt ligger helt inne i området.
+            Orange/rött = kantobjekt som skär eller är klippta mot polygonen ({analysis.edgeCount}{" "}
+            visade). Rött betyder troligen klippt ({analysis.likelyClippedCount} st) och räknas inte
+            som ändring. {analysis.interiorCount} objekt ligger helt inne i området.
           </p>
           <p>
             Växla mellan <span className="font-medium">Hela kartan</span> och{" "}
@@ -312,9 +312,9 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
           <ul className="list-disc pl-5">
             <li>
               {analysis.diff.added} tillägg, {analysis.diff.modified} ändringar, {analysis.diff.removed}{" "}
-              borttagningar (kantöverskridande objekt raderas inte automatiskt)
+              borttagningar (kantklippta och överskridande objekt jämförs inte automatiskt)
             </li>
-            <li>{analysis.likelyClippedCount} objekt markerade som troligen klippta</li>
+            <li>{analysis.likelyClippedCount} objekt markerade som troligen klippta (filtreras bort)</li>
           </ul>
           <label className="flex items-start gap-2">
             <input

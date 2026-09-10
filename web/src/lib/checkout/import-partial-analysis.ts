@@ -1,5 +1,5 @@
 import { bboxFromGeometry } from "./overlap";
-import { CheckoutSelectionType, type Bbox } from "./types";
+import { CheckoutSelectionType, type Bbox, type PolygonRing } from "./types";
 import { compareOcadObjects } from "@/lib/ocad/diff";
 import type { NormalizedOcadObject, OcadParseSummary } from "@/lib/ocad/types";
 import type {
@@ -8,6 +8,16 @@ import type {
   ImportPartialAnalysis,
   ImportSymbolRow,
 } from "./import-partial-types";
+import {
+  bboxFromRing,
+  buildImportPolygonFromObjects,
+  edgeSnapForRing,
+  expandRing,
+  isLikelyClippedByPolygon,
+  objectCrossesPolygon,
+  objectFullyInsidePolygon,
+  objectIntersectsPolygon,
+} from "./import-partial-polygon";
 
 export type {
   ImportDiffSample,
@@ -15,6 +25,17 @@ export type {
   ImportPartialAnalysis,
   ImportSymbolRow,
 } from "./import-partial-types";
+
+export {
+  bboxFromRing,
+  buildImportPolygonFromObjects,
+  edgeSnapForRing,
+  expandRing,
+  isLikelyClippedByPolygon,
+  objectCrossesPolygon,
+  objectFullyInsidePolygon,
+  objectIntersectsPolygon,
+} from "./import-partial-polygon";
 
 const DIFF_TOLERANCE_M = Number(process.env.DIFF_SPATIAL_TOLERANCE_M ?? 2);
 const MAX_EDGE_SAMPLES = 80;
@@ -72,6 +93,7 @@ function bboxContains(outer: Bbox, inner: Bbox): boolean {
   );
 }
 
+/** @deprecated Prefer objectIntersectsPolygon — retained for AABB helpers/tests. */
 export function objectIntersectsBbox(object: NormalizedOcadObject, bbox: Bbox): boolean {
   return (
     object.bbox[0] <= bbox.maxX &&
@@ -81,6 +103,7 @@ export function objectIntersectsBbox(object: NormalizedOcadObject, bbox: Bbox): 
   );
 }
 
+/** @deprecated Prefer objectCrossesPolygon. */
 export function objectCrossesBbox(object: NormalizedOcadObject, bbox: Bbox): boolean {
   if (!objectIntersectsBbox(object, bbox)) return false;
   return (
@@ -104,6 +127,7 @@ function edgeSnap(extent: Bbox): number {
   return Math.max(50, (extent.maxX - extent.minX) * 0.005, (extent.maxY - extent.minY) * 0.005);
 }
 
+/** @deprecated Prefer isLikelyClippedByPolygon. */
 export function isLikelyClipped(object: NormalizedOcadObject, extent: Bbox): boolean {
   const snap = edgeSnap(extent);
   if (object.vertices && object.vertices.length >= 2) {
@@ -149,10 +173,12 @@ export function analyzeImportPartial(input: {
   const warnings: string[] = [];
 
   const headSymbolNums = new Set(input.head.symbolNums);
-  const extent = bboxFromObjects(input.partial.objects);
+  const ring = buildImportPolygonFromObjects(input.partial.objects);
+  const extent = ring ? bboxFromRing(ring) : bboxFromObjects(input.partial.objects);
   const headBounds = bboxFromTuple(input.head.bounds) ?? bboxFromObjects(input.head.objects);
+  const snap = ring ? edgeSnapForRing(ring) : 50;
 
-  if (!extent || input.partial.objects.length === 0) {
+  if (!extent || !ring || input.partial.objects.length === 0) {
     blockers.push("Delkartan innehåller inga kartobjekt att importera.");
   }
 
@@ -202,9 +228,14 @@ export function analyzeImportPartial(input: {
     );
   }
 
-  const extentForHead = extent ?? { minX: 0, minY: 0, maxX: 0, maxY: 0 };
-  const headInArea = extent
-    ? input.head.objects.filter((object) => objectIntersectsBbox(object, extentForHead))
+  const activeRing: PolygonRing = ring ?? [
+    [0, 0],
+    [0, 0],
+    [0, 0],
+  ];
+
+  const headInArea = ring
+    ? input.head.objects.filter((object) => objectIntersectsPolygon(object, activeRing))
     : [];
 
   const onlyInHeadUsedByPartialArea: ImportSymbolRow[] = [];
@@ -220,20 +251,23 @@ export function analyzeImportPartial(input: {
     });
   }
 
-  const edgeSource = input.partial.objects;
   const edgeObjects: ImportEdgeObject[] = [];
   let interiorCount = 0;
   let likelyClippedCount = 0;
+  const clippedPartialIndices = new Set<number>();
 
-  if (extent) {
-    for (const object of edgeSource) {
-      const crosses = objectCrossesBbox(object, extent);
-      const clipped = isLikelyClipped(object, extent);
-      if (objectFullyInsideBbox(object, extent) && !crosses) {
+  if (ring) {
+    for (const object of input.partial.objects) {
+      const crosses = objectCrossesPolygon(object, activeRing);
+      const clipped = isLikelyClippedByPolygon(object, activeRing, snap);
+      if (objectFullyInsidePolygon(object, activeRing) && !crosses && !clipped) {
         interiorCount += 1;
       }
       if (crosses || clipped) {
-        if (clipped) likelyClippedCount += 1;
+        if (clipped) {
+          likelyClippedCount += 1;
+          clippedPartialIndices.add(object.objectIndex);
+        }
         if (edgeObjects.length < MAX_EDGE_SAMPLES) {
           edgeObjects.push({
             objectIndex: object.objectIndex,
@@ -251,26 +285,35 @@ export function analyzeImportPartial(input: {
 
   if (likelyClippedCount > 0) {
     warnings.push(
-      `${likelyClippedCount} objekt ser ut att sluta vid randen — de kan vara klippta i OCAD och ska inte ersätta originalet utanför området.`,
+      `${likelyClippedCount} objekt ser ut att vara klippta mot delkartans kant — de ingår inte i jämförelsen (ersätter inte originalet).`,
     );
   }
 
-  const baseline = extent
-    ? input.head.objects.filter((object) => objectIntersectsBbox(object, extent))
+  const baseline = ring
+    ? input.head.objects.filter((object) => objectIntersectsPolygon(object, activeRing))
     : [];
+  const partialForDiff = input.partial.objects.filter(
+    (object) => !clippedPartialIndices.has(object.objectIndex),
+  );
+
   const diff = compareOcadObjects(
     baseline,
-    input.partial.objects,
+    partialForDiff,
     { fileNameA: input.head.fileName, fileNameB: input.partial.fileName },
     { toleranceMeters: DIFF_TOLERANCE_M, matchByObjectIndex: false },
   );
 
   const protectedRemovals = new Set(
-    baseline.filter((object) => extent && objectCrossesBbox(object, extent)).map((o) => o.objectIndex),
+    baseline
+      .filter((object) => ring && objectCrossesPolygon(object, activeRing))
+      .map((o) => o.objectIndex),
   );
 
   const appliedChanges = diff.changes.filter((change) => {
-    if (change.changeType === "added") return true;
+    if (change.changeType === "added") {
+      // Extra safety: never treat clipped stubs as new map content.
+      return !clippedPartialIndices.has(change.objectIndex);
+    }
     if (protectedRemovals.has(change.objectIndex)) return false;
     return true;
   });
@@ -278,7 +321,7 @@ export function analyzeImportPartial(input: {
   const skippedEdge = diff.changes.length - appliedChanges.length;
   if (skippedEdge > 0) {
     warnings.push(
-      `${skippedEdge} kantöverskridande objekt i den stora kartan tas inte bort automatiskt (de går utanför delkartans ram).`,
+      `${skippedEdge} kantöverskridande eller klippta objekt hoppades över i jämförelsen (de går över eller längs delkartans polygon).`,
     );
   }
 
@@ -302,6 +345,7 @@ export function analyzeImportPartial(input: {
 
   return {
     extent: extent ?? { minX: 0, minY: 0, maxX: 0, maxY: 0 },
+    ring: ring ?? [],
     extentInsideHead,
     headBounds,
     symbols: {
@@ -331,6 +375,12 @@ export function selectionBboxFromAnalysis(analysis: ImportPartialAnalysis): Bbox
 }
 
 export function checkoutGeometryFromAnalysis(analysis: ImportPartialAnalysis) {
+  if (analysis.ring.length >= 3) {
+    return {
+      type: CheckoutSelectionType.POLYGON,
+      ring: expandRing(analysis.ring),
+    } as const;
+  }
   const bbox = selectionBboxFromAnalysis(analysis);
   return {
     type: CheckoutSelectionType.BBOX,
@@ -340,6 +390,10 @@ export function checkoutGeometryFromAnalysis(analysis: ImportPartialAnalysis) {
 
 export function importExtentFromAnalysis(analysis: ImportPartialAnalysis): Bbox {
   return analysis.extent;
+}
+
+export function importRingFromAnalysis(analysis: ImportPartialAnalysis): PolygonRing {
+  return analysis.ring;
 }
 
 export { bboxFromGeometry };

@@ -16,7 +16,7 @@ import {
 } from "@/lib/checkout/repository";
 import { generateCheckoutExport } from "@/lib/checkout/create-checkout";
 import { scheduleCheckoutSubsetDiff } from "@/lib/checkout/diff-status";
-import { CheckoutSelectionType, CheckoutStatus } from "@/lib/checkout/types";
+import { CheckoutStatus } from "@/lib/checkout/types";
 import { readOcadHeaderVersion } from "@/lib/ocad/ocad-export-server";
 import { normalizeSourceVersion } from "@/lib/ocad/ocad-export-shared";
 import { parseOcadBuffer } from "@/lib/ocad/read";
@@ -86,14 +86,13 @@ async function analyzeAgainstHead(
 
   const geometry = checkoutGeometryFromAnalysis(analysis);
   const importExtent = importExtentFromAnalysis(analysis);
+  const importRing = analysis.ring.length >= 3 ? analysis.ring : undefined;
   const selection = {
     geometry,
-    objectIds: objectIdsFromSelection(headSummary.objects, {
-      type: CheckoutSelectionType.BBOX,
-      bbox: importExtent,
-    }),
+    objectIds: objectIdsFromSelection(headSummary.objects, geometry),
     importPartial: true as const,
     importExtent,
+    ...(importRing ? { importRing } : {}),
   };
   const conflicts = detectCheckoutConflicts(
     selection,
@@ -229,13 +228,15 @@ export async function commitImportPartialJob(input: {
 
   const geometry = checkoutGeometryFromAnalysis(job.analysis);
   const importExtent = importExtentFromAnalysis(job.analysis);
+  const importRing = job.analysis.ring.length >= 3 ? job.analysis.ring : undefined;
   // Skip full head parse here: generateCheckoutExport/crop fills objectIds, and overlap
-  // against active checkouts uses geometry (bbox). Double-parsing Mora-sized maps OOMs.
+  // against active checkouts uses geometry. Double-parsing Mora-sized maps OOMs.
   const selection = {
     geometry,
     objectIds: [] as string[],
     importPartial: true as const,
     importExtent,
+    ...(importRing ? { importRing } : {}),
   };
 
   const conflicts = detectCheckoutConflicts(
@@ -257,7 +258,7 @@ export async function commitImportPartialJob(input: {
     mapFileId: input.mapFileId,
     baseVersionId: headVersionId,
     userId: input.userId,
-    selectionType: CheckoutSelectionType.BBOX,
+    selectionType: geometry.type,
     selection,
     exportOcadVersion,
   });

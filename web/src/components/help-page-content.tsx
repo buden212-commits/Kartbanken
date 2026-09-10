@@ -370,8 +370,8 @@ export async function HelpPageContent() {
                   "Öppna området och klicka «Importera delkarta» (bredvid Checka ut område)",
                   "Ladda upp den redigerade .ocd-filen — guiden jämför mot aktuell kartversion",
                   "Steg 2: kontrollera att symbolnumren finns i den stora kartan — saknade symboler stoppar import",
-                  "Steg 3: blå ram på kartan visar delkartans utbredning (inzoomad). Samma kartbild som på området används — även stora filer som Mora Väst. Om den inte syns: öppna området så kartan hinner laddas, gå tillbaka och försök igen",
-                  "Steg 4: orange/röda kantobjekt; växla mellan hela kartan och bara berörda objekt, och visa även vad som raderas i originalet respektive nya/ersatta objekt",
+                  "Steg 3: blå polygon på kartan visar delkartans utbredning (följer formen, inte bara en rektangel). Samma kartbild som på området används — även stora filer som Mora Väst. Om den inte syns: öppna området så kartan hinner laddas, gå tillbaka och försök igen",
+                  "Steg 4: orange/röda kantobjekt (klippta stubbar och objekt som skär polygonen); de jämförs inte och raderar inte originalet utanför. Växla mellan hela kartan och bara berörda objekt",
                   "Steg 5: se tillagda, borttagna och ändrade objekt i området — samma kartväxling och lagerfilter som i steget Kanter",
                   "Steg 6: bekräfta — systemet skapar en utcheckning i efterhand och checkar in filen",
                   "Därefter granskar du diffen som vid vanlig incheckning; admin integrerar till en ny version",
@@ -1122,9 +1122,9 @@ export async function HelpPageContent() {
               <h3 className="font-medium text-slate-900">Jag har en .ocd som aldrig checkades ut här</h3>
               <p className="mt-1">
                 Använd <strong>Importera delkarta</strong> på områdessidan. Guiden matchar symboler,
-                visar läge och kanter och skapar sedan en utcheckning i efterhand. Objekt som går
-                över kanten raderas inte automatiskt. Därefter granskar du diffen som vid vanlig
-                incheckning, och admin integrerar.
+                visar läge som polygon (inte bara rektangel) och filtrerar bort kantklippta objekt så
+                de inte räknas som ändringar. Objekt som går över kanten raderas inte automatiskt.
+                Därefter granskar du diffen som vid vanlig incheckning, och admin integrerar.
               </p>
             </div>
             <div>

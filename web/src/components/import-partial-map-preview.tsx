@@ -325,6 +325,12 @@ export function ImportPartialMapPreview({ previewUrl, analysis, mode, title, are
 
   const frame = useMemo(() => {
     if (!scene) return null;
+    const ring = analysis.ring?.length >= 3 ? analysis.ring : null;
+    if (ring) {
+      const points = ring.map((point) => geoToSvgUserPoint(point, scene.transform));
+      if (points.length < 3) return null;
+      return { kind: "polygon" as const, points };
+    }
     const [minX, minY, maxX, maxY] = geoBboxToSvgUser(
       bboxToTuple(analysis.extent),
       scene.transform,
@@ -332,8 +338,8 @@ export function ImportPartialMapPreview({ previewUrl, analysis, mode, title, are
     const width = maxX - minX;
     const height = maxY - minY;
     if (!(width > 0) || !(height > 0)) return null;
-    return { x: minX, y: minY, width, height };
-  }, [analysis.extent, scene]);
+    return { kind: "rect" as const, x: minX, y: minY, width, height };
+  }, [analysis.extent, analysis.ring, scene]);
 
   const markerRadius = useMemo(() => {
     if (!viewBox) return 8;
@@ -462,12 +468,22 @@ export function ImportPartialMapPreview({ previewUrl, analysis, mode, title, are
             {showMapBackground && (
               <g dangerouslySetInnerHTML={{ __html: scene.inner }} />
             )}
-            {frame && (
+            {frame && frame.kind === "rect" && (
               <rect
                 x={frame.x}
                 y={frame.y}
                 width={frame.width}
                 height={frame.height}
+                fill="rgba(37, 99, 235, 0.12)"
+                stroke="#1d4ed8"
+                strokeWidth={2}
+                vectorEffect="non-scaling-stroke"
+                pointerEvents="none"
+              />
+            )}
+            {frame && frame.kind === "polygon" && (
+              <polygon
+                points={frame.points.map(([x, y]) => `${x},${y}`).join(" ")}
                 fill="rgba(37, 99, 235, 0.12)"
                 stroke="#1d4ed8"
                 strokeWidth={2}

@@ -7,6 +7,16 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-09-10",
+    title: "Importera delkarta — polygon och kantklipp",
+    items: [
+      "Importera delkarta jämför mot en polygon som följer delkartans form — inte bara en omslutande rektangel",
+      "Objekt som är klippta mot kanten (t.ex. linjer som skurits av i OCAD) filtreras bort från jämförelsen",
+      "Objekt på stora kartan som går över polygonen raderas inte automatiskt",
+      "Blå markering i guiden visar polygonen; kantsteget förklarar vilka objekt som hoppas över",
+    ],
+  },
+  {
     date: "2026-09-08",
     title: "Fältredigering — utbredning, Bézier och skärmfasta markörer",
     items: [

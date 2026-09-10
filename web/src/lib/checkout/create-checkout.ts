@@ -32,10 +32,13 @@ export async function generateCheckoutExport(
 
   const sourceBuffer =
     options?.sourceBuffer ?? (await readStoredFile(version.storagePath));
+  // Importerad delkarta: använd polygon (exakt objectIds) när den finns; annars unpadded AABB.
   const cropGeometry =
-    selection.importPartial && selection.importExtent
-      ? { type: CheckoutSelectionType.BBOX, bbox: selection.importExtent }
-      : selection.geometry;
+    selection.importPartial && selection.geometry.type === CheckoutSelectionType.POLYGON
+      ? selection.geometry
+      : selection.importPartial && selection.importExtent
+        ? { type: CheckoutSelectionType.BBOX, bbox: selection.importExtent }
+        : selection.geometry;
 
   const subset = await exportCheckoutSubset(
     sourceBuffer,
