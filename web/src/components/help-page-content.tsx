@@ -368,7 +368,7 @@ export async function HelpPageContent() {
               <HelpList
                 items={[
                   "Öppna området och klicka «Importera delkarta» (bredvid Checka ut område)",
-                  "Ladda upp den redigerade .ocd-filen — guiden jämför mot aktuell kartversion",
+                  "Ladda upp den redigerade .ocd-filen — guiden visar spinner och vilket steg som pågår (uppladdning, parsning, jämförelse) medan den jämför mot aktuell kartversion",
                   "Steg 2: kontrollera att symbolnumren finns i den stora kartan — saknade symboler stoppar import",
                   "Steg 3: blå polygon på kartan visar delkartans utbredning (följer formen, inte bara en rektangel). Samma kartbild som på området används — även stora filer som Mora Väst. Om den inte syns: öppna området så kartan hinner laddas, gå tillbaka och försök igen",
                   "Steg 4: orange/röda kantobjekt (klippta stubbar och objekt som skär polygonen); de jämförs inte och raderar inte originalet utanför. Växla mellan hela kartan och bara berörda objekt",
@@ -1125,6 +1125,14 @@ export async function HelpPageContent() {
                 visar läge som polygon (inte bara rektangel) och filtrerar bort kantklippta objekt så
                 de inte räknas som ändringar. Objekt som går över kanten raderas inte automatiskt.
                 Därefter granskar du diffen som vid vanlig incheckning, och admin integrerar.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-slate-900">Analysen i Importera delkarta tar lång tid</h3>
+              <p className="mt-1">
+                Det är normalt för stora kartor. En spinner visar aktuellt steg (ladda upp, parsa
+                OCAD-filer, bygga polygon, jämföra objekt) och förfluten tid. Låt fliken vara öppen
+                tills analysen är klar — sidan uppdateras automatiskt.
               </p>
             </div>
             <div>

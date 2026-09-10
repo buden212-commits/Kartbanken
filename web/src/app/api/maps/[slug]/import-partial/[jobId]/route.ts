@@ -30,6 +30,8 @@ export async function GET(_request: Request, { params }: RouteParams) {
     jobId: job.id,
     headVersionId: job.headVersionId,
     fileName: job.fileName,
+    status: job.status,
+    progress: job.progress ?? null,
     analysis: job.analysis,
     error: job.error,
   });

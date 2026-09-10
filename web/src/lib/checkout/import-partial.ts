@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { logAction } from "@/lib/audit";
+import { runAfterResponse } from "@/lib/background";
 import { detectCheckoutConflicts } from "@/lib/checkout/overlap";
 import {
   analyzeImportPartial,
@@ -7,6 +8,12 @@ import {
   importExtentFromAnalysis,
   type ImportPartialAnalysis,
 } from "@/lib/checkout/import-partial-analysis";
+import {
+  makeImportPartialProgress,
+  type ImportPartialProgress,
+} from "@/lib/checkout/import-partial-progress";
+
+export { makeImportPartialProgress, type ImportPartialProgress } from "@/lib/checkout/import-partial-progress";
 import { objectIdsFromSelection } from "@/lib/checkout/selection-objects";
 import {
   createCheckout,
@@ -28,6 +35,8 @@ import {
   uploadFile,
 } from "@/lib/storage";
 
+export type ImportPartialJobStatus = "pending" | "analyzing" | "ok" | "error";
+
 export type ImportPartialJob = {
   id: string;
   userId: string;
@@ -36,9 +45,10 @@ export type ImportPartialJob = {
   headVersionId: string;
   fileName: string;
   createdAt: string;
-  status: "ok" | "error";
+  status: ImportPartialJobStatus;
   error?: string;
   analysis?: ImportPartialAnalysis;
+  progress?: ImportPartialProgress;
 };
 
 function metaPath(jobId: string): string {
@@ -62,23 +72,51 @@ export async function readImportPartialJob(jobId: string): Promise<ImportPartial
   }
 }
 
+async function writeJobProgress(
+  job: ImportPartialJob,
+  step: Parameters<typeof makeImportPartialProgress>[0],
+  detail?: string,
+): Promise<ImportPartialJob> {
+  const next: ImportPartialJob = {
+    ...job,
+    status: "analyzing",
+    progress: makeImportPartialProgress(step, detail),
+    error: undefined,
+  };
+  await writeJob(next);
+  return next;
+}
+
 async function analyzeAgainstHead(
   mapFileId: string,
   headVersionId: string,
   partialBuffer: Buffer,
   fileName: string,
+  onProgress?: (
+    step: Parameters<typeof makeImportPartialProgress>[0],
+    detail?: string,
+  ) => Promise<void>,
 ): Promise<ImportPartialAnalysis> {
+  await onProgress?.("load_head", "Hämtar aktuell version av den stora kartan…");
   const headVersion = await prisma.mapVersion.findUnique({ where: { id: headVersionId } });
   if (!headVersion) {
     throw new Error("Aktuell kartversion hittades inte.");
   }
 
+  await onProgress?.(
+    "parse_files",
+    "Parsar stor karta och delkarta — stora filer kan ta flera minuter…",
+  );
   const headBuffer = await readStoredFile(headVersion.storagePath);
   const [headSummary, partialSummary] = await Promise.all([
     parseOcadBuffer(headBuffer, headVersion.originalFilename),
     parseOcadBuffer(partialBuffer, fileName),
   ]);
 
+  await onProgress?.(
+    "compare",
+    `${partialSummary.objectCount.toLocaleString("sv-SE")} objekt i delkartan, ${headSummary.objectCount.toLocaleString("sv-SE")} i stora kartan…`,
+  );
   const analysis = analyzeImportPartial({
     head: headSummary,
     partial: partialSummary,
@@ -94,6 +132,8 @@ async function analyzeAgainstHead(
     importExtent,
     ...(importRing ? { importRing } : {}),
   };
+
+  await onProgress?.("overlap", "Ser efter aktiva utcheckningar i samma område…");
   const conflicts = detectCheckoutConflicts(
     selection,
     await findActiveOverlapCandidates(mapFileId),
@@ -107,6 +147,43 @@ async function analyzeAgainstHead(
   return analysis;
 }
 
+/** Sparar uppladdad delkarta och startar analys i bakgrunden (klienten pollar status). */
+export async function createAndScheduleImportPartial(input: {
+  userId: string;
+  mapFileId: string;
+  mapSlug: string;
+  fileName: string;
+  partialBuffer: Buffer;
+}): Promise<ImportPartialJob> {
+  const headVersionId = await getHeadVersionId(input.mapFileId);
+  if (!headVersionId) {
+    throw new Error("Kartfilen saknar version att jämföra mot.");
+  }
+
+  const jobId = randomUUID();
+  await uploadFile(importPartialFilePath(jobId), input.partialBuffer);
+
+  const job: ImportPartialJob = {
+    id: jobId,
+    userId: input.userId,
+    mapFileId: input.mapFileId,
+    mapSlug: input.mapSlug,
+    headVersionId,
+    fileName: input.fileName,
+    createdAt: new Date().toISOString(),
+    status: "analyzing",
+    progress: makeImportPartialProgress("queued", "Analysen startar strax…"),
+  };
+  await writeJob(job);
+
+  runAfterResponse(async () => {
+    await analyzeExistingImportPartialJob(jobId, input.userId);
+  });
+
+  return job;
+}
+
+/** Synkron analys (tester / nödfall). */
 export async function createAndAnalyzeImportPartial(input: {
   userId: string;
   mapFileId: string;
@@ -121,14 +198,7 @@ export async function createAndAnalyzeImportPartial(input: {
 
   const jobId = randomUUID();
   await uploadFile(importPartialFilePath(jobId), input.partialBuffer);
-  const analysis = await analyzeAgainstHead(
-    input.mapFileId,
-    headVersionId,
-    input.partialBuffer,
-    input.fileName,
-  );
-
-  const job: ImportPartialJob = {
+  let job: ImportPartialJob = {
     id: jobId,
     userId: input.userId,
     mapFileId: input.mapFileId,
@@ -136,11 +206,43 @@ export async function createAndAnalyzeImportPartial(input: {
     headVersionId,
     fileName: input.fileName,
     createdAt: new Date().toISOString(),
-    status: "ok",
-    analysis,
+    status: "analyzing",
+    progress: makeImportPartialProgress("queued"),
   };
   await writeJob(job);
-  return job;
+
+  try {
+    const analysis = await analyzeAgainstHead(
+      input.mapFileId,
+      headVersionId,
+      input.partialBuffer,
+      input.fileName,
+      async (step, detail) => {
+        job = await writeJobProgress(job, step, detail);
+      },
+    );
+    job = {
+      ...job,
+      status: "ok",
+      error: undefined,
+      analysis,
+      progress: makeImportPartialProgress("done"),
+    };
+    await writeJob(job);
+    return job;
+  } catch (err) {
+    job = {
+      ...job,
+      status: "error",
+      error: err instanceof Error ? err.message : "Kunde inte analysera delkartan",
+      progress: makeImportPartialProgress(
+        job.progress?.step ?? "parse_files",
+        err instanceof Error ? err.message : undefined,
+      ),
+    };
+    await writeJob(job);
+    throw err;
+  }
 }
 
 export async function initImportPartialJob(input: {
@@ -159,45 +261,113 @@ export async function initImportPartialJob(input: {
     headVersionId: input.headVersionId,
     fileName: input.fileName,
     createdAt: new Date().toISOString(),
-    status: "ok",
+    status: "pending",
+    progress: makeImportPartialProgress("upload", "Väntar på uppladdning…"),
   };
   await writeJob(job);
   return { jobId, storagePath: importPartialFilePath(jobId) };
+}
+
+export function scheduleImportPartialAnalysis(jobId: string, userId: string): void {
+  runAfterResponse(async () => {
+    await analyzeExistingImportPartialJob(jobId, userId);
+  });
+}
+
+/** Markerar jobb som analyzing och schemalägger bakgrundsanalys (för blob-uppladdning). */
+export async function startImportPartialAnalysis(input: {
+  jobId: string;
+  userId: string;
+  mapFileId: string;
+}): Promise<ImportPartialJob> {
+  const job = await readImportPartialJob(input.jobId);
+  if (!job) throw new Error("Importjobbet hittades inte.");
+  if (job.userId !== input.userId) throw new Error("Otillåten åtkomst till jobbet.");
+  if (job.mapFileId !== input.mapFileId) throw new Error("Jobbet tillhör ett annat område.");
+
+  if (job.status === "ok" && job.analysis) {
+    return job;
+  }
+
+  if (job.status === "analyzing") {
+    const updatedMs = Date.parse(job.progress?.updatedAt ?? job.createdAt);
+    if (Number.isFinite(updatedMs) && Date.now() - updatedMs < 10 * 60 * 1000) {
+      // Already running in background — client should poll.
+      return job;
+    }
+    // Stale analyzing-state (t.ex. avbruten serverless) — starta om.
+  }
+
+  if (!(await fileExists(importPartialFilePath(input.jobId)))) {
+    throw new Error("Delkartan hittades inte i lagringen.");
+  }
+
+  const next: ImportPartialJob = {
+    ...job,
+    status: "analyzing",
+    progress: makeImportPartialProgress("queued", "Analysen startar strax…"),
+    error: undefined,
+  };
+  await writeJob(next);
+  scheduleImportPartialAnalysis(input.jobId, input.userId);
+  return next;
 }
 
 export async function analyzeExistingImportPartialJob(
   jobId: string,
   userId: string,
 ): Promise<ImportPartialJob> {
-  const job = await readImportPartialJob(jobId);
+  let job = await readImportPartialJob(jobId);
   if (!job) throw new Error("Importjobbet hittades inte.");
   if (job.userId !== userId) throw new Error("Otillåten åtkomst till jobbet.");
   if (!(await fileExists(importPartialFilePath(jobId)))) {
     throw new Error("Delkartan hittades inte i lagringen.");
   }
 
-  const headVersionId = await getHeadVersionId(job.mapFileId);
-  if (!headVersionId) {
-    throw new Error("Kartfilen saknar version att jämföra mot.");
+  if (job.status === "ok" && job.analysis) {
+    return job;
   }
 
-  const partialBuffer = await readStoredFile(importPartialFilePath(jobId));
-  const analysis = await analyzeAgainstHead(
-    job.mapFileId,
-    headVersionId,
-    partialBuffer,
-    job.fileName,
-  );
+  job = await writeJobProgress(job, "queued", "Startar analys…");
 
-  const merged: ImportPartialJob = {
-    ...job,
-    headVersionId,
-    status: "ok",
-    error: undefined,
-    analysis,
-  };
-  await writeJob(merged);
-  return merged;
+  try {
+    const headVersionId = await getHeadVersionId(job.mapFileId);
+    if (!headVersionId) {
+      throw new Error("Kartfilen saknar version att jämföra mot.");
+    }
+
+    const partialBuffer = await readStoredFile(importPartialFilePath(jobId));
+    const analysis = await analyzeAgainstHead(
+      job.mapFileId,
+      headVersionId,
+      partialBuffer,
+      job.fileName,
+      async (step, detail) => {
+        job = await writeJobProgress(job!, step, detail);
+      },
+    );
+
+    const merged: ImportPartialJob = {
+      ...job,
+      headVersionId,
+      status: "ok",
+      error: undefined,
+      analysis,
+      progress: makeImportPartialProgress("done"),
+    };
+    await writeJob(merged);
+    return merged;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Kunde inte analysera delkartan";
+    const failed: ImportPartialJob = {
+      ...job,
+      status: "error",
+      error: message,
+      progress: makeImportPartialProgress(job.progress?.step ?? "parse_files", message),
+    };
+    await writeJob(failed);
+    throw err;
+  }
 }
 
 export async function commitImportPartialJob(input: {

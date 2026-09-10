@@ -1,11 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ImportPartialMapPreview } from "@/components/import-partial-map-preview";
 import type { ImportPartialAnalysis } from "@/lib/checkout/import-partial-types";
-import { uploadImportPartial } from "@/lib/upload-client";
+import {
+  uploadImportPartial,
+  type ImportPartialUploadProgress,
+} from "@/lib/upload-client";
 
 type StepId = "upload" | "symbols" | "extent" | "edges" | "diff" | "confirm";
 
@@ -30,6 +33,23 @@ function changeLabel(type: "added" | "removed" | "modified"): string {
   return "Ändrad";
 }
 
+function formatElapsed(totalSec: number): string {
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  if (m <= 0) return `${s} s`;
+  return `${m} min ${s.toString().padStart(2, "0")} s`;
+}
+
+function WorkingSpinner({ className = "" }: { className?: string }) {
+  return (
+    <div
+      className={`mx-auto h-9 w-9 animate-spin rounded-full border-2 border-slate-300 border-t-ifk-blue ${className}`}
+      role="status"
+      aria-label="Arbetar"
+    />
+  );
+}
+
 export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props) {
   const router = useRouter();
   const [step, setStep] = useState<StepId>("upload");
@@ -39,6 +59,8 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
+  const [progress, setProgress] = useState<ImportPartialUploadProgress | null>(null);
+  const [elapsedSec, setElapsedSec] = useState(0);
 
   // Endast redan genererad SVG — regenerering av kartbilden kan ta en minut och ge 500.
   const previewUrl = `/api/maps/${mapSlug}/versions/${headVersionId}/preview?cached=1`;
@@ -50,13 +72,33 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
   const canCommit = blockers.length === 0;
   const mapMode = step === "extent" || step === "edges" || step === "diff" ? step : null;
 
+  useEffect(() => {
+    if (!loading) {
+      setElapsedSec(0);
+      return;
+    }
+    const started = Date.now();
+    setElapsedSec(0);
+    const timer = window.setInterval(() => {
+      setElapsedSec(Math.floor((Date.now() - started) / 1000));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [loading]);
+
   async function onFile(file: File | undefined) {
     if (!file) return;
     setError(null);
     setLoading(true);
     setAcknowledged(false);
+    setProgress({
+      status: "uploading",
+      label: "Laddar upp delkartan",
+      detail: file.name,
+    });
     try {
-      const res = await uploadImportPartial(mapSlug, file);
+      const res = await uploadImportPartial(mapSlug, file, {
+        onProgress: (next) => setProgress(next),
+      });
       const data = (await res.json()) as {
         error?: string;
         jobId?: string;
@@ -68,9 +110,11 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
       setJobId(data.jobId);
       setAnalysis(data.analysis);
       setFileName(data.fileName ?? file.name);
+      setProgress(null);
       setStep("symbols");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Kunde inte analysera filen");
+      setProgress(null);
     } finally {
       setLoading(false);
     }
@@ -80,6 +124,11 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
     if (!jobId) return;
     setError(null);
     setLoading(true);
+    setProgress({
+      status: "analyzing",
+      label: "Skapar utcheckning",
+      detail: "Exporterar urval och checkar in delkartan…",
+    });
     try {
       const res = await fetch(`/api/maps/${mapSlug}/import-partial/${jobId}`, {
         method: "POST",
@@ -102,6 +151,7 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
       router.push(`/maps/${mapSlug}/checkout/${data.checkoutId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Kunde inte skapa utcheckning");
+      setProgress(null);
       setLoading(false);
     }
   }
@@ -150,7 +200,7 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
         </p>
       )}
 
-      {step === "upload" && (
+      {step === "upload" && !loading && (
         <label className="block rounded-xl border border-dashed border-slate-300 bg-white px-4 py-8 text-center">
           <input
             type="file"
@@ -159,13 +209,43 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
             disabled={loading}
             onChange={(event) => void onFile(event.target.files?.[0])}
           />
-          <span className="text-sm font-medium text-ifk-blue">
-            {loading ? "Analyserar delkartan…" : "Välj .ocd-fil"}
-          </span>
+          <span className="text-sm font-medium text-ifk-blue">Välj .ocd-fil</span>
           <span className="mt-1 block text-xs text-slate-500">
             Samma karta som området, redigerad i OCAD — även om den aldrig checkades ut här.
           </span>
         </label>
+      )}
+
+      {step === "upload" && loading && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-8 text-center">
+          <WorkingSpinner className="border-amber-300 border-t-amber-700" />
+          <p className="mt-4 text-sm font-medium text-amber-950">
+            {progress?.label ?? "Analyserar delkartan…"}
+          </p>
+          {progress?.detail && (
+            <p className="mx-auto mt-2 max-w-md text-sm text-slate-700">{progress.detail}</p>
+          )}
+          <p className="mt-3 text-xs text-amber-900/80">
+            Förfluten tid: {formatElapsed(elapsedSec)}
+            {elapsedSec >= 60
+              ? " — stora kartor (t.ex. Mora Väst) kan ta flera minuter att parsa."
+              : ""}
+          </p>
+          <p className="mt-2 text-xs text-slate-500">
+            Sidan uppdaterar status automatiskt medan analysen körs.
+          </p>
+        </div>
+      )}
+
+      {step === "confirm" && loading && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-6 text-center">
+          <WorkingSpinner className="border-amber-300 border-t-amber-700" />
+          <p className="mt-3 text-sm font-medium text-amber-950">
+            {progress?.label ?? "Skapar utcheckning…"}
+          </p>
+          {progress?.detail && <p className="mt-1 text-sm text-slate-700">{progress.detail}</p>}
+          <p className="mt-2 text-xs text-amber-900/80">Förfluten tid: {formatElapsed(elapsedSec)}</p>
+        </div>
       )}
 
       {analysis && step === "symbols" && (
@@ -294,7 +374,7 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
         </div>
       )}
 
-      {analysis && step === "confirm" && (
+      {analysis && step === "confirm" && !loading && (
         <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
           {otherBlockers.length > 0 && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-800">

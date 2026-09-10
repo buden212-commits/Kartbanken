@@ -1,9 +1,9 @@
 import { requireSession } from "@/lib/auth/api";
 import { canCheckout } from "@/lib/auth/permissions";
 import {
-  analyzeExistingImportPartialJob,
-  createAndAnalyzeImportPartial,
+  createAndScheduleImportPartial,
   initImportPartialJob,
+  startImportPartialAnalysis,
 } from "@/lib/checkout/import-partial";
 import { getHeadVersionId } from "@/lib/checkout/repository";
 import { prisma } from "@/lib/prisma";
@@ -94,7 +94,7 @@ export async function POST(request: Request, { params }: RouteParams) {
   }
 
   try {
-    const job = await createAndAnalyzeImportPartial({
+    const job = await createAndScheduleImportPartial({
       userId: session.user.id,
       mapFileId: map.id,
       mapSlug: slug,
@@ -105,7 +105,8 @@ export async function POST(request: Request, { params }: RouteParams) {
       jobId: job.id,
       headVersionId: job.headVersionId,
       fileName: job.fileName,
-      analysis: job.analysis,
+      status: job.status,
+      progress: job.progress,
     });
   } catch (err) {
     console.error("Import partial analyze failed:", err);
@@ -140,15 +141,17 @@ export async function PUT(request: Request, { params }: RouteParams) {
   }
 
   try {
-    const job = await analyzeExistingImportPartialJob(body.jobId, session.user.id);
-    if (job.mapFileId !== map.id) {
-      return NextResponse.json({ error: "Jobbet tillhör ett annat område" }, { status: 403 });
-    }
+    const scheduled = await startImportPartialAnalysis({
+      jobId: body.jobId,
+      userId: session.user.id,
+      mapFileId: map.id,
+    });
     return NextResponse.json({
-      jobId: job.id,
-      headVersionId: job.headVersionId,
-      fileName: job.fileName,
-      analysis: job.analysis,
+      jobId: scheduled.id,
+      headVersionId: scheduled.headVersionId,
+      fileName: scheduled.fileName,
+      status: scheduled.status,
+      progress: scheduled.progress,
     });
   } catch (err) {
     return NextResponse.json(
