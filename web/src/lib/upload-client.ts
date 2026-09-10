@@ -317,48 +317,117 @@ type ImportPartialPollPayload = {
   error?: string;
 };
 
-async function pollImportPartialJob(
+async function readResponsePayload(res: Response): Promise<ImportPartialPollPayload & Record<string, unknown>> {
+  const raw = await res.text();
+  if (!raw.trim()) return {};
+  try {
+    return JSON.parse(raw) as ImportPartialPollPayload & Record<string, unknown>;
+  } catch {
+    const snippet = raw.replace(/\s+/g, " ").trim().slice(0, 180);
+    return {
+      error:
+        snippet ||
+        (res.ok
+          ? "Servern svarade utan giltig JSON."
+          : `Servern svarade med fel (HTTP ${res.status}). Försök igen — stora kartor kan ta flera minuter.`),
+    };
+  }
+}
+
+function jsonResponse(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+/**
+ * Startar synkron analys (PUT) parallellt med GET-polling så progress syns under tiden.
+ */
+async function analyzeAndPollImportPartial(
   mapSlug: string,
   jobId: string,
   onProgress?: (progress: ImportPartialUploadProgress) => void,
 ): Promise<Response> {
   const started = Date.now();
   const maxMs = 14 * 60 * 1000;
+  const analyzeState: {
+    error: string | null;
+    done: ImportPartialPollPayload | null;
+  } = { error: null, done: null };
+
+  const analyzePromise = fetch(`/api/maps/${mapSlug}/import-partial`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jobId }),
+  })
+    .then(async (res) => {
+      const data = await readResponsePayload(res);
+      if (!res.ok) {
+        analyzeState.error = typeof data.error === "string" ? data.error : `HTTP ${res.status}`;
+        return data;
+      }
+      analyzeState.done = data;
+      return data;
+    })
+    .catch((err) => {
+      analyzeState.error = err instanceof Error ? err.message : "Analysanropet misslyckades";
+      return { error: analyzeState.error } as ImportPartialPollPayload;
+    });
+
+  onProgress?.({
+    status: "analyzing",
+    label: "Startar analys",
+    detail: "Parsar och jämför mot den stora kartan…",
+  });
 
   while (Date.now() - started < maxMs) {
     await new Promise((resolve) => setTimeout(resolve, 1500));
+
     const res = await fetch(`/api/maps/${mapSlug}/import-partial/${jobId}`);
-    const data = (await res.json().catch(() => ({}))) as ImportPartialPollPayload;
-    if (!res.ok) {
+    const data = await readResponsePayload(res);
+
+    if (!res.ok && res.status !== 404) {
+      // Tillfälliga plattformsfel under lång körning — fortsätt om analysen fortfarande jobbar.
+      if (analyzeState.error) {
+        onProgress?.({
+          status: "error",
+          label: "Analysen misslyckades",
+          detail: analyzeState.error,
+        });
+        return jsonResponse({ error: analyzeState.error, jobId }, 400);
+      }
       onProgress?.({
-        status: "error",
-        label: "Analysen misslyckades",
-        detail: data.error ?? `HTTP ${res.status}`,
+        status: "analyzing",
+        label: "Analyserar delkartan…",
+        detail: typeof data.error === "string" ? data.error : "Väntar på svar från servern…",
       });
-      return new Response(JSON.stringify(data), {
-        status: res.status,
-        headers: { "Content-Type": "application/json" },
-      });
+      continue;
     }
 
     if (data.status === "ok" && data.analysis) {
       onProgress?.({ status: "ok", label: "Klar", detail: "Analysen är färdig." });
-      return new Response(JSON.stringify(data), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+      return jsonResponse(data, 200);
     }
 
     if (data.status === "error") {
+      const message = typeof data.error === "string" ? data.error : "Okänt fel";
+      onProgress?.({ status: "error", label: "Analysen misslyckades", detail: message });
+      return jsonResponse({ ...data, error: message }, 400);
+    }
+
+    if (analyzeState.done?.status === "ok" && analyzeState.done.analysis) {
+      onProgress?.({ status: "ok", label: "Klar", detail: "Analysen är färdig." });
+      return jsonResponse(analyzeState.done, 200);
+    }
+
+    if (analyzeState.error && data.status !== "analyzing") {
       onProgress?.({
         status: "error",
         label: "Analysen misslyckades",
-        detail: data.error ?? "Okänt fel",
+        detail: analyzeState.error,
       });
-      return new Response(JSON.stringify(data), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: analyzeState.error, jobId }, 400);
     }
 
     onProgress?.({
@@ -368,14 +437,22 @@ async function pollImportPartialJob(
     });
   }
 
+  // Sista chansen: vänta in PUT om den fortfarande pågår.
+  const finalAnalyze = await Promise.race([
+    analyzePromise,
+    new Promise<null>((resolve) => setTimeout(() => resolve(null), 5_000)),
+  ]);
+  if (finalAnalyze && finalAnalyze.status === "ok" && finalAnalyze.analysis) {
+    onProgress?.({ status: "ok", label: "Klar", detail: "Analysen är färdig." });
+    return jsonResponse(finalAnalyze, 200);
+  }
+
   const timeout = {
     error: "Analysen tog för lång tid. Försök igen — stora kartor kan behöva flera försök.",
+    jobId,
   };
   onProgress?.({ status: "error", label: "Timeout", detail: timeout.error });
-  return new Response(JSON.stringify(timeout), {
-    status: 504,
-    headers: { "Content-Type": "application/json" },
-  });
+  return jsonResponse(timeout, 504);
 }
 
 export async function uploadImportPartial(
@@ -396,37 +473,29 @@ export async function uploadImportPartial(
 
   const res = await uploadViaFormData(`/api/maps/${mapSlug}/import-partial`, { file });
   if (res.status === 413) {
-    const data = (await res.clone().json().catch(() => ({}))) as {
-      clientUploadRequired?: boolean;
-    };
+    const data = await readResponsePayload(res.clone());
     if (data.clientUploadRequired) {
       return uploadImportPartialViaBlob(mapSlug, file, onProgress);
     }
   }
 
-  if (!res.ok) return res;
+  const data = await readResponsePayload(res);
+  if (!res.ok) {
+    return jsonResponse(
+      { error: typeof data.error === "string" ? data.error : `Uppladdning misslyckades (HTTP ${res.status})` },
+      res.status,
+    );
+  }
 
-  const data = (await res.json()) as ImportPartialPollPayload;
-  if (data.status === "ok" && data.analysis) {
+  if (data.status === "ok" && data.analysis && data.jobId) {
     onProgress?.({ status: "ok", label: "Klar" });
-    return new Response(JSON.stringify(data), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    return jsonResponse(data, 200);
   }
-  if (!data.jobId) {
-    return new Response(JSON.stringify({ error: "Saknar jobId i svar" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+  if (!data.jobId || typeof data.jobId !== "string") {
+    return jsonResponse({ error: "Saknar jobId i svar från servern" }, 500);
   }
 
-  onProgress?.({
-    status: "analyzing",
-    label: data.progress?.label ?? "Analyserar delkartan…",
-    detail: data.progress?.detail ?? "Parsar och jämför mot den stora kartan…",
-  });
-  return pollImportPartialJob(mapSlug, data.jobId, onProgress);
+  return analyzeAndPollImportPartial(mapSlug, data.jobId, onProgress);
 }
 
 async function uploadImportPartialViaBlob(
@@ -442,69 +511,64 @@ async function uploadImportPartialViaBlob(
 
   if (initRes.status === 400) {
     const res = await uploadViaFormData(`/api/maps/${mapSlug}/import-partial`, { file });
-    if (!res.ok) return res;
-    const data = (await res.json()) as ImportPartialPollPayload;
+    const data = await readResponsePayload(res);
+    if (!res.ok) {
+      return jsonResponse(
+        { error: typeof data.error === "string" ? data.error : `Uppladdning misslyckades (HTTP ${res.status})` },
+        res.status,
+      );
+    }
     if (data.status === "ok" && data.analysis) {
-      return new Response(JSON.stringify(data), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+      return jsonResponse(data, 200);
     }
-    if (data.jobId) {
-      onProgress?.({
-        status: "analyzing",
-        label: data.progress?.label ?? "Analyserar delkartan…",
-        detail: data.progress?.detail,
-      });
-      return pollImportPartialJob(mapSlug, data.jobId, onProgress);
+    if (typeof data.jobId === "string") {
+      return analyzeAndPollImportPartial(mapSlug, data.jobId, onProgress);
     }
-    return new Response(JSON.stringify(data), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    return jsonResponse({ error: "Saknar jobId i svar från servern" }, 500);
   }
-  if (!initRes.ok) return initRes;
 
-  const init = (await initRes.json()) as { jobId: string; storagePath: string };
+  const initData = await readResponsePayload(initRes);
+  if (!initRes.ok) {
+    return jsonResponse(
+      {
+        error:
+          typeof initData.error === "string"
+            ? initData.error
+            : `Kunde inte förbereda uppladdning (HTTP ${initRes.status})`,
+      },
+      initRes.status,
+    );
+  }
+
+  const jobId = typeof initData.jobId === "string" ? initData.jobId : null;
+  const storagePath = typeof initData.storagePath === "string" ? initData.storagePath : null;
+  if (!jobId || !storagePath) {
+    return jsonResponse({ error: "Saknar jobId/storagePath i svar från servern" }, 500);
+  }
+
   onProgress?.({
     status: "uploading",
     label: "Laddar upp delkartan",
     detail: "Skickar filen till lagringen…",
   });
-  await upload(init.storagePath, file, {
-    access: "private",
-    handleUploadUrl: BLOB_UPLOAD_ROUTE,
-    clientPayload: JSON.stringify({
-      kind: "importPartial",
-      jobId: init.jobId,
-      slug: mapSlug,
-    }),
-  });
-
-  onProgress?.({
-    status: "analyzing",
-    label: "Startar analys",
-    detail: "Filen är uppladdad — jämför mot den stora kartan…",
-  });
-  const startRes = await fetch(`/api/maps/${mapSlug}/import-partial`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ jobId: init.jobId }),
-  });
-  if (!startRes.ok) return startRes;
-
-  const started = (await startRes.json()) as ImportPartialPollPayload;
-  if (started.status === "ok" && started.analysis) {
-    return new Response(JSON.stringify(started), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
+  try {
+    await upload(storagePath, file, {
+      access: "private",
+      handleUploadUrl: BLOB_UPLOAD_ROUTE,
+      clientPayload: JSON.stringify({
+        kind: "importPartial",
+        jobId,
+        slug: mapSlug,
+      }),
     });
+  } catch (err) {
+    return jsonResponse(
+      {
+        error: err instanceof Error ? err.message : "Kunde inte ladda upp filen till lagringen",
+      },
+      500,
+    );
   }
 
-  onProgress?.({
-    status: "analyzing",
-    label: started.progress?.label ?? "Analyserar delkartan…",
-    detail: started.progress?.detail,
-  });
-  return pollImportPartialJob(mapSlug, init.jobId, onProgress);
+  return analyzeAndPollImportPartial(mapSlug, jobId, onProgress);
 }

@@ -147,8 +147,8 @@ async function analyzeAgainstHead(
   return analysis;
 }
 
-/** Sparar uppladdad delkarta och startar analys i bakgrunden (klienten pollar status). */
-export async function createAndScheduleImportPartial(input: {
+/** Sparar uppladdad delkarta. Klienten startar analys via PUT och pollar status. */
+export async function createImportPartialFromUpload(input: {
   userId: string;
   mapFileId: string;
   mapSlug: string;
@@ -171,16 +171,22 @@ export async function createAndScheduleImportPartial(input: {
     headVersionId,
     fileName: input.fileName,
     createdAt: new Date().toISOString(),
-    status: "analyzing",
-    progress: makeImportPartialProgress("queued", "Analysen startar strax…"),
+    status: "pending",
+    progress: makeImportPartialProgress("upload", "Filen är sparad — startar analys…"),
   };
   await writeJob(job);
-
-  runAfterResponse(async () => {
-    await analyzeExistingImportPartialJob(jobId, input.userId);
-  });
-
   return job;
+}
+
+/** @deprecated Använd createImportPartialFromUpload + startImportPartialAnalysis. */
+export async function createAndScheduleImportPartial(input: {
+  userId: string;
+  mapFileId: string;
+  mapSlug: string;
+  fileName: string;
+  partialBuffer: Buffer;
+}): Promise<ImportPartialJob> {
+  return createImportPartialFromUpload(input);
 }
 
 /** Synkron analys (tester / nödfall). */
@@ -274,7 +280,10 @@ export function scheduleImportPartialAnalysis(jobId: string, userId: string): vo
   });
 }
 
-/** Markerar jobb som analyzing och schemalägger bakgrundsanalys (för blob-uppladdning). */
+/**
+ * Startar analys synkront (med progress-skrivning så parallella GET kan polla).
+ * Undviker after()-bakgrund som ofta dör tyst på stora OCAD-filer.
+ */
 export async function startImportPartialAnalysis(input: {
   jobId: string;
   userId: string;
@@ -289,28 +298,11 @@ export async function startImportPartialAnalysis(input: {
     return job;
   }
 
-  if (job.status === "analyzing") {
-    const updatedMs = Date.parse(job.progress?.updatedAt ?? job.createdAt);
-    if (Number.isFinite(updatedMs) && Date.now() - updatedMs < 10 * 60 * 1000) {
-      // Already running in background — client should poll.
-      return job;
-    }
-    // Stale analyzing-state (t.ex. avbruten serverless) — starta om.
-  }
-
   if (!(await fileExists(importPartialFilePath(input.jobId)))) {
     throw new Error("Delkartan hittades inte i lagringen.");
   }
 
-  const next: ImportPartialJob = {
-    ...job,
-    status: "analyzing",
-    progress: makeImportPartialProgress("queued", "Analysen startar strax…"),
-    error: undefined,
-  };
-  await writeJob(next);
-  scheduleImportPartialAnalysis(input.jobId, input.userId);
-  return next;
+  return analyzeExistingImportPartialJob(input.jobId, input.userId);
 }
 
 export async function analyzeExistingImportPartialJob(

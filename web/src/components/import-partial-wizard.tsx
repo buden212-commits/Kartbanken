@@ -99,12 +99,22 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
       const res = await uploadImportPartial(mapSlug, file, {
         onProgress: (next) => setProgress(next),
       });
-      const data = (await res.json()) as {
+      const raw = await res.text();
+      let data: {
         error?: string;
         jobId?: string;
         analysis?: ImportPartialAnalysis;
         fileName?: string;
-      };
+      } = {};
+      try {
+        data = raw ? (JSON.parse(raw) as typeof data) : {};
+      } catch {
+        throw new Error(
+          res.ok
+            ? "Servern svarade felaktigt. Försök igen."
+            : `Kunde inte analysera filen (HTTP ${res.status}). Stora kartor kan ta flera minuter — försök igen.`,
+        );
+      }
       if (!res.ok) throw new Error(data.error ?? "Kunde inte analysera filen");
       if (!data.jobId || !data.analysis) throw new Error("Ogiltigt svar från servern");
       setJobId(data.jobId);

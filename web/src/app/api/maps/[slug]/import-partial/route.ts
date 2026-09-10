@@ -1,7 +1,7 @@
 import { requireSession } from "@/lib/auth/api";
 import { canCheckout } from "@/lib/auth/permissions";
 import {
-  createAndScheduleImportPartial,
+  createImportPartialFromUpload,
   initImportPartialJob,
   startImportPartialAnalysis,
 } from "@/lib/checkout/import-partial";
@@ -94,7 +94,7 @@ export async function POST(request: Request, { params }: RouteParams) {
   }
 
   try {
-    const job = await createAndScheduleImportPartial({
+    const job = await createImportPartialFromUpload({
       userId: session.user.id,
       mapFileId: map.id,
       mapSlug: slug,
@@ -109,9 +109,9 @@ export async function POST(request: Request, { params }: RouteParams) {
       progress: job.progress,
     });
   } catch (err) {
-    console.error("Import partial analyze failed:", err);
+    console.error("Import partial upload failed:", err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Kunde inte analysera delkartan" },
+      { error: err instanceof Error ? err.message : "Kunde inte spara delkartan" },
       { status: 500 },
     );
   }
@@ -141,19 +141,22 @@ export async function PUT(request: Request, { params }: RouteParams) {
   }
 
   try {
-    const scheduled = await startImportPartialAnalysis({
+    const job = await startImportPartialAnalysis({
       jobId: body.jobId,
       userId: session.user.id,
       mapFileId: map.id,
     });
     return NextResponse.json({
-      jobId: scheduled.id,
-      headVersionId: scheduled.headVersionId,
-      fileName: scheduled.fileName,
-      status: scheduled.status,
-      progress: scheduled.progress,
+      jobId: job.id,
+      headVersionId: job.headVersionId,
+      fileName: job.fileName,
+      status: job.status,
+      progress: job.progress,
+      analysis: job.analysis,
+      error: job.error,
     });
   } catch (err) {
+    console.error("Import partial analyze failed:", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Kunde inte analysera delkartan" },
       { status: 400 },

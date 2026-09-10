@@ -15,6 +15,7 @@ export const releaseNotes: ReleaseNote[] = [
       "Objekt på stora kartan som går över polygonen raderas inte automatiskt",
       "Blå markering i guiden visar polygonen; kantsteget förklarar vilka objekt som hoppas över",
       "Under analysen visas spinner, förfluten tid och aktuellt steg (uppladdning, parsning, jämförelse)",
+      "Tydligare fel om servern svarar med timeout/text i stället för JSON",
     ],
   },
   {
