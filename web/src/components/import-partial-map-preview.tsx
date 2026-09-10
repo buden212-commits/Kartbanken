@@ -326,10 +326,19 @@ export function ImportPartialMapPreview({ previewUrl, analysis, mode, title, are
   const frame = useMemo(() => {
     if (!scene) return null;
     const ring = analysis.ring?.length >= 3 ? analysis.ring : null;
+    const coreRing = analysis.coreRing?.length >= 3 ? analysis.coreRing : null;
     if (ring) {
       const points = ring.map((point) => geoToSvgUserPoint(point, scene.transform));
       if (points.length < 3) return null;
-      return { kind: "polygon" as const, points };
+      const corePoints = coreRing
+        ? coreRing.map((point) => geoToSvgUserPoint(point, scene.transform))
+        : null;
+      return {
+        kind: "polygon" as const,
+        points,
+        corePoints: corePoints && corePoints.length >= 3 ? corePoints : null,
+        edgeBufferMeters: analysis.edgeBufferMeters ?? 30,
+      };
     }
     const [minX, minY, maxX, maxY] = geoBboxToSvgUser(
       bboxToTuple(analysis.extent),
@@ -339,7 +348,7 @@ export function ImportPartialMapPreview({ previewUrl, analysis, mode, title, are
     const height = maxY - minY;
     if (!(width > 0) || !(height > 0)) return null;
     return { kind: "rect" as const, x: minX, y: minY, width, height };
-  }, [analysis.extent, analysis.ring, scene]);
+  }, [analysis.coreRing, analysis.edgeBufferMeters, analysis.extent, analysis.ring, scene]);
 
   const markerRadius = useMemo(() => {
     if (!viewBox) return 8;
@@ -482,14 +491,27 @@ export function ImportPartialMapPreview({ previewUrl, analysis, mode, title, are
               />
             )}
             {frame && frame.kind === "polygon" && (
-              <polygon
-                points={frame.points.map(([x, y]) => `${x},${y}`).join(" ")}
-                fill="rgba(37, 99, 235, 0.12)"
-                stroke="#1d4ed8"
-                strokeWidth={2}
-                vectorEffect="non-scaling-stroke"
-                pointerEvents="none"
-              />
+              <>
+                <polygon
+                  points={frame.points.map(([x, y]) => `${x},${y}`).join(" ")}
+                  fill="rgba(37, 99, 235, 0.10)"
+                  stroke="#1d4ed8"
+                  strokeWidth={2}
+                  vectorEffect="non-scaling-stroke"
+                  pointerEvents="none"
+                />
+                {frame.corePoints && (
+                  <polygon
+                    points={frame.corePoints.map(([x, y]) => `${x},${y}`).join(" ")}
+                    fill="rgba(16, 185, 129, 0.08)"
+                    stroke="#059669"
+                    strokeWidth={1.5}
+                    strokeDasharray="6 4"
+                    vectorEffect="non-scaling-stroke"
+                    pointerEvents="none"
+                  />
+                )}
+              </>
             )}
             {showOverlayControls && overlays.edges && (
               <EdgeMarkers

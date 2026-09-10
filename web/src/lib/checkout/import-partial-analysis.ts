@@ -13,10 +13,14 @@ import {
   buildImportPolygonFromObjects,
   edgeSnapForRing,
   expandRing,
+  filterObjectsIntersectingPolygon,
+  IMPORT_EDGE_BUFFER_METERS,
   isLikelyClippedByPolygon,
   objectCrossesPolygon,
   objectFullyInsidePolygon,
+  objectInEdgeBufferZone,
   objectIntersectsPolygon,
+  shrinkRing,
 } from "./import-partial-polygon";
 
 export type {
@@ -31,10 +35,14 @@ export {
   buildImportPolygonFromObjects,
   edgeSnapForRing,
   expandRing,
+  filterObjectsIntersectingPolygon,
+  IMPORT_EDGE_BUFFER_METERS,
   isLikelyClippedByPolygon,
   objectCrossesPolygon,
   objectFullyInsidePolygon,
+  objectInEdgeBufferZone,
   objectIntersectsPolygon,
+  shrinkRing,
 } from "./import-partial-polygon";
 
 const DIFF_TOLERANCE_M = Number(process.env.DIFF_SPATIAL_TOLERANCE_M ?? 2);
@@ -234,8 +242,9 @@ export function analyzeImportPartial(input: {
     [0, 0],
   ];
 
+  // AABB → polygon: hoppa över objekt långt från delkartan.
   const headInArea = ring
-    ? input.head.objects.filter((object) => objectIntersectsPolygon(object, activeRing))
+    ? filterObjectsIntersectingPolygon(input.head.objects, activeRing)
     : [];
 
   const onlyInHeadUsedByPartialArea: ImportSymbolRow[] = [];
@@ -255,15 +264,18 @@ export function analyzeImportPartial(input: {
   let interiorCount = 0;
   let likelyClippedCount = 0;
   const clippedPartialIndices = new Set<number>();
+  const edgeBufferMeters = IMPORT_EDGE_BUFFER_METERS;
+  const coreRing = ring ? shrinkRing(activeRing, edgeBufferMeters) : null;
 
   if (ring) {
     for (const object of input.partial.objects) {
       const crosses = objectCrossesPolygon(object, activeRing);
       const clipped = isLikelyClippedByPolygon(object, activeRing, snap);
-      if (objectFullyInsidePolygon(object, activeRing) && !crosses && !clipped) {
+      const inEdgeBelt = objectInEdgeBufferZone(object, activeRing, edgeBufferMeters);
+      if (objectFullyInsidePolygon(object, activeRing) && !crosses && !clipped && !inEdgeBelt) {
         interiorCount += 1;
       }
-      if (crosses || clipped) {
+      if (crosses || clipped || inEdgeBelt) {
         if (clipped) {
           likelyClippedCount += 1;
           clippedPartialIndices.add(object.objectIndex);
@@ -289,9 +301,7 @@ export function analyzeImportPartial(input: {
     );
   }
 
-  const baseline = ring
-    ? input.head.objects.filter((object) => objectIntersectsPolygon(object, activeRing))
-    : [];
+  const baseline = headInArea;
   const partialForDiff = input.partial.objects.filter(
     (object) => !clippedPartialIndices.has(object.objectIndex),
   );
@@ -303,9 +313,14 @@ export function analyzeImportPartial(input: {
     { toleranceMeters: DIFF_TOLERANCE_M, matchByObjectIndex: false },
   );
 
+  // Skydda: överskridande + icke-klippta objekt i kantzonen (t.ex. sten nära snittet).
   const protectedRemovals = new Set(
     baseline
-      .filter((object) => ring && objectCrossesPolygon(object, activeRing))
+      .filter((object) => {
+        if (!ring) return false;
+        if (objectCrossesPolygon(object, activeRing)) return true;
+        return objectInEdgeBufferZone(object, activeRing, edgeBufferMeters);
+      })
       .map((o) => o.objectIndex),
   );
 
@@ -321,7 +336,7 @@ export function analyzeImportPartial(input: {
   const skippedEdge = diff.changes.length - appliedChanges.length;
   if (skippedEdge > 0) {
     warnings.push(
-      `${skippedEdge} kantöverskridande eller klippta objekt hoppades över i jämförelsen (de går över eller längs delkartans polygon).`,
+      `${skippedEdge} kantnära eller överskridande objekt hoppades över i jämförelsen (skyddszon ca ${edgeBufferMeters} m från polygonkanten).`,
     );
   }
 
@@ -346,6 +361,10 @@ export function analyzeImportPartial(input: {
   return {
     extent: extent ?? { minX: 0, minY: 0, maxX: 0, maxY: 0 },
     ring: ring ?? [],
+    coreRing: coreRing ?? [],
+    edgeBufferMeters,
+    headObjectsInArea: headInArea.length,
+    headObjectsTotal: input.head.objects.length,
     extentInsideHead,
     headBounds,
     symbols: {

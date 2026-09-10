@@ -1,9 +1,11 @@
 import { parseSelectionJson, CheckoutSelectionType, type PolygonRing } from "./types";
 import { bboxFromGeometry } from "./overlap";
 import {
+  filterObjectsIntersectingPolygon,
+  IMPORT_EDGE_BUFFER_METERS,
   isLikelyClippedByPolygon,
   objectCrossesPolygon,
-  objectIntersectsPolygon,
+  objectInEdgeBufferZone,
 } from "./import-partial-polygon";
 import { objectCrossesBbox, objectIntersectsBbox } from "./import-partial-analysis";
 import { compareOcadObjects } from "@/lib/ocad/diff";
@@ -207,9 +209,7 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
     selection.importExtent ?? (importPartial ? bboxFromGeometry(selection.geometry) : null);
 
   if (importPartial && importRing) {
-    baselineObjects = baselineObjects.filter((object) =>
-      objectIntersectsPolygon(object, importRing),
-    );
+    baselineObjects = filterObjectsIntersectingPolygon(baselineObjects, importRing);
   } else if (importPartial && importExtent) {
     baselineObjects = baselineObjects.filter((object) => objectIntersectsBbox(object, importExtent));
   }
@@ -297,14 +297,15 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
       const baseline = baselineByIndex.get(change.objectIndex);
       const crosses = baseline
         ? importRing
-          ? objectCrossesPolygon(baseline, importRing)
+          ? objectCrossesPolygon(baseline, importRing) ||
+            objectInEdgeBufferZone(baseline, importRing, IMPORT_EDGE_BUFFER_METERS)
           : importExtent
             ? objectCrossesBbox(baseline, importExtent)
             : false
         : false;
       if (crosses) {
         outOfScopeWarnings.push(
-          `Kantobjekt ${change.objectIndex} (${change.symbolName}) hoppades över — det går utanför importerat område.`,
+          `Kantobjekt ${change.objectIndex} (${change.symbolName}) hoppades över — det ligger i kantzonen eller går utanför importerat område.`,
         );
         continue;
       }

@@ -16,8 +16,8 @@ const STEPS: { id: StepId; title: string; hint: string }[] = [
   { id: "upload", title: "1. Välj fil", hint: "Ladda upp den redigerade delkartan (.ocd)." },
   { id: "symbols", title: "2. Symboler", hint: "Kontrollera att symbolnumren stämmer med den stora kartan." },
   { id: "extent", title: "3. Läge", hint: "Polygonen ska ligga på rätt ställe på den stora kartan." },
-  { id: "edges", title: "4. Kanter", hint: "Objekt som skärs av polygonen jämförs inte — de får inte radera originalet utanför." },
-  { id: "diff", title: "5. Ändringar", hint: "Tillagt, borttaget och ändrat inne i polygonen." },
+  { id: "edges", title: "4. Kanter", hint: "Kantzon (~30 m) och klippta objekt jämförs inte som borttag — originalet utanför/kärnan skyddas." },
+  { id: "diff", title: "5. Ändringar", hint: "Tillagt, borttaget och ändrat i den inre kärnan av polygonen." },
   { id: "confirm", title: "6. Bekräfta", hint: "Skapar en utcheckning i efterhand. Inget slås ihop förrän du och admin bekräftar." },
 ];
 
@@ -332,17 +332,21 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
 
       {analysis && step === "extent" && (
         <p className="text-sm text-slate-600">
-          Blå polygon är delkartans utbredning (följer objektens form, inte bara en rektangel).
-          Kontrollera att den ligger rätt. Fil: <span className="font-medium">{fileName}</span>.
+          Blå polygon är delkartans utbredning. Grön streckad linje är den inre kärnan (ca{" "}
+          {analysis.edgeBufferMeters ?? 30} m innanför) där borttag jämförs. Fil:{" "}
+          <span className="font-medium">{fileName}</span>. Jämför{" "}
+          {analysis.headObjectsInArea.toLocaleString("sv-SE")} objekt i området av{" "}
+          {analysis.headObjectsTotal.toLocaleString("sv-SE")} på stora kartan.
         </p>
       )}
 
       {analysis && step === "edges" && (
         <div className="space-y-2 text-sm text-slate-600">
           <p>
-            Orange/rött = kantobjekt som skär eller är klippta mot polygonen ({analysis.edgeCount}{" "}
-            visade). Rött betyder troligen klippt ({analysis.likelyClippedCount} st) och räknas inte
-            som ändring. {analysis.interiorCount} objekt ligger helt inne i området.
+            Orange/rött = kantobjekt som skär, ligger i kantzonen (~{analysis.edgeBufferMeters} m)
+            eller är klippta ({analysis.edgeCount} visade). Rött betyder troligen klippt (
+            {analysis.likelyClippedCount} st) och räknas inte som ändring.{" "}
+            {analysis.interiorCount} objekt ligger i den inre kärnan.
           </p>
           <p>
             Växla mellan <span className="font-medium">Hela kartan</span> och{" "}
@@ -402,9 +406,14 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
           <ul className="list-disc pl-5">
             <li>
               {analysis.diff.added} tillägg, {analysis.diff.modified} ändringar, {analysis.diff.removed}{" "}
-              borttagningar (kantklippta och överskridande objekt jämförs inte automatiskt)
+              borttagningar (kantzon ~{analysis.edgeBufferMeters} m och klippta objekt jämförs inte som
+              borttag)
             </li>
             <li>{analysis.likelyClippedCount} objekt markerade som troligen klippta (filtreras bort)</li>
+            <li>
+              {analysis.headObjectsInArea.toLocaleString("sv-SE")} av{" "}
+              {analysis.headObjectsTotal.toLocaleString("sv-SE")} objekt på stora kartan ingår i jämförelsen
+            </li>
           </ul>
           <label className="flex items-start gap-2">
             <input

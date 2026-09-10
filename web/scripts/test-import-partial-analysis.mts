@@ -14,8 +14,11 @@ import {
   buildImportPolygonFromObjects,
   concaveHull,
   convexHull,
+  filterObjectsIntersectingPolygon,
+  IMPORT_EDGE_BUFFER_METERS,
   isLikelyClippedByPolygon,
   objectCrossesPolygon,
+  objectInEdgeBufferZone,
   objectIntersectsPolygon,
 } from "../src/lib/checkout/import-partial-polygon";
 import { CheckoutSelectionType } from "../src/lib/checkout/types";
@@ -123,6 +126,8 @@ const head = makeSummary("head.ocd", headObjects, [101, 102, 103], [0, 0, 1000, 
   );
   assert(analysis.extent.minX === 100 && analysis.extent.maxX === 160, "Utbredning från delkartans objekt");
   assert(analysis.ring.length >= 3, "Analys ska ha polygon-ring");
+  assert(analysis.headObjectsInArea < analysis.headObjectsTotal, "Färre objekt i området än totalt");
+  assert(analysis.edgeBufferMeters === IMPORT_EDGE_BUFFER_METERS, "Kantbuffert 30 m");
   assert(
     checkoutGeometryFromAnalysis(analysis).type === CheckoutSelectionType.POLYGON,
     "Checkout-geometri ska vara POLYGON",
@@ -277,6 +282,40 @@ const head = makeSummary("head.ocd", headObjects, [101, 102, 103], [0, 0, 1000, 
   assert(concave.length >= 3, "Concave hull ska returnera ring");
   const convex = convexHull(points);
   assert(concave.length >= convex.length, "Concave hull ska ha minst lika många hörn som konvex");
+}
+
+{
+  // AABB-prefilter: fjärran objekt ska inte nå polygon-testet.
+  const near = makeObject(1, 101, [100, 100, 110, 110]);
+  const far = makeObject(2, 101, [9000, 9000, 9010, 9010]);
+  const ring = buildImportPolygonFromObjects([near])!;
+  const filtered = filterObjectsIntersectingPolygon([near, far], ring);
+  assert(filtered.length === 1 && filtered[0]!.objectIndex === 1, "AABB ska sålla bort fjärran objekt");
+}
+
+{
+  // Sten nära kanten ska skyddas från borttag (kantbuffert), trots att den saknas i delkartan.
+  const areaPartial: NormalizedOcadObject[] = [];
+  for (let x = 0; x <= 200; x += 20) {
+    for (let y = 0; y <= 200; y += 20) {
+      areaPartial.push(makeObject(1000 + x + y, 101, [x, y, x + 5, y + 5]));
+    }
+  }
+  const ring = buildImportPolygonFromObjects(areaPartial)!;
+  // Placera sten ~10 m innanför övre kanten.
+  const stoneNearEdge = makeObject(42, 112, [100, 195, 102, 197], { type: "point", centroid: [101, 196] });
+  assert(objectInEdgeBufferZone(stoneNearEdge, ring, IMPORT_EDGE_BUFFER_METERS), "Sten nära kant i buffertzon");
+  const analysis = analyzeImportPartial({
+    head: makeSummary("head-stone.ocd", [...areaPartial, stoneNearEdge], [101, 112], [-50, -50, 300, 300]),
+    partial: makeSummary("partial-stone.ocd", areaPartial, [101]),
+  });
+  assert(
+    !analysis.diff.mapChanges.some(
+      (change) => change.changeType === "removed" && change.objectIndex === 42,
+    ),
+    "Sten i kantzon ska inte räknas som borttagen",
+  );
+  assert(analysis.headObjectsInArea >= areaPartial.length, "Head i området ska inkludera delkartans objekt");
 }
 
 console.log("test-import-partial-analysis: ok");

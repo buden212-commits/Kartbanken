@@ -115,12 +115,16 @@ async function analyzeAgainstHead(
 
   await onProgress?.(
     "compare",
-    `${partialSummary.objectCount.toLocaleString("sv-SE")} objekt i delkartan, ${headSummary.objectCount.toLocaleString("sv-SE")} i stora kartan…`,
+    `Bygger polygon och filtrerar geografiskt (${partialSummary.objectCount.toLocaleString("sv-SE")} i delkartan, ${headSummary.objectCount.toLocaleString("sv-SE")} totalt på stora kartan)…`,
   );
   const analysis = analyzeImportPartial({
     head: headSummary,
     partial: partialSummary,
   });
+  await onProgress?.(
+    "compare",
+    `Jämför ${analysis.headObjectsInArea.toLocaleString("sv-SE")} objekt i området (av ${analysis.headObjectsTotal.toLocaleString("sv-SE")}); ${partialSummary.objectCount.toLocaleString("sv-SE")} i delkartan. Kantzon ${analysis.edgeBufferMeters} m.`,
+  );
 
   const geometry = checkoutGeometryFromAnalysis(analysis);
   const importExtent = importExtentFromAnalysis(analysis);

@@ -272,8 +272,18 @@ export function buildImportPolygonFromObjects(objects: NormalizedOcadObject[]): 
     ];
   }
 
-  const hull = concaveHull(points, 3);
-  return hull.length >= 3 ? hull : convexHull(points);
+  // Begränsa antal punkter till hull — snabbare på stora delkartor.
+  const MAX_HULL_POINTS = 2500;
+  let hullInput = points;
+  if (points.length > MAX_HULL_POINTS) {
+    const stride = Math.ceil(points.length / MAX_HULL_POINTS);
+    hullInput = points.filter((_, index) => index % stride === 0);
+    // Behåll extrema för stabil AABB/hull.
+    hullInput.push(points[0]!, points[points.length - 1]!);
+  }
+
+  const hull = concaveHull(hullInput, 3);
+  return hull.length >= 3 ? hull : convexHull(hullInput);
 }
 
 export function bboxFromRing(ring: PolygonRing): Bbox | null {
@@ -302,6 +312,94 @@ export function expandRing(ring: PolygonRing, fraction = 0.01, minPad = 100): Po
   const scaleX = bbox.maxX === bbox.minX ? 1 : 1 + (2 * padX) / (bbox.maxX - bbox.minX);
   const scaleY = bbox.maxY === bbox.minY ? 1 : 1 + (2 * padY) / (bbox.maxY - bbox.minY);
   return ring.map(([x, y]) => [cx + (x - cx) * scaleX, cy + (y - cy) * scaleY]);
+}
+
+/** Default kantzon: objekt innanför polygonen men inom detta avstånd från kanten skyddas från auto-borttag. */
+export const IMPORT_EDGE_BUFFER_METERS = 30;
+
+/**
+ * Krymp polygon ungefärligt inåt med `meters` (mot centroid).
+ * Returnerar null om utsnittet är för litet för given buffert.
+ */
+export function shrinkRing(ring: PolygonRing, meters: number): PolygonRing | null {
+  const bbox = bboxFromRing(ring);
+  if (!bbox || ring.length < 3 || !(meters > 0)) return null;
+  const width = bbox.maxX - bbox.minX;
+  const height = bbox.maxY - bbox.minY;
+  let shrink = meters;
+  if (width <= 2 * shrink || height <= 2 * shrink) {
+    shrink = Math.min(width, height) * 0.2;
+    if (shrink < 1) return null;
+  }
+  const cx = (bbox.minX + bbox.maxX) / 2;
+  const cy = (bbox.minY + bbox.maxY) / 2;
+  const shrunk = ring.map(([x, y]) => {
+    const dx = x - cx;
+    const dy = y - cy;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 1e-9) return [x, y] as [number, number];
+    const factor = Math.max(0, (dist - shrink) / dist);
+    return [cx + dx * factor, cy + dy * factor] as [number, number];
+  });
+  return shrunk.length >= 3 ? shrunk : null;
+}
+
+export function padBboxMeters(bbox: Bbox, meters: number): Bbox {
+  return {
+    minX: bbox.minX - meters,
+    minY: bbox.minY - meters,
+    maxX: bbox.maxX + meters,
+    maxY: bbox.maxY + meters,
+  };
+}
+
+export function objectIntersectsBboxQuick(
+  object: NormalizedOcadObject,
+  bbox: Bbox,
+): boolean {
+  return (
+    object.bbox[0] <= bbox.maxX &&
+    object.bbox[2] >= bbox.minX &&
+    object.bbox[1] <= bbox.maxY &&
+    object.bbox[3] >= bbox.minY
+  );
+}
+
+/**
+ * Snabb geografisk sållning: AABB först, därefter polygon.
+ * Undviker PIP mot objekt långt från delkartan.
+ */
+export function filterObjectsIntersectingPolygon(
+  objects: NormalizedOcadObject[],
+  ring: PolygonRing,
+  options?: { padMeters?: number },
+): NormalizedOcadObject[] {
+  const bbox = bboxFromRing(ring);
+  if (!bbox || ring.length < 3) return [];
+  const padded = options?.padMeters ? padBboxMeters(bbox, options.padMeters) : bbox;
+  const candidates: NormalizedOcadObject[] = [];
+  for (const object of objects) {
+    if (!objectIntersectsBboxQuick(object, padded)) continue;
+    if (objectIntersectsPolygon(object, ring, bbox)) {
+      candidates.push(object);
+    }
+  }
+  return candidates;
+}
+
+/** True om objektets centroid ligger i kantzonen (inne i polygon, ≤ bufferMeters från randen). */
+export function objectInEdgeBufferZone(
+  object: NormalizedOcadObject,
+  ring: PolygonRing,
+  bufferMeters: number = IMPORT_EDGE_BUFFER_METERS,
+): boolean {
+  if (!(bufferMeters > 0) || ring.length < 3) return false;
+  const [x, y] = object.centroid;
+  if (!pointInPolygon(x, y, ring)) {
+    // Objekt som bara snuddar området via bbox — behandla som kant.
+    return objectIntersectsPolygon(object, ring);
+  }
+  return distancePointToRing(x, y, ring) <= bufferMeters;
 }
 
 export function edgeSnapForRing(ring: PolygonRing): number {
@@ -354,8 +452,12 @@ function objectSamplePointsForContainment(object: NormalizedOcadObject): [number
   ];
 }
 
-export function objectIntersectsPolygon(object: NormalizedOcadObject, ring: PolygonRing): boolean {
-  const bbox = bboxFromRing(ring);
+export function objectIntersectsPolygon(
+  object: NormalizedOcadObject,
+  ring: PolygonRing,
+  ringBbox?: Bbox | null,
+): boolean {
+  const bbox = ringBbox ?? bboxFromRing(ring);
   if (!bbox) return false;
   if (
     object.bbox[2] < bbox.minX ||

@@ -34,6 +34,14 @@ export type ImportPartialAnalysis = {
   extent: Bbox;
   /** Faktiskt jämförelseområde — konkav hull av delkartans objekt. */
   ring: PolygonRing;
+  /** Inre kärna (ring krympt med edgeBufferMeters); tom om utsnittet är för litet. */
+  coreRing: PolygonRing;
+  /** Kantzon i meter där borttag på stora kartan skyddas. */
+  edgeBufferMeters: number;
+  /** Antal objekt på stora kartan som faktiskt jämförs (efter AABB+polygon). */
+  headObjectsInArea: number;
+  /** Totalt antal objekt på stora kartan (för status). */
+  headObjectsTotal: number;
   extentInsideHead: boolean;
   headBounds: Bbox | null;
   symbols: {
