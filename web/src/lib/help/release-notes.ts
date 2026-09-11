@@ -13,6 +13,8 @@ export const releaseNotes: ReleaseNote[] = [
       "Delkartans utbredning byggs nu som en rutnätskontur (~15 m celler) utifrån var objekten faktiskt ligger",
       "Inbuktningar och vikar i snittet följs bättre än tidigare konkav omslutning — tomma vikar räknas inte med i området",
       "Kartan i Importera delkarta går att zooma och panorera (mushjul, nyp, +/− och dra) — «Återställ» visar utbredningen igen",
+      "Färre objekt raderas felaktigt nära snittet: skyddszonen mäts nu mot hela objektet, så en bäck eller stig vars ände når kanten behålls även om mitten ligger långt in",
+      "Skyddszonen kompenseras för att rutnätskonturen ligger något utanför objekten — de utlovade ~30 m täcker nu verkligt kartinnehåll (visas som ca 45–60 m i guiden)",
     ],
   },
   {

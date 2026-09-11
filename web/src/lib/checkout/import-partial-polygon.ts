@@ -332,17 +332,22 @@ function countOccupancyComponents(occupied: Set<string>): number {
  * Binder ihop fragment med minimal ortogonal dilatering (max 2 steg).
  * Stoppar så fort det blir en komponent — undviker att fylla vikar i onödan.
  */
-function connectComponentsMinimally(occupied: Set<string>): Set<string> {
+function connectComponentsMinimally(occupied: Set<string>): {
+  cells: Set<string>;
+  dilateSteps: number;
+} {
   let current = occupied;
   if (countOccupancyComponents(current) <= 1) {
-    return closeSingleCellGaps(current);
+    return { cells: closeSingleCellGaps(current), dilateSteps: 0 };
   }
+  let dilateSteps = 0;
   for (let step = 0; step < 2; step++) {
     current = dilateOccupancyOrtho(current);
     current = closeSingleCellGaps(current);
+    dilateSteps += 1;
     if (countOccupancyComponents(current) <= 1) break;
   }
-  return current;
+  return { cells: current, dilateSteps };
 }
 
 function markLineCells(
@@ -364,14 +369,20 @@ function markLineCells(
   }
 }
 
+export type GridContourResult = {
+  ring: PolygonRing;
+  cellMeters: number;
+  dilateSteps: number;
+};
+
 /**
  * Bygger fotavtryck från objekt via rutnät och plockar ytterkonturen.
  * Följer vikar/inbuktningar bättre än konkav hull.
  */
-export function buildGridContourFromObjects(
+export function buildGridContourWithMeta(
   objects: NormalizedOcadObject[],
   options?: { cellMeters?: number; dilate?: boolean },
-): PolygonRing | null {
+): GridContourResult | null {
   if (objects.length === 0) return null;
 
   let minX = Infinity;
@@ -424,15 +435,25 @@ export function buildGridContourFromObjects(
 
   if (occupied.size === 0) return null;
   // Minimal sammankoppling av fragment; undviker att alltid dilatera (fyller annars vikar).
+  let dilateSteps = 0;
   if (options?.dilate === false) {
     occupied = closeSingleCellGaps(occupied);
   } else {
-    occupied = connectComponentsMinimally(occupied);
+    const connected = connectComponentsMinimally(occupied);
+    occupied = connected.cells;
+    dilateSteps = connected.dilateSteps;
   }
 
   const ring = traceOccupancyOuterRing(occupied, originX, originY, cell);
   if (!ring || ring.length < 3) return null;
-  return simplifyAxisAlignedRing(ring);
+  return { ring: simplifyAxisAlignedRing(ring), cellMeters: cell, dilateSteps };
+}
+
+export function buildGridContourFromObjects(
+  objects: NormalizedOcadObject[],
+  options?: { cellMeters?: number; dilate?: boolean },
+): PolygonRing | null {
+  return buildGridContourWithMeta(objects, options)?.ring ?? null;
 }
 
 /**
@@ -542,7 +563,20 @@ export function simplifyAxisAlignedRing(ring: PolygonRing): PolygonRing {
   return out.length >= 3 ? out : ring;
 }
 
-export function buildImportPolygonFromObjects(objects: NormalizedOcadObject[]): PolygonRing | null {
+export type ImportPolygonResult = {
+  ring: PolygonRing;
+  /**
+   * Hur långt utanför de yttersta objekten ringen kan ligga (meter).
+   * Rutnätskonturen följer cellkanter och kan dilateras, så den ligger en bit
+   * utanför datat; kantzonen måste kompenseras med detta för att skydda
+   * ~IMPORT_EDGE_BUFFER_METERS av verkligt kartinnehåll.
+   */
+  edgeSlackMeters: number;
+};
+
+export function buildImportPolygonWithMeta(
+  objects: NormalizedOcadObject[],
+): ImportPolygonResult | null {
   if (objects.length === 0) return null;
   const points: [number, number][] = [];
   for (const object of objects) {
@@ -554,28 +588,37 @@ export function buildImportPolygonFromObjects(objects: NormalizedOcadObject[]): 
   if (points.length === 1) {
     const [x, y] = points[0]!;
     const pad = 5;
-    return [
-      [x - pad, y - pad],
-      [x + pad, y - pad],
-      [x + pad, y + pad],
-      [x - pad, y + pad],
-    ];
+    return {
+      ring: [
+        [x - pad, y - pad],
+        [x + pad, y - pad],
+        [x + pad, y + pad],
+        [x - pad, y + pad],
+      ],
+      edgeSlackMeters: pad,
+    };
   }
   if (points.length === 2) {
     const [a, b] = points;
     const pad = Math.max(5, dist(a!, b!) * 0.05);
-    return [
-      [a![0] - pad, a![1] - pad],
-      [b![0] + pad, a![1] - pad],
-      [b![0] + pad, b![1] + pad],
-      [a![0] - pad, b![1] + pad],
-    ];
+    return {
+      ring: [
+        [a![0] - pad, a![1] - pad],
+        [b![0] + pad, a![1] - pad],
+        [b![0] + pad, b![1] + pad],
+        [a![0] - pad, b![1] + pad],
+      ],
+      edgeSlackMeters: pad,
+    };
   }
 
   // Primärt: rutnätskontur (följer vikar). Fallback: konkav/konvex hull.
-  const gridRing = buildGridContourFromObjects(objects);
-  if (gridRing && gridRing.length >= 3 && !ringSelfIntersects(gridRing)) {
-    return gridRing;
+  const grid = buildGridContourWithMeta(objects);
+  if (grid && grid.ring.length >= 3 && !ringSelfIntersects(grid.ring)) {
+    return {
+      ring: grid.ring,
+      edgeSlackMeters: grid.cellMeters * (1 + grid.dilateSteps),
+    };
   }
 
   const MAX_HULL_POINTS = 2500;
@@ -587,7 +630,15 @@ export function buildImportPolygonFromObjects(objects: NormalizedOcadObject[]): 
   }
 
   const hull = concaveHull(hullInput, 3);
-  return hull.length >= 3 ? hull : convexHull(hullInput);
+  const ring = hull.length >= 3 ? hull : convexHull(hullInput);
+  // Hullen går genom de yttersta punkterna, så ingen förskjutning utåt.
+  return { ring, edgeSlackMeters: 0 };
+}
+
+export function buildImportPolygonFromObjects(
+  objects: NormalizedOcadObject[],
+): PolygonRing | null {
+  return buildImportPolygonWithMeta(objects)?.ring ?? null;
 }
 
 export function bboxFromRing(ring: PolygonRing): Bbox | null {
@@ -691,19 +742,91 @@ export function filterObjectsIntersectingPolygon(
   return candidates;
 }
 
-/** True om objektets centroid ligger i kantzonen (inne i polygon, ≤ bufferMeters från randen). */
+/**
+ * True om punkten ligger inom `maxDist` från ringen.
+ * Avbryter tidigt och sållar bort segment med billig AABB-test först.
+ */
+export function pointWithinRingDistance(
+  px: number,
+  py: number,
+  ring: PolygonRing,
+  maxDist: number,
+): boolean {
+  if (ring.length < 2 || !(maxDist >= 0)) return false;
+  for (let i = 0; i < ring.length; i++) {
+    const [ax, ay] = ring[i]!;
+    const [bx, by] = ring[(i + 1) % ring.length]!;
+    if (
+      px < Math.min(ax, bx) - maxDist ||
+      px > Math.max(ax, bx) + maxDist ||
+      py < Math.min(ay, by) - maxDist ||
+      py > Math.max(ay, by) + maxDist
+    ) {
+      continue;
+    }
+    if (distancePointToSegment(px, py, ax, ay, bx, by) <= maxDist) return true;
+  }
+  return false;
+}
+
+/** Max antal punkter som testas per objekt mot kantzonen. */
+const EDGE_PROBE_POINT_LIMIT = 12;
+
+/**
+ * Punkter som representerar hela objektets utsträckning, inte bara tyngdpunkten.
+ * Långa linjer (stigar, bäckar, kurvor) måste kunna nå kantzonen med sin ände
+ * även när tyngdpunkten ligger långt inne i utsnittet.
+ */
+export function edgeProbePoints(object: NormalizedOcadObject): [number, number][] {
+  const vertices = object.vertices;
+  if (vertices && vertices.length >= 2) {
+    if (vertices.length <= EDGE_PROBE_POINT_LIMIT) return vertices;
+    const points: [number, number][] = [];
+    const stride = (vertices.length - 1) / (EDGE_PROBE_POINT_LIMIT - 1);
+    for (let i = 0; i < EDGE_PROBE_POINT_LIMIT; i++) {
+      points.push(vertices[Math.round(i * stride)]!);
+    }
+    // Ändpunkterna är viktigast — garantera att båda finns med.
+    points[0] = vertices[0]!;
+    points[points.length - 1] = vertices[vertices.length - 1]!;
+    return points;
+  }
+  const [minX, minY, maxX, maxY] = object.bbox;
+  return [
+    object.centroid,
+    [minX, minY],
+    [maxX, minY],
+    [maxX, maxY],
+    [minX, maxY],
+  ];
+}
+
+/**
+ * True om någon del av objektet ligger i kantzonen
+ * (inne i polygonen, ≤ bufferMeters från randen) eller korsar randen.
+ */
 export function objectInEdgeBufferZone(
   object: NormalizedOcadObject,
   ring: PolygonRing,
   bufferMeters: number = IMPORT_EDGE_BUFFER_METERS,
 ): boolean {
   if (!(bufferMeters > 0) || ring.length < 3) return false;
-  const [x, y] = object.centroid;
-  if (!pointInPolygon(x, y, ring)) {
-    // Objekt som bara snuddar området via bbox — behandla som kant.
-    return objectIntersectsPolygon(object, ring);
+  const ringBbox = bboxFromRing(ring);
+  if (!ringBbox) return false;
+  if (
+    object.bbox[2] < ringBbox.minX - bufferMeters ||
+    object.bbox[0] > ringBbox.maxX + bufferMeters ||
+    object.bbox[3] < ringBbox.minY - bufferMeters ||
+    object.bbox[1] > ringBbox.maxY + bufferMeters
+  ) {
+    return false;
   }
-  return distancePointToRing(x, y, ring) <= bufferMeters;
+  if (!objectIntersectsPolygon(object, ring, ringBbox)) return false;
+  for (const [x, y] of edgeProbePoints(object)) {
+    if (pointWithinRingDistance(x, y, ring, bufferMeters)) return true;
+  }
+  // Objekt som bara snuddar området — behandla som kant.
+  return !objectFullyInsidePolygon(object, ring);
 }
 
 export function edgeSnapForRing(ring: PolygonRing): number {

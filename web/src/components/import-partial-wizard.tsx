@@ -346,7 +346,8 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
             Orange/rött = kantobjekt som skär, ligger i kantzonen (~{analysis.edgeBufferMeters} m)
             eller är klippta ({analysis.edgeCount} visade). Rött betyder troligen klippt (
             {analysis.likelyClippedCount} st) och räknas inte som ändring.{" "}
-            {analysis.interiorCount} objekt ligger i den inre kärnan.
+            {analysis.interiorCount} objekt ligger i den inre kärnan. Kantzonen mäts mot hela
+            objektet, så en bäck eller stig som når kanten skyddas även om mitten ligger långt in.
           </p>
           <p>
             Växla mellan <span className="font-medium">Hela kartan</span> och{" "}

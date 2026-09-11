@@ -207,6 +207,12 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
         : null;
   const importExtent =
     selection.importExtent ?? (importPartial ? bboxFromGeometry(selection.geometry) : null);
+  // Utcheckningen sparar kantzonen som användes vid analysen (kompenserad för
+  // rutnätskonturens förskjutning). Äldre utcheckningar saknar värdet.
+  const importEdgeBuffer =
+    selection.importEdgeBuffer && selection.importEdgeBuffer > 0
+      ? selection.importEdgeBuffer
+      : IMPORT_EDGE_BUFFER_METERS;
 
   if (importPartial && importRing) {
     baselineObjects = filterObjectsIntersectingPolygon(baselineObjects, importRing);
@@ -298,7 +304,7 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
       const crosses = baseline
         ? importRing
           ? objectCrossesPolygon(baseline, importRing) ||
-            objectInEdgeBufferZone(baseline, importRing, IMPORT_EDGE_BUFFER_METERS)
+            objectInEdgeBufferZone(baseline, importRing, importEdgeBuffer)
           : importExtent
             ? objectCrossesBbox(baseline, importExtent)
             : false

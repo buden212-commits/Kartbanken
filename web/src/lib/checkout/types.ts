@@ -53,6 +53,8 @@ export type CheckoutSelection = {
   importExtent?: Bbox;
   /** Unpadded polygon för importerad delkarta (diff/kantfilter). */
   importRing?: PolygonRing;
+  /** Skyddad kantzon (meter) innanför importRing — objekt där tas aldrig bort automatiskt. */
+  importEdgeBuffer?: number;
 };
 
 export type CheckoutSelectionInput = {
@@ -106,16 +108,25 @@ function parsePolygonRing(value: unknown): PolygonRing | null {
 
 function importFields(
   record: Record<string, unknown>,
-): Pick<CheckoutSelection, "importPartial" | "importExtent" | "importRing"> {
+): Pick<
+  CheckoutSelection,
+  "importPartial" | "importExtent" | "importRing" | "importEdgeBuffer"
+> {
   if (record.importPartial !== true) {
     return { importPartial: false };
   }
   const importExtent = parseBbox(record.importExtent) ?? undefined;
   const importRing = parsePolygonRing(record.importRing) ?? undefined;
+  const rawBuffer = record.importEdgeBuffer;
+  const importEdgeBuffer =
+    typeof rawBuffer === "number" && Number.isFinite(rawBuffer) && rawBuffer > 0
+      ? rawBuffer
+      : undefined;
   return {
     importPartial: true,
     ...(importExtent ? { importExtent } : {}),
     ...(importRing ? { importRing } : {}),
+    ...(importEdgeBuffer ? { importEdgeBuffer } : {}),
   };
 }
 

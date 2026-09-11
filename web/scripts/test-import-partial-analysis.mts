@@ -12,6 +12,7 @@ import {
 } from "../src/lib/checkout/import-partial-analysis";
 import {
   buildImportPolygonFromObjects,
+  buildImportPolygonWithMeta,
   buildGridContourFromObjects,
   concaveHull,
   convexHull,
@@ -23,7 +24,11 @@ import {
   objectIntersectsPolygon,
 } from "../src/lib/checkout/import-partial-polygon";
 import { pointInPolygon } from "../src/lib/checkout/overlap";
-import { CheckoutSelectionType } from "../src/lib/checkout/types";
+import {
+  CheckoutSelectionType,
+  parseSelectionJson,
+  serializeSelection,
+} from "../src/lib/checkout/types";
 import type { NormalizedOcadObject, OcadParseSummary } from "../src/lib/ocad/types";
 
 function assert(condition: boolean, message: string): void {
@@ -135,7 +140,10 @@ const head = makeSummary("head.ocd", headObjects, [101, 102, 103], [0, 0, 1000, 
   );
   assert(analysis.ring.length >= 3, "Analys ska ha polygon-ring");
   assert(analysis.headObjectsInArea <= analysis.headObjectsTotal, "Objekt i området ≤ totalt");
-  assert(analysis.edgeBufferMeters === IMPORT_EDGE_BUFFER_METERS, "Kantbuffert 30 m");
+  assert(
+    analysis.edgeBufferMeters >= IMPORT_EDGE_BUFFER_METERS,
+    "Kantbuffert minst 30 m (plus rutnätets förskjutning)",
+  );
   assert(
     checkoutGeometryFromAnalysis(analysis).type === CheckoutSelectionType.POLYGON,
     "Checkout-geometri ska vara POLYGON",
@@ -359,6 +367,92 @@ const head = makeSummary("head.ocd", headObjects, [101, 102, 103], [0, 0, 1000, 
     { cellMeters: 10 },
   );
   assert(grid != null && grid.length >= 3, "buildGridContourFromObjects ska ge ring");
+}
+
+{
+  // Rutnätskonturen ligger utanför datat — slacket måste rapporteras så kantzonen kan kompensera.
+  const dense: NormalizedOcadObject[] = [];
+  let idx = 1;
+  for (let x = 0; x <= 200; x += 10) {
+    for (let y = 0; y <= 200; y += 10) {
+      dense.push(makeObject(idx++, 101, [x, y, x + 2, y + 2]));
+    }
+  }
+  const meta = buildImportPolygonWithMeta(dense)!;
+  assert(meta.ring.length >= 3, "buildImportPolygonWithMeta ska ge ring");
+  assert(meta.edgeSlackMeters > 0, "Rutnätskontur ska rapportera förskjutning utåt");
+}
+
+{
+  // Lång linje: tyngdpunkten ligger djupt inne, men änden når kanten.
+  const areaPartial: NormalizedOcadObject[] = [];
+  let idx = 2000;
+  for (let x = 0; x <= 400; x += 20) {
+    for (let y = 0; y <= 400; y += 20) {
+      areaPartial.push(makeObject(idx++, 101, [x, y, x + 5, y + 5]));
+    }
+  }
+  const ring = buildImportPolygonFromObjects(areaPartial)!;
+  const stream = makeObject(9001, 305, [200, 150, 405, 155], {
+    type: "line",
+    centroid: [300, 152],
+    vertices: [
+      [200, 152],
+      [300, 152],
+      [404, 152],
+    ],
+  });
+  assert(
+    objectInEdgeBufferZone(stream, ring, IMPORT_EDGE_BUFFER_METERS),
+    "Linje vars ände når kanten ska ligga i kantzonen även när tyngdpunkten är djupt inne",
+  );
+  const innerStone = makeObject(9002, 112, [198, 198, 200, 200], {
+    type: "point",
+    centroid: [199, 199],
+  });
+  assert(
+    objectInEdgeBufferZone(innerStone, ring, IMPORT_EDGE_BUFFER_METERS) === false,
+    "Objekt mitt i utsnittet ska inte ligga i kantzonen",
+  );
+  const analysis = analyzeImportPartial({
+    head: makeSummary(
+      "head-stream.ocd",
+      [...areaPartial, stream],
+      [101, 305],
+      [-100, -100, 600, 600],
+    ),
+    partial: makeSummary("partial-stream.ocd", areaPartial, [101]),
+  });
+  assert(
+    !analysis.diff.mapChanges.some(
+      (change) => change.changeType === "removed" && change.objectIndex === 9001,
+    ),
+    "Linje som når kantzonen ska inte räknas som borttagen",
+  );
+}
+
+{
+  // Kantzonen ska följa med utcheckningen så incheckningen använder samma värde.
+  const selection = {
+    geometry: {
+      type: CheckoutSelectionType.POLYGON,
+      ring: [
+        [0, 0],
+        [100, 0],
+        [100, 100],
+      ] as [number, number][],
+    },
+    objectIds: [],
+    importPartial: true,
+    importRing: [
+      [0, 0],
+      [100, 0],
+      [100, 100],
+    ] as [number, number][],
+    importEdgeBuffer: 75,
+  };
+  const parsed = parseSelectionJson(serializeSelection(selection));
+  assert(parsed.importEdgeBuffer === 75, "importEdgeBuffer ska överleva serialisering");
 }
 
 console.log("test-import-partial-analysis: ok");

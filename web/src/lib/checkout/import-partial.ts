@@ -134,7 +134,7 @@ async function analyzeAgainstHead(
     objectIds: objectIdsFromSelection(headSummary.objects, geometry),
     importPartial: true as const,
     importExtent,
-    ...(importRing ? { importRing } : {}),
+    ...(importRing ? { importRing, importEdgeBuffer: analysis.edgeBufferMeters } : {}),
   };
 
   await onProgress?.("overlap", "Ser efter aktiva utcheckningar i samma område…");
@@ -402,7 +402,7 @@ export async function commitImportPartialJob(input: {
     objectIds: [] as string[],
     importPartial: true as const,
     importExtent,
-    ...(importRing ? { importRing } : {}),
+    ...(importRing ? { importRing, importEdgeBuffer: job.analysis.edgeBufferMeters } : {}),
   };
 
   const conflicts = detectCheckoutConflicts(

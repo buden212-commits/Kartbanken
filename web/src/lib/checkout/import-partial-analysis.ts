@@ -10,7 +10,7 @@ import type {
 } from "./import-partial-types";
 import {
   bboxFromRing,
-  buildImportPolygonFromObjects,
+  buildImportPolygonWithMeta,
   edgeSnapForRing,
   expandRing,
   filterObjectsIntersectingPolygon,
@@ -19,7 +19,6 @@ import {
   objectCrossesPolygon,
   objectFullyInsidePolygon,
   objectInEdgeBufferZone,
-  objectIntersectsPolygon,
   shrinkRing,
 } from "./import-partial-polygon";
 
@@ -33,6 +32,7 @@ export type {
 export {
   bboxFromRing,
   buildImportPolygonFromObjects,
+  buildImportPolygonWithMeta,
   edgeSnapForRing,
   expandRing,
   filterObjectsIntersectingPolygon,
@@ -181,7 +181,8 @@ export function analyzeImportPartial(input: {
   const warnings: string[] = [];
 
   const headSymbolNums = new Set(input.head.symbolNums);
-  const ring = buildImportPolygonFromObjects(input.partial.objects);
+  const polygon = buildImportPolygonWithMeta(input.partial.objects);
+  const ring = polygon?.ring ?? null;
   const extent = ring ? bboxFromRing(ring) : bboxFromObjects(input.partial.objects);
   const headBounds = bboxFromTuple(input.head.bounds) ?? bboxFromObjects(input.head.objects);
   const snap = ring ? edgeSnapForRing(ring) : 50;
@@ -264,7 +265,12 @@ export function analyzeImportPartial(input: {
   let interiorCount = 0;
   let likelyClippedCount = 0;
   const clippedPartialIndices = new Set<number>();
-  const edgeBufferMeters = IMPORT_EDGE_BUFFER_METERS;
+  // Rutnätskonturen ligger en bit utanför de yttersta objekten (cellkanter +
+  // ev. dilatering). Kompensera så att ~IMPORT_EDGE_BUFFER_METERS av verkligt
+  // kartinnehåll skyddas, inte tom yta mellan datat och ringen.
+  const edgeBufferMeters = Math.round(
+    IMPORT_EDGE_BUFFER_METERS + (polygon?.edgeSlackMeters ?? 0),
+  );
   const coreRing = ring ? shrinkRing(activeRing, edgeBufferMeters) : null;
 
   if (ring) {
