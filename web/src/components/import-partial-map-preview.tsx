@@ -49,6 +49,8 @@ type Props = {
   selectedKey?: string | null;
   /** Ändringar som kryssats bort — ritas dämpade så det syns att de inte tillämpas. */
   excludedKeys?: ReadonlySet<string>;
+  /** Anropas när man klickar på en markering i kartan; null när man klickar bredvid. */
+  onSelectChange?: (change: ImportDiffSample | null) => void;
   ref?: Ref<ImportPartialMapHandle>;
 };
 
@@ -77,6 +79,8 @@ const MARKER_RADIUS_PX = 5;
 const FOCUS_MIN_SPAN_METERS = 120;
 /** Dämpad ton för ändringar som kryssats bort. */
 const EXCLUDED_COLOR = "#94a3b8";
+/** Träffytans bredd i skärmpixlar — tunna linjer ska gå att pricka utan att zooma. */
+const HIT_STROKE_PX = 14;
 
 function ringToPath(points: [number, number][]): string {
   return `M ${points.map(([x, y]) => `${x},${y}`).join(" L ")} Z`;
@@ -287,6 +291,61 @@ function ObjectOutline({
   );
 }
 
+/**
+ * Osynlig träffyta ovanpå markeringen. Själva markeringen är för tunn att pricka,
+ * särskilt utzoomad, så klick fångas av en bred genomskinlig kopia i stället.
+ * `data-change-key` gör att pekaruppsläppet kan slå upp vilken ändring som träffades.
+ */
+function HitArea({
+  changeKey,
+  outline,
+  transform,
+  cx,
+  cy,
+  radius,
+  strokeWidth,
+  closed,
+}: {
+  changeKey: string;
+  outline?: [number, number][];
+  transform: SvgRootTransform;
+  cx: number;
+  cy: number;
+  radius: number;
+  strokeWidth: number;
+  closed: boolean;
+}) {
+  if (outline && outline.length >= 2) {
+    const points = outline.map((point) => geoToSvgUserPoint(point, transform));
+    const d = `M ${points.map(([x, y]) => `${x},${y}`).join(" L ")}${closed ? " Z" : ""}`;
+    return (
+      <path
+        data-change-key={changeKey}
+        d={d}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={strokeWidth}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        vectorEffect="non-scaling-stroke"
+        pointerEvents={closed ? "all" : "stroke"}
+        className="cursor-pointer"
+      />
+    );
+  }
+  return (
+    <circle
+      data-change-key={changeKey}
+      cx={cx}
+      cy={cy}
+      r={radius}
+      fill="transparent"
+      pointerEvents="all"
+      className="cursor-pointer"
+    />
+  );
+}
+
 /** Ihålig ring med vit halo — symbolen under ska gå att känna igen. */
 function PointMarker({
   cx,
@@ -393,6 +452,7 @@ function DiffMarkers({
   kinds,
   selectedKey,
   excludedKeys,
+  selectable,
 }: {
   changes: ImportDiffSample[];
   transform: SvgRootTransform;
@@ -402,6 +462,7 @@ function DiffMarkers({
   kinds: { removed: boolean; added: boolean; modified: boolean };
   selectedKey?: string | null;
   excludedKeys?: ReadonlySet<string>;
+  selectable: boolean;
 }) {
   // Den valda ändringen ritas sist så den inte hamnar under grannarna.
   const ordered = selectedKey
@@ -487,6 +548,18 @@ function DiffMarkers({
                 dashed={dashed}
               />
             )}
+            {selectable && (
+              <HitArea
+                changeKey={key}
+                outline={change.outline}
+                transform={transform}
+                cx={cx}
+                cy={cy}
+                radius={Math.max(radius * 2, radius + strokePx(6))}
+                strokeWidth={strokePx(HIT_STROKE_PX)}
+                closed={change.type === "area"}
+              />
+            )}
           </g>
         );
       })}
@@ -502,6 +575,7 @@ export function ImportPartialMapPreview({
   areaHref,
   selectedKey,
   excludedKeys,
+  onSelectChange,
   ref,
 }: Props) {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -540,6 +614,18 @@ export function ImportPartialMapPreview({
   );
   const maxZoomRef = useRef(maxZoom);
   maxZoomRef.current = maxZoom;
+
+  const mapChanges = analysis.diff.mapChanges ?? analysis.diff.samples;
+  const changeByKey = useMemo(
+    () =>
+      new Map(
+        mapChanges.map((change) => [
+          importChangeKey(change.changeType, change.objectIndex),
+          change,
+        ]),
+      ),
+    [mapChanges],
+  );
 
   useEffect(() => {
     setOverlays(defaultOverlays(mode));
@@ -773,17 +859,38 @@ export function ImportPartialMapPreview({
     }
   }, []);
 
+  /**
+   * Pekaren fångas av vyn för att panorering ska fungera, så ett vanligt
+   * click-event på markeringen är inte att lita på. I stället görs träfftestet
+   * mot DOM:en vid uppsläppet — bara när fingret/musen inte flyttat sig.
+   */
+  const pickChangeAt = useCallback(
+    (clientX: number, clientY: number) => {
+      if (!onSelectChange) return;
+      const element = document.elementFromPoint(clientX, clientY);
+      const hit = element?.closest?.("[data-change-key]");
+      const key = hit?.getAttribute("data-change-key") ?? null;
+      onSelectChange(key ? (changeByKey.get(key) ?? null) : null);
+    },
+    [changeByKey, onSelectChange],
+  );
+
   const handlePointerUp = useCallback(
     (e: React.PointerEvent) => {
       pointersRef.current.delete(e.pointerId);
+      const wasPinching = pinchRef.current != null;
       if (pointersRef.current.size < 2) {
         pinchRef.current = null;
       }
       if (pointersRef.current.size === 1) {
         beginPinch();
       }
-      if (dragRef.current?.pointerId === e.pointerId) {
+      const drag = dragRef.current;
+      if (drag?.pointerId === e.pointerId) {
         dragRef.current = null;
+        if (!drag.moved && !wasPinching && e.type !== "pointercancel") {
+          pickChangeAt(e.clientX, e.clientY);
+        }
       }
       try {
         viewportRef.current?.releasePointerCapture(e.pointerId);
@@ -791,7 +898,7 @@ export function ImportPartialMapPreview({
         /* already released */
       }
     },
-    [beginPinch],
+    [beginPinch, pickChangeAt],
   );
 
   const frame = useMemo(() => {
@@ -857,7 +964,6 @@ export function ImportPartialMapPreview({
 
   const strokePx = useCallback((px: number) => px / zoom, [zoom]);
 
-  const mapChanges = analysis.diff.mapChanges ?? analysis.diff.samples;
   const showOverlayControls = mode === "edges" || mode === "diff";
   // Kartan visas i båda lägena — utan den går det inte att bedöma om en ändring
   // är rimlig. «Dämpad» lägger bara en slöja över så markeringarna träder fram.
@@ -960,6 +1066,7 @@ export function ImportPartialMapPreview({
         {status === "ready" && (
           <p className="text-xs text-slate-500">
             Dra för att panorera · mushjul eller nyp för att zooma · +/− i verktygsraden
+            {onSelectChange ? " · klicka på en markering för att välja den i listan" : ""}
           </p>
         )}
       </div>
@@ -1106,6 +1213,7 @@ export function ImportPartialMapPreview({
                     }}
                     selectedKey={selectedKey}
                     excludedKeys={excludedKeys}
+                    selectable={onSelectChange != null}
                   />
                 )}
             </svg>

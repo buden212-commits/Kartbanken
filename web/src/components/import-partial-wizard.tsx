@@ -85,6 +85,7 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
   const [excludedKeys, setExcludedKeys] = useState<ReadonlySet<string>>(() => new Set<string>());
 
   const mapRef = useRef<ImportPartialMapHandle>(null);
+  const listRef = useRef<HTMLUListElement>(null);
 
   // Endast redan genererad SVG — regenerering av kartbilden kan ta en minut och ge 500.
   const previewUrl = `/api/maps/${mapSlug}/versions/${headVersionId}/preview?cached=1`;
@@ -119,6 +120,19 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
   function focusChange(change: ImportDiffSample) {
     setSelectedKey(importChangeKey(change.changeType, change.objectIndex));
     mapRef.current?.focusOn({ bbox: change.bbox, centroid: change.centroid });
+  }
+
+  /** Klick i kartan väljer raden och rullar fram den — annars syns valet inte. */
+  function selectFromMap(change: ImportDiffSample | null) {
+    if (!change) {
+      setSelectedKey(null);
+      return;
+    }
+    const key = importChangeKey(change.changeType, change.objectIndex);
+    setSelectedKey(key);
+    listRef.current
+      ?.querySelector(`[data-row-key="${CSS.escape(key)}"]`)
+      ?.scrollIntoView({ block: "nearest" });
   }
 
   function toggleExcluded(change: ImportDiffSample) {
@@ -385,6 +399,7 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
           areaHref={`/maps/${mapSlug}`}
           selectedKey={mapMode === "diff" ? selectedKey : null}
           excludedKeys={excludedKeys}
+          onSelectChange={mapMode === "diff" ? selectFromMap : undefined}
           title={
             mapMode === "extent" ? "Utbredning" : mapMode === "edges" ? "Kantobjekt" : "Ändringar"
           }
@@ -439,9 +454,10 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
             {analysis.diff.unchanged} oförändrade i området
           </p>
           <p className="text-slate-600">
-            Klicka på en rad för att zooma dit i kartan. Kryssa ur <span className="font-medium">Ta med</span>{" "}
-            för en ändring som inte ska tillämpas — då lämnas det objektet orört i den stora kartan.
-            Kartväxlingen och lagerfiltren fungerar som i steget Kanter.
+            Klicka på en rad för att zooma dit i kartan, eller på en markering i kartan för att
+            välja raden. Kryssa ur <span className="font-medium">Ta med</span> för en ändring som
+            inte ska tillämpas — då lämnas det objektet orört i den stora kartan. Kartväxlingen och
+            lagerfiltren fungerar som i steget Kanter.
           </p>
           <p className="text-slate-600">
             Ett objekt som flyttats syns ofta som både borttaget och tillagt. Kryssar du bara bort
@@ -466,7 +482,10 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
                   </button>
                 )}
               </div>
-              <ul className="max-h-96 divide-y divide-slate-100 overflow-y-auto text-xs">
+              <ul
+                ref={listRef}
+                className="max-h-96 divide-y divide-slate-100 overflow-y-auto text-xs"
+              >
                 {listedChanges.map((change, index) => {
                   const key = importChangeKey(change.changeType, change.objectIndex);
                   const excluded = excludedKeys.has(key);
@@ -474,6 +493,7 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
                   return (
                     <li
                       key={`${key}-${index}`}
+                      data-row-key={key}
                       className={`flex items-center gap-2 px-3 ${
                         selected ? "bg-ifk-blue-pale" : ""
                       } ${excluded ? "text-slate-400" : "text-slate-700"}`}
