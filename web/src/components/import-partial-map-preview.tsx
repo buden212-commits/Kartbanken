@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import type { Bbox } from "@/lib/checkout/types";
 import type {
   ImportDiffSample,
@@ -12,8 +19,11 @@ import { extractSvgInner } from "@/lib/ocad/svg-utils";
 import {
   geoBboxToSvgUser,
   geoToSvgUserPoint,
+  mapPointToScreen,
   type SvgRootTransform,
 } from "@/lib/ocad/svg-coords";
+import { parseViewBoxString } from "@/lib/ocad/map-hit-test";
+import { maxZoomForMapScale } from "@/lib/ocad/map-display-scale";
 
 type Mode = "extent" | "edges" | "diff";
 type MapBase = "full" | "affected";
@@ -31,6 +41,7 @@ type Scene = {
   fill: string;
   fullViewBox: string;
   transform: SvgRootTransform;
+  ocadMapScale: number;
 };
 
 type OverlayFlags = {
@@ -40,33 +51,13 @@ type OverlayFlags = {
   modified: boolean;
 };
 
+const MIN_ZOOM = 0.2;
+const ZOOM_IN_FACTOR = 1.5;
+const ZOOM_OUT_FACTOR = 1 / ZOOM_IN_FACTOR;
+const DRAG_THRESHOLD_PX = 5;
+
 function bboxToTuple(box: Bbox): [number, number, number, number] {
   return [box.minX, box.minY, box.maxX, box.maxY];
-}
-
-function paddedViewBox(
-  extent: Bbox,
-  transform: SvgRootTransform,
-  fallback: string,
-): string {
-  const [minX, minY, maxX, maxY] = geoBboxToSvgUser(bboxToTuple(extent), transform);
-  const width = maxX - minX;
-  const height = maxY - minY;
-  if (!(width > 0) || !(height > 0) || !Number.isFinite(width) || !Number.isFinite(height)) {
-    return fallback;
-  }
-  const padX = width * 0.2;
-  const padY = height * 0.2;
-  return `${minX - padX} ${minY - padY} ${width + padX * 2} ${height + padY * 2}`;
-}
-
-function parseViewBoxSize(viewBox: string): { w: number; h: number } | null {
-  const parts = viewBox.trim().split(/\s+/).map(Number);
-  if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) return null;
-  const w = Math.abs(parts[2]!);
-  const h = Math.abs(parts[3]!);
-  if (!(w > 0) || !(h > 0)) return null;
-  return { w, h };
 }
 
 function objectSvgBox(
@@ -88,6 +79,58 @@ function defaultOverlays(mode: Mode): OverlayFlags {
     return { edges: false, removed: true, added: true, modified: true };
   }
   return { edges: false, removed: false, added: false, modified: false };
+}
+
+function zoomAtPoint(
+  prevZoom: number,
+  factor: number,
+  prevPan: { x: number; y: number },
+  focalX: number,
+  focalY: number,
+  maxZoom: number,
+): { zoom: number; pan: { x: number; y: number } } {
+  const nextZoom = Math.min(maxZoom, Math.max(MIN_ZOOM, prevZoom * factor));
+  const ratio = nextZoom / prevZoom;
+  return {
+    zoom: nextZoom,
+    pan: {
+      x: focalX - (focalX - prevPan.x) * ratio,
+      y: focalY - (focalY - prevPan.y) * ratio,
+    },
+  };
+}
+
+/** Fit viewport to analysis extent (padded), same approach as DiffMapPanel focus. */
+function fitExtentView(
+  extent: Bbox,
+  transform: SvgRootTransform,
+  viewBox: string,
+  containerWidth: number,
+  containerHeight: number,
+  maxZoom: number,
+): { pan: { x: number; y: number }; zoom: number } | null {
+  if (containerWidth < 10 || containerHeight < 10) return null;
+  const [minX, minY, maxX, maxY] = geoBboxToSvgUser(bboxToTuple(extent), transform);
+  const bw = Math.max(maxX - minX, 5) * 1.4;
+  const bh = Math.max(maxY - minY, 5) * 1.4;
+  const vb = parseViewBoxString(viewBox);
+  if (!vb || !(vb.width > 0) || !(vb.height > 0)) return null;
+  const renderScale = Math.min(containerWidth / vb.width, containerHeight / vb.height);
+  if (!(renderScale > 0)) return null;
+  const visibleW = containerWidth / renderScale;
+  const visibleH = containerHeight / renderScale;
+  let targetZoom = Math.min(visibleW / bw, visibleH / bh) * 0.85;
+  targetZoom = Math.min(maxZoom, Math.max(MIN_ZOOM, targetZoom));
+
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  const screen0 = mapPointToScreen(cx, cy, viewBox, containerWidth, containerHeight);
+  const panX = containerWidth / 2 - screen0[0] * targetZoom;
+  const panY = containerHeight / 2 - screen0[1] * targetZoom;
+  if (!Number.isFinite(targetZoom) || !Number.isFinite(panX) || !Number.isFinite(panY)) {
+    return null;
+  }
+  return { pan: { x: panX, y: panY }, zoom: targetZoom };
 }
 
 function SegmentButton({
@@ -259,7 +302,13 @@ function DiffMarkers({
   );
 }
 
-export function ImportPartialMapPreview({ previewUrl, analysis, mode, title, areaHref }: Props) {
+export function ImportPartialMapPreview({
+  previewUrl,
+  analysis,
+  mode,
+  title,
+  areaHref,
+}: Props) {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [slow, setSlow] = useState(false);
   const [scene, setScene] = useState<Scene | null>(null);
@@ -267,6 +316,34 @@ export function ImportPartialMapPreview({ previewUrl, analysis, mode, title, are
   const [retryKey, setRetryKey] = useState(0);
   const [mapBase, setMapBase] = useState<MapBase>("full");
   const [overlays, setOverlays] = useState<OverlayFlags>(() => defaultOverlays(mode));
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [fitToken, setFitToken] = useState(0);
+
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const viewStateRef = useRef({ zoom: 1, pan: { x: 0, y: 0 } });
+  viewStateRef.current = { zoom, pan };
+  const pointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const dragRef = useRef<{
+    startX: number;
+    startY: number;
+    panX: number;
+    panY: number;
+    moved: boolean;
+    pointerId: number;
+  } | null>(null);
+  const pinchRef = useRef<{
+    distance: number;
+    zoom: number;
+    pan: { x: number; y: number };
+  } | null>(null);
+
+  const maxZoom = useMemo(
+    () => maxZoomForMapScale(scene?.ocadMapScale ?? 15000),
+    [scene?.ocadMapScale],
+  );
+  const maxZoomRef = useRef(maxZoom);
+  maxZoomRef.current = maxZoom;
 
   useEffect(() => {
     setOverlays(defaultOverlays(mode));
@@ -297,8 +374,10 @@ export function ImportPartialMapPreview({ previewUrl, analysis, mode, title, are
           fill: extracted.fill ?? "transparent",
           fullViewBox: extracted.viewBox,
           transform: extracted.rootTransform,
+          ocadMapScale: extracted.ocadMapScale ?? 15000,
         });
         setStatus("ready");
+        setFitToken((n) => n + 1);
       })
       .catch((err) => {
         if (cancelled || controller.signal.aborted) return;
@@ -318,10 +397,171 @@ export function ImportPartialMapPreview({ previewUrl, analysis, mode, title, are
     return () => window.clearTimeout(timer);
   }, [status]);
 
-  const viewBox = useMemo(() => {
-    if (!scene) return null;
-    return paddedViewBox(analysis.extent, scene.transform, scene.fullViewBox);
-  }, [analysis.extent, scene]);
+  const applyFit = useCallback(() => {
+    if (!scene || status !== "ready") return false;
+    const viewport = viewportRef.current;
+    if (!viewport) return false;
+    const rect = viewport.getBoundingClientRect();
+    if (rect.width < 10 || rect.height < 10) return false;
+    const next = fitExtentView(
+      analysis.extent,
+      scene.transform,
+      scene.fullViewBox,
+      rect.width,
+      rect.height,
+      maxZoomRef.current,
+    );
+    if (!next) return false;
+    setPan(next.pan);
+    setZoom(next.zoom);
+    return true;
+  }, [analysis.extent, scene, status]);
+
+  useEffect(() => {
+    if (applyFit()) return;
+    let tries = 0;
+    let raf = 0;
+    const tick = () => {
+      tries += 1;
+      if (applyFit() || tries >= 20) return;
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [applyFit, fitToken]);
+
+  const adjustZoom = useCallback((factor: number, focal?: { x: number; y: number }) => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const rect = viewport.getBoundingClientRect();
+    const focalX = focal?.x ?? rect.width / 2;
+    const focalY = focal?.y ?? rect.height / 2;
+    const { pan: prevPan, zoom: prevZoom } = viewStateRef.current;
+    const next = zoomAtPoint(prevZoom, factor, prevPan, focalX, focalY, maxZoomRef.current);
+    setZoom(next.zoom);
+    setPan(next.pan);
+  }, []);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport || status !== "ready") return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = viewport.getBoundingClientRect();
+      const factor = e.deltaY > 0 ? ZOOM_OUT_FACTOR : ZOOM_IN_FACTOR;
+      adjustZoom(factor, {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      });
+    };
+    viewport.addEventListener("wheel", onWheel, { passive: false });
+    return () => viewport.removeEventListener("wheel", onWheel);
+  }, [adjustZoom, status]);
+
+  const beginPinch = useCallback(() => {
+    const pts = [...pointersRef.current.values()];
+    if (pts.length < 2) return;
+    const [a, b] = pts;
+    const distance = Math.hypot(a!.x - b!.x, a!.y - b!.y);
+    if (distance < 1) return;
+    pinchRef.current = {
+      distance,
+      zoom: viewStateRef.current.zoom,
+      pan: { ...viewStateRef.current.pan },
+    };
+    dragRef.current = null;
+  }, []);
+
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      if ((e.target as Element).closest("[data-map-toolbar]")) return;
+      const viewport = viewportRef.current;
+      if (!viewport) return;
+
+      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      viewport.setPointerCapture(e.pointerId);
+
+      if (pointersRef.current.size >= 2) {
+        beginPinch();
+        e.preventDefault();
+        return;
+      }
+
+      dragRef.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        panX: viewStateRef.current.pan.x,
+        panY: viewStateRef.current.pan.y,
+        moved: false,
+        pointerId: e.pointerId,
+      };
+    },
+    [beginPinch],
+  );
+
+  const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    if (!pointersRef.current.has(e.pointerId)) return;
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (pinchRef.current && pointersRef.current.size >= 2) {
+      const viewport = viewportRef.current;
+      if (!viewport) return;
+      const pts = [...pointersRef.current.values()];
+      const [a, b] = pts;
+      const distance = Math.hypot(a!.x - b!.x, a!.y - b!.y);
+      if (distance < 1) return;
+      const rect = viewport.getBoundingClientRect();
+      const focalX = (a!.x + b!.x) / 2 - rect.left;
+      const focalY = (a!.y + b!.y) / 2 - rect.top;
+      const factor = distance / pinchRef.current.distance;
+      const next = zoomAtPoint(
+        pinchRef.current.zoom,
+        factor,
+        pinchRef.current.pan,
+        focalX,
+        focalY,
+        maxZoomRef.current,
+      );
+      setZoom(next.zoom);
+      setPan(next.pan);
+      e.preventDefault();
+      return;
+    }
+
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    const dx = e.clientX - drag.startX;
+    const dy = e.clientY - drag.startY;
+    if (Math.hypot(dx, dy) > DRAG_THRESHOLD_PX) {
+      drag.moved = true;
+    }
+    if (drag.moved) {
+      setPan({ x: drag.panX + dx, y: drag.panY + dy });
+      e.preventDefault();
+    }
+  }, []);
+
+  const handlePointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      pointersRef.current.delete(e.pointerId);
+      if (pointersRef.current.size < 2) {
+        pinchRef.current = null;
+      }
+      if (pointersRef.current.size === 1) {
+        beginPinch();
+      }
+      if (dragRef.current?.pointerId === e.pointerId) {
+        dragRef.current = null;
+      }
+      try {
+        viewportRef.current?.releasePointerCapture(e.pointerId);
+      } catch {
+        /* already released */
+      }
+    },
+    [beginPinch],
+  );
 
   const frame = useMemo(() => {
     if (!scene) return null;
@@ -337,7 +577,6 @@ export function ImportPartialMapPreview({ previewUrl, analysis, mode, title, are
         kind: "polygon" as const,
         points,
         corePoints: corePoints && corePoints.length >= 3 ? corePoints : null,
-        edgeBufferMeters: analysis.edgeBufferMeters ?? 30,
       };
     }
     const [minX, minY, maxX, maxY] = geoBboxToSvgUser(
@@ -348,23 +587,22 @@ export function ImportPartialMapPreview({ previewUrl, analysis, mode, title, are
     const height = maxY - minY;
     if (!(width > 0) || !(height > 0)) return null;
     return { kind: "rect" as const, x: minX, y: minY, width, height };
-  }, [analysis.coreRing, analysis.edgeBufferMeters, analysis.extent, analysis.ring, scene]);
+  }, [analysis.coreRing, analysis.extent, analysis.ring, scene]);
 
   const markerRadius = useMemo(() => {
-    if (!viewBox) return 8;
-    const size = parseViewBoxSize(viewBox);
-    if (!size) return 8;
-    return Math.max(size.w, size.h) * 0.008;
-  }, [viewBox]);
+    if (!scene) return 8;
+    const [minX, minY, maxX, maxY] = geoBboxToSvgUser(
+      bboxToTuple(analysis.extent),
+      scene.transform,
+    );
+    const span = Math.max(maxX - minX, maxY - minY, 1);
+    return Math.max(span * 0.008, 2);
+  }, [analysis.extent, scene]);
 
   const mapChanges = analysis.diff.mapChanges ?? analysis.diff.samples;
   const showOverlayControls = mode === "edges" || mode === "diff";
   const showBoxes = mapBase === "affected";
   const showMapBackground = mapBase === "full";
-
-  const removedCount = analysis.diff.removed;
-  const addedCount = analysis.diff.added;
-  const modifiedCount = analysis.diff.modified;
 
   function retry() {
     clearPreviewCache(previewUrl);
@@ -376,10 +614,42 @@ export function ImportPartialMapPreview({ previewUrl, analysis, mode, title, are
     setOverlays((prev) => ({ ...prev, [key]: value }));
   }
 
+  const toolbarBtn =
+    "min-h-8 min-w-8 rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-700 transition hover:border-ifk-blue hover:text-ifk-blue";
+
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="space-y-2 border-b border-slate-200 bg-slate-50 px-3 py-2 sm:px-4">
-        <h3 className="text-sm font-medium text-slate-800">{title}</h3>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-medium text-slate-800">{title}</h3>
+          {status === "ready" && (
+            <div className="flex flex-wrap items-center gap-1.5" data-map-toolbar>
+              <button
+                type="button"
+                className={toolbarBtn}
+                onClick={() => adjustZoom(ZOOM_OUT_FACTOR)}
+                aria-label="Zooma ut"
+              >
+                −
+              </button>
+              <button
+                type="button"
+                className={toolbarBtn}
+                onClick={() => adjustZoom(ZOOM_IN_FACTOR)}
+                aria-label="Zooma in"
+              >
+                +
+              </button>
+              <button
+                type="button"
+                className={toolbarBtn}
+                onClick={() => setFitToken((n) => n + 1)}
+              >
+                Återställ
+              </button>
+            </div>
+          )}
+        </div>
         {showOverlayControls && (
           <div className="flex flex-col gap-2">
             <div className="inline-flex w-fit flex-wrap gap-1 rounded-lg border border-slate-200 bg-slate-100 p-0.5">
@@ -408,30 +678,40 @@ export function ImportPartialMapPreview({ previewUrl, analysis, mode, title, are
                 onChange={(next) => setOverlay("removed", next)}
                 label="Raderas i original"
                 swatch="#dc2626"
-                count={removedCount}
+                count={analysis.diff.removed}
               />
               <OverlayCheckbox
                 checked={overlays.added}
                 onChange={(next) => setOverlay("added", next)}
                 label="Nya i delkartan"
                 swatch="#059669"
-                count={addedCount}
+                count={analysis.diff.added}
               />
               <OverlayCheckbox
                 checked={overlays.modified}
                 onChange={(next) => setOverlay("modified", next)}
                 label="Ändrade / ersatta"
                 swatch="#d97706"
-                count={modifiedCount}
+                count={analysis.diff.modified}
               />
             </div>
           </div>
         )}
+        {status === "ready" && (
+          <p className="text-xs text-slate-500">
+            Dra för att panorera · mushjul eller nyp för att zooma · +/− i verktygsraden
+          </p>
+        )}
       </div>
       <div
-        className={`relative flex h-[min(70svh,560px)] min-h-[280px] items-center justify-center overflow-hidden ${
+        ref={viewportRef}
+        className={`relative h-[min(70svh,560px)] min-h-[280px] touch-none overflow-hidden ${
           showMapBackground ? "bg-white" : "bg-slate-100"
-        }`}
+        } ${status === "ready" ? "cursor-grab active:cursor-grabbing" : ""}`}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
       >
         {status === "loading" && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 bg-white text-sm text-slate-600">
@@ -442,7 +722,7 @@ export function ImportPartialMapPreview({ previewUrl, analysis, mode, title, are
           </div>
         )}
         {status === "error" && (
-          <div className="z-10 flex max-w-md flex-col items-center gap-3 px-6 text-center">
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 px-6 text-center">
             <p className="text-sm text-red-600">
               {error ??
                 "Kunde inte visa kartan. Öppna området och kontrollera att kartbilden laddas där."}
@@ -466,76 +746,84 @@ export function ImportPartialMapPreview({ previewUrl, analysis, mode, title, are
             </div>
           </div>
         )}
-        {scene && viewBox && status === "ready" && (
-          <svg
-            viewBox={viewBox}
-            fill={showMapBackground ? scene.fill : "#f1f5f9"}
-            xmlns="http://www.w3.org/2000/svg"
-            preserveAspectRatio="xMidYMid meet"
-            className="h-full w-full max-h-full max-w-full"
+        {scene && status === "ready" && (
+          <div
+            className="absolute inset-0"
+            style={{
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+              transformOrigin: "0 0",
+            }}
           >
-            {showMapBackground && (
-              <g dangerouslySetInnerHTML={{ __html: scene.inner }} />
-            )}
-            {frame && frame.kind === "rect" && (
-              <rect
-                x={frame.x}
-                y={frame.y}
-                width={frame.width}
-                height={frame.height}
-                fill="rgba(37, 99, 235, 0.12)"
-                stroke="#1d4ed8"
-                strokeWidth={2}
-                vectorEffect="non-scaling-stroke"
-                pointerEvents="none"
-              />
-            )}
-            {frame && frame.kind === "polygon" && (
-              <>
-                <polygon
-                  points={frame.points.map(([x, y]) => `${x},${y}`).join(" ")}
-                  fill="rgba(37, 99, 235, 0.10)"
+            <svg
+              viewBox={scene.fullViewBox}
+              fill={showMapBackground ? scene.fill : "#f1f5f9"}
+              xmlns="http://www.w3.org/2000/svg"
+              preserveAspectRatio="xMidYMid meet"
+              className="h-full w-full max-h-full max-w-full"
+            >
+              {showMapBackground && (
+                <g dangerouslySetInnerHTML={{ __html: scene.inner }} />
+              )}
+              {frame && frame.kind === "rect" && (
+                <rect
+                  x={frame.x}
+                  y={frame.y}
+                  width={frame.width}
+                  height={frame.height}
+                  fill="rgba(37, 99, 235, 0.12)"
                   stroke="#1d4ed8"
                   strokeWidth={2}
                   vectorEffect="non-scaling-stroke"
                   pointerEvents="none"
                 />
-                {frame.corePoints && (
+              )}
+              {frame && frame.kind === "polygon" && (
+                <>
                   <polygon
-                    points={frame.corePoints.map(([x, y]) => `${x},${y}`).join(" ")}
-                    fill="rgba(16, 185, 129, 0.08)"
-                    stroke="#059669"
-                    strokeWidth={1.5}
-                    strokeDasharray="6 4"
+                    points={frame.points.map(([x, y]) => `${x},${y}`).join(" ")}
+                    fill="rgba(37, 99, 235, 0.10)"
+                    stroke="#1d4ed8"
+                    strokeWidth={2}
                     vectorEffect="non-scaling-stroke"
                     pointerEvents="none"
                   />
-                )}
-              </>
-            )}
-            {showOverlayControls && overlays.edges && (
-              <EdgeMarkers
-                objects={analysis.edgeObjects}
-                transform={scene.transform}
-                radius={markerRadius}
-                showBoxes={showBoxes}
-              />
-            )}
-            {showOverlayControls &&
-              (overlays.removed || overlays.added || overlays.modified) && (
-                <DiffMarkers
-                  changes={mapChanges}
+                  {frame.corePoints && (
+                    <polygon
+                      points={frame.corePoints.map(([x, y]) => `${x},${y}`).join(" ")}
+                      fill="rgba(16, 185, 129, 0.08)"
+                      stroke="#059669"
+                      strokeWidth={1.5}
+                      strokeDasharray="6 4"
+                      vectorEffect="non-scaling-stroke"
+                      pointerEvents="none"
+                    />
+                  )}
+                </>
+              )}
+              {showOverlayControls && overlays.edges && (
+                <EdgeMarkers
+                  objects={analysis.edgeObjects}
                   transform={scene.transform}
-                  radius={markerRadius * 0.85}
+                  radius={markerRadius}
                   showBoxes={showBoxes}
-                  kinds={{
-                    removed: overlays.removed,
-                    added: overlays.added,
-                    modified: overlays.modified,
-                  }}
                 />
               )}
-          </svg>
+              {showOverlayControls &&
+                (overlays.removed || overlays.added || overlays.modified) && (
+                  <DiffMarkers
+                    changes={mapChanges}
+                    transform={scene.transform}
+                    radius={markerRadius * 0.85}
+                    showBoxes={showBoxes}
+                    kinds={{
+                      removed: overlays.removed,
+                      added: overlays.added,
+                      modified: overlays.modified,
+                    }}
+                  />
+                )}
+            </svg>
+          </div>
         )}
       </div>
     </div>

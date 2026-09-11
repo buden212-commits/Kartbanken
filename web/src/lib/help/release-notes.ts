@@ -12,6 +12,7 @@ export const releaseNotes: ReleaseNote[] = [
     items: [
       "Delkartans utbredning byggs nu som en rutnätskontur (~15 m celler) utifrån var objekten faktiskt ligger",
       "Inbuktningar och vikar i snittet följs bättre än tidigare konkav omslutning — tomma vikar räknas inte med i området",
+      "Kartan i Importera delkarta går att zooma och panorera (mushjul, nyp, +/− och dra) — «Återställ» visar utbredningen igen",
     ],
   },
   {
