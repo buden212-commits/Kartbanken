@@ -7,6 +7,14 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-09-11",
+    title: "Importera delkarta — rutnätskontur som följer vikar",
+    items: [
+      "Delkartans utbredning byggs nu som en rutnätskontur (~15 m celler) utifrån var objekten faktiskt ligger",
+      "Inbuktningar och vikar i snittet följs bättre än tidigare konkav omslutning — tomma vikar räknas inte med i området",
+    ],
+  },
+  {
     date: "2026-09-10",
     title: "Importera delkarta — polygon, kantklipp och progress",
     items: [

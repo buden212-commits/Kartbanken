@@ -332,9 +332,9 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
 
       {analysis && step === "extent" && (
         <p className="text-sm text-slate-600">
-          Blå polygon är delkartans utbredning. Grön streckad linje är den inre kärnan (ca{" "}
-          {analysis.edgeBufferMeters ?? 30} m innanför) där borttag jämförs. Fil:{" "}
-          <span className="font-medium">{fileName}</span>. Jämför{" "}
+          Blå polygon är delkartans utbredning (rutnätskontur utifrån objekten). Grön streckad linje
+          är den inre kärnan (ca {analysis.edgeBufferMeters ?? 30} m innanför) där borttag jämförs.
+          Fil: <span className="font-medium">{fileName}</span>. Jämför{" "}
           {analysis.headObjectsInArea.toLocaleString("sv-SE")} objekt i området av{" "}
           {analysis.headObjectsTotal.toLocaleString("sv-SE")} på stora kartan.
         </p>

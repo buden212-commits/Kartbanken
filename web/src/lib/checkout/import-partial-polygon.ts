@@ -242,6 +242,306 @@ export function collectObjectSamplePoints(object: NormalizedOcadObject): [number
   return points;
 }
 
+/** Målstorlek för rutnätscell (meter). Anpassas uppåt för mycket stora utsnitt. */
+export const IMPORT_GRID_CELL_METERS = 15;
+const IMPORT_GRID_MAX_CELLS_PER_SIDE = 320;
+
+function cellKey(i: number, j: number): string {
+  return `${i},${j}`;
+}
+
+function parseCellKey(key: string): [number, number] {
+  const [i, j] = key.split(",").map(Number);
+  return [i!, j!];
+}
+
+function chooseGridCellSize(width: number, height: number): number {
+  const span = Math.max(width, height, 1);
+  return Math.max(IMPORT_GRID_CELL_METERS, span / IMPORT_GRID_MAX_CELLS_PER_SIDE);
+}
+
+function dilateOccupancyOrtho(occupied: Set<string>): Set<string> {
+  const next = new Set(occupied);
+  for (const key of occupied) {
+    const [i, j] = parseCellKey(key);
+    next.add(cellKey(i - 1, j));
+    next.add(cellKey(i + 1, j));
+    next.add(cellKey(i, j - 1));
+    next.add(cellKey(i, j + 1));
+  }
+  return next;
+}
+
+/** Fyll enstaka hål (cell med ≥3 ortogonala grannar) utan att fylla stora vikar. */
+function closeSingleCellGaps(occupied: Set<string>): Set<string> {
+  const next = new Set(occupied);
+  const candidates = new Set<string>();
+  for (const key of occupied) {
+    const [i, j] = parseCellKey(key);
+    for (const [di, dj] of [
+      [-1, 0],
+      [1, 0],
+      [0, -1],
+      [0, 1],
+    ] as const) {
+      candidates.add(cellKey(i + di, j + dj));
+    }
+  }
+  for (const key of candidates) {
+    if (occupied.has(key)) continue;
+    const [i, j] = parseCellKey(key);
+    let n = 0;
+    if (occupied.has(cellKey(i - 1, j))) n += 1;
+    if (occupied.has(cellKey(i + 1, j))) n += 1;
+    if (occupied.has(cellKey(i, j - 1))) n += 1;
+    if (occupied.has(cellKey(i, j + 1))) n += 1;
+    if (n >= 3) next.add(key);
+  }
+  return next;
+}
+
+function countOccupancyComponents(occupied: Set<string>): number {
+  const seen = new Set<string>();
+  let count = 0;
+  for (const start of occupied) {
+    if (seen.has(start)) continue;
+    count += 1;
+    const stack = [start];
+    seen.add(start);
+    while (stack.length > 0) {
+      const key = stack.pop()!;
+      const [i, j] = parseCellKey(key);
+      for (const [di, dj] of [
+        [-1, 0],
+        [1, 0],
+        [0, -1],
+        [0, 1],
+      ] as const) {
+        const next = cellKey(i + di, j + dj);
+        if (occupied.has(next) && !seen.has(next)) {
+          seen.add(next);
+          stack.push(next);
+        }
+      }
+    }
+  }
+  return count;
+}
+
+/**
+ * Binder ihop fragment med minimal ortogonal dilatering (max 2 steg).
+ * Stoppar så fort det blir en komponent — undviker att fylla vikar i onödan.
+ */
+function connectComponentsMinimally(occupied: Set<string>): Set<string> {
+  let current = occupied;
+  if (countOccupancyComponents(current) <= 1) {
+    return closeSingleCellGaps(current);
+  }
+  for (let step = 0; step < 2; step++) {
+    current = dilateOccupancyOrtho(current);
+    current = closeSingleCellGaps(current);
+    if (countOccupancyComponents(current) <= 1) break;
+  }
+  return current;
+}
+
+function markLineCells(
+  occupied: Set<string>,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  originX: number,
+  originY: number,
+  cell: number,
+): void {
+  const steps = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / (cell * 0.5)));
+  for (let s = 0; s <= steps; s++) {
+    const t = s / steps;
+    const x = x0 + (x1 - x0) * t;
+    const y = y0 + (y1 - y0) * t;
+    occupied.add(cellKey(Math.floor((x - originX) / cell), Math.floor((y - originY) / cell)));
+  }
+}
+
+/**
+ * Bygger fotavtryck från objekt via rutnät och plockar ytterkonturen.
+ * Följer vikar/inbuktningar bättre än konkav hull.
+ */
+export function buildGridContourFromObjects(
+  objects: NormalizedOcadObject[],
+  options?: { cellMeters?: number; dilate?: boolean },
+): PolygonRing | null {
+  if (objects.length === 0) return null;
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  const samples: [number, number][] = [];
+  for (const object of objects) {
+    for (const point of collectObjectSamplePoints(object)) {
+      samples.push(point);
+      minX = Math.min(minX, point[0]);
+      minY = Math.min(minY, point[1]);
+      maxX = Math.max(maxX, point[0]);
+      maxY = Math.max(maxY, point[1]);
+    }
+    minX = Math.min(minX, object.bbox[0], object.centroid[0]);
+    minY = Math.min(minY, object.bbox[1], object.centroid[1]);
+    maxX = Math.max(maxX, object.bbox[2], object.centroid[0]);
+    maxY = Math.max(maxY, object.bbox[3], object.centroid[1]);
+  }
+  if (!Number.isFinite(minX) || samples.length === 0) return null;
+
+  const width = Math.max(1, maxX - minX);
+  const height = Math.max(1, maxY - minY);
+  const cell = options?.cellMeters ?? chooseGridCellSize(width, height);
+  const pad = cell;
+  const originX = minX - pad;
+  const originY = minY - pad;
+
+  let occupied = new Set<string>();
+  for (const [x, y] of samples) {
+    occupied.add(cellKey(Math.floor((x - originX) / cell), Math.floor((y - originY) / cell)));
+  }
+
+  // Linjer/ytor: fyll celler längs vertexkedjor så fotavtrycket inte blir håligt.
+  for (const object of objects) {
+    const verts = object.vertices;
+    if (!verts || verts.length < 2) continue;
+    for (let i = 0; i < verts.length - 1; i++) {
+      const a = verts[i]!;
+      const b = verts[i + 1]!;
+      markLineCells(occupied, a[0], a[1], b[0], b[1], originX, originY, cell);
+    }
+    if (object.type === "area" && verts.length >= 3) {
+      const first = verts[0]!;
+      const last = verts[verts.length - 1]!;
+      markLineCells(occupied, last[0], last[1], first[0], first[1], originX, originY, cell);
+    }
+  }
+
+  if (occupied.size === 0) return null;
+  // Minimal sammankoppling av fragment; undviker att alltid dilatera (fyller annars vikar).
+  if (options?.dilate === false) {
+    occupied = closeSingleCellGaps(occupied);
+  } else {
+    occupied = connectComponentsMinimally(occupied);
+  }
+
+  const ring = traceOccupancyOuterRing(occupied, originX, originY, cell);
+  if (!ring || ring.length < 3) return null;
+  return simplifyAxisAlignedRing(ring);
+}
+
+/**
+ * Kedjar kantsegment mellan upptagna/tomma celler till den största yttre ringen.
+ */
+export function traceOccupancyOuterRing(
+  occupied: Set<string>,
+  originX: number,
+  originY: number,
+  cell: number,
+): PolygonRing | null {
+  type Edge = { x0: number; y0: number; x1: number; y1: number };
+  const edgeMap = new Map<string, Edge>();
+
+  const edgeId = (x0: number, y0: number, x1: number, y1: number) =>
+    `${x0},${y0}>${x1},${y1}`;
+
+  const addEdge = (x0: number, y0: number, x1: number, y1: number) => {
+    // World coords at cell corners.
+    const wx0 = originX + x0 * cell;
+    const wy0 = originY + y0 * cell;
+    const wx1 = originX + x1 * cell;
+    const wy1 = originY + y1 * cell;
+    edgeMap.set(edgeId(x0, y0, x1, y1), { x0: wx0, y0: wy0, x1: wx1, y1: wy1 });
+  };
+
+  for (const key of occupied) {
+    const [i, j] = parseCellKey(key);
+    // Cell corners in grid index space: (i,j), (i+1,j), (i+1,j+1), (i,j+1)
+    if (!occupied.has(cellKey(i, j - 1))) addEdge(i, j, i + 1, j); // bottom, left→right
+    if (!occupied.has(cellKey(i + 1, j))) addEdge(i + 1, j, i + 1, j + 1); // right, bottom→top
+    if (!occupied.has(cellKey(i, j + 1))) addEdge(i + 1, j + 1, i, j + 1); // top, right→left
+    if (!occupied.has(cellKey(i - 1, j))) addEdge(i, j + 1, i, j); // left, top→bottom
+  }
+
+  if (edgeMap.size < 3) return null;
+
+  // Index outgoing edges by start grid corner.
+  const byStart = new Map<string, string[]>();
+  for (const id of edgeMap.keys()) {
+    const start = id.split(">")[0]!;
+    const list = byStart.get(start) ?? [];
+    list.push(id);
+    byStart.set(start, list);
+  }
+
+  const used = new Set<string>();
+  let bestRing: PolygonRing | null = null;
+  let bestArea = -1;
+
+  for (const startId of edgeMap.keys()) {
+    if (used.has(startId)) continue;
+    const ring: PolygonRing = [];
+    let currentId: string | undefined = startId;
+    let guard = 0;
+    while (currentId && !used.has(currentId) && guard < edgeMap.size + 2) {
+      guard += 1;
+      used.add(currentId);
+      const edge = edgeMap.get(currentId);
+      if (!edge) break;
+      ring.push([edge.x0, edge.y0]);
+      const endKey: string = currentId.split(">")[1]!;
+      const nextList: string[] = byStart.get(endKey) ?? [];
+      currentId = nextList.find((id: string) => !used.has(id));
+      if (!currentId && endKey === startId.split(">")[0]) break;
+    }
+
+    if (ring.length < 3) continue;
+    const area = Math.abs(ringSignedArea(ring));
+    if (area > bestArea) {
+      bestArea = area;
+      bestRing = ensureCcw(ring);
+    }
+  }
+
+  return bestRing;
+}
+
+function ringSignedArea(ring: PolygonRing): number {
+  let sum = 0;
+  for (let i = 0; i < ring.length; i++) {
+    const [x1, y1] = ring[i]!;
+    const [x2, y2] = ring[(i + 1) % ring.length]!;
+    sum += x1 * y2 - x2 * y1;
+  }
+  return sum / 2;
+}
+
+function ensureCcw(ring: PolygonRing): PolygonRing {
+  return ringSignedArea(ring) < 0 ? [...ring].reverse() : ring;
+}
+
+/** Tar bort kollinjära mellanpunkter på axelparallell kontur. */
+export function simplifyAxisAlignedRing(ring: PolygonRing): PolygonRing {
+  if (ring.length < 3) return ring;
+  const out: PolygonRing = [];
+  const n = ring.length;
+  for (let i = 0; i < n; i++) {
+    const prev = ring[(i - 1 + n) % n]!;
+    const curr = ring[i]!;
+    const next = ring[(i + 1) % n]!;
+    const crossVal = cross(prev, curr, next);
+    if (Math.abs(crossVal) > 1e-6) {
+      out.push(curr);
+    }
+  }
+  return out.length >= 3 ? out : ring;
+}
+
 export function buildImportPolygonFromObjects(objects: NormalizedOcadObject[]): PolygonRing | null {
   if (objects.length === 0) return null;
   const points: [number, number][] = [];
@@ -272,13 +572,17 @@ export function buildImportPolygonFromObjects(objects: NormalizedOcadObject[]): 
     ];
   }
 
-  // Begränsa antal punkter till hull — snabbare på stora delkartor.
+  // Primärt: rutnätskontur (följer vikar). Fallback: konkav/konvex hull.
+  const gridRing = buildGridContourFromObjects(objects);
+  if (gridRing && gridRing.length >= 3 && !ringSelfIntersects(gridRing)) {
+    return gridRing;
+  }
+
   const MAX_HULL_POINTS = 2500;
   let hullInput = points;
   if (points.length > MAX_HULL_POINTS) {
     const stride = Math.ceil(points.length / MAX_HULL_POINTS);
     hullInput = points.filter((_, index) => index % stride === 0);
-    // Behåll extrema för stabil AABB/hull.
     hullInput.push(points[0]!, points[points.length - 1]!);
   }
 

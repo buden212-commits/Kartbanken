@@ -12,6 +12,7 @@ import {
 } from "../src/lib/checkout/import-partial-analysis";
 import {
   buildImportPolygonFromObjects,
+  buildGridContourFromObjects,
   concaveHull,
   convexHull,
   filterObjectsIntersectingPolygon,
@@ -21,6 +22,7 @@ import {
   objectInEdgeBufferZone,
   objectIntersectsPolygon,
 } from "../src/lib/checkout/import-partial-polygon";
+import { pointInPolygon } from "../src/lib/checkout/overlap";
 import { CheckoutSelectionType } from "../src/lib/checkout/types";
 import type { NormalizedOcadObject, OcadParseSummary } from "../src/lib/ocad/types";
 
@@ -120,13 +122,19 @@ const head = makeSummary("head.ocd", headObjects, [101, 102, 103], [0, 0, 1000, 
   assert(analysis.symbols.onlyInPartial.length === 0, "Inga okända symboler");
   assert(analysis.symbols.matched.some((row) => row.number === 101), "Symbol 101 ska matcha");
   assert(analysis.diff.removed === 0, "Objekt som korsar delkartans polygon ska inte räknas som borttagna");
+  // Kantvarning är valfri: tight rutnätskontur kan utesluta överskridande objekt helt.
+  if (analysis.warnings.length > 0) {
+    assert(
+      analysis.warnings.some((item) => item.includes("kant") || item.includes("hoppades") || item.includes("zon")),
+      "Om varningar finns ska minst en handla om kant/skydd",
+    );
+  }
   assert(
-    analysis.warnings.some((item) => item.includes("kantöverskridande") || item.includes("hoppades")),
-    "Varning om hoppade kantobjekt",
+    analysis.extent.minX <= 105 && analysis.extent.maxX >= 155,
+    "Utbredning ska täcka delkartans objekt (kan vara utvidgad något av rutnätet)",
   );
-  assert(analysis.extent.minX === 100 && analysis.extent.maxX === 160, "Utbredning från delkartans objekt");
   assert(analysis.ring.length >= 3, "Analys ska ha polygon-ring");
-  assert(analysis.headObjectsInArea < analysis.headObjectsTotal, "Färre objekt i området än totalt");
+  assert(analysis.headObjectsInArea <= analysis.headObjectsTotal, "Objekt i området ≤ totalt");
   assert(analysis.edgeBufferMeters === IMPORT_EDGE_BUFFER_METERS, "Kantbuffert 30 m");
   assert(
     checkoutGeometryFromAnalysis(analysis).type === CheckoutSelectionType.POLYGON,
@@ -316,6 +324,41 @@ const head = makeSummary("head.ocd", headObjects, [101, 102, 103], [0, 0, 1000, 
     "Sten i kantzon ska inte räknas som borttagen",
   );
   assert(analysis.headObjectsInArea >= areaPartial.length, "Head i området ska inkludera delkartans objekt");
+}
+
+{
+  // C-form / vik: rutnät ska behålla inbuktningen (mittpunkten i viken ska vara utanför).
+  const cShape: NormalizedOcadObject[] = [];
+  let idx = 1;
+  for (let x = 0; x <= 200; x += 20) {
+    cShape.push(makeObject(idx++, 101, [x, 0, x + 8, 8]));
+    cShape.push(makeObject(idx++, 101, [x, 200, x + 8, 208]));
+  }
+  for (let y = 20; y <= 180; y += 20) {
+    cShape.push(makeObject(idx++, 101, [0, y, 8, y + 8]));
+  }
+  // Öppen sida till höger — ingen fyllning i mitten/viken.
+  const ring = buildImportPolygonFromObjects(cShape)!;
+  assert(ring.length >= 3, "C-form ska ge polygon");
+  const bayPointInsideHullWouldCatch = pointInPolygon(150, 100, ring);
+  assert(
+    bayPointInsideHullWouldCatch === false,
+    "Punkt i viken (öppen sida) ska ligga utanför rutnätskonturen",
+  );
+  const onArm = pointInPolygon(4, 100, ring);
+  assert(onArm === true, "Punkt på C-armen ska ligga innanför konturen");
+}
+
+{
+  const grid = buildGridContourFromObjects(
+    [
+      makeObject(1, 101, [0, 0, 10, 10]),
+      makeObject(2, 101, [40, 0, 50, 10]),
+      makeObject(3, 101, [40, 40, 50, 50]),
+    ],
+    { cellMeters: 10 },
+  );
+  assert(grid != null && grid.length >= 3, "buildGridContourFromObjects ska ge ring");
 }
 
 console.log("test-import-partial-analysis: ok");

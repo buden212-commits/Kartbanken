@@ -370,7 +370,7 @@ export async function HelpPageContent() {
                   "Öppna området och klicka «Importera delkarta» (bredvid Checka ut område)",
                   "Ladda upp den redigerade .ocd-filen — guiden visar spinner och vilket steg som pågår (uppladdning, parsning, jämförelse) medan den jämför mot aktuell kartversion",
                   "Steg 2: kontrollera att symbolnumren finns i den stora kartan — saknade symboler stoppar import",
-                  "Steg 3: blå polygon visar delkartans utbredning; grön streckad linje är den inre kärnan (~30 m innanför) där borttag jämförs. Status visar hur många objekt i området som jämförs (inte hela stora kartan)",
+                  "Steg 3: blå polygon visar delkartans utbredning (rutnätskontur som följer objektens form och vikar); grön streckad linje är den inre kärnan (~30 m innanför) där borttag jämförs. Status visar hur många objekt i området som jämförs (inte hela stora kartan)",
                   "Steg 4: orange/röda kantobjekt (klippta stubbar, överskridande och objekt i kantzonen); de raderar inte originalet. Växla mellan hela kartan och bara berörda objekt",
                   "Steg 5: se tillagda, borttagna och ändrade objekt i området — samma kartväxling och lagerfilter som i steget Kanter",
                   "Steg 6: bekräfta — systemet skapar en utcheckning i efterhand och checkar in filen",
@@ -1122,10 +1122,10 @@ export async function HelpPageContent() {
               <h3 className="font-medium text-slate-900">Jag har en .ocd som aldrig checkades ut här</h3>
               <p className="mt-1">
                 Använd <strong>Importera delkarta</strong> på områdessidan. Guiden matchar symboler,
-                visar läge som polygon med en inre kärna (~30 m kantzon) och filtrerar bort
-                kantklippta objekt samt objekt långt från utsnittet. Objekt i kantzonen eller som går
-                över kanten raderas inte automatiskt. Därefter granskar du diffen som vid vanlig
-                incheckning, och admin integrerar.
+                visar läge som en rutnätskontur (följer vikar bättre än en enkel omslutning) med en
+                inre kärna (~30 m kantzon) och filtrerar bort kantklippta objekt samt objekt långt från
+                utsnittet. Objekt i kantzonen eller som går över kanten raderas inte automatiskt.
+                Därefter granskar du diffen som vid vanlig incheckning, och admin integrerar.
               </p>
             </div>
             <div>
