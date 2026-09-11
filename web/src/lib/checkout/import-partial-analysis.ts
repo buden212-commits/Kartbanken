@@ -18,6 +18,7 @@ import {
   isLikelyClippedByPolygon,
   objectCrossesPolygon,
   objectFullyInsidePolygon,
+  objectFullyInsideCore,
   objectInEdgeBufferZone,
 } from "./import-partial-polygon";
 
@@ -38,6 +39,7 @@ export {
   IMPORT_EDGE_BUFFER_METERS,
   isLikelyClippedByPolygon,
   objectCrossesPolygon,
+  objectFullyInsideCore,
   objectFullyInsidePolygon,
   objectInEdgeBufferZone,
   objectIntersectsPolygon,
@@ -268,7 +270,8 @@ export function analyzeImportPartial(input: {
   // yttersta objekten, så att ~IMPORT_EDGE_BUFFER_METERS verkligt kartinnehåll
   // skyddas i stället för tom yta mellan datat och ringen.
   const edgeBufferMeters = polygon?.edgeBufferMeters ?? IMPORT_EDGE_BUFFER_METERS;
-  const coreRing = polygon?.coreRing ?? null;
+  const coreRings = polygon?.coreRings ?? [];
+  const core = polygon?.core ?? null;
 
   if (ring) {
     for (const object of input.partial.objects) {
@@ -316,13 +319,16 @@ export function analyzeImportPartial(input: {
     { toleranceMeters: DIFF_TOLERANCE_M, matchByObjectIndex: false },
   );
 
-  // Skydda: överskridande + icke-klippta objekt i kantzonen (t.ex. sten nära snittet).
+  // Borttag kräver att hela objektet ligger i kärnan. Det skyddar både snittet
+  // och inre tomrum där delkartan saknar innehåll — där går det inte att skilja
+  // "borttaget av redigeraren" från "täcks inte av utsnittet".
   const protectedRemovals = new Set(
     baseline
       .filter((object) => {
         if (!ring) return false;
         if (objectCrossesPolygon(object, activeRing)) return true;
-        return objectInEdgeBufferZone(object, activeRing, edgeBufferMeters);
+        if (objectInEdgeBufferZone(object, activeRing, edgeBufferMeters)) return true;
+        return core ? !objectFullyInsideCore(object, core) : false;
       })
       .map((o) => o.objectIndex),
   );
@@ -364,7 +370,8 @@ export function analyzeImportPartial(input: {
   return {
     extent: extent ?? { minX: 0, minY: 0, maxX: 0, maxY: 0 },
     ring: ring ?? [],
-    coreRing: coreRing ?? [],
+    coreRing: coreRings[0] ?? [],
+    coreRings,
     edgeBufferMeters,
     headObjectsInArea: headInArea.length,
     headObjectsTotal: input.head.objects.length,

@@ -389,7 +389,7 @@ const head = makeSummary("head.ocd", headObjects, [101, 102, 103], [0, 0, 1000, 
     meta.edgeBufferMeters <= 2 * IMPORT_EDGE_BUFFER_METERS,
     "Kantzonen ska ha tak så den aldrig skenar",
   );
-  assert(meta.coreRing != null && meta.coreRing.length >= 3, "Inre kärna ska finnas");
+  assert(meta.coreRings.length > 0 && meta.core != null, "Inre kärna ska finnas");
 }
 
 {
@@ -426,11 +426,63 @@ const head = makeSummary("head.ocd", headObjects, [101, 102, 103], [0, 0, 1000, 
   push(0, 1200, 0, 300);
   push(0, 300, 300, 1200);
   push(900, 1200, 300, 1200);
-  const core = buildImportPolygonWithMeta(uShape)!.coreRing!;
-  assert(pointInPolygon(150, 800, core), "Mitten av vänster arm ska ligga i kärnan");
-  assert(pointInPolygon(1050, 800, core), "Mitten av höger arm ska ligga i kärnan");
-  assert(!pointInPolygon(600, 800, core), "Öppningen mellan armarna ska ligga utanför kärnan");
-  assert(!pointInPolygon(5, 800, core), "Yttersta kanten ska ligga utanför kärnan");
+  const coreRings = buildImportPolygonWithMeta(uShape)!.coreRings;
+  // Even-odd över samtliga kärnringar: udda antal träffar = inne i kärnan.
+  const inCore = (x: number, y: number) =>
+    coreRings.filter((part) => pointInPolygon(x, y, part)).length % 2 === 1;
+  assert(inCore(150, 800), "Mitten av vänster arm ska ligga i kärnan");
+  assert(inCore(1050, 800), "Mitten av höger arm ska ligga i kärnan");
+  assert(!inCore(600, 800), "Öppningen mellan armarna ska ligga utanför kärnan");
+  assert(!inCore(5, 800), "Yttersta kanten ska ligga utanför kärnan");
+}
+
+{
+  // Tomrum där delkartan saknar innehåll: stora kartans objekt ska behållas där,
+  // men objekt i tät kärna som verkligen saknas ska fortfarande räknas som borttagna.
+  const partial: NormalizedOcadObject[] = [];
+  let idx = 20000;
+  for (let x = 0; x <= 1200; x += 40) {
+    for (let y = 0; y <= 1200; y += 40) {
+      if (x >= 400 && x <= 700 && y >= 400 && y <= 700) continue;
+      partial.push(makeObject(idx++, 101, [x, y, x + 3, y + 3]));
+    }
+  }
+  const head = partial.map((object) => ({ ...object }));
+  const inVoid: number[] = [];
+  let j = 40000;
+  for (let x = 450; x <= 650; x += 50) {
+    for (let y = 450; y <= 650; y += 50) {
+      head.push(makeObject(j, 112, [x, y, x + 3, y + 3]));
+      inVoid.push(j);
+      j += 1;
+    }
+  }
+  const deletedForReal: number[] = [];
+  for (const [x, y] of [
+    [900, 900],
+    [950, 300],
+    [200, 950],
+  ] as const) {
+    head.push(makeObject(j, 112, [x, y, x + 3, y + 3]));
+    deletedForReal.push(j);
+    j += 1;
+  }
+  const analysis = analyzeImportPartial({
+    head: makeSummary("head-void.ocd", head, [101, 112], [-200, -200, 1400, 1400]),
+    partial: makeSummary("partial-void.ocd", partial, [101]),
+  });
+  const removed = new Set(
+    analysis.diff.mapChanges.filter((c) => c.changeType === "removed").map((c) => c.objectIndex),
+  );
+  assert(
+    inVoid.every((index) => !removed.has(index)),
+    "Objekt i tomrum där delkartan saknar innehåll ska behållas",
+  );
+  assert(
+    deletedForReal.every((index) => removed.has(index)),
+    "Objekt som saknas mitt i tät kärna ska fortfarande räknas som borttagna",
+  );
+  assert(analysis.coreRings.length >= 2, "Tomrummet ska ge en extra kärnring");
 }
 
 {

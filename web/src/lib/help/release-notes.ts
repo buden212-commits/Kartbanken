@@ -17,7 +17,10 @@ export const releaseNotes: ReleaseNote[] = [
       "Skyddszonen kompenseras för att rutnätskonturen ligger något utanför objekten — de utlovade ~30 m täcker nu verkligt kartinnehåll (visas som ca 45–60 m i guiden)",
       "Enstaka strö-objekt långt från delkartan (t.ex. kvarglömda symboler) blåser inte längre upp utbredningen — tidigare kunde de göra kantzonen flera hundra meter bred",
       "Inre kärnan följer nu delkartans verkliga form, även i U- och L-formade utsnitt där den tidigare kunde hamna i tomma vikar",
-      "Tydligare karta: bara kantzonen tonas blå så att kartan syns oskymd där borttag jämförs, och markörer och linjer håller samma storlek oavsett zoom",
+      "Ett objekt på stora kartan raderas bara om hela objektet ligger i delkartans inre kärna — betydligt färre felaktiga borttag",
+      "Tomrum där delkartan saknar innehåll skyddas nu också: där går det inte att avgöra om redigeraren tagit bort något eller bara inte ritat, så originalet behålls",
+      "Skyddet räknar in hur glest objekten ligger, så glest karterad terräng inte längre behandlas som tomrum",
+      "Tydligare karta: bara den skyddade zonen tonas blå så att kartan syns oskymd där borttag jämförs, och markörer och linjer håller samma storlek oavsett zoom",
     ],
   },
   {

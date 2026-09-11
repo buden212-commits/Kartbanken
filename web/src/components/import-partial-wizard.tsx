@@ -332,10 +332,10 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
 
       {analysis && step === "extent" && (
         <p className="text-sm text-slate-600">
-          Blå linje är delkartans utbredning (rutnätskontur utifrån objekten). Det blåtonade bandet
-          innanför är kantzonen (~{analysis.edgeBufferMeters ?? 30} m) där inget raderas
-          automatiskt. Grön streckad linje visar den inre kärnan — där jämförs borttag.
-          Fil: <span className="font-medium">{fileName}</span>. Jämför{" "}
+          Blå linje är delkartans utbredning (rutnätskontur utifrån objekten). Blåtonat = skyddad
+          zon där inget raderas automatiskt: kanten (~{analysis.edgeBufferMeters ?? 30} m) och
+          eventuella tomrum där delkartan saknar innehåll. Innanför den gröna streckade linjen
+          jämförs borttag. Fil: <span className="font-medium">{fileName}</span>. Jämför{" "}
           {analysis.headObjectsInArea.toLocaleString("sv-SE")} objekt i området av{" "}
           {analysis.headObjectsTotal.toLocaleString("sv-SE")} på stora kartan.
         </p>
@@ -347,8 +347,9 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
             Orange/rött = kantobjekt som skär, ligger i kantzonen (~{analysis.edgeBufferMeters} m)
             eller är klippta ({analysis.edgeCount} visade). Rött betyder troligen klippt (
             {analysis.likelyClippedCount} st) och räknas inte som ändring.{" "}
-            {analysis.interiorCount} objekt ligger i den inre kärnan. Kantzonen mäts mot hela
-            objektet, så en bäck eller stig som når kanten skyddas även om mitten ligger långt in.
+            {analysis.interiorCount} objekt ligger i den inre kärnan. Zonen mäts mot hela objektet,
+            så en bäck eller stig som når kanten skyddas även om mitten ligger långt in. Objekt i
+            tomrum där delkartan inte har något innehåll behålls också.
           </p>
           <p>
             Växla mellan <span className="font-medium">Hela kartan</span> och{" "}

@@ -590,18 +590,21 @@ export function ImportPartialMapPreview({
   const frame = useMemo(() => {
     if (!scene) return null;
     const ring = analysis.ring?.length >= 3 ? analysis.ring : null;
-    const coreRing = analysis.coreRing?.length >= 3 ? analysis.coreRing : null;
+    // Kärnan kan bestå av flera ringar: ytterkontur plus tomrum där delkartan
+    // saknar innehåll. Tillsammans med even-odd ger de exakt den skyddade zonen.
+    const coreSource =
+      analysis.coreRings?.length > 0
+        ? analysis.coreRings
+        : analysis.coreRing?.length >= 3
+          ? [analysis.coreRing]
+          : [];
     if (ring) {
       const points = ring.map((point) => geoToSvgUserPoint(point, scene.transform));
       if (points.length < 3) return null;
-      const corePoints = coreRing
-        ? coreRing.map((point) => geoToSvgUserPoint(point, scene.transform))
-        : null;
-      return {
-        kind: "polygon" as const,
-        points,
-        corePoints: corePoints && corePoints.length >= 3 ? corePoints : null,
-      };
+      const coreParts = coreSource
+        .filter((part) => part.length >= 3)
+        .map((part) => part.map((point) => geoToSvgUserPoint(point, scene.transform)));
+      return { kind: "polygon" as const, points, coreParts };
     }
     const [minX, minY, maxX, maxY] = geoBboxToSvgUser(
       bboxToTuple(analysis.extent),
@@ -611,7 +614,7 @@ export function ImportPartialMapPreview({
     const height = maxY - minY;
     if (!(width > 0) || !(height > 0)) return null;
     return { kind: "rect" as const, x: minX, y: minY, width, height };
-  }, [analysis.coreRing, analysis.extent, analysis.ring, scene]);
+  }, [analysis.coreRing, analysis.coreRings, analysis.extent, analysis.ring, scene]);
 
   /**
    * SVG:n är CSS-skalad av zoomen, så både markörer och linjebredder måste
@@ -823,17 +826,13 @@ export function ImportPartialMapPreview({
               {frame && frame.kind === "polygon" && (
                 <>
                   {/*
-                    Bara kantzonen tonas (ringen minus kärnan via evenodd) så att
-                    kartan syns oskymd där borttag faktiskt jämförs.
+                    Bara den skyddade zonen tonas (ringen minus kärnan via
+                    evenodd) så att kartan syns oskymd där borttag jämförs.
                   */}
                   <path
-                    d={
-                      frame.corePoints
-                        ? `${ringToPath(frame.points)} ${ringToPath(frame.corePoints)}`
-                        : ringToPath(frame.points)
-                    }
+                    d={[ringToPath(frame.points), ...frame.coreParts.map(ringToPath)].join(" ")}
                     fillRule="evenodd"
-                    fill="rgba(37, 99, 235, 0.22)"
+                    fill="rgba(37, 99, 235, 0.18)"
                     stroke="none"
                     pointerEvents="none"
                   />
@@ -846,12 +845,12 @@ export function ImportPartialMapPreview({
                     vectorEffect="non-scaling-stroke"
                     pointerEvents="none"
                   />
-                  {frame.corePoints && (
+                  {frame.coreParts.length > 0 && (
                     <path
-                      d={ringToPath(frame.corePoints)}
+                      d={frame.coreParts.map(ringToPath).join(" ")}
                       fill="none"
                       stroke="#047857"
-                      strokeWidth={strokePx(1.5)}
+                      strokeWidth={strokePx(1.25)}
                       strokeDasharray={`${strokePx(6)} ${strokePx(4)}`}
                       strokeLinejoin="round"
                       vectorEffect="non-scaling-stroke"

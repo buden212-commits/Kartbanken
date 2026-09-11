@@ -1,10 +1,12 @@
 import { parseSelectionJson, CheckoutSelectionType, type PolygonRing } from "./types";
 import { bboxFromGeometry } from "./overlap";
 import {
+  buildImportPolygonWithMeta,
   filterObjectsIntersectingPolygon,
   IMPORT_EDGE_BUFFER_METERS,
   isLikelyClippedByPolygon,
   objectCrossesPolygon,
+  objectFullyInsideCore,
   objectInEdgeBufferZone,
 } from "./import-partial-polygon";
 import { objectCrossesBbox, objectIntersectsBbox } from "./import-partial-analysis";
@@ -220,6 +222,13 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
     baselineObjects = baselineObjects.filter((object) => objectIntersectsBbox(object, importExtent));
   }
 
+  // Kärnan räknas om ur den incheckade delkartan — samma fil som analysen såg,
+  // så regeln för vad som får tas bort blir densamma här som i importguiden.
+  const importCore =
+    importPartial && importRing
+      ? (buildImportPolygonWithMeta(checkinSummary.objects)?.core ?? null)
+      : null;
+
   let checkinObjects: NormalizedOcadObject[] = checkinSummary.objects;
   const clippedCheckinIndices = new Set<number>();
   if (importPartial && importRing) {
@@ -304,7 +313,8 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
       const crosses = baseline
         ? importRing
           ? objectCrossesPolygon(baseline, importRing) ||
-            objectInEdgeBufferZone(baseline, importRing, importEdgeBuffer)
+            objectInEdgeBufferZone(baseline, importRing, importEdgeBuffer) ||
+            (importCore ? !objectFullyInsideCore(baseline, importCore) : false)
           : importExtent
             ? objectCrossesBbox(baseline, importExtent)
             : false

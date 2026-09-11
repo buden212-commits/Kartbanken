@@ -34,8 +34,14 @@ export type ImportPartialAnalysis = {
   extent: Bbox;
   /** Faktiskt jämförelseområde — konkav hull av delkartans objekt. */
   ring: PolygonRing;
-  /** Inre kärna (ring krympt med edgeBufferMeters); tom om utsnittet är för litet. */
+  /** Största kärnringen; tom om utsnittet är för litet. Kvar för bakåtkompatibilitet. */
   coreRing: PolygonRing;
+  /**
+   * Kärnans rand som flera ringar (even-odd): ytterkontur plus tomrum där
+   * delkartan saknar innehåll. Allt innanför ringen men utanför kärnan är
+   * skyddad zon där inget raderas automatiskt.
+   */
+  coreRings: PolygonRing[];
   /** Kantzon i meter där borttag på stora kartan skyddas. */
   edgeBufferMeters: number;
   /** Antal objekt på stora kartan som faktiskt jämförs (efter AABB+polygon). */

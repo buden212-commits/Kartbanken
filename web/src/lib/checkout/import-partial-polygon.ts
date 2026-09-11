@@ -410,8 +410,10 @@ export type GridContourResult = {
   ring: PolygonRing;
   cellMeters: number;
   dilateSteps: number;
-  /** Fotavtryckets celler efter sammankoppling — används för att erodera fram inre kärnan. */
+  /** Fotavtryckets celler efter sammankoppling — grunden för konturen. */
   cells: Set<string>;
+  /** Råa objektceller före sammankoppling — grunden för täckningsmasken. */
+  seedCells: Set<string>;
   originX: number;
   originY: number;
 };
@@ -575,6 +577,7 @@ export function buildGridContourWithMeta(
   }
 
   if (occupied.size === 0) return null;
+  const seedCells = occupied;
   // Minimal sammankoppling av fragment; undviker att alltid dilatera (fyller annars vikar).
   let dilateSteps = 0;
   if (options?.dilate === false) {
@@ -592,6 +595,7 @@ export function buildGridContourWithMeta(
     cellMeters: cell,
     dilateSteps,
     cells: occupied,
+    seedCells,
     originX,
     originY,
   };
@@ -604,15 +608,37 @@ export function buildGridContourFromObjects(
   return buildGridContourWithMeta(objects, options)?.ring ?? null;
 }
 
-/**
- * Kedjar kantsegment mellan upptagna/tomma celler till den största yttre ringen.
- */
+/** Största ringen i fotavtrycket. */
 export function traceOccupancyOuterRing(
   occupied: Set<string>,
   originX: number,
   originY: number,
   cell: number,
 ): PolygonRing | null {
+  const rings = traceOccupancyRings(occupied, originX, originY, cell);
+  let best: PolygonRing | null = null;
+  let bestArea = -1;
+  for (const ring of rings) {
+    const area = Math.abs(ringSignedArea(ring));
+    if (area > bestArea) {
+      bestArea = area;
+      best = ring;
+    }
+  }
+  return best;
+}
+
+/**
+ * Kedjar kantsegment mellan upptagna/tomma celler till samtliga ringar —
+ * ytterkonturer och hålkanter. Med even-odd beskriver de tillsammans exakt
+ * vilka punkter som ligger i fotavtrycket, även när det har tomrum.
+ */
+export function traceOccupancyRings(
+  occupied: Set<string>,
+  originX: number,
+  originY: number,
+  cell: number,
+): PolygonRing[] {
   type Edge = { x0: number; y0: number; x1: number; y1: number };
   const edgeMap = new Map<string, Edge>();
 
@@ -637,7 +663,7 @@ export function traceOccupancyOuterRing(
     if (!occupied.has(cellKey(i - 1, j))) addEdge(i, j + 1, i, j); // left, top→bottom
   }
 
-  if (edgeMap.size < 3) return null;
+  if (edgeMap.size < 3) return [];
 
   // Index outgoing edges by start grid corner.
   const byStart = new Map<string, string[]>();
@@ -649,8 +675,7 @@ export function traceOccupancyOuterRing(
   }
 
   const used = new Set<string>();
-  let bestRing: PolygonRing | null = null;
-  let bestArea = -1;
+  const rings: PolygonRing[] = [];
 
   for (const startId of edgeMap.keys()) {
     if (used.has(startId)) continue;
@@ -670,14 +695,10 @@ export function traceOccupancyOuterRing(
     }
 
     if (ring.length < 3) continue;
-    const area = Math.abs(ringSignedArea(ring));
-    if (area > bestArea) {
-      bestArea = area;
-      bestRing = ensureCcw(ring);
-    }
+    rings.push(ensureCcw(ring));
   }
 
-  return bestRing;
+  return rings;
 }
 
 function ringSignedArea(ring: PolygonRing): number {
@@ -711,6 +732,18 @@ export function simplifyAxisAlignedRing(ring: PolygonRing): PolygonRing {
   return out.length >= 3 ? out : ring;
 }
 
+/**
+ * Rutnätsmask över den inre kärnan: den yta där delkartan både har eget
+ * innehåll och ligger tillräckligt långt från snittet för att borttag ska
+ * kunna lita på. Allt annat innanför ringen är skyddad kantzon.
+ */
+export type ImportCoreMask = {
+  cells: Set<string>;
+  originX: number;
+  originY: number;
+  cellMeters: number;
+};
+
 export type ImportPolygonResult = {
   ring: PolygonRing;
   /**
@@ -719,9 +752,82 @@ export type ImportPolygonResult = {
    * för att skydda ~IMPORT_EDGE_BUFFER_METERS av verkligt kartinnehåll.
    */
   edgeBufferMeters: number;
-  /** Inre kärna — sant inåtoffset av ringen, null om utsnittet är för litet. */
-  coreRing: PolygonRing | null;
+  /** Kärnans rand — flera ringar när kärnan har tomrum eller delas i öar. */
+  coreRings: PolygonRing[];
+  /** Kärnan som rutnätsmask, för att avgöra om ett objekt får tas bort. */
+  core: ImportCoreMask | null;
 };
+
+/**
+ * Hur långt från ett objekt i delkartan vi anser att kartan är "täckt".
+ * Härleds ur objekttätheten: i gles terräng ligger objekten glesare utan att
+ * kartan för den skull saknar innehåll. Utan det blir fotavtrycket ett
+ * skelett i stället för en yta.
+ */
+function coverageRadiusMeters(ring: PolygonRing, objectCount: number): number {
+  const bbox = bboxFromRing(ring);
+  if (!bbox || objectCount < 1) return IMPORT_EDGE_BUFFER_METERS;
+  const area = Math.max(1, (bbox.maxX - bbox.minX) * (bbox.maxY - bbox.minY));
+  const meanSpacing = Math.sqrt(area / objectCount);
+  return Math.min(150, Math.max(IMPORT_EDGE_BUFFER_METERS, meanSpacing * 1.2));
+}
+
+/**
+ * Kärnan = delkartans täckning, indragen med kantzonen.
+ *
+ * Täckningen byggs genom att vidga objektcellerna, vilket både fyller glesa
+ * gluggar mellan objekt och lämnar verkliga tomrum kvar som tomrum. Att i
+ * stället erodera fotavtrycket direkt fungerar inte: i gles terräng är det ett
+ * tunt skelett som erosionen äter upp helt.
+ */
+function buildCoreMask(
+  grid: GridContourResult,
+  edgeBufferMeters: number,
+  coverageMeters: number,
+): ImportCoreMask | null {
+  const coverageSteps = Math.max(1, Math.round(coverageMeters / grid.cellMeters));
+  const edgeSteps = Math.max(1, Math.round(edgeBufferMeters / grid.cellMeters));
+
+  let coverage = grid.seedCells;
+  for (let step = 0; step < coverageSteps; step++) {
+    coverage = dilateOccupancyOrtho(coverage);
+  }
+  // Vidgningen tas tillbaka i samma veva som kantzonen dras in.
+  const core = erodeOccupancyOrtho(coverage, coverageSteps + edgeSteps);
+  if (core.size === 0) return null;
+  return {
+    cells: core,
+    originX: grid.originX,
+    originY: grid.originY,
+    cellMeters: grid.cellMeters,
+  };
+}
+
+function coreMaskHasPoint(mask: ImportCoreMask, x: number, y: number): boolean {
+  const i = Math.floor((x - mask.originX) / mask.cellMeters);
+  const j = Math.floor((y - mask.originY) / mask.cellMeters);
+  return mask.cells.has(cellKey(i, j));
+}
+
+/**
+ * True bara om hela objektet ligger i kärnan. Objekt som sticker ut i
+ * kantzonen eller in i ett tomrum där delkartan saknar innehåll ska behållas.
+ */
+export function objectFullyInsideCore(
+  object: NormalizedOcadObject,
+  mask: ImportCoreMask,
+): boolean {
+  for (const [x, y] of edgeProbePoints(object)) {
+    if (!coreMaskHasPoint(mask, x, y)) return false;
+  }
+  return coreMaskHasPoint(mask, object.centroid[0], object.centroid[1]);
+}
+
+export function coreMaskRings(mask: ImportCoreMask): PolygonRing[] {
+  return traceOccupancyRings(mask.cells, mask.originX, mask.originY, mask.cellMeters).map(
+    simplifyAxisAlignedRing,
+  );
+}
 
 /**
  * Kantzonen kompenseras för rutnätets förskjutning, men får aldrig skena.
@@ -754,7 +860,8 @@ export function buildImportPolygonWithMeta(
         [x - pad, y + pad],
       ],
       edgeBufferMeters: edgeBufferForSlack(pad),
-      coreRing: null,
+      coreRings: [],
+      core: null,
     };
   }
   if (points.length === 2) {
@@ -768,7 +875,8 @@ export function buildImportPolygonWithMeta(
         [a![0] - pad, b![1] + pad],
       ],
       edgeBufferMeters: edgeBufferForSlack(pad),
-      coreRing: null,
+      coreRings: [],
+      core: null,
     };
   }
 
@@ -776,10 +884,16 @@ export function buildImportPolygonWithMeta(
   const grid = buildGridContourWithMeta(objects);
   if (grid && grid.ring.length >= 3 && !ringSelfIntersects(grid.ring)) {
     const edgeBufferMeters = edgeBufferForSlack(grid.cellMeters * (1 + grid.dilateSteps));
+    const core = buildCoreMask(
+      grid,
+      edgeBufferMeters,
+      coverageRadiusMeters(grid.ring, objects.length),
+    );
     return {
       ring: grid.ring,
       edgeBufferMeters,
-      coreRing: coreRingFromGrid(grid, edgeBufferMeters),
+      coreRings: core ? coreMaskRings(core) : [],
+      core,
     };
   }
 
@@ -795,21 +909,13 @@ export function buildImportPolygonWithMeta(
   const ring = hull.length >= 3 ? hull : convexHull(hullInput);
   // Hullen går genom de yttersta punkterna, så ingen förskjutning att kompensera.
   const edgeBufferMeters = edgeBufferForSlack(0);
-  return { ring, edgeBufferMeters, coreRing: shrinkRing(ring, edgeBufferMeters) };
-}
-
-/**
- * Inre kärna via erosion av fotavtrycket. Till skillnad från shrinkRing (som
- * skalar mot tyngdpunkten) blir det ett verkligt inåtoffset som följer armar
- * och vikar. Returnerar den största kärnan om utsnittet delas av erosionen.
- */
-function coreRingFromGrid(grid: GridContourResult, bufferMeters: number): PolygonRing | null {
-  const steps = Math.round(bufferMeters / grid.cellMeters);
-  if (steps < 1) return grid.ring;
-  const eroded = erodeOccupancyOrtho(grid.cells, steps);
-  if (eroded.size === 0) return null;
-  const ring = traceOccupancyOuterRing(eroded, grid.originX, grid.originY, grid.cellMeters);
-  return ring && ring.length >= 3 ? simplifyAxisAlignedRing(ring) : null;
+  const fallbackCore = shrinkRing(ring, edgeBufferMeters);
+  return {
+    ring,
+    edgeBufferMeters,
+    coreRings: fallbackCore ? [fallbackCore] : [],
+    core: null,
+  };
 }
 
 export function buildImportPolygonFromObjects(
