@@ -370,9 +370,10 @@ export async function HelpPageContent() {
                   "Öppna området och klicka «Importera delkarta» (bredvid Checka ut område)",
                   "Ladda upp den redigerade .ocd-filen — guiden visar spinner och vilket steg som pågår (uppladdning, parsning, jämförelse) medan den jämför mot aktuell kartversion",
                   "Steg 2: kontrollera att symbolnumren finns i den stora kartan — saknade symboler stoppar import",
-                  "Steg 3: blå linje visar delkartans utbredning (rutnätskontur som följer objektens form och vikar). Blåtonat är den skyddade zonen där inget raderas automatiskt — 60 m in från delkartans innehåll, lika brett åt alla håll, plus eventuella tomrum där delkartan inte ritat något. Innanför den gröna streckade linjen jämförs borttag, och där syns kartan oskymd. Zooma med mushjul, nyp eller +/−, dra för att panorera, «Återställ» för att visa utbredningen igen. Status visar hur många objekt i området som jämförs (inte hela stora kartan)",
-                  "Steg 4: orange/röda kantobjekt (klippta stubbar, överskridande och objekt i skyddad zon); de raderar inte originalet. Zonen mäts mot hela objektets geometri, så en bäck eller stig vars ände når snittet skyddas även om mitten ligger långt in. Växla mellan hela kartan och bara berörda objekt",
-                  "Steg 5: se tillagda, borttagna och ändrade objekt i området — samma kartväxling och lagerfilter som i steget Kanter",
+                  "Steg 3: blå linje visar delkartans utbredning (rutnätskontur som följer objektens form och vikar). Blåtonat är den skyddade zonen där inget raderas automatiskt — 60 m in från delkartans innehåll, lika brett åt alla håll, plus eventuella tomrum där delkartan inte ritat något. Innanför den gröna streckade linjen jämförs borttag. Zooma med mushjul, nyp eller +/−, dra för att panorera, «Återställ» för att visa utbredningen igen. Status visar hur många objekt i området som jämförs (inte hela stora kartan)",
+                  "Steg 4: orange/röda kantobjekt (klippta stubbar, överskridande och objekt i skyddad zon); de raderar inte originalet. Zonen mäts mot hela objektets geometri, så en bäck eller stig vars ände når snittet skyddas även om mitten ligger långt in",
+                  "Steg 5: se tillagda, borttagna och ändrade objekt i området — samma lagerfilter som i steget Kanter",
+                  "Kartan ligger alltid kvar under markeringarna i steg 4 och 5, så du kan bedöma varje ändring mot omgivningen. Linjer och ytor ritas med sin egen form (borttag streckat), punktobjekt som ihålig ring så symbolen under syns. «Dämpa kartan» lägger en slöja över kartan när markeringarna drunknar i kartfärgerna",
                   "Steg 6: bekräfta — systemet skapar en utcheckning i efterhand och checkar in filen",
                   "Därefter granskar du diffen som vid vanlig incheckning; admin integrerar till en ny version",
                 ]}
@@ -1124,7 +1125,9 @@ export async function HelpPageContent() {
                 Använd <strong>Importera delkarta</strong> på områdessidan. Guiden matchar symboler,
                 visar läge som en rutnätskontur (följer vikar bättre än en enkel omslutning) med en
                 inre kärna och filtrerar bort kantklippta objekt samt objekt långt från
-                utsnittet. Kartan i guiden går att zooma och panorera. Ett objekt på stora kartan
+                utsnittet. Kartan i guiden går att zooma och panorera, och den ligger kvar under
+                markeringarna i stegen Kanter och Ändringar så att du ser vad varje markerat objekt
+                är: linjer och ytor ritas med sin egen form, punktobjekt som ihålig ring. Ett objekt på stora kartan
                 raderas bara om hela objektet ligger i delkartans inre kärna, alltså minst 60 m in
                 från delkartans innehåll. Skyddszonen, objekt som går över kanten och tomrum där
                 delkartan inte ritat något behålls alltid — där går det inte att skilja «borttaget

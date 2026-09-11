@@ -354,8 +354,10 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
             tomrum där delkartan inte har något innehåll behålls också.
           </p>
           <p>
-            Växla mellan <span className="font-medium">Hela kartan</span> och{" "}
-            <span className="font-medium">Bara berörda objekt</span> för tydligare överblick. Kryssa i{" "}
+            Kartan visas alltid under markeringarna så att du kan bedöma varje ändring i sitt
+            sammanhang; <span className="font-medium">Dämpa kartan</span> lägger en slöja över den
+            när markeringarna drunknar i kartfärgerna. Linjer och ytor ritas med sin egen form,
+            punktobjekt som ring. Kryssa i{" "}
             <span className="font-medium">Raderas i original</span>,{" "}
             <span className="font-medium">Nya i delkartan</span> och{" "}
             <span className="font-medium">Ändrade / ersatta</span> för att jämföra vad som tas bort

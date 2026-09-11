@@ -17,6 +17,8 @@ export type ImportEdgeObject = {
   centroid: [number, number];
   bbox: [number, number, number, number];
   likelyClipped: boolean;
+  /** Glesad vertexkedja för linjer/ytor, så kartbilden kan rita objektets form. */
+  outline?: [number, number][];
 };
 
 export type ImportDiffSample = {
@@ -27,6 +29,8 @@ export type ImportDiffSample = {
   type: OcadObjectType;
   centroid: [number, number];
   bbox: [number, number, number, number];
+  /** Glesad vertexkedja för linjer/ytor, så kartbilden kan rita objektets form. */
+  outline?: [number, number][];
 };
 
 export type ImportPartialAnalysis = {

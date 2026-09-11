@@ -23,6 +23,9 @@ export const releaseNotes: ReleaseNote[] = [
       "Skyddszonen är nu 60 m mätt från delkartans innehåll och lika bred åt alla håll — tidigare blev den bara ca 45 m rakt in och ojämn snett, vilket släppte igenom enstaka kantobjekt",
       "Siffran som visas i guiden är den zon du faktiskt får; förut visades ett värde mätt från utbredningslinjen som låg utanför innehållet",
       "Tydligare karta: bara den skyddade zonen tonas blå så att kartan syns oskymd där borttag jämförs, och markörer och linjer håller samma storlek oavsett zoom",
+      "Kartan slocknar inte längre när du granskar kanter och ändringar — den ligger alltid kvar under markeringarna så att du kan bedöma om en ändring är rimlig",
+      "Markerade objekt ritas med sin egen form i stället för en ruta: ett dike, en stig eller en yta går att känna igen direkt (borttag streckat), och punktobjekt markeras med en ihålig ring så symbolen under syns",
+      "Knappen «Bara berörda objekt» heter nu «Dämpa kartan» och lägger bara en slöja över kartan när markeringarna drunknar i kartfärgerna",
     ],
   },
   {

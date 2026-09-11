@@ -610,4 +610,40 @@ const head = makeSummary("head.ocd", headObjects, [101, 102, 103], [0, 0, 1000, 
   assert(parsed.importEdgeBuffer === 75, "importEdgeBuffer ska överleva serialisering");
 }
 
+{
+  // Kartbilden ritar objektens verkliga form, så konturen måste följa med i svaret.
+  const areaPartial: NormalizedOcadObject[] = [];
+  let idx = 4000;
+  for (let x = 0; x <= 600; x += 20) {
+    for (let y = 0; y <= 600; y += 20) {
+      areaPartial.push(makeObject(idx++, 101, [x, y, x + 5, y + 5]));
+    }
+  }
+  const longDitch = makeObject(7000, 106, [200, 300, 400, 300], {
+    type: "line",
+    centroid: [300, 300],
+    vertices: Array.from(
+      { length: 200 },
+      (_, i) => [200 + i, 300 + Math.sin(i / 8) * 4.567] as [number, number],
+    ),
+  });
+  const analysis = analyzeImportPartial({
+    head: makeSummary("head-outline.ocd", [...areaPartial, longDitch], [101, 106], [-100, -100, 800, 800]),
+    partial: makeSummary("partial-outline.ocd", areaPartial, [101]),
+  });
+  const ditchChange = analysis.diff.mapChanges.find((change) => change.objectIndex === 7000);
+  assert(ditchChange != null, "Diket djupt inne ska rapporteras som ändring");
+  const outline = ditchChange!.outline;
+  assert(outline != null && outline.length >= 2, "Linjeobjekt ska ha kontur i kartbilden");
+  assert(outline!.length <= 24, "Konturen ska glesas ned så svaret inte sväller");
+  assert(
+    outline![0]![0] === 200 && outline![outline!.length - 1]![0] === 399,
+    "Konturens ändpunkter ska bevaras",
+  );
+  assert(
+    outline!.every(([, y]) => Math.abs(y * 100 - Math.round(y * 100)) < 1e-6),
+    "Konturens punkter ska avrundas till centimeter",
+  );
+}
+
 console.log("test-import-partial-analysis: ok");

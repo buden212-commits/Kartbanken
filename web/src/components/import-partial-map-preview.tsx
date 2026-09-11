@@ -197,6 +197,101 @@ function OverlayCheckbox({
   );
 }
 
+/**
+ * Konturen ritas när objektet har en vertexkedja: ett dike eller en stig går
+ * att bedöma på formen, en ruta runt den gör det inte. Punktobjekt saknar kedja
+ * och markeras i stället med sin ring.
+ */
+function ObjectOutline({
+  outline,
+  transform,
+  color,
+  strokeWidth,
+  closed,
+  dashed,
+}: {
+  outline: [number, number][];
+  transform: SvgRootTransform;
+  color: string;
+  strokeWidth: number;
+  closed: boolean;
+  dashed?: string;
+}) {
+  const points = outline.map((point) => geoToSvgUserPoint(point, transform));
+  if (points.length < 2) return null;
+  const d = `M ${points.map(([x, y]) => `${x},${y}`).join(" L ")}${closed ? " Z" : ""}`;
+  return (
+    <>
+      <path
+        d={d}
+        fill={closed ? `${color}26` : "none"}
+        stroke="#fff"
+        strokeWidth={strokeWidth * 2.5}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        strokeOpacity={0.75}
+        vectorEffect="non-scaling-stroke"
+        pointerEvents="none"
+      />
+      <path
+        d={d}
+        fill="none"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeDasharray={dashed}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        vectorEffect="non-scaling-stroke"
+        pointerEvents="none"
+      />
+    </>
+  );
+}
+
+/** Ihålig ring med vit halo — symbolen under ska gå att känna igen. */
+function PointMarker({
+  cx,
+  cy,
+  radius,
+  color,
+  strokeWidth,
+  dashed,
+}: {
+  cx: number;
+  cy: number;
+  radius: number;
+  color: string;
+  strokeWidth: number;
+  dashed?: string;
+}) {
+  return (
+    <>
+      <circle
+        cx={cx}
+        cy={cy}
+        r={radius}
+        fill="none"
+        stroke="#fff"
+        strokeWidth={strokeWidth * 2.5}
+        strokeOpacity={0.75}
+        vectorEffect="non-scaling-stroke"
+        pointerEvents="none"
+      />
+      <circle
+        cx={cx}
+        cy={cy}
+        r={radius}
+        fill="none"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeDasharray={dashed}
+        vectorEffect="non-scaling-stroke"
+        pointerEvents="none"
+      />
+    </>
+  );
+}
+
 function EdgeMarkers({
   objects,
   transform,
@@ -215,7 +310,7 @@ function EdgeMarkers({
       {objects.map((object) => {
         const [cx, cy] = geoToSvgUserPoint(object.centroid, transform);
         const fill = object.likelyClipped ? "#dc2626" : "#f97316";
-        const box = showBoxes ? objectSvgBox(object.bbox, transform) : null;
+        const box = showBoxes && !object.outline ? objectSvgBox(object.bbox, transform) : null;
         return (
           <g key={`edge-${object.objectIndex}-${object.symbolNumber}`}>
             {box && (
@@ -231,17 +326,18 @@ function EdgeMarkers({
                 pointerEvents="none"
               />
             )}
-            <circle
-              cx={cx}
-              cy={cy}
-              r={radius}
-              fill={fill}
-              fillOpacity={0.9}
-              stroke="#fff"
-              strokeWidth={strokePx(1)}
-              vectorEffect="non-scaling-stroke"
-              pointerEvents="none"
-            />
+            {object.outline && (
+              <ObjectOutline
+                outline={object.outline}
+                transform={transform}
+                color={fill}
+                strokeWidth={strokePx(2)}
+                closed={object.type === "area"}
+              />
+            )}
+            {!object.outline && (
+              <PointMarker cx={cx} cy={cy} radius={radius} color={fill} strokeWidth={strokePx(2)} />
+            )}
           </g>
         );
       })}
@@ -279,7 +375,10 @@ function DiffMarkers({
               : "#d97706";
         const [cx, cy] = geoToSvgUserPoint(change.centroid, transform);
         const box =
-          showBoxes && change.bbox ? objectSvgBox(change.bbox, transform) : null;
+          showBoxes && change.bbox && !change.outline
+            ? objectSvgBox(change.bbox, transform)
+            : null;
+        const dashed = change.changeType === "removed" ? "5 3" : undefined;
         return (
           <g key={`diff-${change.changeType}-${change.objectIndex}-${index}`}>
             {box && (
@@ -288,25 +387,34 @@ function DiffMarkers({
                 y={box.y}
                 width={box.width}
                 height={box.height}
-                fill={`${fill}33`}
+                fill={`${fill}26`}
                 stroke={fill}
                 strokeWidth={strokePx(change.changeType === "removed" ? 1.5 : 1.25)}
-                strokeDasharray={change.changeType === "removed" ? "4 3" : undefined}
+                strokeDasharray={dashed}
                 vectorEffect="non-scaling-stroke"
                 pointerEvents="none"
               />
             )}
-            <circle
-              cx={cx}
-              cy={cy}
-              r={radius}
-              fill={fill}
-              fillOpacity={0.9}
-              stroke="#fff"
-              strokeWidth={strokePx(1)}
-              vectorEffect="non-scaling-stroke"
-              pointerEvents="none"
-            />
+            {change.outline && (
+              <ObjectOutline
+                outline={change.outline}
+                transform={transform}
+                color={fill}
+                strokeWidth={strokePx(2)}
+                closed={change.type === "area"}
+                dashed={dashed}
+              />
+            )}
+            {!change.outline && (
+              <PointMarker
+                cx={cx}
+                cy={cy}
+                radius={radius}
+                color={fill}
+                strokeWidth={strokePx(2)}
+                dashed={dashed}
+              />
+            )}
           </g>
         );
       })}
@@ -621,6 +729,11 @@ export function ImportPartialMapPreview({
    * räknas om för att hålla samma storlek på skärmen oavsett zoom och hur
    * stort utsnittet är. Utan det blir markörerna stora klumpar som täcker kartan.
    */
+  const mapViewBox = useMemo(
+    () => (scene ? parseViewBoxString(scene.fullViewBox) : null),
+    [scene],
+  );
+
   const userUnitsPerPixel = useMemo(() => {
     if (!scene || viewportSize.width < 10 || viewportSize.height < 10) return null;
     const vb = parseViewBoxString(scene.fullViewBox);
@@ -647,8 +760,10 @@ export function ImportPartialMapPreview({
 
   const mapChanges = analysis.diff.mapChanges ?? analysis.diff.samples;
   const showOverlayControls = mode === "edges" || mode === "diff";
+  // Kartan visas i båda lägena — utan den går det inte att bedöma om en ändring
+  // är rimlig. «Dämpad» lägger bara en slöja över så markeringarna träder fram.
   const showBoxes = mapBase === "affected";
-  const showMapBackground = mapBase === "full";
+  const dimMap = mapBase === "affected";
 
   function retry() {
     clearPreviewCache(previewUrl);
@@ -700,13 +815,13 @@ export function ImportPartialMapPreview({
           <div className="flex flex-col gap-2">
             <div className="inline-flex w-fit flex-wrap gap-1 rounded-lg border border-slate-200 bg-slate-100 p-0.5">
               <SegmentButton active={mapBase === "full"} onClick={() => setMapBase("full")}>
-                Hela kartan
+                Kartan i full färg
               </SegmentButton>
               <SegmentButton
                 active={mapBase === "affected"}
                 onClick={() => setMapBase("affected")}
               >
-                Bara berörda objekt
+                Dämpa kartan
               </SegmentButton>
             </div>
             <div className="flex flex-wrap gap-x-4 gap-y-1.5">
@@ -752,8 +867,8 @@ export function ImportPartialMapPreview({
       <div
         ref={viewportRef}
         className={`relative h-[min(70svh,560px)] min-h-[280px] touch-none overflow-hidden ${
-          showMapBackground ? "bg-white" : "bg-slate-100"
-        } ${status === "ready" ? "cursor-grab active:cursor-grabbing" : ""}`}
+          status === "ready" ? "cursor-grab active:cursor-grabbing bg-white" : "bg-white"
+        }`}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -802,13 +917,22 @@ export function ImportPartialMapPreview({
           >
             <svg
               viewBox={scene.fullViewBox}
-              fill={showMapBackground ? scene.fill : "#f1f5f9"}
+              fill={scene.fill}
               xmlns="http://www.w3.org/2000/svg"
               preserveAspectRatio="xMidYMid meet"
               className="h-full w-full max-h-full max-w-full"
             >
-              {showMapBackground && (
-                <g dangerouslySetInnerHTML={{ __html: scene.inner }} />
+              <g dangerouslySetInnerHTML={{ __html: scene.inner }} />
+              {dimMap && (
+                <rect
+                  x={mapViewBox?.x ?? 0}
+                  y={mapViewBox?.y ?? 0}
+                  width={mapViewBox?.width ?? 0}
+                  height={mapViewBox?.height ?? 0}
+                  fill="#ffffff"
+                  fillOpacity={0.62}
+                  pointerEvents="none"
+                />
               )}
               {frame && frame.kind === "rect" && (
                 <rect

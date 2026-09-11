@@ -47,10 +47,30 @@ export {
 } from "./import-partial-polygon";
 
 const DIFF_TOLERANCE_M = Number(process.env.DIFF_SPATIAL_TOLERANCE_M ?? 2);
+/** Punkter per objektkontur i kartbilden — nog för formen utan att svälla svaret. */
+const MAX_OUTLINE_POINTS = 24;
 const MAX_EDGE_SAMPLES = 80;
 const MAX_DIFF_SAMPLES = 40;
 const MAX_DIFF_MAP_SAMPLES = 300;
 const MAX_SYMBOL_ROWS = 80;
+
+/** Centimeter räcker gott för en kontur på skärmen och håller nere svarets storlek. */
+function roundPoint(point: [number, number]): [number, number] {
+  return [Math.round(point[0] * 100) / 100, Math.round(point[1] * 100) / 100];
+}
+
+function sampleOutline(object: NormalizedOcadObject): [number, number][] | null {
+  const vertices = object.vertices;
+  if (!vertices || vertices.length < 2) return null;
+  if (vertices.length <= MAX_OUTLINE_POINTS) return vertices.map(roundPoint);
+  const stride = (vertices.length - 1) / (MAX_OUTLINE_POINTS - 1);
+  const points: [number, number][] = [];
+  for (let i = 0; i < MAX_OUTLINE_POINTS; i++) {
+    points.push(roundPoint(vertices[Math.round(i * stride)]!));
+  }
+  points[points.length - 1] = roundPoint(vertices[vertices.length - 1]!);
+  return points;
+}
 
 function bboxFromTuple(bounds: number[] | null): Bbox | null {
   if (!bounds || bounds.length < 4) return null;
@@ -288,6 +308,7 @@ export function analyzeImportPartial(input: {
           clippedPartialIndices.add(object.objectIndex);
         }
         if (edgeObjects.length < MAX_EDGE_SAMPLES) {
+          const outline = sampleOutline(object);
           edgeObjects.push({
             objectIndex: object.objectIndex,
             symbolNumber: object.symbolNumber,
@@ -296,6 +317,7 @@ export function analyzeImportPartial(input: {
             centroid: object.centroid,
             bbox: object.bbox,
             likelyClipped: clipped,
+            ...(outline ? { outline } : {}),
           });
         }
       }
@@ -354,15 +376,29 @@ export function analyzeImportPartial(input: {
   const removed = appliedChanges.filter((c) => c.changeType === "removed").length;
   const modified = appliedChanges.filter((c) => c.changeType === "modified").length;
 
-  const toDiffSample = (change: (typeof appliedChanges)[number]): ImportDiffSample => ({
-    changeType: change.changeType,
-    objectIndex: change.objectIndex,
-    symbolNumber: change.symbolNumber,
-    symbolName: change.symbolName,
-    type: change.type,
-    centroid: change.centroid,
-    bbox: change.bbox,
-  });
+  // Formen på det som ändras säger mer än en ruta runt det. Vertexkedjan tas med
+  // (glesad) så kartbilden kan rita själva diket eller stigen, inte bara en bbox.
+  const baselineByIndex = new Map(baseline.map((object) => [object.objectIndex, object]));
+  const partialByIndex = new Map(
+    input.partial.objects.map((object) => [object.objectIndex, object]),
+  );
+  const toDiffSample = (change: (typeof appliedChanges)[number]): ImportDiffSample => {
+    const source =
+      change.changeType === "removed"
+        ? baselineByIndex.get(change.objectIndex)
+        : partialByIndex.get(change.objectIndex);
+    const outline = source ? sampleOutline(source) : null;
+    return {
+      changeType: change.changeType,
+      objectIndex: change.objectIndex,
+      symbolNumber: change.symbolNumber,
+      symbolName: change.symbolName,
+      type: change.type,
+      centroid: change.centroid,
+      bbox: change.bbox,
+      ...(outline ? { outline } : {}),
+    };
+  };
 
   matched.sort((a, b) => b.countPartial - a.countPartial);
   onlyInPartial.sort((a, b) => b.countPartial - a.countPartial);
