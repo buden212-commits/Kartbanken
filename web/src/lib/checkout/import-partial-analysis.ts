@@ -270,6 +270,7 @@ export function analyzeImportPartial(input: {
   // yttersta objekten, så att ~IMPORT_EDGE_BUFFER_METERS verkligt kartinnehåll
   // skyddas i stället för tom yta mellan datat och ringen.
   const edgeBufferMeters = polygon?.edgeBufferMeters ?? IMPORT_EDGE_BUFFER_METERS;
+  const ringBufferMeters = polygon?.ringBufferMeters ?? IMPORT_EDGE_BUFFER_METERS;
   const coreRings = polygon?.coreRings ?? [];
   const core = polygon?.core ?? null;
 
@@ -277,7 +278,7 @@ export function analyzeImportPartial(input: {
     for (const object of input.partial.objects) {
       const crosses = objectCrossesPolygon(object, activeRing);
       const clipped = isLikelyClippedByPolygon(object, activeRing, snap);
-      const inEdgeBelt = objectInEdgeBufferZone(object, activeRing, edgeBufferMeters);
+      const inEdgeBelt = objectInEdgeBufferZone(object, activeRing, ringBufferMeters);
       if (objectFullyInsidePolygon(object, activeRing) && !crosses && !clipped && !inEdgeBelt) {
         interiorCount += 1;
       }
@@ -327,7 +328,7 @@ export function analyzeImportPartial(input: {
       .filter((object) => {
         if (!ring) return false;
         if (objectCrossesPolygon(object, activeRing)) return true;
-        if (objectInEdgeBufferZone(object, activeRing, edgeBufferMeters)) return true;
+        if (objectInEdgeBufferZone(object, activeRing, ringBufferMeters)) return true;
         return core ? !objectFullyInsideCore(object, core) : false;
       })
       .map((o) => o.objectIndex),
@@ -345,7 +346,7 @@ export function analyzeImportPartial(input: {
   const skippedEdge = diff.changes.length - appliedChanges.length;
   if (skippedEdge > 0) {
     warnings.push(
-      `${skippedEdge} kantnära eller överskridande objekt hoppades över i jämförelsen (skyddszon ca ${edgeBufferMeters} m från polygonkanten).`,
+      `${skippedEdge} objekt hoppades över i jämförelsen — de ligger i skyddszonen (${edgeBufferMeters} m från delkartans innehåll), går över kanten, eller ligger i ett tomrum där delkartan inte ritat något.`,
     );
   }
 
@@ -373,6 +374,7 @@ export function analyzeImportPartial(input: {
     coreRing: coreRings[0] ?? [],
     coreRings,
     edgeBufferMeters,
+    ringBufferMeters,
     headObjectsInArea: headInArea.length,
     headObjectsTotal: input.head.objects.length,
     extentInsideHead,

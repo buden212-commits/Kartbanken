@@ -123,7 +123,7 @@ async function analyzeAgainstHead(
   });
   await onProgress?.(
     "compare",
-    `Jämför ${analysis.headObjectsInArea.toLocaleString("sv-SE")} objekt i området (av ${analysis.headObjectsTotal.toLocaleString("sv-SE")}); ${partialSummary.objectCount.toLocaleString("sv-SE")} i delkartan. Kantzon ${analysis.edgeBufferMeters} m.`,
+    `Jämför ${analysis.headObjectsInArea.toLocaleString("sv-SE")} objekt i området (av ${analysis.headObjectsTotal.toLocaleString("sv-SE")}); ${partialSummary.objectCount.toLocaleString("sv-SE")} i delkartan. Skyddszon ${analysis.edgeBufferMeters} m.`,
   );
 
   const geometry = checkoutGeometryFromAnalysis(analysis);
@@ -134,7 +134,7 @@ async function analyzeAgainstHead(
     objectIds: objectIdsFromSelection(headSummary.objects, geometry),
     importPartial: true as const,
     importExtent,
-    ...(importRing ? { importRing, importEdgeBuffer: analysis.edgeBufferMeters } : {}),
+    ...(importRing ? { importRing, importEdgeBuffer: analysis.ringBufferMeters } : {}),
   };
 
   await onProgress?.("overlap", "Ser efter aktiva utcheckningar i samma område…");
@@ -402,7 +402,7 @@ export async function commitImportPartialJob(input: {
     objectIds: [] as string[],
     importPartial: true as const,
     importExtent,
-    ...(importRing ? { importRing, importEdgeBuffer: job.analysis.edgeBufferMeters } : {}),
+    ...(importRing ? { importRing, importEdgeBuffer: job.analysis.ringBufferMeters } : {}),
   };
 
   const conflicts = detectCheckoutConflicts(

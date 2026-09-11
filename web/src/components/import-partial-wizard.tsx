@@ -333,9 +333,10 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
       {analysis && step === "extent" && (
         <p className="text-sm text-slate-600">
           Blå linje är delkartans utbredning (rutnätskontur utifrån objekten). Blåtonat = skyddad
-          zon där inget raderas automatiskt: kanten (~{analysis.edgeBufferMeters ?? 30} m) och
-          eventuella tomrum där delkartan saknar innehåll. Innanför den gröna streckade linjen
-          jämförs borttag. Fil: <span className="font-medium">{fileName}</span>. Jämför{" "}
+          zon där inget raderas automatiskt: {analysis.edgeBufferMeters ?? 60} m in från delkartans
+          innehåll, plus eventuella tomrum där delkartan inte ritat något. Innanför den gröna
+          streckade linjen jämförs borttag. Fil: <span className="font-medium">{fileName}</span>.
+          Jämför{" "}
           {analysis.headObjectsInArea.toLocaleString("sv-SE")} objekt i området av{" "}
           {analysis.headObjectsTotal.toLocaleString("sv-SE")} på stora kartan.
         </p>
@@ -344,8 +345,9 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
       {analysis && step === "edges" && (
         <div className="space-y-2 text-sm text-slate-600">
           <p>
-            Orange/rött = kantobjekt som skär, ligger i kantzonen (~{analysis.edgeBufferMeters} m)
-            eller är klippta ({analysis.edgeCount} visade). Rött betyder troligen klippt (
+            Orange/rött = kantobjekt som skär, ligger i skyddszonen ({analysis.edgeBufferMeters} m
+            från delkartans innehåll) eller är klippta ({analysis.edgeCount} visade). Rött betyder
+            troligen klippt (
             {analysis.likelyClippedCount} st) och räknas inte som ändring.{" "}
             {analysis.interiorCount} objekt ligger i den inre kärnan. Zonen mäts mot hela objektet,
             så en bäck eller stig som når kanten skyddas även om mitten ligger långt in. Objekt i
@@ -409,8 +411,8 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
           <ul className="list-disc pl-5">
             <li>
               {analysis.diff.added} tillägg, {analysis.diff.modified} ändringar, {analysis.diff.removed}{" "}
-              borttagningar (kantzon ~{analysis.edgeBufferMeters} m och klippta objekt jämförs inte som
-              borttag)
+              borttagningar (skyddszon {analysis.edgeBufferMeters} m från delkartans innehåll, och
+              klippta objekt jämförs inte som borttag)
             </li>
             <li>{analysis.likelyClippedCount} objekt markerade som troligen klippta (filtreras bort)</li>
             <li>

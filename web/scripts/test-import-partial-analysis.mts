@@ -382,14 +382,67 @@ const head = makeSummary("head.ocd", headObjects, [101, 102, 103], [0, 0, 1000, 
   const meta = buildImportPolygonWithMeta(dense)!;
   assert(meta.ring.length >= 3, "buildImportPolygonWithMeta ska ge ring");
   assert(
-    meta.edgeBufferMeters > IMPORT_EDGE_BUFFER_METERS,
-    "Kantzonen ska kompensera för rutnätets förskjutning utåt",
+    meta.edgeBufferMeters === IMPORT_EDGE_BUFFER_METERS,
+    "Zonen mot innehållet är konstant och oberoende av rutnätet",
   );
   assert(
-    meta.edgeBufferMeters <= 2 * IMPORT_EDGE_BUFFER_METERS,
-    "Kantzonen ska ha tak så den aldrig skenar",
+    meta.ringBufferMeters > meta.edgeBufferMeters,
+    "Zonen mot ringen ska kompensera för rutnätets förskjutning utåt",
+  );
+  assert(
+    meta.ringBufferMeters <= 2 * IMPORT_EDGE_BUFFER_METERS,
+    "Zonen mot ringen ska ha tak så den aldrig skenar",
   );
   assert(meta.coreRings.length > 0 && meta.core != null, "Inre kärna ska finnas");
+}
+
+{
+  // Skyddet ska vara lika brett åt alla håll. Ett hörn testas snett inifrån:
+  // djupet d längs diagonalen motsvarar d/√2 verkligt avstånd till kanten.
+  const partial: NormalizedOcadObject[] = [];
+  let idx = 50000;
+  for (let x = 0; x <= 1200; x += 20) {
+    for (let y = 0; y <= 1200; y += 20) partial.push(makeObject(idx++, 101, [x, y, x + 1, y + 1]));
+  }
+  const head = partial.map((object) => ({ ...object }));
+  type Probe = { index: number; edgeDistance: number };
+  const sideProbes: Probe[] = [];
+  const cornerProbes: Probe[] = [];
+  let j = 60000;
+  for (let d = 10; d <= 130; d += 10) {
+    head.push(makeObject(j, 112, [600, 1200 - d, 601, 1201 - d]));
+    sideProbes.push({ index: j++, edgeDistance: d });
+    const off = d / Math.SQRT2;
+    head.push(makeObject(j, 112, [1200 - off, 1200 - off, 1201 - off, 1201 - off]));
+    cornerProbes.push({ index: j++, edgeDistance: off });
+  }
+  const analysis = analyzeImportPartial({
+    head: makeSummary("head-depth.ocd", head, [101, 112], [-300, -300, 1500, 1500]),
+    partial: makeSummary("partial-depth.ocd", partial, [101]),
+  });
+  const removed = new Set(
+    analysis.diff.mapChanges.filter((c) => c.changeType === "removed").map((c) => c.objectIndex),
+  );
+  for (const [label, probes] of [
+    ["rakt in", sideProbes],
+    ["diagonalt", cornerProbes],
+  ] as const) {
+    for (const probe of probes) {
+      if (probe.edgeDistance <= IMPORT_EDGE_BUFFER_METERS) {
+        assert(
+          !removed.has(probe.index),
+          `${label}: objekt ${probe.edgeDistance.toFixed(0)} m från kanten ska behållas`,
+        );
+      }
+    }
+    const deepestKept = Math.max(
+      ...probes.filter((p) => !removed.has(p.index)).map((p) => p.edgeDistance),
+    );
+    assert(
+      deepestKept < IMPORT_EDGE_BUFFER_METERS * 1.6,
+      `${label}: skyddet ska inte svälla långt förbi ${IMPORT_EDGE_BUFFER_METERS} m`,
+    );
+  }
 }
 
 {

@@ -343,23 +343,62 @@ function countOccupancyComponents(occupied: Set<string>): number {
   return occupancyComponents(occupied).length;
 }
 
-/** Skalar bort celler med tom ortogonal granne — sant inåtoffset, till skillnad från centroidkrympning. */
-function erodeOccupancyOrtho(occupied: Set<string>, steps: number): Set<string> {
+const ORTHO_OFFSETS = [
+  [-1, 0],
+  [1, 0],
+  [0, -1],
+  [0, 1],
+] as const;
+
+const DIAGONAL_OFFSETS = [
+  [-1, -1],
+  [1, -1],
+  [-1, 1],
+  [1, 1],
+] as const;
+
+/**
+ * Enbart ortogonala steg ger en romb: ett steg når `cell` längs axlarna men
+ * bara `cell/√2` snett. Genom att varva in diagonala steg blir formen en
+ * åttahörning som ligger nära en cirkel, så zonen blir lika bred åt alla håll.
+ */
+function stepOffsets(step: number): readonly (readonly [number, number])[] {
+  return step % 2 === 0 ? ORTHO_OFFSETS : [...ORTHO_OFFSETS, ...DIAGONAL_OFFSETS];
+}
+
+function erodeOccupancyRadial(occupied: Set<string>, steps: number): Set<string> {
   let current = occupied;
   for (let step = 0; step < steps; step++) {
+    const offsets = stepOffsets(step);
     const next = new Set<string>();
     for (const key of current) {
       const [i, j] = parseCellKey(key);
-      if (
-        current.has(cellKey(i - 1, j)) &&
-        current.has(cellKey(i + 1, j)) &&
-        current.has(cellKey(i, j - 1)) &&
-        current.has(cellKey(i, j + 1))
-      ) {
-        next.add(key);
+      let keep = true;
+      for (const [di, dj] of offsets) {
+        if (!current.has(cellKey(i + di, j + dj))) {
+          keep = false;
+          break;
+        }
       }
+      if (keep) next.add(key);
     }
     if (next.size === 0) return next;
+    current = next;
+  }
+  return current;
+}
+
+function dilateOccupancyRadial(occupied: Set<string>, steps: number): Set<string> {
+  let current = occupied;
+  for (let step = 0; step < steps; step++) {
+    const offsets = stepOffsets(step);
+    const next = new Set(current);
+    for (const key of current) {
+      const [i, j] = parseCellKey(key);
+      for (const [di, dj] of offsets) {
+        next.add(cellKey(i + di, j + dj));
+      }
+    }
     current = next;
   }
   return current;
@@ -746,12 +785,14 @@ export type ImportCoreMask = {
 
 export type ImportPolygonResult = {
   ring: PolygonRing;
-  /**
-   * Kantzon i meter mätt från ringen. Rutnätskonturen följer cellkanter och kan
-   * dilateras, så den ligger en bit utanför datat; zonen kompenseras för det
-   * för att skydda ~IMPORT_EDGE_BUFFER_METERS av verkligt kartinnehåll.
-   */
+  /** Skyddad zon mätt från delkartans innehåll. Det är siffran som betyder något. */
   edgeBufferMeters: number;
+  /**
+   * Samma zon mätt från konturen. Rutnätskonturen följer cellkanter och kan
+   * dilateras, så den ligger utanför innehållet; reservregeln som mäter mot
+   * ringen måste kompensera för det.
+   */
+  ringBufferMeters: number;
   /** Kärnans rand — flera ringar när kärnan har tomrum eller delas i öar. */
   coreRings: PolygonRing[];
   /** Kärnan som rutnätsmask, för att avgöra om ett objekt får tas bort. */
@@ -785,15 +826,14 @@ function buildCoreMask(
   edgeBufferMeters: number,
   coverageMeters: number,
 ): ImportCoreMask | null {
-  const coverageSteps = Math.max(1, Math.round(coverageMeters / grid.cellMeters));
-  const edgeSteps = Math.max(1, Math.round(edgeBufferMeters / grid.cellMeters));
+  const coverageSteps = Math.max(1, Math.ceil(coverageMeters / grid.cellMeters));
+  // Punkter avrundas till närmaste cell, så ett extra steg garanterar att hela
+  // den utlovade zonen verkligen skyddas i stället för att tappa upp till en cell.
+  const edgeSteps = Math.max(1, Math.ceil(edgeBufferMeters / grid.cellMeters) + 1);
 
-  let coverage = grid.seedCells;
-  for (let step = 0; step < coverageSteps; step++) {
-    coverage = dilateOccupancyOrtho(coverage);
-  }
+  const coverage = dilateOccupancyRadial(grid.seedCells, coverageSteps);
   // Vidgningen tas tillbaka i samma veva som kantzonen dras in.
-  const core = erodeOccupancyOrtho(coverage, coverageSteps + edgeSteps);
+  const core = erodeOccupancyRadial(coverage, coverageSteps + edgeSteps);
   if (core.size === 0) return null;
   return {
     cells: core,
@@ -830,10 +870,11 @@ export function coreMaskRings(mask: ImportCoreMask): PolygonRing[] {
 }
 
 /**
- * Kantzonen kompenseras för rutnätets förskjutning, men får aldrig skena.
- * Utan tak kan en grov cell ge en zon som slukar hela utsnittet.
+ * Zonen mätt från ringen måste vara bredare än den mätt från innehållet,
+ * eftersom ringen ligger utanför innehållet. Taket hindrar att en grov cell
+ * ger en zon som slukar hela utsnittet.
  */
-function edgeBufferForSlack(slackMeters: number): number {
+function ringBufferForSlack(slackMeters: number): number {
   const slack = Math.min(Math.max(slackMeters, 0), IMPORT_EDGE_BUFFER_METERS);
   return Math.round(IMPORT_EDGE_BUFFER_METERS + slack);
 }
@@ -859,7 +900,8 @@ export function buildImportPolygonWithMeta(
         [x + pad, y + pad],
         [x - pad, y + pad],
       ],
-      edgeBufferMeters: edgeBufferForSlack(pad),
+      edgeBufferMeters: IMPORT_EDGE_BUFFER_METERS,
+      ringBufferMeters: ringBufferForSlack(pad),
       coreRings: [],
       core: null,
     };
@@ -874,7 +916,8 @@ export function buildImportPolygonWithMeta(
         [b![0] + pad, b![1] + pad],
         [a![0] - pad, b![1] + pad],
       ],
-      edgeBufferMeters: edgeBufferForSlack(pad),
+      edgeBufferMeters: IMPORT_EDGE_BUFFER_METERS,
+      ringBufferMeters: ringBufferForSlack(pad),
       coreRings: [],
       core: null,
     };
@@ -883,15 +926,15 @@ export function buildImportPolygonWithMeta(
   // Primärt: rutnätskontur (följer vikar). Fallback: konkav/konvex hull.
   const grid = buildGridContourWithMeta(objects);
   if (grid && grid.ring.length >= 3 && !ringSelfIntersects(grid.ring)) {
-    const edgeBufferMeters = edgeBufferForSlack(grid.cellMeters * (1 + grid.dilateSteps));
     const core = buildCoreMask(
       grid,
-      edgeBufferMeters,
+      IMPORT_EDGE_BUFFER_METERS,
       coverageRadiusMeters(grid.ring, objects.length),
     );
     return {
       ring: grid.ring,
-      edgeBufferMeters,
+      edgeBufferMeters: IMPORT_EDGE_BUFFER_METERS,
+      ringBufferMeters: ringBufferForSlack(grid.cellMeters * (1 + grid.dilateSteps)),
       coreRings: core ? coreMaskRings(core) : [],
       core,
     };
@@ -908,11 +951,11 @@ export function buildImportPolygonWithMeta(
   const hull = concaveHull(hullInput, 3);
   const ring = hull.length >= 3 ? hull : convexHull(hullInput);
   // Hullen går genom de yttersta punkterna, så ingen förskjutning att kompensera.
-  const edgeBufferMeters = edgeBufferForSlack(0);
-  const fallbackCore = shrinkRing(ring, edgeBufferMeters);
+  const fallbackCore = shrinkRing(ring, IMPORT_EDGE_BUFFER_METERS);
   return {
     ring,
-    edgeBufferMeters,
+    edgeBufferMeters: IMPORT_EDGE_BUFFER_METERS,
+    ringBufferMeters: ringBufferForSlack(0),
     coreRings: fallbackCore ? [fallbackCore] : [],
     core: null,
   };
@@ -952,8 +995,12 @@ export function expandRing(ring: PolygonRing, fraction = 0.01, minPad = 100): Po
   return ring.map(([x, y]) => [cx + (x - cx) * scaleX, cy + (y - cy) * scaleY]);
 }
 
-/** Default kantzon: objekt innanför polygonen men inom detta avstånd från kanten skyddas från auto-borttag. */
-export const IMPORT_EDGE_BUFFER_METERS = 30;
+/**
+ * Skyddad zon, mätt från delkartans faktiska innehåll (inte från konturen,
+ * som ligger en bit utanför). Objekt på stora kartan närmare snittet än så
+ * tas aldrig bort automatiskt.
+ */
+export const IMPORT_EDGE_BUFFER_METERS = 60;
 
 /**
  * Krymp polygon ungefärligt inåt med `meters` (mot centroid).

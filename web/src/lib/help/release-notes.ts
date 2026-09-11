@@ -20,6 +20,8 @@ export const releaseNotes: ReleaseNote[] = [
       "Ett objekt på stora kartan raderas bara om hela objektet ligger i delkartans inre kärna — betydligt färre felaktiga borttag",
       "Tomrum där delkartan saknar innehåll skyddas nu också: där går det inte att avgöra om redigeraren tagit bort något eller bara inte ritat, så originalet behålls",
       "Skyddet räknar in hur glest objekten ligger, så glest karterad terräng inte längre behandlas som tomrum",
+      "Skyddszonen är nu 60 m mätt från delkartans innehåll och lika bred åt alla håll — tidigare blev den bara ca 45 m rakt in och ojämn snett, vilket släppte igenom enstaka kantobjekt",
+      "Siffran som visas i guiden är den zon du faktiskt får; förut visades ett värde mätt från utbredningslinjen som låg utanför innehållet",
       "Tydligare karta: bara den skyddade zonen tonas blå så att kartan syns oskymd där borttag jämförs, och markörer och linjer håller samma storlek oavsett zoom",
     ],
   },

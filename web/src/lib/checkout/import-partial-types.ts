@@ -42,8 +42,10 @@ export type ImportPartialAnalysis = {
    * skyddad zon där inget raderas automatiskt.
    */
   coreRings: PolygonRing[];
-  /** Kantzon i meter där borttag på stora kartan skyddas. */
+  /** Skyddad zon i meter, mätt från delkartans innehåll. Siffran som visas. */
   edgeBufferMeters: number;
+  /** Samma zon mätt från konturen, som ligger utanför innehållet. */
+  ringBufferMeters: number;
   /** Antal objekt på stora kartan som faktiskt jämförs (efter AABB+polygon). */
   headObjectsInArea: number;
   /** Totalt antal objekt på stora kartan (för status). */
