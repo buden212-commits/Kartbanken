@@ -443,6 +443,11 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
             för en ändring som inte ska tillämpas — då lämnas det objektet orört i den stora kartan.
             Kartväxlingen och lagerfiltren fungerar som i steget Kanter.
           </p>
+          <p className="text-slate-600">
+            Ett objekt som flyttats syns ofta som både borttaget och tillagt. Kryssar du bara bort
+            borttaget hamnar båda versionerna på kartan — kryssa bort båda raderna om objektet ska
+            stå kvar oförändrat.
+          </p>
           {listedChanges.length > 0 && (
             <div className="rounded-lg border border-slate-200 bg-white">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-2 text-xs text-slate-600">
