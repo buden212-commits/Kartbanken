@@ -24,6 +24,7 @@ import {
   objectInEdgeBufferZone,
   objectIntersectsPolygon,
 } from "../src/lib/checkout/import-partial-polygon";
+import { importChangeKey } from "../src/lib/checkout/import-partial-types";
 import { pointInPolygon } from "../src/lib/checkout/overlap";
 import {
   CheckoutSelectionType,
@@ -608,6 +609,49 @@ const head = makeSummary("head.ocd", headObjects, [101, 102, 103], [0, 0, 1000, 
   };
   const parsed = parseSelectionJson(serializeSelection(selection));
   assert(parsed.importEdgeBuffer === 75, "importEdgeBuffer ska överleva serialisering");
+}
+
+{
+  // Bortkryssade ändringar måste följa med utcheckningen — annars tillämpas de ändå.
+  const base = {
+    geometry: {
+      type: CheckoutSelectionType.POLYGON,
+      ring: [
+        [0, 0],
+        [100, 0],
+        [100, 100],
+      ] as [number, number][],
+    },
+    objectIds: [],
+    importPartial: true,
+  };
+  const parsed = parseSelectionJson(
+    serializeSelection({
+      ...base,
+      importExcluded: [
+        importChangeKey("removed", 4711),
+        importChangeKey("added", 12),
+        importChangeKey("modified", 3),
+        importChangeKey("removed", 4711),
+      ],
+    }),
+  );
+  assert(parsed.importExcluded?.length === 3, "Dubbletter ska falla bort");
+  assert(parsed.importExcluded?.includes("removed:4711") === true, "Borttagsnyckel ska överleva");
+
+  const junk = parseSelectionJson(
+    serializeSelection({
+      ...base,
+      importExcluded: ["removed:abc", "deleted:1", "", "removed:7"] as string[],
+    }),
+  );
+  assert(
+    junk.importExcluded?.length === 1 && junk.importExcluded[0] === "removed:7",
+    "Ogiltiga nycklar ska sållas bort i stället för att stoppa importen",
+  );
+
+  const none = parseSelectionJson(serializeSelection({ ...base, importExcluded: ["nope"] }));
+  assert(none.importExcluded === undefined, "Tom lista ska inte sparas");
 }
 
 {

@@ -366,12 +366,20 @@ export async function analyzeExistingImportPartialJob(
   }
 }
 
+/** Nycklar som «removed:1234» — allt annat ignoreras hellre än att stoppa importen. */
+function normalizeExcludedKeys(keys: string[] | undefined): string[] {
+  if (!keys) return [];
+  return [...new Set(keys.filter((key) => /^(added|removed|modified):\d+$/.test(key)))];
+}
+
 export async function commitImportPartialJob(input: {
   jobId: string;
   userId: string;
   mapFileId: string;
   mapSlug: string;
   comment?: string | null;
+  /** Ändringar redaktören kryssade bort i guiden — de ska inte nå kartan. */
+  excluded?: string[];
 }): Promise<{ checkoutId: string }> {
   const job = await readImportPartialJob(input.jobId);
   if (!job) throw new Error("Importjobbet hittades inte.");
@@ -395,6 +403,7 @@ export async function commitImportPartialJob(input: {
   const geometry = checkoutGeometryFromAnalysis(job.analysis);
   const importExtent = importExtentFromAnalysis(job.analysis);
   const importRing = job.analysis.ring.length >= 3 ? job.analysis.ring : undefined;
+  const excluded = normalizeExcludedKeys(input.excluded);
   // Skip full head parse here: generateCheckoutExport/crop fills objectIds, and overlap
   // against active checkouts uses geometry. Double-parsing Mora-sized maps OOMs.
   const selection = {
@@ -403,6 +412,7 @@ export async function commitImportPartialJob(input: {
     importPartial: true as const,
     importExtent,
     ...(importRing ? { importRing, importEdgeBuffer: job.analysis.ringBufferMeters } : {}),
+    ...(excluded.length > 0 ? { importExcluded: excluded } : {}),
   };
 
   const conflicts = detectCheckoutConflicts(
@@ -459,6 +469,7 @@ export async function commitImportPartialJob(input: {
     mapSlug: input.mapSlug,
     importPartial: true,
     fileName: job.fileName,
+    excludedChanges: excluded.length,
   });
   await logAction(input.userId, "CHECKIN_SUBMITTED", "MapCheckout", checkout.id, {
     mapSlug: input.mapSlug,

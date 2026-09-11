@@ -55,6 +55,11 @@ export type CheckoutSelection = {
   importRing?: PolygonRing;
   /** Skyddad kantzon (meter) innanför importRing — objekt där tas aldrig bort automatiskt. */
   importEdgeBuffer?: number;
+  /**
+   * Ändringar som redaktören kryssat bort i importguiden, som «removed:1234».
+   * De hoppas över i incheckningens diff och når därför aldrig kartan.
+   */
+  importExcluded?: string[];
 };
 
 export type CheckoutSelectionInput = {
@@ -106,11 +111,23 @@ function parsePolygonRing(value: unknown): PolygonRing | null {
   return ring.length >= 3 ? ring : null;
 }
 
+const IMPORT_EXCLUDED_PATTERN = /^(added|removed|modified):\d+$/;
+
+function parseExcludedKeys(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const keys = [
+    ...new Set(
+      value.filter((item): item is string => typeof item === "string" && IMPORT_EXCLUDED_PATTERN.test(item)),
+    ),
+  ];
+  return keys.length > 0 ? keys : null;
+}
+
 function importFields(
   record: Record<string, unknown>,
 ): Pick<
   CheckoutSelection,
-  "importPartial" | "importExtent" | "importRing" | "importEdgeBuffer"
+  "importPartial" | "importExtent" | "importRing" | "importEdgeBuffer" | "importExcluded"
 > {
   if (record.importPartial !== true) {
     return { importPartial: false };
@@ -122,11 +139,13 @@ function importFields(
     typeof rawBuffer === "number" && Number.isFinite(rawBuffer) && rawBuffer > 0
       ? rawBuffer
       : undefined;
+  const importExcluded = parseExcludedKeys(record.importExcluded) ?? undefined;
   return {
     importPartial: true,
     ...(importExtent ? { importExtent } : {}),
     ...(importRing ? { importRing } : {}),
     ...(importEdgeBuffer ? { importEdgeBuffer } : {}),
+    ...(importExcluded ? { importExcluded } : {}),
   };
 }
 

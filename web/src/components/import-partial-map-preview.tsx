@@ -3,16 +3,19 @@
 import {
   useCallback,
   useEffect,
+  useImperativeHandle,
   useMemo,
   useRef,
   useState,
   type ReactNode,
+  type Ref,
 } from "react";
 import type { Bbox } from "@/lib/checkout/types";
-import type {
-  ImportDiffSample,
-  ImportEdgeObject,
-  ImportPartialAnalysis,
+import {
+  importChangeKey,
+  type ImportDiffSample,
+  type ImportEdgeObject,
+  type ImportPartialAnalysis,
 } from "@/lib/checkout/import-partial-types";
 import { clearPreviewCache, fetchPreviewText } from "@/lib/ocad/preview-fetch";
 import { extractSvgInner } from "@/lib/ocad/svg-utils";
@@ -28,12 +31,25 @@ import { maxZoomForMapScale } from "@/lib/ocad/map-display-scale";
 type Mode = "extent" | "edges" | "diff";
 type MapBase = "full" | "affected";
 
+export type ImportPartialMapHandle = {
+  /** Zoomar och centrerar på ett enskilt objekt, t.ex. från ändringslistan. */
+  focusOn: (target: {
+    bbox?: [number, number, number, number] | null;
+    centroid: [number, number];
+  }) => void;
+};
+
 type Props = {
   previewUrl: string;
   analysis: ImportPartialAnalysis;
   mode: Mode;
   title: string;
   areaHref?: string;
+  /** `${changeType}:${objectIndex}` för raden som är vald i listan. */
+  selectedKey?: string | null;
+  /** Ändringar som kryssats bort — ritas dämpade så det syns att de inte tillämpas. */
+  excludedKeys?: ReadonlySet<string>;
+  ref?: Ref<ImportPartialMapHandle>;
 };
 
 type Scene = {
@@ -57,6 +73,10 @@ const ZOOM_OUT_FACTOR = 1 / ZOOM_IN_FACTOR;
 const DRAG_THRESHOLD_PX = 5;
 /** Markörernas radie på skärmen. Oberoende av zoom och utsnittets storlek. */
 const MARKER_RADIUS_PX = 5;
+/** Minsta kartfönster (meter) när man zoomar till ett enskilt objekt. */
+const FOCUS_MIN_SPAN_METERS = 120;
+/** Dämpad ton för ändringar som kryssats bort. */
+const EXCLUDED_COLOR = "#94a3b8";
 
 function ringToPath(points: [number, number][]): string {
   return `M ${points.map(([x, y]) => `${x},${y}`).join(" L ")} Z`;
@@ -106,9 +126,9 @@ function zoomAtPoint(
   };
 }
 
-/** Fit viewport to analysis extent (padded), same approach as DiffMapPanel focus. */
-function fitExtentView(
-  extent: Bbox,
+/** Fit viewport to a geo bbox (padded), same approach as DiffMapPanel focus. */
+function fitGeoBoxView(
+  box: [number, number, number, number],
   transform: SvgRootTransform,
   viewBox: string,
   containerWidth: number,
@@ -116,7 +136,7 @@ function fitExtentView(
   maxZoom: number,
 ): { pan: { x: number; y: number }; zoom: number } | null {
   if (containerWidth < 10 || containerHeight < 10) return null;
-  const [minX, minY, maxX, maxY] = geoBboxToSvgUser(bboxToTuple(extent), transform);
+  const [minX, minY, maxX, maxY] = geoBboxToSvgUser(box, transform);
   const bw = Math.max(maxX - minX, 5) * 1.4;
   const bh = Math.max(maxY - minY, 5) * 1.4;
   const vb = parseViewBoxString(viewBox);
@@ -137,6 +157,25 @@ function fitExtentView(
     return null;
   }
   return { pan: { x: panX, y: panY }, zoom: targetZoom };
+}
+
+/**
+ * Ett enskilt objekt får ett minsta fönster runt sig. En sten har noll utbredning
+ * och skulle annars zooma till max, där omgivningen — det man ska bedöma mot —
+ * inte längre syns.
+ */
+function focusBox(
+  bbox: [number, number, number, number] | null | undefined,
+  centroid: [number, number],
+): [number, number, number, number] {
+  const [cx, cy] = centroid;
+  const minX = Math.min(bbox?.[0] ?? cx, cx);
+  const minY = Math.min(bbox?.[1] ?? cy, cy);
+  const maxX = Math.max(bbox?.[2] ?? cx, cx);
+  const maxY = Math.max(bbox?.[3] ?? cy, cy);
+  const padX = Math.max(0, (FOCUS_MIN_SPAN_METERS - (maxX - minX)) / 2);
+  const padY = Math.max(0, (FOCUS_MIN_SPAN_METERS - (maxY - minY)) / 2);
+  return [minX - padX, minY - padY, maxX + padX, maxY + padY];
 }
 
 function SegmentButton({
@@ -352,6 +391,8 @@ function DiffMarkers({
   strokePx,
   showBoxes,
   kinds,
+  selectedKey,
+  excludedKeys,
 }: {
   changes: ImportDiffSample[];
   transform: SvgRootTransform;
@@ -359,16 +400,31 @@ function DiffMarkers({
   strokePx: (px: number) => number;
   showBoxes: boolean;
   kinds: { removed: boolean; added: boolean; modified: boolean };
+  selectedKey?: string | null;
+  excludedKeys?: ReadonlySet<string>;
 }) {
+  // Den valda ändringen ritas sist så den inte hamnar under grannarna.
+  const ordered = selectedKey
+    ? [...changes].sort((a, b) => {
+        const aSel = importChangeKey(a.changeType, a.objectIndex) === selectedKey ? 1 : 0;
+        const bSel = importChangeKey(b.changeType, b.objectIndex) === selectedKey ? 1 : 0;
+        return aSel - bSel;
+      })
+    : changes;
+
   return (
     <>
-      {changes.map((change, index) => {
+      {ordered.map((change, index) => {
         if (change.changeType === "removed" && !kinds.removed) return null;
         if (change.changeType === "added" && !kinds.added) return null;
         if (change.changeType === "modified" && !kinds.modified) return null;
 
-        const fill =
-          change.changeType === "added"
+        const key = importChangeKey(change.changeType, change.objectIndex);
+        const excluded = excludedKeys?.has(key) ?? false;
+        const selected = selectedKey === key;
+        const fill = excluded
+          ? EXCLUDED_COLOR
+          : change.changeType === "added"
             ? "#059669"
             : change.changeType === "removed"
               ? "#dc2626"
@@ -380,7 +436,23 @@ function DiffMarkers({
             : null;
         const dashed = change.changeType === "removed" ? "5 3" : undefined;
         return (
-          <g key={`diff-${change.changeType}-${change.objectIndex}-${index}`}>
+          <g
+            key={`diff-${change.changeType}-${change.objectIndex}-${index}`}
+            opacity={excluded ? 0.55 : 1}
+          >
+            {selected && (
+              <circle
+                cx={cx}
+                cy={cy}
+                r={radius * 3.5}
+                fill="none"
+                stroke="#1d4ed8"
+                strokeWidth={strokePx(2)}
+                strokeDasharray={`${strokePx(5)} ${strokePx(4)}`}
+                vectorEffect="non-scaling-stroke"
+                pointerEvents="none"
+              />
+            )}
             {box && (
               <rect
                 x={box.x}
@@ -428,6 +500,9 @@ export function ImportPartialMapPreview({
   mode,
   title,
   areaHref,
+  selectedKey,
+  excludedKeys,
+  ref,
 }: Props) {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [slow, setSlow] = useState(false);
@@ -535,8 +610,8 @@ export function ImportPartialMapPreview({
     if (!viewport) return false;
     const rect = viewport.getBoundingClientRect();
     if (rect.width < 10 || rect.height < 10) return false;
-    const next = fitExtentView(
-      analysis.extent,
+    const next = fitGeoBoxView(
+      bboxToTuple(analysis.extent),
       scene.transform,
       scene.fullViewBox,
       rect.width,
@@ -561,6 +636,30 @@ export function ImportPartialMapPreview({
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [applyFit, fitToken]);
+
+  const focusOn = useCallback<ImportPartialMapHandle["focusOn"]>(
+    (target) => {
+      const viewport = viewportRef.current;
+      if (!scene || !viewport) return;
+      const rect = viewport.getBoundingClientRect();
+      const next = fitGeoBoxView(
+        focusBox(target.bbox, target.centroid),
+        scene.transform,
+        scene.fullViewBox,
+        rect.width,
+        rect.height,
+        maxZoom,
+      );
+      if (!next) return;
+      setPan(next.pan);
+      setZoom(next.zoom);
+      // Listan ligger under kartan; utan detta zoomar man till något man inte ser.
+      viewport.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    },
+    [maxZoom, scene],
+  );
+
+  useImperativeHandle(ref, () => ({ focusOn }), [focusOn]);
 
   const adjustZoom = useCallback((factor: number, focal?: { x: number; y: number }) => {
     const viewport = viewportRef.current;
@@ -1005,6 +1104,8 @@ export function ImportPartialMapPreview({
                       added: overlays.added,
                       modified: overlays.modified,
                     }}
+                    selectedKey={selectedKey}
+                    excludedKeys={excludedKeys}
                   />
                 )}
             </svg>

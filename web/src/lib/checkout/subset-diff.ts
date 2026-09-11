@@ -10,6 +10,7 @@ import {
   objectInEdgeBufferZone,
 } from "./import-partial-polygon";
 import { objectCrossesBbox, objectIntersectsBbox } from "./import-partial-analysis";
+import { importChangeKey } from "./import-partial-types";
 import { compareOcadObjects } from "@/lib/ocad/diff";
 import type { OcadDiffResult, OcadObjectChange, SymbolDiffSummary } from "@/lib/ocad/diff-types";
 import {
@@ -295,10 +296,32 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
   );
 
   let changes = scopedChanges;
+
+  // Redaktören kan kryssa bort enskilda ändringar i importguiden. Integrationen
+  // applicerar exakt den här listan, så en bortkryssad rad når aldrig kartan.
+  const excludedKeys = new Set(selection.importExcluded ?? []);
+  if (excludedKeys.size > 0) {
+    const kept: typeof changes = [];
+    let skipped = 0;
+    for (const change of changes) {
+      if (excludedKeys.has(importChangeKey(change.changeType, change.objectIndex))) {
+        skipped += 1;
+        continue;
+      }
+      kept.push(change);
+    }
+    changes = kept;
+    if (skipped > 0) {
+      outOfScopeWarnings.push(
+        `${skipped} ändringar kryssades bort i importguiden och tillämpas inte — de objekten lämnas orörda.`,
+      );
+    }
+  }
+
   if (importPartial && (importRing || importExtent)) {
     const baselineByIndex = new Map(baselineObjects.map((object) => [object.objectIndex, object]));
-    const kept: typeof scopedChanges = [];
-    for (const change of scopedChanges) {
+    const kept: typeof changes = [];
+    for (const change of changes) {
       if (change.changeType === "added") {
         if (clippedCheckinIndices.has(change.objectIndex)) {
           outOfScopeWarnings.push(

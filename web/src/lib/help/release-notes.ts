@@ -26,6 +26,10 @@ export const releaseNotes: ReleaseNote[] = [
       "Kartan slocknar inte längre när du granskar kanter och ändringar — den ligger alltid kvar under markeringarna så att du kan bedöma om en ändring är rimlig",
       "Markerade objekt ritas med sin egen form i stället för en ruta: ett dike, en stig eller en yta går att känna igen direkt (borttag streckat), och punktobjekt markeras med en ihålig ring så symbolen under syns",
       "Knappen «Bara berörda objekt» heter nu «Dämpa kartan» och lägger bara en slöja över kartan när markeringarna drunknar i kartfärgerna",
+      "Klicka på en rad i ändringslistan så zoomar kartan dit och markerar objektet — du slipper leta reda på det själv",
+      "Ändringar som blivit fel går att kryssa bort i listan: borttaget objekt behålls, tillagt objekt importeras inte och ändrade objekt behåller originalets version",
+      "Bortkryssade ändringar ritas grå i kartan och följer med utcheckningen hela vägen, så de hoppas över även när admin integrerar",
+      "Listan visar nu alla ändringar i området (tidigare bara de 40 första)",
     ],
   },
   {

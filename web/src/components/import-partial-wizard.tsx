@@ -1,10 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ImportPartialMapPreview } from "@/components/import-partial-map-preview";
-import type { ImportPartialAnalysis } from "@/lib/checkout/import-partial-types";
+import {
+  ImportPartialMapPreview,
+  type ImportPartialMapHandle,
+} from "@/components/import-partial-map-preview";
+import {
+  importChangeKey,
+  type ImportDiffSample,
+  type ImportPartialAnalysis,
+} from "@/lib/checkout/import-partial-types";
 import {
   uploadImportPartial,
   type ImportPartialUploadProgress,
@@ -31,6 +38,19 @@ function changeLabel(type: "added" | "removed" | "modified"): string {
   if (type === "added") return "Tillagd";
   if (type === "removed") return "Borttagen";
   return "Ändrad";
+}
+
+function changeTone(type: "added" | "removed" | "modified"): string {
+  if (type === "added") return "text-emerald-700";
+  if (type === "removed") return "text-red-700";
+  return "text-amber-700";
+}
+
+/** Vad som händer med kartan om raden kryssas bort. */
+function skipHint(type: "added" | "removed" | "modified"): string {
+  if (type === "added") return "objektet importeras inte";
+  if (type === "removed") return "objektet behålls i originalet";
+  return "originalets version behålls";
 }
 
 function formatElapsed(totalSec: number): string {
@@ -61,6 +81,10 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
   const [acknowledged, setAcknowledged] = useState(false);
   const [progress, setProgress] = useState<ImportPartialUploadProgress | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [excludedKeys, setExcludedKeys] = useState<ReadonlySet<string>>(() => new Set<string>());
+
+  const mapRef = useRef<ImportPartialMapHandle>(null);
 
   // Endast redan genererad SVG — regenerering av kartbilden kan ta en minut och ge 500.
   const previewUrl = `/api/maps/${mapSlug}/versions/${headVersionId}/preview?cached=1`;
@@ -71,6 +95,40 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
   const canProceedPastSymbols = !symbolBlocked;
   const canCommit = blockers.length === 0;
   const mapMode = step === "extent" || step === "edges" || step === "diff" ? step : null;
+
+  // Listan visar samma ändringar som kartan markerar, så varje rad går att hitta.
+  const listedChanges = useMemo<ImportDiffSample[]>(
+    () => analysis?.diff.mapChanges ?? analysis?.diff.samples ?? [],
+    [analysis],
+  );
+  const totalChanges = analysis
+    ? analysis.diff.added + analysis.diff.removed + analysis.diff.modified
+    : 0;
+  const applied = useMemo(() => {
+    const counts = { added: 0, removed: 0, modified: 0 };
+    for (const change of listedChanges) {
+      if (excludedKeys.has(importChangeKey(change.changeType, change.objectIndex))) continue;
+      counts[change.changeType] += 1;
+    }
+    // Ändringar bortom listans tak kan inte kryssas bort, så de räknas som kvar.
+    const hidden = Math.max(0, totalChanges - listedChanges.length);
+    return { ...counts, hidden };
+  }, [excludedKeys, listedChanges, totalChanges]);
+  const excludedCount = excludedKeys.size;
+
+  function focusChange(change: ImportDiffSample) {
+    setSelectedKey(importChangeKey(change.changeType, change.objectIndex));
+    mapRef.current?.focusOn({ bbox: change.bbox, centroid: change.centroid });
+  }
+
+  function toggleExcluded(change: ImportDiffSample) {
+    const key = importChangeKey(change.changeType, change.objectIndex);
+    setExcludedKeys((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (!loading) {
@@ -143,7 +201,7 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
       const res = await fetch(`/api/maps/${mapSlug}/import-partial/${jobId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ excluded: [...excludedKeys] }),
       });
       const raw = await res.text();
       let data: { error?: string; checkoutId?: string } = {};
@@ -320,10 +378,13 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
 
       {analysis && mapMode && (
         <ImportPartialMapPreview
+          ref={mapRef}
           previewUrl={previewUrl}
           analysis={analysis}
           mode={mapMode}
           areaHref={`/maps/${mapSlug}`}
+          selectedKey={mapMode === "diff" ? selectedKey : null}
+          excludedKeys={excludedKeys}
           title={
             mapMode === "extent" ? "Utbredning" : mapMode === "edges" ? "Kantobjekt" : "Ändringar"
           }
@@ -378,19 +439,75 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
             {analysis.diff.unchanged} oförändrade i området
           </p>
           <p className="text-slate-600">
-            Använd samma kartväxling som i steget Kanter: hela kartan eller bara berörda objekt, och
-            filtrera tillagda / borttagna / ändrade.
+            Klicka på en rad för att zooma dit i kartan. Kryssa ur <span className="font-medium">Ta med</span>{" "}
+            för en ändring som inte ska tillämpas — då lämnas det objektet orört i den stora kartan.
+            Kartväxlingen och lagerfiltren fungerar som i steget Kanter.
           </p>
-          {analysis.diff.samples.length > 0 && (
-            <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white text-xs">
-              {analysis.diff.samples.map((change, index) => (
-                <li key={`${change.objectIndex}-${index}`} className="flex gap-3 px-3 py-2">
-                  <span className="w-20 shrink-0 font-medium">{changeLabel(change.changeType)}</span>
-                  <span className="font-mono text-slate-500">{change.symbolNumber}</span>
-                  <span>{change.symbolName}</span>
-                </li>
-              ))}
-            </ul>
+          {listedChanges.length > 0 && (
+            <div className="rounded-lg border border-slate-200 bg-white">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-2 text-xs text-slate-600">
+                <span>
+                  {listedChanges.length} av {totalChanges} ändringar i listan
+                  {applied.hidden > 0 ? ` (${applied.hidden} visas inte och tas med som de är)` : ""}
+                  {excludedCount > 0 ? ` · ${excludedCount} bortkryssade` : ""}
+                </span>
+                {excludedCount > 0 && (
+                  <button
+                    type="button"
+                    className="rounded-md border border-slate-300 px-2 py-1 font-medium text-slate-700 hover:bg-slate-50"
+                    onClick={() => setExcludedKeys(new Set<string>())}
+                  >
+                    Ta med alla igen
+                  </button>
+                )}
+              </div>
+              <ul className="max-h-96 divide-y divide-slate-100 overflow-y-auto text-xs">
+                {listedChanges.map((change, index) => {
+                  const key = importChangeKey(change.changeType, change.objectIndex);
+                  const excluded = excludedKeys.has(key);
+                  const selected = selectedKey === key;
+                  return (
+                    <li
+                      key={`${key}-${index}`}
+                      className={`flex items-center gap-2 px-3 ${
+                        selected ? "bg-ifk-blue-pale" : ""
+                      } ${excluded ? "text-slate-400" : "text-slate-700"}`}
+                    >
+                      <label className="flex shrink-0 cursor-pointer items-center gap-1.5 py-2">
+                        <input
+                          type="checkbox"
+                          className="rounded border-slate-300"
+                          checked={!excluded}
+                          onChange={() => toggleExcluded(change)}
+                        />
+                        <span className="sr-only">
+                          Ta med {changeLabel(change.changeType).toLowerCase()} {change.symbolName}
+                        </span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => focusChange(change)}
+                        className="flex flex-1 flex-wrap items-center gap-x-3 gap-y-0.5 py-2 text-left hover:underline"
+                        title="Zooma till objektet i kartan"
+                      >
+                        <span
+                          className={`w-20 shrink-0 font-medium ${
+                            excluded ? "text-slate-400" : changeTone(change.changeType)
+                          }`}
+                        >
+                          {changeLabel(change.changeType)}
+                        </span>
+                        <span className="font-mono text-slate-500">{change.symbolNumber}</span>
+                        <span className={excluded ? "line-through" : ""}>{change.symbolName}</span>
+                        {excluded && (
+                          <span className="text-slate-500">— {skipHint(change.changeType)}</span>
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           )}
         </div>
       )}
@@ -412,10 +529,17 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
           </p>
           <ul className="list-disc pl-5">
             <li>
-              {analysis.diff.added} tillägg, {analysis.diff.modified} ändringar, {analysis.diff.removed}{" "}
-              borttagningar (skyddszon {analysis.edgeBufferMeters} m från delkartans innehåll, och
-              klippta objekt jämförs inte som borttag)
+              {applied.added} tillägg, {applied.modified} ändringar, {applied.removed} borttagningar
+              {applied.hidden > 0 ? ` (plus ${applied.hidden} ändringar utanför listan)` : ""} —
+              skyddszon {analysis.edgeBufferMeters} m från delkartans innehåll, och klippta objekt
+              jämförs inte som borttag
             </li>
+            {excludedCount > 0 && (
+              <li className="text-slate-900">
+                {excludedCount} ändringar är bortkryssade och tillämpas inte — de objekten lämnas
+                orörda i den stora kartan
+              </li>
+            )}
             <li>{analysis.likelyClippedCount} objekt markerade som troligen klippta (filtreras bort)</li>
             <li>
               {analysis.headObjectsInArea.toLocaleString("sv-SE")} av{" "}

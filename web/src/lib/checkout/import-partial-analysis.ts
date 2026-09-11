@@ -51,7 +51,8 @@ const DIFF_TOLERANCE_M = Number(process.env.DIFF_SPATIAL_TOLERANCE_M ?? 2);
 const MAX_OUTLINE_POINTS = 24;
 const MAX_EDGE_SAMPLES = 80;
 const MAX_DIFF_SAMPLES = 40;
-const MAX_DIFF_MAP_SAMPLES = 300;
+/** Listan i guiden bygger på samma urval, och bara det som listas går att kryssa bort. */
+const MAX_DIFF_MAP_SAMPLES = 1000;
 const MAX_SYMBOL_ROWS = 80;
 
 /** Centimeter räcker gott för en kontur på skärmen och håller nere svarets storlek. */

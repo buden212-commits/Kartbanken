@@ -2,6 +2,15 @@ import type { Bbox, PolygonRing } from "./types";
 import type { OcadObjectType } from "@/lib/ocad/types";
 import type { ChangeType } from "@/lib/ocad/diff-types";
 
+/**
+ * Nyckel för en enskild ändring. Borttag och ändringar pekar på stora kartans
+ * objectIndex, tillägg på delkartans — samma index som integrationen använder,
+ * så en bortkryssad rad går att hitta igen vid incheckningen.
+ */
+export function importChangeKey(changeType: ChangeType, objectIndex: number): string {
+  return `${changeType}:${objectIndex}`;
+}
+
 export type ImportSymbolRow = {
   number: number;
   nameHead: string;
