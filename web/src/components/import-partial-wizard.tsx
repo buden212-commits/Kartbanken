@@ -332,8 +332,9 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
 
       {analysis && step === "extent" && (
         <p className="text-sm text-slate-600">
-          Blå polygon är delkartans utbredning (rutnätskontur utifrån objekten). Grön streckad linje
-          är den inre kärnan (ca {analysis.edgeBufferMeters ?? 30} m innanför) där borttag jämförs.
+          Blå linje är delkartans utbredning (rutnätskontur utifrån objekten). Det blåtonade bandet
+          innanför är kantzonen (~{analysis.edgeBufferMeters ?? 30} m) där inget raderas
+          automatiskt. Grön streckad linje visar den inre kärnan — där jämförs borttag.
           Fil: <span className="font-medium">{fileName}</span>. Jämför{" "}
           {analysis.headObjectsInArea.toLocaleString("sv-SE")} objekt i området av{" "}
           {analysis.headObjectsTotal.toLocaleString("sv-SE")} på stora kartan.

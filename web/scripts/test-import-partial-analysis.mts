@@ -11,6 +11,7 @@ import {
   padBbox,
 } from "../src/lib/checkout/import-partial-analysis";
 import {
+  bboxFromRing,
   buildImportPolygonFromObjects,
   buildImportPolygonWithMeta,
   buildGridContourFromObjects,
@@ -380,7 +381,56 @@ const head = makeSummary("head.ocd", headObjects, [101, 102, 103], [0, 0, 1000, 
   }
   const meta = buildImportPolygonWithMeta(dense)!;
   assert(meta.ring.length >= 3, "buildImportPolygonWithMeta ska ge ring");
-  assert(meta.edgeSlackMeters > 0, "Rutnätskontur ska rapportera förskjutning utåt");
+  assert(
+    meta.edgeBufferMeters > IMPORT_EDGE_BUFFER_METERS,
+    "Kantzonen ska kompensera för rutnätets förskjutning utåt",
+  );
+  assert(
+    meta.edgeBufferMeters <= 2 * IMPORT_EDGE_BUFFER_METERS,
+    "Kantzonen ska ha tak så den aldrig skenar",
+  );
+  assert(meta.coreRing != null && meta.coreRing.length >= 3, "Inre kärna ska finnas");
+}
+
+{
+  // Ett enda strö-objekt långt bort får inte grovhugga rutnätet och blåsa upp kantzonen.
+  const base: NormalizedOcadObject[] = [];
+  let idx = 3000;
+  for (let x = 0; x <= 1800; x += 15) {
+    for (let y = 0; y <= 1200; y += 15) base.push(makeObject(idx++, 101, [x, y, x + 2, y + 2]));
+  }
+  const clean = buildImportPolygonWithMeta(base)!;
+  const stray = makeObject(999999, 101, [20000, 15000, 20002, 15002]);
+  const withStray = buildImportPolygonWithMeta([...base, stray])!;
+  assert(
+    withStray.edgeBufferMeters === clean.edgeBufferMeters,
+    "Strö-objekt långt bort ska inte ändra kantzonen",
+  );
+  const cleanBox = bboxFromRing(clean.ring)!;
+  const strayBox = bboxFromRing(withStray.ring)!;
+  assert(
+    Math.abs(strayBox.maxX - cleanBox.maxX) < 1 && Math.abs(strayBox.maxY - cleanBox.maxY) < 1,
+    "Strö-objekt långt bort ska inte utvidga utbredningen",
+  );
+}
+
+{
+  // Inre kärnan ska vara ett sant inåtoffset: armarna behålls, viken utesluts.
+  const uShape: NormalizedOcadObject[] = [];
+  let idx = 6000;
+  const push = (x0: number, x1: number, y0: number, y1: number) => {
+    for (let x = x0; x <= x1; x += 10) {
+      for (let y = y0; y <= y1; y += 10) uShape.push(makeObject(idx++, 101, [x, y, x + 2, y + 2]));
+    }
+  };
+  push(0, 1200, 0, 300);
+  push(0, 300, 300, 1200);
+  push(900, 1200, 300, 1200);
+  const core = buildImportPolygonWithMeta(uShape)!.coreRing!;
+  assert(pointInPolygon(150, 800, core), "Mitten av vänster arm ska ligga i kärnan");
+  assert(pointInPolygon(1050, 800, core), "Mitten av höger arm ska ligga i kärnan");
+  assert(!pointInPolygon(600, 800, core), "Öppningen mellan armarna ska ligga utanför kärnan");
+  assert(!pointInPolygon(5, 800, core), "Yttersta kanten ska ligga utanför kärnan");
 }
 
 {

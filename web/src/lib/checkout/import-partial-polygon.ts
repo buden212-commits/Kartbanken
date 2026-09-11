@@ -244,7 +244,11 @@ export function collectObjectSamplePoints(object: NormalizedOcadObject): [number
 
 /** Målstorlek för rutnätscell (meter). Anpassas uppåt för mycket stora utsnitt. */
 export const IMPORT_GRID_CELL_METERS = 15;
-const IMPORT_GRID_MAX_CELLS_PER_SIDE = 320;
+const IMPORT_GRID_MAX_CELLS_PER_SIDE = 640;
+/** Taket på antal celler håller minnet i schack även för avlånga utsnitt. */
+const IMPORT_GRID_MAX_TOTAL_CELLS = 300_000;
+/** Klungor mindre än så här av fotavtrycket räknas som strö-objekt, inte delkarta. */
+const IMPORT_GRID_STRAY_CLUSTER_FRACTION = 0.01;
 
 function cellKey(i: number, j: number): string {
   return `${i},${j}`;
@@ -257,7 +261,12 @@ function parseCellKey(key: string): [number, number] {
 
 function chooseGridCellSize(width: number, height: number): number {
   const span = Math.max(width, height, 1);
-  return Math.max(IMPORT_GRID_CELL_METERS, span / IMPORT_GRID_MAX_CELLS_PER_SIDE);
+  const byArea = Math.sqrt((Math.max(width, 1) * Math.max(height, 1)) / IMPORT_GRID_MAX_TOTAL_CELLS);
+  return Math.max(
+    IMPORT_GRID_CELL_METERS,
+    span / IMPORT_GRID_MAX_CELLS_PER_SIDE,
+    byArea,
+  );
 }
 
 function dilateOccupancyOrtho(occupied: Set<string>): Set<string> {
@@ -300,16 +309,17 @@ function closeSingleCellGaps(occupied: Set<string>): Set<string> {
   return next;
 }
 
-function countOccupancyComponents(occupied: Set<string>): number {
+function occupancyComponents(occupied: Set<string>): string[][] {
   const seen = new Set<string>();
-  let count = 0;
+  const components: string[][] = [];
   for (const start of occupied) {
     if (seen.has(start)) continue;
-    count += 1;
+    const component: string[] = [];
     const stack = [start];
     seen.add(start);
     while (stack.length > 0) {
       const key = stack.pop()!;
+      component.push(key);
       const [i, j] = parseCellKey(key);
       for (const [di, dj] of [
         [-1, 0],
@@ -324,8 +334,35 @@ function countOccupancyComponents(occupied: Set<string>): number {
         }
       }
     }
+    components.push(component);
   }
-  return count;
+  return components;
+}
+
+function countOccupancyComponents(occupied: Set<string>): number {
+  return occupancyComponents(occupied).length;
+}
+
+/** Skalar bort celler med tom ortogonal granne — sant inåtoffset, till skillnad från centroidkrympning. */
+function erodeOccupancyOrtho(occupied: Set<string>, steps: number): Set<string> {
+  let current = occupied;
+  for (let step = 0; step < steps; step++) {
+    const next = new Set<string>();
+    for (const key of current) {
+      const [i, j] = parseCellKey(key);
+      if (
+        current.has(cellKey(i - 1, j)) &&
+        current.has(cellKey(i + 1, j)) &&
+        current.has(cellKey(i, j - 1)) &&
+        current.has(cellKey(i, j + 1))
+      ) {
+        next.add(key);
+      }
+    }
+    if (next.size === 0) return next;
+    current = next;
+  }
+  return current;
 }
 
 /**
@@ -373,7 +410,84 @@ export type GridContourResult = {
   ring: PolygonRing;
   cellMeters: number;
   dilateSteps: number;
+  /** Fotavtryckets celler efter sammankoppling — används för att erodera fram inre kärnan. */
+  cells: Set<string>;
+  originX: number;
+  originY: number;
 };
+
+type GridBounds = { minX: number; minY: number; maxX: number; maxY: number };
+
+function boundsFromSamples(samples: [number, number][]): GridBounds | null {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const [x, y] of samples) {
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  }
+  return Number.isFinite(minX) ? { minX, minY, maxX, maxY } : null;
+}
+
+function markSampleCells(
+  samples: [number, number][],
+  originX: number,
+  originY: number,
+  cell: number,
+): Set<string> {
+  const occupied = new Set<string>();
+  for (const [x, y] of samples) {
+    occupied.add(cellKey(Math.floor((x - originX) / cell), Math.floor((y - originY) / cell)));
+  }
+  return occupied;
+}
+
+/**
+ * Strö-objekt långt från delkartan (kvarglömda symboler, ramar, objekt vid origo)
+ * blåser upp utbredningen och tvingar upp cellstorleken, vilket i sin tur gör
+ * konturen grov och kantzonen orimligt bred. Kör en grov pass och behåll bara de
+ * klungor som faktiskt utgör fotavtrycket.
+ */
+function boundsOfDominantClusters(
+  samples: [number, number][],
+  bounds: GridBounds,
+  coarseCell: number,
+): GridBounds | null {
+  const originX = bounds.minX - coarseCell;
+  const originY = bounds.minY - coarseCell;
+  const occupied = markSampleCells(samples, originX, originY, coarseCell);
+  if (occupied.size === 0) return null;
+
+  const components = occupancyComponents(occupied);
+  if (components.length < 2) return null;
+
+  const minCells = Math.max(2, occupied.size * IMPORT_GRID_STRAY_CLUSTER_FRACTION);
+  let minI = Infinity;
+  let minJ = Infinity;
+  let maxI = -Infinity;
+  let maxJ = -Infinity;
+  for (const component of components) {
+    if (component.length < minCells) continue;
+    for (const key of component) {
+      const [i, j] = parseCellKey(key);
+      minI = Math.min(minI, i);
+      minJ = Math.min(minJ, j);
+      maxI = Math.max(maxI, i);
+      maxJ = Math.max(maxJ, j);
+    }
+  }
+  if (!Number.isFinite(minI)) return null;
+
+  return {
+    minX: originX + minI * coarseCell,
+    minY: originY + minJ * coarseCell,
+    maxX: originX + (maxI + 1) * coarseCell,
+    maxY: originY + (maxJ + 1) * coarseCell,
+  };
+}
 
 /**
  * Bygger fotavtryck från objekt via rutnät och plockar ytterkonturen.
@@ -385,37 +499,61 @@ export function buildGridContourWithMeta(
 ): GridContourResult | null {
   if (objects.length === 0) return null;
 
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  const samples: [number, number][] = [];
+  // collectObjectSamplePoints ger centroid + hörn/vertexkedja, så utbredningen
+  // följer av samma punkter som markerar celler.
+  let samples: [number, number][] = [];
   for (const object of objects) {
     for (const point of collectObjectSamplePoints(object)) {
       samples.push(point);
-      minX = Math.min(minX, point[0]);
-      minY = Math.min(minY, point[1]);
-      maxX = Math.max(maxX, point[0]);
-      maxY = Math.max(maxY, point[1]);
     }
-    minX = Math.min(minX, object.bbox[0], object.centroid[0]);
-    minY = Math.min(minY, object.bbox[1], object.centroid[1]);
-    maxX = Math.max(maxX, object.bbox[2], object.centroid[0]);
-    maxY = Math.max(maxY, object.bbox[3], object.centroid[1]);
   }
-  if (!Number.isFinite(minX) || samples.length === 0) return null;
+  let bounds = boundsFromSamples(samples);
+  if (!bounds || samples.length === 0) return null;
 
-  const width = Math.max(1, maxX - minX);
-  const height = Math.max(1, maxY - minY);
-  const cell = options?.cellMeters ?? chooseGridCellSize(width, height);
+  let cell =
+    options?.cellMeters ??
+    chooseGridCellSize(
+      Math.max(1, bounds.maxX - bounds.minX),
+      Math.max(1, bounds.maxY - bounds.minY),
+    );
+
+  // Bara relevant när utbredningen tvingat upp cellen över målstorleken.
+  if (options?.cellMeters == null && cell > IMPORT_GRID_CELL_METERS) {
+    const trimmed = boundsOfDominantClusters(samples, bounds, cell);
+    const trimmedSpan = trimmed
+      ? Math.max(trimmed.maxX - trimmed.minX, trimmed.maxY - trimmed.minY)
+      : Infinity;
+    const fullSpan = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY);
+    if (trimmed && trimmedSpan < fullSpan * 0.9) {
+      const margin = cell;
+      samples = samples.filter(
+        ([x, y]) =>
+          x >= trimmed.minX - margin &&
+          x <= trimmed.maxX + margin &&
+          y >= trimmed.minY - margin &&
+          y <= trimmed.maxY + margin,
+      );
+      const refined = boundsFromSamples(samples);
+      if (refined) {
+        bounds = refined;
+        cell = chooseGridCellSize(
+          Math.max(1, bounds.maxX - bounds.minX),
+          Math.max(1, bounds.maxY - bounds.minY),
+        );
+      }
+    }
+  }
+
   const pad = cell;
-  const originX = minX - pad;
-  const originY = minY - pad;
+  const originX = bounds.minX - pad;
+  const originY = bounds.minY - pad;
+  const inBounds = (x: number, y: number) =>
+    x >= bounds!.minX - pad &&
+    x <= bounds!.maxX + pad &&
+    y >= bounds!.minY - pad &&
+    y <= bounds!.maxY + pad;
 
-  let occupied = new Set<string>();
-  for (const [x, y] of samples) {
-    occupied.add(cellKey(Math.floor((x - originX) / cell), Math.floor((y - originY) / cell)));
-  }
+  let occupied = markSampleCells(samples, originX, originY, cell);
 
   // Linjer/ytor: fyll celler längs vertexkedjor så fotavtrycket inte blir håligt.
   for (const object of objects) {
@@ -424,12 +562,15 @@ export function buildGridContourWithMeta(
     for (let i = 0; i < verts.length - 1; i++) {
       const a = verts[i]!;
       const b = verts[i + 1]!;
+      if (!inBounds(a[0], a[1]) || !inBounds(b[0], b[1])) continue;
       markLineCells(occupied, a[0], a[1], b[0], b[1], originX, originY, cell);
     }
     if (object.type === "area" && verts.length >= 3) {
       const first = verts[0]!;
       const last = verts[verts.length - 1]!;
-      markLineCells(occupied, last[0], last[1], first[0], first[1], originX, originY, cell);
+      if (inBounds(first[0], first[1]) && inBounds(last[0], last[1])) {
+        markLineCells(occupied, last[0], last[1], first[0], first[1], originX, originY, cell);
+      }
     }
   }
 
@@ -446,7 +587,14 @@ export function buildGridContourWithMeta(
 
   const ring = traceOccupancyOuterRing(occupied, originX, originY, cell);
   if (!ring || ring.length < 3) return null;
-  return { ring: simplifyAxisAlignedRing(ring), cellMeters: cell, dilateSteps };
+  return {
+    ring: simplifyAxisAlignedRing(ring),
+    cellMeters: cell,
+    dilateSteps,
+    cells: occupied,
+    originX,
+    originY,
+  };
 }
 
 export function buildGridContourFromObjects(
@@ -566,13 +714,23 @@ export function simplifyAxisAlignedRing(ring: PolygonRing): PolygonRing {
 export type ImportPolygonResult = {
   ring: PolygonRing;
   /**
-   * Hur långt utanför de yttersta objekten ringen kan ligga (meter).
-   * Rutnätskonturen följer cellkanter och kan dilateras, så den ligger en bit
-   * utanför datat; kantzonen måste kompenseras med detta för att skydda
-   * ~IMPORT_EDGE_BUFFER_METERS av verkligt kartinnehåll.
+   * Kantzon i meter mätt från ringen. Rutnätskonturen följer cellkanter och kan
+   * dilateras, så den ligger en bit utanför datat; zonen kompenseras för det
+   * för att skydda ~IMPORT_EDGE_BUFFER_METERS av verkligt kartinnehåll.
    */
-  edgeSlackMeters: number;
+  edgeBufferMeters: number;
+  /** Inre kärna — sant inåtoffset av ringen, null om utsnittet är för litet. */
+  coreRing: PolygonRing | null;
 };
+
+/**
+ * Kantzonen kompenseras för rutnätets förskjutning, men får aldrig skena.
+ * Utan tak kan en grov cell ge en zon som slukar hela utsnittet.
+ */
+function edgeBufferForSlack(slackMeters: number): number {
+  const slack = Math.min(Math.max(slackMeters, 0), IMPORT_EDGE_BUFFER_METERS);
+  return Math.round(IMPORT_EDGE_BUFFER_METERS + slack);
+}
 
 export function buildImportPolygonWithMeta(
   objects: NormalizedOcadObject[],
@@ -595,7 +753,8 @@ export function buildImportPolygonWithMeta(
         [x + pad, y + pad],
         [x - pad, y + pad],
       ],
-      edgeSlackMeters: pad,
+      edgeBufferMeters: edgeBufferForSlack(pad),
+      coreRing: null,
     };
   }
   if (points.length === 2) {
@@ -608,16 +767,19 @@ export function buildImportPolygonWithMeta(
         [b![0] + pad, b![1] + pad],
         [a![0] - pad, b![1] + pad],
       ],
-      edgeSlackMeters: pad,
+      edgeBufferMeters: edgeBufferForSlack(pad),
+      coreRing: null,
     };
   }
 
   // Primärt: rutnätskontur (följer vikar). Fallback: konkav/konvex hull.
   const grid = buildGridContourWithMeta(objects);
   if (grid && grid.ring.length >= 3 && !ringSelfIntersects(grid.ring)) {
+    const edgeBufferMeters = edgeBufferForSlack(grid.cellMeters * (1 + grid.dilateSteps));
     return {
       ring: grid.ring,
-      edgeSlackMeters: grid.cellMeters * (1 + grid.dilateSteps),
+      edgeBufferMeters,
+      coreRing: coreRingFromGrid(grid, edgeBufferMeters),
     };
   }
 
@@ -631,8 +793,23 @@ export function buildImportPolygonWithMeta(
 
   const hull = concaveHull(hullInput, 3);
   const ring = hull.length >= 3 ? hull : convexHull(hullInput);
-  // Hullen går genom de yttersta punkterna, så ingen förskjutning utåt.
-  return { ring, edgeSlackMeters: 0 };
+  // Hullen går genom de yttersta punkterna, så ingen förskjutning att kompensera.
+  const edgeBufferMeters = edgeBufferForSlack(0);
+  return { ring, edgeBufferMeters, coreRing: shrinkRing(ring, edgeBufferMeters) };
+}
+
+/**
+ * Inre kärna via erosion av fotavtrycket. Till skillnad från shrinkRing (som
+ * skalar mot tyngdpunkten) blir det ett verkligt inåtoffset som följer armar
+ * och vikar. Returnerar den största kärnan om utsnittet delas av erosionen.
+ */
+function coreRingFromGrid(grid: GridContourResult, bufferMeters: number): PolygonRing | null {
+  const steps = Math.round(bufferMeters / grid.cellMeters);
+  if (steps < 1) return grid.ring;
+  const eroded = erodeOccupancyOrtho(grid.cells, steps);
+  if (eroded.size === 0) return null;
+  const ring = traceOccupancyOuterRing(eroded, grid.originX, grid.originY, grid.cellMeters);
+  return ring && ring.length >= 3 ? simplifyAxisAlignedRing(ring) : null;
 }
 
 export function buildImportPolygonFromObjects(

@@ -15,6 +15,9 @@ export const releaseNotes: ReleaseNote[] = [
       "Kartan i Importera delkarta går att zooma och panorera (mushjul, nyp, +/− och dra) — «Återställ» visar utbredningen igen",
       "Färre objekt raderas felaktigt nära snittet: skyddszonen mäts nu mot hela objektet, så en bäck eller stig vars ände når kanten behålls även om mitten ligger långt in",
       "Skyddszonen kompenseras för att rutnätskonturen ligger något utanför objekten — de utlovade ~30 m täcker nu verkligt kartinnehåll (visas som ca 45–60 m i guiden)",
+      "Enstaka strö-objekt långt från delkartan (t.ex. kvarglömda symboler) blåser inte längre upp utbredningen — tidigare kunde de göra kantzonen flera hundra meter bred",
+      "Inre kärnan följer nu delkartans verkliga form, även i U- och L-formade utsnitt där den tidigare kunde hamna i tomma vikar",
+      "Tydligare karta: bara kantzonen tonas blå så att kartan syns oskymd där borttag jämförs, och markörer och linjer håller samma storlek oavsett zoom",
     ],
   },
   {

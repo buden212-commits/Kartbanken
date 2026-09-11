@@ -55,6 +55,12 @@ const MIN_ZOOM = 0.2;
 const ZOOM_IN_FACTOR = 1.5;
 const ZOOM_OUT_FACTOR = 1 / ZOOM_IN_FACTOR;
 const DRAG_THRESHOLD_PX = 5;
+/** Markörernas radie på skärmen. Oberoende av zoom och utsnittets storlek. */
+const MARKER_RADIUS_PX = 5;
+
+function ringToPath(points: [number, number][]): string {
+  return `M ${points.map(([x, y]) => `${x},${y}`).join(" L ")} Z`;
+}
 
 function bboxToTuple(box: Bbox): [number, number, number, number] {
   return [box.minX, box.minY, box.maxX, box.maxY];
@@ -195,11 +201,13 @@ function EdgeMarkers({
   objects,
   transform,
   radius,
+  strokePx,
   showBoxes,
 }: {
   objects: ImportEdgeObject[];
   transform: SvgRootTransform;
   radius: number;
+  strokePx: (px: number) => number;
   showBoxes: boolean;
 }) {
   return (
@@ -218,7 +226,7 @@ function EdgeMarkers({
                 height={box.height}
                 fill={`${fill}33`}
                 stroke={fill}
-                strokeWidth={1.5}
+                strokeWidth={strokePx(1.5)}
                 vectorEffect="non-scaling-stroke"
                 pointerEvents="none"
               />
@@ -228,8 +236,9 @@ function EdgeMarkers({
               cy={cy}
               r={radius}
               fill={fill}
+              fillOpacity={0.9}
               stroke="#fff"
-              strokeWidth={1}
+              strokeWidth={strokePx(1)}
               vectorEffect="non-scaling-stroke"
               pointerEvents="none"
             />
@@ -244,12 +253,14 @@ function DiffMarkers({
   changes,
   transform,
   radius,
+  strokePx,
   showBoxes,
   kinds,
 }: {
   changes: ImportDiffSample[];
   transform: SvgRootTransform;
   radius: number;
+  strokePx: (px: number) => number;
   showBoxes: boolean;
   kinds: { removed: boolean; added: boolean; modified: boolean };
 }) {
@@ -279,7 +290,7 @@ function DiffMarkers({
                 height={box.height}
                 fill={`${fill}33`}
                 stroke={fill}
-                strokeWidth={change.changeType === "removed" ? 1.5 : 1.25}
+                strokeWidth={strokePx(change.changeType === "removed" ? 1.5 : 1.25)}
                 strokeDasharray={change.changeType === "removed" ? "4 3" : undefined}
                 vectorEffect="non-scaling-stroke"
                 pointerEvents="none"
@@ -290,8 +301,9 @@ function DiffMarkers({
               cy={cy}
               r={radius}
               fill={fill}
+              fillOpacity={0.9}
               stroke="#fff"
-              strokeWidth={1}
+              strokeWidth={strokePx(1)}
               vectorEffect="non-scaling-stroke"
               pointerEvents="none"
             />
@@ -319,6 +331,7 @@ export function ImportPartialMapPreview({
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [fitToken, setFitToken] = useState(0);
+  const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const viewStateRef = useRef({ zoom: 1, pan: { x: 0, y: 0 } });
@@ -349,6 +362,17 @@ export function ImportPartialMapPreview({
     setOverlays(defaultOverlays(mode));
     setMapBase("full");
   }, [mode]);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const observer = new ResizeObserver((entries) => {
+      const rect = entries[0]?.contentRect;
+      if (rect) setViewportSize({ width: rect.width, height: rect.height });
+    });
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -589,15 +613,34 @@ export function ImportPartialMapPreview({
     return { kind: "rect" as const, x: minX, y: minY, width, height };
   }, [analysis.coreRing, analysis.extent, analysis.ring, scene]);
 
+  /**
+   * SVG:n är CSS-skalad av zoomen, så både markörer och linjebredder måste
+   * räknas om för att hålla samma storlek på skärmen oavsett zoom och hur
+   * stort utsnittet är. Utan det blir markörerna stora klumpar som täcker kartan.
+   */
+  const userUnitsPerPixel = useMemo(() => {
+    if (!scene || viewportSize.width < 10 || viewportSize.height < 10) return null;
+    const vb = parseViewBoxString(scene.fullViewBox);
+    if (!vb || !(vb.width > 0) || !(vb.height > 0)) return null;
+    const renderScale = Math.min(
+      viewportSize.width / vb.width,
+      viewportSize.height / vb.height,
+    );
+    if (!(renderScale > 0)) return null;
+    return 1 / (renderScale * zoom);
+  }, [scene, viewportSize, zoom]);
+
   const markerRadius = useMemo(() => {
+    if (userUnitsPerPixel) return userUnitsPerPixel * MARKER_RADIUS_PX;
     if (!scene) return 8;
     const [minX, minY, maxX, maxY] = geoBboxToSvgUser(
       bboxToTuple(analysis.extent),
       scene.transform,
     );
-    const span = Math.max(maxX - minX, maxY - minY, 1);
-    return Math.max(span * 0.008, 2);
-  }, [analysis.extent, scene]);
+    return Math.max(Math.max(maxX - minX, maxY - minY, 1) * 0.002, 2);
+  }, [analysis.extent, scene, userUnitsPerPixel]);
+
+  const strokePx = useCallback((px: number) => px / zoom, [zoom]);
 
   const mapChanges = analysis.diff.mapChanges ?? analysis.diff.samples;
   const showOverlayControls = mode === "edges" || mode === "diff";
@@ -770,30 +813,47 @@ export function ImportPartialMapPreview({
                   y={frame.y}
                   width={frame.width}
                   height={frame.height}
-                  fill="rgba(37, 99, 235, 0.12)"
+                  fill="rgba(37, 99, 235, 0.10)"
                   stroke="#1d4ed8"
-                  strokeWidth={2}
+                  strokeWidth={strokePx(1.75)}
                   vectorEffect="non-scaling-stroke"
                   pointerEvents="none"
                 />
               )}
               {frame && frame.kind === "polygon" && (
                 <>
-                  <polygon
-                    points={frame.points.map(([x, y]) => `${x},${y}`).join(" ")}
-                    fill="rgba(37, 99, 235, 0.10)"
+                  {/*
+                    Bara kantzonen tonas (ringen minus kärnan via evenodd) så att
+                    kartan syns oskymd där borttag faktiskt jämförs.
+                  */}
+                  <path
+                    d={
+                      frame.corePoints
+                        ? `${ringToPath(frame.points)} ${ringToPath(frame.corePoints)}`
+                        : ringToPath(frame.points)
+                    }
+                    fillRule="evenodd"
+                    fill="rgba(37, 99, 235, 0.22)"
+                    stroke="none"
+                    pointerEvents="none"
+                  />
+                  <path
+                    d={ringToPath(frame.points)}
+                    fill="none"
                     stroke="#1d4ed8"
-                    strokeWidth={2}
+                    strokeWidth={strokePx(1.75)}
+                    strokeLinejoin="round"
                     vectorEffect="non-scaling-stroke"
                     pointerEvents="none"
                   />
                   {frame.corePoints && (
-                    <polygon
-                      points={frame.corePoints.map(([x, y]) => `${x},${y}`).join(" ")}
-                      fill="rgba(16, 185, 129, 0.08)"
-                      stroke="#059669"
-                      strokeWidth={1.5}
-                      strokeDasharray="6 4"
+                    <path
+                      d={ringToPath(frame.corePoints)}
+                      fill="none"
+                      stroke="#047857"
+                      strokeWidth={strokePx(1.5)}
+                      strokeDasharray={`${strokePx(6)} ${strokePx(4)}`}
+                      strokeLinejoin="round"
                       vectorEffect="non-scaling-stroke"
                       pointerEvents="none"
                     />
@@ -805,6 +865,7 @@ export function ImportPartialMapPreview({
                   objects={analysis.edgeObjects}
                   transform={scene.transform}
                   radius={markerRadius}
+                  strokePx={strokePx}
                   showBoxes={showBoxes}
                 />
               )}
@@ -814,6 +875,7 @@ export function ImportPartialMapPreview({
                     changes={mapChanges}
                     transform={scene.transform}
                     radius={markerRadius * 0.85}
+                    strokePx={strokePx}
                     showBoxes={showBoxes}
                     kinds={{
                       removed: overlays.removed,

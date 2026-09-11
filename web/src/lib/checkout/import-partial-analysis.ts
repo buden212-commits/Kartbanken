@@ -19,7 +19,6 @@ import {
   objectCrossesPolygon,
   objectFullyInsidePolygon,
   objectInEdgeBufferZone,
-  shrinkRing,
 } from "./import-partial-polygon";
 
 export type {
@@ -265,13 +264,11 @@ export function analyzeImportPartial(input: {
   let interiorCount = 0;
   let likelyClippedCount = 0;
   const clippedPartialIndices = new Set<number>();
-  // Rutnätskonturen ligger en bit utanför de yttersta objekten (cellkanter +
-  // ev. dilatering). Kompensera så att ~IMPORT_EDGE_BUFFER_METERS av verkligt
-  // kartinnehåll skyddas, inte tom yta mellan datat och ringen.
-  const edgeBufferMeters = Math.round(
-    IMPORT_EDGE_BUFFER_METERS + (polygon?.edgeSlackMeters ?? 0),
-  );
-  const coreRing = ring ? shrinkRing(activeRing, edgeBufferMeters) : null;
+  // Kantzonen kompenserar för att rutnätskonturen ligger något utanför de
+  // yttersta objekten, så att ~IMPORT_EDGE_BUFFER_METERS verkligt kartinnehåll
+  // skyddas i stället för tom yta mellan datat och ringen.
+  const edgeBufferMeters = polygon?.edgeBufferMeters ?? IMPORT_EDGE_BUFFER_METERS;
+  const coreRing = polygon?.coreRing ?? null;
 
   if (ring) {
     for (const object of input.partial.objects) {
