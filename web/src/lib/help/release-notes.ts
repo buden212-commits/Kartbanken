@@ -8,8 +8,10 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-12",
-    title: "Utcheckning — välj OCAD-version eller Mapper vid nedladdning",
+    title: "Snabbare karta igen — och OCAD/Mapper vid nedladdning",
     items: [
+      "Karttiles är tillbaka i utcheckning, kartförslag, banläggning, felobjekt och helskärm: zoom och panorering är åter smidigare på stora kartor",
+      "Första gången en version öppnas byggs tiles igen med progress (X av Y rutor) — samma beteende som 30 augusti",
       "På utcheckningssidan kan du välja filtyp innan du laddar ner: OCAD (.ocd) eller OpenOrienteering Mapper (.omap)",
       "För .ocd väljer du OCAD-version (10/11/12/2018) — praktiskt om du skapade utcheckningen i ett annat format än din installation",
       "Mapper-exporten ger en native .omap med utcheckningens objekt; öppna i OpenOrienteering Mapper 0.9.6 eller senare",
