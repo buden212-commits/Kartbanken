@@ -253,7 +253,12 @@ export async function HelpPageContent() {
             version, uppladdningsdatum, filstorlek och vem som laddade upp. Listan visas först;
             formuläret <strong>Skapa nytt kartområde</strong> finns under listan.
           </p>
-          <p>Klicka på ett områdesnamn för att öppna detaljsidan med full versionshistorik.</p>
+          <p>
+            Klicka på ett områdesnamn för att öppna detaljsidan. Överst visas eventuell gul banner
+            («Kräver uppmärksamhet»), därefter den publicerade kartan. Versionshistorik (med
+            uppladdning under listan), kartförslag, utcheckningar och banor följer — flera
+            kartsektioner kan fällas ihop/ut. Utcheckningshistorik ligger längst ned.
+          </p>
           {showAdmin && (
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
               <p className="font-medium text-slate-900">Administratörer</p>
@@ -283,7 +288,8 @@ export async function HelpPageContent() {
               <h3 className="font-medium text-slate-900">Ladda upp ny version</h3>
               <HelpList
                 items={[
-                  "Öppna området och välj OCAD-fil (.ocd) i uppladdningsformuläret",
+                  "Öppna området — uppladdningsformuläret finns under versionshistoriken",
+                  "Välj OCAD-fil (.ocd) i uppladdningsformuläret",
                   "Lägg till en valfri kommentar, t.ex. vad som ändrats",
                   "Efter uppladdning jämförs automatiskt mot föregående version",
                   "Nya versioner är opublicerade tills du markerar dem som publicerade",
@@ -384,9 +390,10 @@ export async function HelpPageContent() {
             <>
               <h3 className="font-medium text-slate-900">Synliga överlagringar</h3>
               <p>
-                På områdessidan visas färgade ytor för alla aktiva utcheckningar. Varje färg
-                motsvarar en användare och visar vem som arbetar i området och när utcheckningen
-                skapades. Det hjälper teamet undvika parallella ändringar i samma del av kartan.
+                På områdessidan kan du fälla ut <strong>Utcheckningsområden på kartan</strong> för
+                att se färgade ytor för alla aktiva utcheckningar. Varje färg motsvarar en användare
+                och visar vem som arbetar i området. Det hjälper teamet undvika parallella ändringar
+                i samma del av kartan. Utcheckningshistorik visas längst ned på sidan.
               </p>
             </>
           )}
@@ -553,7 +560,7 @@ export async function HelpPageContent() {
               "«Tala» vid beskrivningen (i webbläsare som stödjer det) låter dig säga ett symbolnamn — det matchas mot kartans symboler och infogas på aktiv markering; «Rensa» tömmer beskrivningsrutan",
               "I dialogen: «Ta foto» öppnar kameran på mobil (direktfoto), «Välj bild» plockar från albumet",
               "Skicka-sektionen ovanför kartan visar antal tillagda ändringar innan du skickar",
-              "Öppna och pågående förslag från alla versioner visas på områdessidans karta (underlag: senaste publicerade version) — klicka markeringen eller ett förslag i listan",
+              "Öppna och pågående förslag från alla versioner visas under «Kartförslag på kartan» på områdessidan (fäll ut sektionen; underlag: senaste publicerade version) — klicka markeringen eller ett förslag i listan",
               "På detaljsidan zoomas kartan automatiskt till markeringen; «Zooma till markering» finns kvar om du vill fokusera om",
               "Växla «Visa kartförslag» i kartvyn för att dölja lagret",
               "Redaktörer markerar som Pågår, Införd eller Avvisad och kan koppla utcheckning",
@@ -582,7 +589,7 @@ export async function HelpPageContent() {
             <HelpList
               items={[
                 "Endast en version kan vara publicerad åt gången per område",
-                "Gul statusbanner på områdessidan när kartförslag väntar, senaste version inte är publicerad eller det finns utcheckade områden — med uppdelning per versionsnummer för kartförslag",
+                "Gul statusbanner överst på områdessidan när kartförslag väntar, senaste version inte är publicerad eller det finns utcheckade områden — med uppdelning per versionsnummer för kartförslag; den publicerade kartan visas direkt under bannern",
                 "Under Kartförslag anges vilken version som är publicerad för läsare",
                 "Kryssa i Publicerad i versionshistoriken för att göra versionen synlig för läsare — tidigare publicerad version avpubliceras då automatiskt",
                 "Versioner med parsningsfel kan inte publiceras",

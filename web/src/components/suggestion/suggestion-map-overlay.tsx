@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { CollapsibleSection } from "@/components/collapsible-section";
 import { DiffMapPanel } from "@/components/diff-map-panel";
 import { type SvgRootTransform } from "@/lib/ocad/svg-coords";
 import {
@@ -10,6 +11,7 @@ import {
   renderSuggestionGeometrySvg,
 } from "@/lib/suggestion/geometry";
 import type { SuggestionOverlayItem, SuggestionSummary } from "@/lib/suggestion/types";
+import { SuggestionStatus } from "@/lib/suggestion/types";
 import { SuggestionListPanel } from "@/components/suggestion/suggestion-list-panel";
 
 export function useSuggestionOverlays(mapSlug: string, mapVersionId?: string | null) {
@@ -192,6 +194,11 @@ export function SuggestionAreaSection({
     requestId: number;
   } | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const openCount = suggestions.filter(
+    (s) =>
+      s.status === SuggestionStatus.OPEN || s.status === SuggestionStatus.IN_PROGRESS,
+  ).length;
+  const [mapSectionOpen, setMapSectionOpen] = useState(openCount > 0);
 
   const zoomToSuggestion = useCallback(
     (suggestionId: string) => {
@@ -200,6 +207,7 @@ export function SuggestionAreaSection({
         .map((item) => item.geometry);
       const bbox = bboxFromSuggestionGeometries(geometries);
       if (!bbox) return;
+      setMapSectionOpen(true);
       fitRequestIdRef.current += 1;
       setFitGeoBbox({ bbox, requestId: fitRequestIdRef.current });
       setHighlightedId(suggestionId);
@@ -209,20 +217,22 @@ export function SuggestionAreaSection({
 
   return (
     <>
-      <section className="mt-10">
-        <h2 className="text-lg font-medium text-slate-900">Kartförslag på kartan</h2>
-        <div className="mt-2">
-          <SuggestionOverviewMap
-            mapSlug={mapSlug}
-            versionId={versionId}
-            versionNumber={versionNumber}
-            fitGeoBbox={fitGeoBbox}
-          />
-        </div>
+      <CollapsibleSection
+        title="Kartförslag på kartan"
+        description="Öppna och pågående markeringar på senaste publicerade version."
+        open={mapSectionOpen}
+        onOpenChange={setMapSectionOpen}
+      >
+        <SuggestionOverviewMap
+          mapSlug={mapSlug}
+          versionId={versionId}
+          versionNumber={versionNumber}
+          fitGeoBbox={fitGeoBbox}
+        />
         <p className="mt-2 text-xs text-slate-500">
           Klicka på ett kartförslag i listan nedan för att zooma kartan till markeringen.
         </p>
-      </section>
+      </CollapsibleSection>
 
       <SuggestionListPanel
         mapSlug={mapSlug}

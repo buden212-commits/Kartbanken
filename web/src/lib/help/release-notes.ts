@@ -7,6 +7,16 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-09-12",
+    title: "Områdessidan — tydligare layout",
+    items: [
+      "Publicerad karta visas överst på områdessidan (efter gul statusbanner när något kräver uppmärksamhet)",
+      "Kartförslag på kartan och utcheckningsområden kan fällas ihop/ut",
+      "Ladda upp ny version ligger under versionshistoriken",
+      "Utcheckningshistorik ligger längst ned på sidan",
+    ],
+  },
+  {
     date: "2026-08-30",
     title: "Utcheckning — stora kartor",
     items: [

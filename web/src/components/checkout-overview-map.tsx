@@ -19,7 +19,7 @@ export function CheckoutOverviewMap({ mapSlug, headVersionId, checkouts }: Props
   }));
 
   return (
-    <div className="mt-4">
+    <div>
       <CheckoutMapPanel
         previewUrl={`/api/maps/${mapSlug}/versions/${headVersionId}/preview`}
         mapSlug={mapSlug}
