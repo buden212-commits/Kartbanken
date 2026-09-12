@@ -142,7 +142,8 @@ const SuggestionCreateMapPanel = memo(function SuggestionCreateMapPanel({
       mapSlug={mapSlug}
       versionId={versionId}
       basemap="tiles"
-      exportEnabled={false}
+      exportEnabled
+      promptOcdSuggestionSymbols
       interactionMode={mapMode}
       drawPointerHandlers={mapMode === "draw" ? drawPointerHandlers : undefined}
       onDrawInterrupt={onDrawInterrupt}

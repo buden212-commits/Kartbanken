@@ -97,6 +97,11 @@ type Props = {
   /** "tiles" = rasterpyramid för stora kartor (utcheckning / kartförslag). Default SVG. */
   basemap?: "svg" | "tiles";
   exportEnabled?: boolean;
+  /**
+   * When true, OCD export with «Exportera endast kartförslag» opens the symbol dialog.
+   * Used under «Föreslå ändringar». On Visa karta symbols are auto-picked server-side.
+   */
+  promptOcdSuggestionSymbols?: boolean;
   fullscreen?: boolean;
   focusTarget?: FocusTarget | null;
   selectedChange?: OcadObjectChange | null;
@@ -313,6 +318,7 @@ export function DiffMapPanel({
   versionId,
   basemap = "svg",
   exportEnabled = true,
+  promptOcdSuggestionSymbols = false,
   fullscreen = false,
   focusTarget,
   selectedChange,
@@ -765,13 +771,28 @@ export function DiffMapPanel({
    * Fetch it on demand so export stays available without slowing down viewing.
    */
   const ensureFullSvg = useCallback(async (): Promise<string | null> => {
-    if (fullSvgText) return fullSvgText;
+    if (fullSvgText) {
+      if (mapLayers.length === 0) {
+        const { ocadLayers } = extractSvgInner(fullSvgText);
+        if (ocadLayers.length > 0) {
+          setMapLayers(ocadLayers);
+          setLayerVisibility(initialLayerVisibility(ocadLayers));
+          onOcadLayersReady?.(ocadLayers);
+        }
+      }
+      return fullSvgText;
+    }
     setPreparingExport(true);
     try {
       const text = await fetchPreviewText(previewUrl);
-      const { ocadCrs: crs, ocadFileVersion } = extractSvgInner(text);
+      const { ocadCrs: crs, ocadFileVersion, ocadLayers } = extractSvgInner(text);
       setFullSvgText(text);
       if (crs) setOcadCrs(crs);
+      if (ocadLayers.length > 0) {
+        setMapLayers(ocadLayers);
+        setLayerVisibility(initialLayerVisibility(ocadLayers));
+        onOcadLayersReady?.(ocadLayers);
+      }
       setExportSettings((prev) => ({
         ...prev,
         ocadVersion: defaultOcadExportVersion(ocadFileVersion),
@@ -785,7 +806,7 @@ export function DiffMapPanel({
     } finally {
       setPreparingExport(false);
     }
-  }, [fullSvgText, previewUrl]);
+  }, [fullSvgText, previewUrl, mapLayers.length, onOcadLayersReady]);
 
   const startExportMode = useCallback(() => {
     setExportError(null);
@@ -943,13 +964,29 @@ export function DiffMapPanel({
       if (!svgText) return;
     }
 
-    if (exportSettings.outputFormat === "ocd" && exportSettings.includeSuggestions) {
+    if (
+      promptOcdSuggestionSymbols &&
+      exportSettings.outputFormat === "ocd" &&
+      exportSettings.includeSuggestions
+    ) {
+      // Symbol dialog needs layer metadata — load full SVG first in tile mode.
+      const svgText = await ensureFullSvg();
+      if (!svgText) return;
       setOcdSymbolDialogOpen(true);
       return;
     }
 
     await performExport();
-  }, [exportFrame, exportSettings.outputFormat, exportSettings.includeSuggestions, performExport, fullSvgText, ensureFullSvg]);
+  }, [
+    exportFrame,
+    exportSettings.outputFormat,
+    exportSettings.includeSuggestions,
+    promptOcdSuggestionSymbols,
+    mapLayers.length,
+    performExport,
+    fullSvgText,
+    ensureFullSvg,
+  ]);
 
   const viewStateRef = useRef({ pan: { x: 0, y: 0 }, zoom: FIT_WHOLE_ZOOM });
   viewStateRef.current = { pan, zoom };
@@ -1700,6 +1737,7 @@ export function DiffMapPanel({
           exporting={exporting || preparingExport}
           error={exportError}
           suggestionOverlayCount={suggestionOverlays?.length}
+          promptOcdSuggestionSymbols={promptOcdSuggestionSymbols}
         />
       )}
 

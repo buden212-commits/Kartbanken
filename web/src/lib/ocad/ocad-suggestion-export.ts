@@ -330,6 +330,36 @@ function geometryToObjectSpec(
   }
 }
 
+export async function autoPickOcdSuggestionSymbols(
+  buffer: Buffer,
+): Promise<OcdSuggestionSymbolMapping> {
+  const ocadFile = await readOcad(buffer, { quietWarnings: true });
+
+  const pick = (expectedTypes: number[], label: string): number => {
+    for (const symbol of ocadFile.symbols) {
+      if (expectedTypes.includes(symbol.type) && Number.isFinite(symbol.symNum) && symbol.symNum > 0) {
+        return symbol.symNum;
+      }
+    }
+    for (const obj of ocadFile.objects) {
+      if (!isActiveObject(obj)) continue;
+      const inferred = inferSymbolTypeFromObjects(ocadFile, obj.sym);
+      if (inferred != null && expectedTypes.includes(inferred) && obj.sym > 0) {
+        return obj.sym;
+      }
+    }
+    throw new Error(
+      `Kunde inte hitta en ${label}-symbol i kartfilen för export av kartförslag.`,
+    );
+  };
+
+  return {
+    point: pick([OCAD_POINT_SYMBOL], "punkt"),
+    line: pick([OCAD_LINE_SYMBOL, OCAD_LINE_TEXT_SYMBOL], "linje"),
+    area: pick([OCAD_AREA_SYMBOL, OCAD_RECTANGLE_SYMBOL], "yta"),
+  };
+}
+
 export function validateOcdSuggestionSymbolMapping(
   value: unknown,
 ): OcdSuggestionSymbolMapping | null {

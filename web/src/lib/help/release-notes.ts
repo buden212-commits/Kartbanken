@@ -15,6 +15,8 @@ export const releaseNotes: ReleaseNote[] = [
       "På utcheckningssidan kan du välja filtyp innan du laddar ner: OCAD (.ocd) eller OpenOrienteering Mapper (.omap)",
       "För .ocd väljer du OCAD-version (10/11/12/2018) — praktiskt om du skapade utcheckningen i ett annat format än din installation",
       "Mapper-exporten ger en native .omap med utcheckningens objekt; öppna i OpenOrienteering Mapper 0.9.6 eller senare",
+      "Vid Visa karta → Exportera utsnitt behöver du inte längre välja «Symboler för kartförslag» — symboler väljs automatiskt från kartan",
+      "Dialogen «Symboler för kartförslag» visas bara när du exporterar OCD under Föreslå ändringar",
     ],
   },
   {
