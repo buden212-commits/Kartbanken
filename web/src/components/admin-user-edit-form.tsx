@@ -14,6 +14,7 @@ export type EditableUser = {
   role: string;
   receiveNotifications: boolean;
   receiveOcdAttachment: boolean;
+  canFieldEdit: boolean;
 };
 
 type UpdateResult = { ok: true } | { ok: false; error: string };
@@ -39,6 +40,9 @@ function AdminUserEditFormPanel({
   const isSelf = user.id === currentUserId;
   const canSubscribe = canSubscribeToNotifications(user.role);
   const showOcdAttachment = canReceiveOcdAttachment(user.role as RoleType);
+  const showFieldEditGrant =
+    user.role === Role.READER || user.role === Role.EDITOR;
+  const isAdminRole = user.role === Role.ADMIN;
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -171,6 +175,30 @@ function AdminUserEditFormPanel({
               </span>
             </label>
             )}
+          </div>
+        )}
+        {showFieldEditGrant && (
+          <div className="sm:col-span-2 lg:col-span-4">
+            <label className="inline-flex cursor-pointer items-start gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                name="canFieldEdit"
+                defaultChecked={user.canFieldEdit}
+                disabled={pending}
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-ifk-blue focus:ring-ifk-blue/20"
+              />
+              <span>
+                <span className="font-medium text-slate-900">Fältredigering</span>
+                <span className="mt-0.5 block text-xs text-slate-500">
+                  Får checka ut max 1 km² och redigera kartan direkt i webben (OCAD light).
+                </span>
+              </span>
+            </label>
+          </div>
+        )}
+        {isAdminRole && (
+          <div className="sm:col-span-2 lg:col-span-4 text-sm text-slate-600">
+            Administratörer har alltid rätt till fältredigering.
           </div>
         )}
       </div>

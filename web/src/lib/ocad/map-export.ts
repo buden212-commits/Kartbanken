@@ -7,7 +7,7 @@ import { parseOcadMapScale } from "./svg-utils";
 export type ExportScale = 5000 | 7500 | 10000;
 export type ExportFormat = "A4" | "A3";
 export type ExportOrientation = "portrait" | "landscape";
-export type ExportOutputFormat = "pdf" | "ocd" | "geotiff";
+export type ExportOutputFormat = "pdf" | "ocd" | "omap" | "geotiff";
 
 export type ExportSettings = {
   scale: ExportScale;
@@ -378,6 +378,46 @@ export async function downloadMapOcd(
   URL.revokeObjectURL(url);
 
   return { versionWarning, suggestionWarnings };
+}
+
+export async function downloadMapOmap(
+  mapSlug: string,
+  versionId: string,
+  frame: ExportFrame,
+  fileName: string,
+): Promise<{ warnings?: string }> {
+  validateExportFrame(frame);
+
+  const response = await fetch(`/api/maps/${mapSlug}/versions/${versionId}/export-omap`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      svgFrame: {
+        centerX: frame.centerX,
+        centerY: frame.centerY,
+        widthUnits: frame.widthUnits,
+        heightUnits: frame.heightUnits,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(payload?.error ?? "Mapper-export (.omap) misslyckades");
+  }
+
+  const blob = await response.blob();
+  const warningsHeader = response.headers.get("X-Omap-Warnings");
+  const warnings = warningsHeader ? decodeURIComponent(warningsHeader) : undefined;
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName.endsWith(".omap") ? fileName : `${fileName}.omap`;
+  link.click();
+  URL.revokeObjectURL(url);
+
+  return { warnings };
 }
 
 export async function downloadMapGeoTiff(

@@ -3,7 +3,7 @@ import { canCheckout, canViewCheckouts } from "@/lib/auth/permissions";
 import { detectCheckoutConflicts } from "@/lib/checkout/overlap";
 import {
   createCheckout,
-  findActiveCheckoutsForMap,
+  findActiveAreaLocksForMap,
   findActiveOverlapCandidates,
   getCheckoutById,
   getHeadVersionId,
@@ -38,7 +38,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Kartfil hittades inte" }, { status: 404 });
   }
 
-  const checkouts = await findActiveCheckoutsForMap(map.id);
+  const checkouts = await findActiveAreaLocksForMap(map.id);
   return NextResponse.json({
     checkouts: checkouts.map(serializeCheckoutResponse),
   });

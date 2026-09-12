@@ -53,7 +53,7 @@ export type CheckoutOverlay = {
 
 
 
-type DrawTool = "rectangle" | "polygon";
+type DrawTool = "pan" | "rectangle" | "polygon";
 
 
 
@@ -88,7 +88,11 @@ type Props = {
   onOcadVersionChange?: (version: OcadExportVersion) => void;
 
   sourceOcadVersionLabel?: string;
-
+  hideOcadVersion?: boolean;
+  createButtonLabel?: string;
+  createLoadingLabel?: string;
+  areaHint?: string | null;
+  polygonOnly?: boolean;
 };
 
 
@@ -206,10 +210,14 @@ export function CheckoutMapPanel({
   onOcadVersionChange,
 
   sourceOcadVersionLabel,
-
+  hideOcadVersion = false,
+  createButtonLabel = "Checka ut område",
+  createLoadingLabel = "Skapar utcheckning…",
+  areaHint = null,
+  polygonOnly = false,
 }: Props) {
 
-  const [tool, setTool] = useState<DrawTool>("rectangle");
+  const [tool, setTool] = useState<DrawTool>("pan");
 
   const [draftBbox, setDraftBbox] = useState<Bbox | null>(null);
 
@@ -298,39 +306,22 @@ export function CheckoutMapPanel({
 
 
   const handlePointerDown = useCallback(
-
     (e: React.PointerEvent, svg: SVGSVGElement) => {
-
-      if (disabled) return;
-
+      if (disabled || tool === "pan") return;
       const pt = screenToSvgPoint(svg, e.clientX, e.clientY);
-
       if (!pt) return;
 
-
-
       if (tool === "rectangle") {
-
         dragRef.current = { start: pt, current: pt };
-
         setDraftBbox(null);
-
         setPolygonPoints([]);
-
       } else {
-
         const [gx, gy] = svgUserToGeoPoint(pt, rootTransformRef.current);
-
         setPolygonPoints((prev) => [...prev, [gx, gy]]);
-
         setDraftBbox(null);
-
       }
-
     },
-
     [disabled, tool],
-
   );
 
 
@@ -404,24 +395,15 @@ export function CheckoutMapPanel({
 
 
   const confirmDraft = useCallback(() => {
-
-    if (tool === "rectangle" && draftBbox) {
-
+    // Confirm based on draft content so Panorera can stay selected after drawing.
+    if (draftBbox) {
       finalizeSelection({ type: CheckoutSelectionType.BBOX, bbox: draftBbox });
-
       return;
-
     }
-
-
-
-    if (tool === "polygon" && polygonPoints.length >= 3) {
-
+    if (polygonPoints.length >= 3) {
       finalizeSelection({ type: CheckoutSelectionType.POLYGON, ring: polygonPoints });
-
     }
-
-  }, [draftBbox, finalizeSelection, polygonPoints, tool]);
+  }, [draftBbox, finalizeSelection, polygonPoints]);
 
 
 
@@ -531,110 +513,74 @@ export function CheckoutMapPanel({
 
 
 
+  const canConfirmDraft = draftBbox != null || polygonPoints.length >= 3;
+
   const drawToolbar = (
-
     <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2">
-
       <span className="text-sm font-medium text-slate-700">Verktyg:</span>
-
       <button
-
         type="button"
-
         disabled={disabled}
-
-        onClick={() => {
-
-          setTool("rectangle");
-
-          resetDraft();
-
-        }}
-
+        onClick={() => setTool("pan")}
         className={`rounded-md px-3 py-1.5 text-sm ${
-
-          tool === "rectangle"
-
+          tool === "pan"
             ? "bg-ifk-blue text-white"
-
             : "border border-slate-300 text-slate-700"
-
         }`}
-
       >
-
-        Rektangel
-
+        Panorera
       </button>
-
-      <button
-
-        type="button"
-
-        disabled={disabled}
-
-        onClick={() => {
-
-          setTool("polygon");
-
-          resetDraft();
-
-        }}
-
-        className={`rounded-md px-3 py-1.5 text-sm ${
-
-          tool === "polygon"
-
-            ? "bg-ifk-blue text-white"
-
-            : "border border-slate-300 text-slate-700"
-
-        }`}
-
-      >
-
-        Polygon
-
-      </button>
-
-      <button
-
-        type="button"
-
-        disabled={disabled}
-
-        onClick={resetDraft}
-
-        className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700"
-
-      >
-
-        Rensa
-
-      </button>
-
-      {!disabled && (
-
+      {!polygonOnly && (
         <button
-
           type="button"
-
-          disabled={tool === "rectangle" ? !draftBbox : polygonPoints.length < 3}
-
-          onClick={confirmDraft}
-
-          className="ml-auto rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-
+          disabled={disabled}
+          onClick={() => {
+            setTool("rectangle");
+            resetDraft();
+          }}
+          className={`rounded-md px-3 py-1.5 text-sm ${
+            tool === "rectangle"
+              ? "bg-ifk-blue text-white"
+              : "border border-slate-300 text-slate-700"
+          }`}
         >
-
-          Bekräfta område
-
+          Rektangel
         </button>
-
       )}
-
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => {
+          setTool("polygon");
+          resetDraft();
+        }}
+        className={`rounded-md px-3 py-1.5 text-sm ${
+          tool === "polygon"
+            ? "bg-ifk-blue text-white"
+            : "border border-slate-300 text-slate-700"
+        }`}
+      >
+        Polygon
+      </button>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={resetDraft}
+        className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700"
+      >
+        Rensa
+      </button>
+      {!disabled && (
+        <button
+          type="button"
+          disabled={!canConfirmDraft}
+          onClick={confirmDraft}
+          className="ml-auto rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+        >
+          Bekräfta område
+        </button>
+      )}
     </div>
-
   );
 
 
@@ -646,14 +592,12 @@ export function CheckoutMapPanel({
       <p className="border-b border-slate-100 px-3 py-2 text-xs text-slate-500">
 
         {disabled
-
           ? "Färgade ytor visar befintliga utcheckningsområden."
-
-          : tool === "rectangle"
-
-            ? "Dra en rektangel på kartan. Använd +/− eller scrollhjul för att zooma."
-
-            : "Klicka hörn (minst 3), klicka Bekräfta område."}
+          : tool === "pan"
+            ? "Panorera och zooma kartan. Välj Polygon (eller Rektangel) när du ska rita området."
+            : tool === "rectangle"
+              ? "Dra en rektangel på kartan. Använd +/− eller scrollhjul för att zooma."
+              : "Klicka hörn (minst 3), klicka Bekräfta område."}
 
       </p>
 
@@ -680,89 +624,52 @@ export function CheckoutMapPanel({
         <div className="space-y-2 border-b border-emerald-100 bg-emerald-50 px-3 py-2">
 
           <p className="text-sm text-emerald-800">
-
             Område valt (
-
             {confirmedSelection.selectionType === CheckoutSelectionType.BBOX
-
               ? "rektangel"
-
               : "polygon"}
-
             ).
-
+            {areaHint ? ` ${areaHint}` : ""}
           </p>
 
-          {onCreateCheckout && onOcadVersionChange && (
-
+          {onCreateCheckout && (
             <div className="flex flex-wrap items-end gap-3">
-
-              <div>
-
-                <label htmlFor="checkout-ocad-version" className="text-xs font-medium text-slate-700">
-
-                  OCAD-format för utcheckning
-
-                </label>
-
-                <select
-
-                  id="checkout-ocad-version"
-
-                  value={ocadVersion}
-
-                  onChange={(e) =>
-
-                    onOcadVersionChange(Number(e.target.value) as OcadExportVersion)
-
-                  }
-
-                  className="form-select mt-1 min-w-[140px]"
-
-                >
-
-                  {OCAD_EXPORT_VERSIONS.map((opt) => (
-
-                    <option key={opt.value} value={opt.value}>
-
-                      {opt.label}
-
-                    </option>
-
-                  ))}
-
-                </select>
-
-                {sourceOcadVersionLabel && (
-
-                  <p className="mt-1 text-xs text-slate-500">
-
-                    Källkarta: {sourceOcadVersionLabel}
-
-                  </p>
-
-                )}
-
-              </div>
+              {!hideOcadVersion && onOcadVersionChange && (
+                <div>
+                  <label htmlFor="checkout-ocad-version" className="text-xs font-medium text-slate-700">
+                    OCAD-format för utcheckning
+                  </label>
+                  <select
+                    id="checkout-ocad-version"
+                    value={ocadVersion}
+                    onChange={(e) =>
+                      onOcadVersionChange(Number(e.target.value) as OcadExportVersion)
+                    }
+                    className="form-select mt-1 min-w-[140px]"
+                  >
+                    {OCAD_EXPORT_VERSIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                  {sourceOcadVersionLabel && (
+                    <p className="mt-1 text-xs text-slate-500">
+                      Källkarta: {sourceOcadVersionLabel}
+                    </p>
+                  )}
+                </div>
+              )}
 
               <button
-
                 type="button"
-
                 disabled={disabled || createLoading}
-
                 onClick={onCreateCheckout}
-
                 className="shrink-0 rounded-md bg-ifk-blue px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
-
               >
-
-                {createLoading ? "Skapar utcheckning…" : "Checka ut område"}
-
+                {createLoading ? createLoadingLabel : createButtonLabel}
               </button>
-
             </div>
-
           )}
 
         </div>
@@ -803,15 +710,16 @@ export function CheckoutMapPanel({
 
         versionId={versionId}
 
+        basemap="tiles"
+
         exportEnabled={false}
 
         headerContent={<span className="text-sm font-medium text-slate-800">Karta</span>}
 
         renderSvgOverlay={renderSvgOverlay}
 
-        interactionMode={disabled ? "navigate" : "draw"}
-
-        drawPointerHandlers={disabled ? undefined : drawPointerHandlers}
+        interactionMode={disabled || tool === "pan" ? "navigate" : "draw"}
+        drawPointerHandlers={disabled || tool === "pan" ? undefined : drawPointerHandlers}
 
         unboxed
 

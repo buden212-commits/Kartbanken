@@ -36,6 +36,7 @@ const userListSelect = {
   lastLoginAt: true,
   receiveNotifications: true,
   receiveOcdAttachment: true,
+  canFieldEdit: true,
 } as const;
 
 type ListedUser = {
@@ -47,6 +48,7 @@ type ListedUser = {
   lastLoginAt: Date | null;
   receiveNotifications: boolean;
   receiveOcdAttachment: boolean;
+  canFieldEdit: boolean;
 };
 
 async function requireAdmin() {
@@ -252,7 +254,7 @@ async function updateUser(formData: FormData): Promise<{ ok: true } | { ok: fals
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, email: true, role: true, receiveNotifications: true, receiveOcdAttachment: true },
+    select: { id: true, name: true, email: true, role: true, receiveNotifications: true, receiveOcdAttachment: true, canFieldEdit: true },
   });
   if (!user) {
     return { ok: false, error: "Användaren hittades inte" };
@@ -287,6 +289,9 @@ async function updateUser(formData: FormData): Promise<{ ok: true } | { ok: fals
     receiveNotifications &&
     canReceiveOcdAttachment(nextRole) &&
     formData.get("receiveOcdAttachment") === "on";
+  const canFieldEditGranted =
+    (nextRole === Role.READER || nextRole === Role.EDITOR) &&
+    formData.get("canFieldEdit") === "on";
   const data: {
     name: string | null;
     email: string;
@@ -296,12 +301,14 @@ async function updateUser(formData: FormData): Promise<{ ok: true } | { ok: fals
     approvedById?: string | null;
     receiveNotifications: boolean;
     receiveOcdAttachment: boolean;
+    canFieldEdit: boolean;
   } = {
     name,
     email,
     role: nextRole,
     receiveNotifications,
     receiveOcdAttachment,
+    canFieldEdit: nextRole === Role.ADMIN ? true : canFieldEditGranted,
   };
 
   if (password) {
@@ -335,8 +342,9 @@ async function updateUser(formData: FormData): Promise<{ ok: true } | { ok: fals
       role: user.role,
       receiveNotifications: user.receiveNotifications,
       receiveOcdAttachment: user.receiveOcdAttachment,
+      canFieldEdit: user.canFieldEdit,
     },
-    next: { name, email, role: nextRole, receiveNotifications, receiveOcdAttachment },
+    next: { name, email, role: nextRole, receiveNotifications, receiveOcdAttachment, canFieldEdit: data.canFieldEdit },
     passwordChanged: Boolean(password),
   });
 
@@ -566,6 +574,9 @@ export default async function AdminUsersPage() {
               <p className="mt-1 break-all text-sm text-slate-600">{user.email}</p>
               <p className="mt-2 text-xs text-slate-500">
                 <span className="font-mono">{user.role}</span> ({roleLabel(user.role as RoleType)})
+                {user.canFieldEdit && user.role !== Role.ADMIN && (
+                  <span className="ml-2 text-ifk-blue">· Fältredigering</span>
+                )}
               </p>
               <p className="mt-1 text-xs text-slate-500">
                 Skapad {user.createdAt.toLocaleDateString("sv-SE")} · Senaste inloggning{" "}
@@ -623,6 +634,9 @@ export default async function AdminUsersPage() {
                     <span className="ml-2 text-slate-500">
                       ({roleLabel(user.role as RoleType)})
                     </span>
+                    {user.canFieldEdit && user.role !== Role.ADMIN && (
+                      <span className="ml-2 text-xs text-ifk-blue">Fältredigering</span>
+                    )}
                   </td>
                   <td className="py-3 pr-4 text-slate-500">
                     {user.createdAt.toLocaleDateString("sv-SE")}

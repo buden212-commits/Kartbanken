@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "MapCheckout" ADD COLUMN "mode" TEXT NOT NULL DEFAULT 'OCAD_DESKTOP';
+ALTER TABLE "MapCheckout" ADD COLUMN "editOpsJson" TEXT;

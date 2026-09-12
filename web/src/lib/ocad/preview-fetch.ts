@@ -26,8 +26,27 @@ function toLoadError(err: unknown): Error {
   return new Error("Kunde inte ladda kartbild");
 }
 
+/** Normalize so `…/preview` and `…/preview?direct=1` share cache/inflight. */
+export function previewCacheKey(url: string): string {
+  try {
+    const parsed = new URL(
+      url,
+      typeof window !== "undefined" ? window.location.origin : "http://localhost",
+    );
+    parsed.searchParams.delete("direct");
+    const search = parsed.searchParams.toString();
+    return search ? `${parsed.pathname}?${search}` : parsed.pathname;
+  } catch {
+    return url.replace(/([?&])direct=1(&|$)/, "$1").replace(/[?&]$/, "");
+  }
+}
+
 export function clearPreviewCache(url?: string): void {
   if (url) {
+    const key = previewCacheKey(url);
+    previewCache.delete(key);
+    inflight.delete(key);
+    // Also drop the raw key if an older caller stored it un-normalized.
     previewCache.delete(url);
     inflight.delete(url);
     return;
@@ -98,9 +117,7 @@ async function fetchPreviewFromNetwork(
           response.status,
         );
       }
-      const text = await readSvgBody(response, signal);
-      previewCache.set(url, text);
-      return text;
+      return await readSvgBody(response, signal);
     } catch (err) {
       if (signal?.aborted) throw abortError();
       // HTTP-fel (404/500) ska inte retrys:s — det förlänger bara en gateway-timeout.
@@ -120,17 +137,28 @@ export async function fetchPreviewText(
     throw abortError();
   }
 
+  const key = previewCacheKey(url);
+
   if (!options?.bypassCache) {
-    const cached = previewCache.get(url);
+    const cached = previewCache.get(key);
     if (cached) return cached;
   }
 
-  let pending = inflight.get(url);
+  let pending = inflight.get(key);
   if (!pending) {
-    pending = fetchPreviewFromNetwork(url, options?.signal).finally(() => {
-      inflight.delete(url);
-    });
-    inflight.set(url, pending);
+    // Shared network fetch must NOT use a caller AbortSignal. In React Strict Mode
+    // (and remounts), the first effect aborts on cleanup; if that signal is tied to
+    // the shared request, the remounted effect joins the same promise and surfaces
+    // "Laddning avbröts" even though its own signal is still live.
+    pending = fetchPreviewFromNetwork(url)
+      .then((text) => {
+        previewCache.set(key, text);
+        return text;
+      })
+      .finally(() => {
+        inflight.delete(key);
+      });
+    inflight.set(key, pending);
   }
 
   if (!options?.signal) {

@@ -5,7 +5,7 @@ import { AdminNav } from "@/components/admin-nav";
 import { HelpSectionHeading } from "@/components/help-link-icon";
 import { canAdmin } from "@/lib/auth/permissions";
 import { findPendingAdminCheckouts } from "@/lib/checkout/repository";
-import { checkoutStatusLabel, CheckoutStatus } from "@/lib/checkout/types";
+import { CheckoutMode, checkoutModeLabel, checkoutStatusLabel, CheckoutStatus } from "@/lib/checkout/types";
 import { formatDate } from "@/lib/format";
 
 export default async function AdminCheckoutsPage() {
@@ -28,15 +28,17 @@ export default async function AdminCheckoutsPage() {
         </HelpSectionHeading>
         <p className="mt-1 text-sm text-slate-600">
           Användaren har bekräftat diff — admin måste integrera innan ändringarna blir en ny version.
+          Gäller både OCAD-utcheckningar och fältredigeringar.
         </p>
 
         {pending.length === 0 ? (
           <p className="mt-4 text-sm text-slate-500">Inga utcheckningar väntar just nu.</p>
         ) : (
           <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
-            <table className="w-full min-w-[640px] text-sm">
+            <table className="w-full min-w-[720px] text-sm">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-500">
+                  <th className="px-4 py-3 font-medium">Typ</th>
                   <th className="px-4 py-3 font-medium">Område</th>
                   <th className="px-4 py-3 font-medium">Ägare</th>
                   <th className="px-4 py-3 font-medium">Bekräftad</th>
@@ -45,34 +47,40 @@ export default async function AdminCheckoutsPage() {
                 </tr>
               </thead>
               <tbody>
-                {pending.map((row) => (
-                  <tr key={row.id} className="border-b border-slate-100 last:border-0">
-                    <td className="px-4 py-3">
-                      <Link href={`/maps/${row.mapFile.slug}`} className="link-primary">
-                        {row.mapFile.title}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {row.user.name ?? row.user.email}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {row.userConfirmedAt
-                        ? formatDate(row.userConfirmedAt)
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {checkoutStatusLabel(row.status as CheckoutStatus)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/maps/${row.mapFile.slug}/checkout/${row.id}`}
-                        className="text-ifk-blue hover:underline"
-                      >
-                        Granska och integrera
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
+                {pending.map((row) => {
+                  const isFieldEdit = row.mode === CheckoutMode.FIELD_EDIT;
+                  const href = isFieldEdit
+                    ? `/maps/${row.mapFile.slug}/field-edit/${row.id}`
+                    : `/maps/${row.mapFile.slug}/checkout/${row.id}`;
+                  return (
+                    <tr key={row.id} className="border-b border-slate-100 last:border-0">
+                      <td className="px-4 py-3 text-slate-600">
+                        {checkoutModeLabel(row.mode as never)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Link href={`/maps/${row.mapFile.slug}`} className="link-primary">
+                          {row.mapFile.title}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 text-slate-700">
+                        {row.user.name ?? row.user.email}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {row.userConfirmedAt
+                          ? formatDate(row.userConfirmedAt)
+                          : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {checkoutStatusLabel(row.status as CheckoutStatus)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Link href={href} className="text-ifk-blue hover:underline">
+                          Granska och integrera
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

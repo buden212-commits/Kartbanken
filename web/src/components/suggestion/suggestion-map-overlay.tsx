@@ -163,6 +163,8 @@ export function SuggestionOverviewMap({
         title="Kartförslag på kartan"
         mapSlug={mapSlug}
         versionId={versionId}
+        basemap="tiles"
+        exportEnabled={false}
         renderSvgOverlay={renderOverlay}
         fitGeoBbox={fitGeoBbox}
       />

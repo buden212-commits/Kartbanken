@@ -1,9 +1,9 @@
 import { requireSession } from "@/lib/auth/api";
 import { canCheckout } from "@/lib/auth/permissions";
 import {
-  analyzeExistingImportPartialJob,
-  createAndAnalyzeImportPartial,
+  createImportPartialFromUpload,
   initImportPartialJob,
+  startImportPartialAnalysis,
 } from "@/lib/checkout/import-partial";
 import { getHeadVersionId } from "@/lib/checkout/repository";
 import { prisma } from "@/lib/prisma";
@@ -94,7 +94,7 @@ export async function POST(request: Request, { params }: RouteParams) {
   }
 
   try {
-    const job = await createAndAnalyzeImportPartial({
+    const job = await createImportPartialFromUpload({
       userId: session.user.id,
       mapFileId: map.id,
       mapSlug: slug,
@@ -105,12 +105,13 @@ export async function POST(request: Request, { params }: RouteParams) {
       jobId: job.id,
       headVersionId: job.headVersionId,
       fileName: job.fileName,
-      analysis: job.analysis,
+      status: job.status,
+      progress: job.progress,
     });
   } catch (err) {
-    console.error("Import partial analyze failed:", err);
+    console.error("Import partial upload failed:", err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Kunde inte analysera delkartan" },
+      { error: err instanceof Error ? err.message : "Kunde inte spara delkartan" },
       { status: 500 },
     );
   }
@@ -140,17 +141,22 @@ export async function PUT(request: Request, { params }: RouteParams) {
   }
 
   try {
-    const job = await analyzeExistingImportPartialJob(body.jobId, session.user.id);
-    if (job.mapFileId !== map.id) {
-      return NextResponse.json({ error: "Jobbet tillhör ett annat område" }, { status: 403 });
-    }
+    const job = await startImportPartialAnalysis({
+      jobId: body.jobId,
+      userId: session.user.id,
+      mapFileId: map.id,
+    });
     return NextResponse.json({
       jobId: job.id,
       headVersionId: job.headVersionId,
       fileName: job.fileName,
+      status: job.status,
+      progress: job.progress,
       analysis: job.analysis,
+      error: job.error,
     });
   } catch (err) {
+    console.error("Import partial analyze failed:", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Kunde inte analysera delkartan" },
       { status: 400 },

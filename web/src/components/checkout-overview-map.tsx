@@ -2,6 +2,7 @@
 
 import { CheckoutMapPanel, OVERLAY_COLORS } from "@/components/checkout-map-panel";
 import type { CheckoutListItem } from "@/components/checkout-list-panel";
+import { CheckoutMode, checkoutModeLabel } from "@/lib/checkout/types";
 
 type Props = {
   mapSlug: string;
@@ -34,7 +35,12 @@ export function CheckoutOverviewMap({ mapSlug, headVersionId, checkouts }: Props
               className="inline-block h-3 w-3 rounded-sm border border-slate-400"
               style={{ backgroundColor: OVERLAY_COLORS[index % OVERLAY_COLORS.length] }}
             />
-            {checkout.user.name ?? checkout.user.email}
+            <span>
+              {checkout.user.name ?? checkout.user.email}
+              {checkout.mode === CheckoutMode.FIELD_EDIT && (
+                <span className="text-slate-500"> · {checkoutModeLabel(checkout.mode as never)}</span>
+              )}
+            </span>
           </li>
         ))}
       </ul>

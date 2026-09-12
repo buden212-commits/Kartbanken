@@ -313,6 +313,16 @@ export function defaultControlNumberGeoPoint(
   return [cx + offset, cy - mmToOcadUnits(0.5)];
 }
 
+export function renderControlNumberNearPoint(
+  cx: number,
+  cy: number,
+  number: number,
+  opacity = 1,
+  textRotationDeg = COURSE_TEXT_ROTATION_DEG,
+): string {
+  return renderControlNumber(cx, cy, number, IOF_MAGENTA, opacity, textRotationDeg);
+}
+
 function renderControlNumber(
   cx: number,
   cy: number,

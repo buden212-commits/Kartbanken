@@ -37,10 +37,16 @@ type OcadObjectProperties = {
   text?: string;
 };
 
-export async function parseOcadBuffer(
+export type ParsedOcadBuffer = {
+  summary: OcadParseSummary;
+  /** Rå ocad2geojson-fil — återanvänds för SVG-rendering utan ny inläsning. */
+  ocadFile: unknown;
+};
+
+export async function parseOcadBufferWithFile(
   buffer: Buffer,
   fileName: string,
-): Promise<OcadParseSummary> {
+): Promise<ParsedOcadBuffer> {
   const started = Date.now();
   const ocadFile = await readOcad(buffer, { quietWarnings: true });
   // generateSymbolElements must stay false: decorative symbol parts become GeoJSON
@@ -57,13 +63,24 @@ export async function parseOcadBuffer(
     symbolNames,
   );
 
-  return summarizeParseResult({
-    fileName,
-    fileSizeBytes: buffer.byteLength,
-    parseDurationMs: Date.now() - started,
+  return {
+    summary: summarizeParseResult({
+      fileName,
+      fileSizeBytes: buffer.byteLength,
+      parseDurationMs: Date.now() - started,
+      ocadFile,
+      objects,
+    }),
     ocadFile,
-    objects,
-  });
+  };
+}
+
+export async function parseOcadBuffer(
+  buffer: Buffer,
+  fileName: string,
+): Promise<OcadParseSummary> {
+  const { summary } = await parseOcadBufferWithFile(buffer, fileName);
+  return summary;
 }
 
 export async function parseOcadFile(filePath: string): Promise<OcadParseSummary> {

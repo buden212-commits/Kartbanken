@@ -30,6 +30,8 @@ export async function GET(_request: Request, { params }: RouteParams) {
     jobId: job.id,
     headVersionId: job.headVersionId,
     fileName: job.fileName,
+    status: job.status,
+    progress: job.progress ?? null,
     analysis: job.analysis,
     error: job.error,
   });
@@ -48,9 +50,9 @@ export async function POST(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Kartfil hittades inte" }, { status: 404 });
   }
 
-  let body: { comment?: string } = {};
+  let body: { comment?: string; excluded?: string[] } = {};
   try {
-    body = (await request.json()) as { comment?: string };
+    body = (await request.json()) as { comment?: string; excluded?: string[] };
   } catch {
     body = {};
   }
@@ -62,6 +64,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       mapFileId: map.id,
       mapSlug: slug,
       comment: body.comment,
+      excluded: Array.isArray(body.excluded) ? body.excluded : undefined,
     });
     return NextResponse.json(result);
   } catch (err) {

@@ -5,9 +5,10 @@ alwaysApply: true
 
 # Deploy till Vercel
 
-När användaren ber om deploy / produktion:
+**Alltid deploya** när du är klar med appändringar (efter commit och push) — vänta inte på att användaren ber om det. Användaren ska kunna testa i produktion utan extra steg.
 
-1. Kör `npm run deploy:prod` i `web/` (använder `VERCEL_TOKEN`).
+1. Kör `npm run deploy:check && npm run deploy:prod` i `web/` (använder `VERCEL_TOKEN`).
 2. Om token saknas: be användaren lägga till Cursor Secret `VERCEL_TOKEN` (Runtime Secret) från https://vercel.com/account/tokens — committa aldrig token.
 3. Push till `main` triggar också GitHub Action `Deploy production` om samma secret finns i GitHub Actions.
 4. Använd inte interaktiv `vercel login` som enda strategi — den sparas inte mellan cloud-agenter.
+5. Rapportera produktions-URL när deployen är klar.

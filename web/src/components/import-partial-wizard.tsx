@@ -1,20 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ImportPartialMapPreview } from "@/components/import-partial-map-preview";
-import type { ImportPartialAnalysis } from "@/lib/checkout/import-partial-types";
-import { uploadImportPartial } from "@/lib/upload-client";
+import {
+  ImportPartialMapPreview,
+  type ImportPartialMapHandle,
+} from "@/components/import-partial-map-preview";
+import {
+  importChangeKey,
+  type ImportDiffSample,
+  type ImportPartialAnalysis,
+} from "@/lib/checkout/import-partial-types";
+import {
+  uploadImportPartial,
+  type ImportPartialUploadProgress,
+} from "@/lib/upload-client";
 
 type StepId = "upload" | "symbols" | "extent" | "edges" | "diff" | "confirm";
 
 const STEPS: { id: StepId; title: string; hint: string }[] = [
   { id: "upload", title: "1. Välj fil", hint: "Ladda upp den redigerade delkartan (.ocd)." },
   { id: "symbols", title: "2. Symboler", hint: "Kontrollera att symbolnumren stämmer med den stora kartan." },
-  { id: "extent", title: "3. Läge", hint: "Ramen ska ligga på rätt ställe på den stora kartan." },
-  { id: "edges", title: "4. Kanter", hint: "Objekt som skär ramen klipps inte — de får inte radera originalet utanför." },
-  { id: "diff", title: "5. Ändringar", hint: "Tillagt, borttaget och ändrat inne i området." },
+  { id: "extent", title: "3. Läge", hint: "Polygonen ska ligga på rätt ställe på den stora kartan." },
+  { id: "edges", title: "4. Kanter", hint: "Kantzon (~30 m) och klippta objekt jämförs inte som borttag — originalet utanför/kärnan skyddas." },
+  { id: "diff", title: "5. Ändringar", hint: "Tillagt, borttaget och ändrat i den inre kärnan av polygonen." },
   { id: "confirm", title: "6. Bekräfta", hint: "Skapar en utcheckning i efterhand. Inget slås ihop förrän du och admin bekräftar." },
 ];
 
@@ -30,6 +40,36 @@ function changeLabel(type: "added" | "removed" | "modified"): string {
   return "Ändrad";
 }
 
+function changeTone(type: "added" | "removed" | "modified"): string {
+  if (type === "added") return "text-emerald-700";
+  if (type === "removed") return "text-red-700";
+  return "text-amber-700";
+}
+
+/** Vad som händer med kartan om raden kryssas bort. */
+function skipHint(type: "added" | "removed" | "modified"): string {
+  if (type === "added") return "objektet importeras inte";
+  if (type === "removed") return "objektet behålls i originalet";
+  return "originalets version behålls";
+}
+
+function formatElapsed(totalSec: number): string {
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  if (m <= 0) return `${s} s`;
+  return `${m} min ${s.toString().padStart(2, "0")} s`;
+}
+
+function WorkingSpinner({ className = "" }: { className?: string }) {
+  return (
+    <div
+      className={`mx-auto h-9 w-9 animate-spin rounded-full border-2 border-slate-300 border-t-ifk-blue ${className}`}
+      role="status"
+      aria-label="Arbetar"
+    />
+  );
+}
+
 export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props) {
   const router = useRouter();
   const [step, setStep] = useState<StepId>("upload");
@@ -39,6 +79,13 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
+  const [progress, setProgress] = useState<ImportPartialUploadProgress | null>(null);
+  const [elapsedSec, setElapsedSec] = useState(0);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [excludedKeys, setExcludedKeys] = useState<ReadonlySet<string>>(() => new Set<string>());
+
+  const mapRef = useRef<ImportPartialMapHandle>(null);
+  const listRef = useRef<HTMLUListElement>(null);
 
   // Endast redan genererad SVG — regenerering av kartbilden kan ta en minut och ge 500.
   const previewUrl = `/api/maps/${mapSlug}/versions/${headVersionId}/preview?cached=1`;
@@ -50,27 +97,106 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
   const canCommit = blockers.length === 0;
   const mapMode = step === "extent" || step === "edges" || step === "diff" ? step : null;
 
+  // Listan visar samma ändringar som kartan markerar, så varje rad går att hitta.
+  const listedChanges = useMemo<ImportDiffSample[]>(
+    () => analysis?.diff.mapChanges ?? analysis?.diff.samples ?? [],
+    [analysis],
+  );
+  const totalChanges = analysis
+    ? analysis.diff.added + analysis.diff.removed + analysis.diff.modified
+    : 0;
+  const applied = useMemo(() => {
+    const counts = { added: 0, removed: 0, modified: 0 };
+    for (const change of listedChanges) {
+      if (excludedKeys.has(importChangeKey(change.changeType, change.objectIndex))) continue;
+      counts[change.changeType] += 1;
+    }
+    // Ändringar bortom listans tak kan inte kryssas bort, så de räknas som kvar.
+    const hidden = Math.max(0, totalChanges - listedChanges.length);
+    return { ...counts, hidden };
+  }, [excludedKeys, listedChanges, totalChanges]);
+  const excludedCount = excludedKeys.size;
+
+  function focusChange(change: ImportDiffSample) {
+    setSelectedKey(importChangeKey(change.changeType, change.objectIndex));
+    mapRef.current?.focusOn({ bbox: change.bbox, centroid: change.centroid });
+  }
+
+  /** Klick i kartan väljer raden och rullar fram den — annars syns valet inte. */
+  function selectFromMap(change: ImportDiffSample | null) {
+    if (!change) {
+      setSelectedKey(null);
+      return;
+    }
+    const key = importChangeKey(change.changeType, change.objectIndex);
+    setSelectedKey(key);
+    listRef.current
+      ?.querySelector(`[data-row-key="${CSS.escape(key)}"]`)
+      ?.scrollIntoView({ block: "nearest" });
+  }
+
+  function toggleExcluded(change: ImportDiffSample) {
+    const key = importChangeKey(change.changeType, change.objectIndex);
+    setExcludedKeys((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
+  }
+
+  useEffect(() => {
+    if (!loading) {
+      setElapsedSec(0);
+      return;
+    }
+    const started = Date.now();
+    setElapsedSec(0);
+    const timer = window.setInterval(() => {
+      setElapsedSec(Math.floor((Date.now() - started) / 1000));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [loading]);
+
   async function onFile(file: File | undefined) {
     if (!file) return;
     setError(null);
     setLoading(true);
     setAcknowledged(false);
+    setProgress({
+      status: "uploading",
+      label: "Laddar upp delkartan",
+      detail: file.name,
+    });
     try {
-      const res = await uploadImportPartial(mapSlug, file);
-      const data = (await res.json()) as {
+      const res = await uploadImportPartial(mapSlug, file, {
+        onProgress: (next) => setProgress(next),
+      });
+      const raw = await res.text();
+      let data: {
         error?: string;
         jobId?: string;
         analysis?: ImportPartialAnalysis;
         fileName?: string;
-      };
+      } = {};
+      try {
+        data = raw ? (JSON.parse(raw) as typeof data) : {};
+      } catch {
+        throw new Error(
+          res.ok
+            ? "Servern svarade felaktigt. Försök igen."
+            : `Kunde inte analysera filen (HTTP ${res.status}). Stora kartor kan ta flera minuter — försök igen.`,
+        );
+      }
       if (!res.ok) throw new Error(data.error ?? "Kunde inte analysera filen");
       if (!data.jobId || !data.analysis) throw new Error("Ogiltigt svar från servern");
       setJobId(data.jobId);
       setAnalysis(data.analysis);
       setFileName(data.fileName ?? file.name);
+      setProgress(null);
       setStep("symbols");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Kunde inte analysera filen");
+      setProgress(null);
     } finally {
       setLoading(false);
     }
@@ -80,11 +206,16 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
     if (!jobId) return;
     setError(null);
     setLoading(true);
+    setProgress({
+      status: "analyzing",
+      label: "Skapar utcheckning",
+      detail: "Exporterar urval och checkar in delkartan…",
+    });
     try {
       const res = await fetch(`/api/maps/${mapSlug}/import-partial/${jobId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ excluded: [...excludedKeys] }),
       });
       const raw = await res.text();
       let data: { error?: string; checkoutId?: string } = {};
@@ -102,6 +233,7 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
       router.push(`/maps/${mapSlug}/checkout/${data.checkoutId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Kunde inte skapa utcheckning");
+      setProgress(null);
       setLoading(false);
     }
   }
@@ -150,7 +282,7 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
         </p>
       )}
 
-      {step === "upload" && (
+      {step === "upload" && !loading && (
         <label className="block rounded-xl border border-dashed border-slate-300 bg-white px-4 py-8 text-center">
           <input
             type="file"
@@ -159,13 +291,43 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
             disabled={loading}
             onChange={(event) => void onFile(event.target.files?.[0])}
           />
-          <span className="text-sm font-medium text-ifk-blue">
-            {loading ? "Analyserar delkartan…" : "Välj .ocd-fil"}
-          </span>
+          <span className="text-sm font-medium text-ifk-blue">Välj .ocd-fil</span>
           <span className="mt-1 block text-xs text-slate-500">
             Samma karta som området, redigerad i OCAD — även om den aldrig checkades ut här.
           </span>
         </label>
+      )}
+
+      {step === "upload" && loading && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-8 text-center">
+          <WorkingSpinner className="border-amber-300 border-t-amber-700" />
+          <p className="mt-4 text-sm font-medium text-amber-950">
+            {progress?.label ?? "Analyserar delkartan…"}
+          </p>
+          {progress?.detail && (
+            <p className="mx-auto mt-2 max-w-md text-sm text-slate-700">{progress.detail}</p>
+          )}
+          <p className="mt-3 text-xs text-amber-900/80">
+            Förfluten tid: {formatElapsed(elapsedSec)}
+            {elapsedSec >= 60
+              ? " — stora kartor (t.ex. Mora Väst) kan ta flera minuter att parsa."
+              : ""}
+          </p>
+          <p className="mt-2 text-xs text-slate-500">
+            Sidan uppdaterar status automatiskt medan analysen körs.
+          </p>
+        </div>
+      )}
+
+      {step === "confirm" && loading && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-6 text-center">
+          <WorkingSpinner className="border-amber-300 border-t-amber-700" />
+          <p className="mt-3 text-sm font-medium text-amber-950">
+            {progress?.label ?? "Skapar utcheckning…"}
+          </p>
+          {progress?.detail && <p className="mt-1 text-sm text-slate-700">{progress.detail}</p>}
+          <p className="mt-2 text-xs text-amber-900/80">Förfluten tid: {formatElapsed(elapsedSec)}</p>
+        </div>
       )}
 
       {analysis && step === "symbols" && (
@@ -230,10 +392,14 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
 
       {analysis && mapMode && (
         <ImportPartialMapPreview
+          ref={mapRef}
           previewUrl={previewUrl}
           analysis={analysis}
           mode={mapMode}
           areaHref={`/maps/${mapSlug}`}
+          selectedKey={mapMode === "diff" ? selectedKey : null}
+          excludedKeys={excludedKeys}
+          onSelectChange={mapMode === "diff" ? selectFromMap : undefined}
           title={
             mapMode === "extent" ? "Utbredning" : mapMode === "edges" ? "Kantobjekt" : "Ändringar"
           }
@@ -242,21 +408,32 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
 
       {analysis && step === "extent" && (
         <p className="text-sm text-slate-600">
-          Blå ram är delkartans utbredning. Zooma och kontrollera att den ligger rätt. Fil:{" "}
-          <span className="font-medium">{fileName}</span>.
+          Blå linje är delkartans utbredning (rutnätskontur utifrån objekten). Blåtonat = skyddad
+          zon där inget raderas automatiskt: {analysis.edgeBufferMeters ?? 60} m in från delkartans
+          innehåll, plus eventuella tomrum där delkartan inte ritat något. Innanför den gröna
+          streckade linjen jämförs borttag. Fil: <span className="font-medium">{fileName}</span>.
+          Jämför{" "}
+          {analysis.headObjectsInArea.toLocaleString("sv-SE")} objekt i området av{" "}
+          {analysis.headObjectsTotal.toLocaleString("sv-SE")} på stora kartan.
         </p>
       )}
 
       {analysis && step === "edges" && (
         <div className="space-y-2 text-sm text-slate-600">
           <p>
-            Orange/rött = kantobjekt som skär eller slutar vid ramen ({analysis.edgeCount} visade).
-            Rött betyder troligen klippt ({analysis.likelyClippedCount} st).{" "}
-            {analysis.interiorCount} objekt ligger helt inne i området.
+            Orange/rött = kantobjekt som skär, ligger i skyddszonen ({analysis.edgeBufferMeters} m
+            från delkartans innehåll) eller är klippta ({analysis.edgeCount} visade). Rött betyder
+            troligen klippt (
+            {analysis.likelyClippedCount} st) och räknas inte som ändring.{" "}
+            {analysis.interiorCount} objekt ligger i den inre kärnan. Zonen mäts mot hela objektet,
+            så en bäck eller stig som når kanten skyddas även om mitten ligger långt in. Objekt i
+            tomrum där delkartan inte har något innehåll behålls också.
           </p>
           <p>
-            Växla mellan <span className="font-medium">Hela kartan</span> och{" "}
-            <span className="font-medium">Bara berörda objekt</span> för tydligare överblick. Kryssa i{" "}
+            Kartan visas alltid under markeringarna så att du kan bedöma varje ändring i sitt
+            sammanhang; <span className="font-medium">Dämpa kartan</span> lägger en slöja över den
+            när markeringarna drunknar i kartfärgerna. Linjer och ytor ritas med sin egen form,
+            punktobjekt som ring. Kryssa i{" "}
             <span className="font-medium">Raderas i original</span>,{" "}
             <span className="font-medium">Nya i delkartan</span> och{" "}
             <span className="font-medium">Ändrade / ersatta</span> för att jämföra vad som tas bort
@@ -277,24 +454,90 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
             {analysis.diff.unchanged} oförändrade i området
           </p>
           <p className="text-slate-600">
-            Använd samma kartväxling som i steget Kanter: hela kartan eller bara berörda objekt, och
-            filtrera tillagda / borttagna / ändrade.
+            Klicka på en rad för att zooma dit i kartan, eller på en markering i kartan för att
+            välja raden. Kryssa ur <span className="font-medium">Ta med</span> för en ändring som
+            inte ska tillämpas — då lämnas det objektet orört i den stora kartan. Kartväxlingen och
+            lagerfiltren fungerar som i steget Kanter.
           </p>
-          {analysis.diff.samples.length > 0 && (
-            <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white text-xs">
-              {analysis.diff.samples.map((change, index) => (
-                <li key={`${change.objectIndex}-${index}`} className="flex gap-3 px-3 py-2">
-                  <span className="w-20 shrink-0 font-medium">{changeLabel(change.changeType)}</span>
-                  <span className="font-mono text-slate-500">{change.symbolNumber}</span>
-                  <span>{change.symbolName}</span>
-                </li>
-              ))}
-            </ul>
+          <p className="text-slate-600">
+            Ett objekt som flyttats syns ofta som både borttaget och tillagt. Kryssar du bara bort
+            borttaget hamnar båda versionerna på kartan — kryssa bort båda raderna om objektet ska
+            stå kvar oförändrat.
+          </p>
+          {listedChanges.length > 0 && (
+            <div className="rounded-lg border border-slate-200 bg-white">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-3 py-2 text-xs text-slate-600">
+                <span>
+                  {listedChanges.length} av {totalChanges} ändringar i listan
+                  {applied.hidden > 0 ? ` (${applied.hidden} visas inte och tas med som de är)` : ""}
+                  {excludedCount > 0 ? ` · ${excludedCount} bortkryssade` : ""}
+                </span>
+                {excludedCount > 0 && (
+                  <button
+                    type="button"
+                    className="rounded-md border border-slate-300 px-2 py-1 font-medium text-slate-700 hover:bg-slate-50"
+                    onClick={() => setExcludedKeys(new Set<string>())}
+                  >
+                    Ta med alla igen
+                  </button>
+                )}
+              </div>
+              <ul
+                ref={listRef}
+                className="max-h-96 divide-y divide-slate-100 overflow-y-auto text-xs"
+              >
+                {listedChanges.map((change, index) => {
+                  const key = importChangeKey(change.changeType, change.objectIndex);
+                  const excluded = excludedKeys.has(key);
+                  const selected = selectedKey === key;
+                  return (
+                    <li
+                      key={`${key}-${index}`}
+                      data-row-key={key}
+                      className={`flex items-center gap-2 px-3 ${
+                        selected ? "bg-ifk-blue-pale" : ""
+                      } ${excluded ? "text-slate-400" : "text-slate-700"}`}
+                    >
+                      <label className="flex shrink-0 cursor-pointer items-center gap-1.5 py-2">
+                        <input
+                          type="checkbox"
+                          className="rounded border-slate-300"
+                          checked={!excluded}
+                          onChange={() => toggleExcluded(change)}
+                        />
+                        <span className="sr-only">
+                          Ta med {changeLabel(change.changeType).toLowerCase()} {change.symbolName}
+                        </span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => focusChange(change)}
+                        className="flex flex-1 flex-wrap items-center gap-x-3 gap-y-0.5 py-2 text-left hover:underline"
+                        title="Zooma till objektet i kartan"
+                      >
+                        <span
+                          className={`w-20 shrink-0 font-medium ${
+                            excluded ? "text-slate-400" : changeTone(change.changeType)
+                          }`}
+                        >
+                          {changeLabel(change.changeType)}
+                        </span>
+                        <span className="font-mono text-slate-500">{change.symbolNumber}</span>
+                        <span className={excluded ? "line-through" : ""}>{change.symbolName}</span>
+                        {excluded && (
+                          <span className="text-slate-500">— {skipHint(change.changeType)}</span>
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           )}
         </div>
       )}
 
-      {analysis && step === "confirm" && (
+      {analysis && step === "confirm" && !loading && (
         <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
           {otherBlockers.length > 0 && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-800">
@@ -311,10 +554,22 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
           </p>
           <ul className="list-disc pl-5">
             <li>
-              {analysis.diff.added} tillägg, {analysis.diff.modified} ändringar, {analysis.diff.removed}{" "}
-              borttagningar (kantöverskridande objekt raderas inte automatiskt)
+              {applied.added} tillägg, {applied.modified} ändringar, {applied.removed} borttagningar
+              {applied.hidden > 0 ? ` (plus ${applied.hidden} ändringar utanför listan)` : ""} —
+              skyddszon {analysis.edgeBufferMeters} m från delkartans innehåll, och klippta objekt
+              jämförs inte som borttag
             </li>
-            <li>{analysis.likelyClippedCount} objekt markerade som troligen klippta</li>
+            {excludedCount > 0 && (
+              <li className="text-slate-900">
+                {excludedCount} ändringar är bortkryssade och tillämpas inte — de objekten lämnas
+                orörda i den stora kartan
+              </li>
+            )}
+            <li>{analysis.likelyClippedCount} objekt markerade som troligen klippta (filtreras bort)</li>
+            <li>
+              {analysis.headObjectsInArea.toLocaleString("sv-SE")} av{" "}
+              {analysis.headObjectsTotal.toLocaleString("sv-SE")} objekt på stora kartan ingår i jämförelsen
+            </li>
           </ul>
           <label className="flex items-start gap-2">
             <input

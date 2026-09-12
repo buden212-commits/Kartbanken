@@ -1,6 +1,15 @@
-import type { Bbox } from "./types";
+import type { Bbox, PolygonRing } from "./types";
 import type { OcadObjectType } from "@/lib/ocad/types";
 import type { ChangeType } from "@/lib/ocad/diff-types";
+
+/**
+ * Nyckel för en enskild ändring. Borttag och ändringar pekar på stora kartans
+ * objectIndex, tillägg på delkartans — samma index som integrationen använder,
+ * så en bortkryssad rad går att hitta igen vid incheckningen.
+ */
+export function importChangeKey(changeType: ChangeType, objectIndex: number): string {
+  return `${changeType}:${objectIndex}`;
+}
 
 export type ImportSymbolRow = {
   number: number;
@@ -17,6 +26,8 @@ export type ImportEdgeObject = {
   centroid: [number, number];
   bbox: [number, number, number, number];
   likelyClipped: boolean;
+  /** Glesad vertexkedja för linjer/ytor, så kartbilden kan rita objektets form. */
+  outline?: [number, number][];
 };
 
 export type ImportDiffSample = {
@@ -27,10 +38,31 @@ export type ImportDiffSample = {
   type: OcadObjectType;
   centroid: [number, number];
   bbox: [number, number, number, number];
+  /** Glesad vertexkedja för linjer/ytor, så kartbilden kan rita objektets form. */
+  outline?: [number, number][];
 };
 
 export type ImportPartialAnalysis = {
+  /** Omslutande rektangel (för zoom/bakåtkompatibilitet). */
   extent: Bbox;
+  /** Faktiskt jämförelseområde — konkav hull av delkartans objekt. */
+  ring: PolygonRing;
+  /** Största kärnringen; tom om utsnittet är för litet. Kvar för bakåtkompatibilitet. */
+  coreRing: PolygonRing;
+  /**
+   * Kärnans rand som flera ringar (even-odd): ytterkontur plus tomrum där
+   * delkartan saknar innehåll. Allt innanför ringen men utanför kärnan är
+   * skyddad zon där inget raderas automatiskt.
+   */
+  coreRings: PolygonRing[];
+  /** Skyddad zon i meter, mätt från delkartans innehåll. Siffran som visas. */
+  edgeBufferMeters: number;
+  /** Samma zon mätt från konturen, som ligger utanför innehållet. */
+  ringBufferMeters: number;
+  /** Antal objekt på stora kartan som faktiskt jämförs (efter AABB+polygon). */
+  headObjectsInArea: number;
+  /** Totalt antal objekt på stora kartan (för status). */
+  headObjectsTotal: number;
   extentInsideHead: boolean;
   headBounds: Bbox | null;
   symbols: {

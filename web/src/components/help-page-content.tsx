@@ -12,6 +12,7 @@ import {
   checkoutSteps,
   compareFlow,
   courseFlow,
+  fieldEditFlow,
   importPartialFlow,
   loginFlow,
   mapViewExport,
@@ -33,6 +34,7 @@ const sections = [
   { id: "omraden", label: "Områden" },
   { id: "versioner", label: "Versionshantering" },
   { id: "checkout", label: "Checka ut och in" },
+  { id: "faltredigering", label: "Fältredigering" },
   { id: "bana", label: "Lägg bana" },
   { id: "kartforslag", label: "Kartförslag" },
   { id: "publicering", label: "Publicering" },
@@ -134,10 +136,16 @@ export async function HelpPageContent() {
             <li>Rita start, kontroller och mål med IOF-symboler 701–709.</li>
             <li>Spara banan och exportera som PDF vid behov.</li>
           </ol>
+          <p className="mt-4">Fältredigering (direkt i webben):</p>
+          <ol className="list-decimal space-y-2 pl-5">
+            <li>Öppna Fältredigering på områdessidan (kräver behörighet).</li>
+            <li>Rita ett område (max 1 km²) och redigera kartobjekt i webbläsaren.</li>
+            <li>Checka in — administratör godkänner innan ny version skapas.</li>
+          </ol>
           <HelpProcessDiagram
             title="Översikt — huvudflöden i systemet"
             chart={overviewSystem}
-            caption="Versionshantering är kärnflödet; utcheckning, banor, kartförslag och verifiering sker parallellt."
+            caption="Versionshantering är kärnflödet; utcheckning, fältredigering, banor, kartförslag och verifiering sker parallellt."
           />
         </HelpSection>
 
@@ -190,7 +198,7 @@ export async function HelpPageContent() {
               "Område — startsidan med alla kartområden",
               "Visste du att… — dagens tips om en funktion du kanske inte känner till (länk till hjälpen)",
               "Verifiera — tillfällig jämförelse utan uppladdning",
-              "Hjälp — översikt, guide, buggar och förbättringsförslag (/hjalp)",
+              "Hjälp — översikt, guide, självstudier, buggar och förbättringsförslag (/hjalp)",
               "Admin — användare, lagring, loggning och inställningar (endast administratörer)",
             ]}
           />
@@ -212,7 +220,8 @@ export async function HelpPageContent() {
                   <td className="px-4 py-3">
                     Visar <strong>publicerade</strong> kartversioner, skapar kartförslag och egna
                     banor. Ser bara områden med publicerad karta — inga utcheckningar. Kan få
-                    e-postnotiser men inte .ocd-bilaga.
+                    e-postnotiser men inte .ocd-bilaga. Kan få rättigheten{" "}
+                    <strong>Fältredigering</strong> av administratör.
                   </td>
                 </tr>
                 <tr className="border-b border-slate-100">
@@ -220,15 +229,17 @@ export async function HelpPageContent() {
                   <td className="px-4 py-3">
                     Allt läsare kan, plus ladda upp versioner, publicera/avpublicera, se
                     opublicerade versioner, checka ut/in områden och importera en delkarta som
-                    aldrig checkades ut här
+                    aldrig checkades ut här. Fältredigering kräver uttrycklig tilldelning (som för
+                    läsare).
                   </td>
                 </tr>
                 <tr>
                   <td className="px-4 py-3 font-medium">Administratör</td>
                   <td className="px-4 py-3">
                     Allt redaktör kan, plus skapa områden, redigera områdesnamn, radera områden,
-                    godkänna konton, avbryta utcheckningar, integrera incheckningar och hantera
-                    systeminställningar
+                    godkänna konton, avbryta utcheckningar och fältredigeringar, integrera
+                    incheckningar, tilldela fältredigering och hantera systeminställningar.
+                    Administratörer har alltid fältredigering.
                   </td>
                 </tr>
               </tbody>
@@ -327,8 +338,15 @@ export async function HelpPageContent() {
           <p>
             Utcheckning låter redaktörer reservera ett delområde på kartan, ladda ner en utcheckning
             .ocd-fil för redigering i OCAD, och sedan checka in ändringarna för granskning och
-            integration. Alla inloggade användare ser aktiva utcheckningsområden som färgade
+            integration. Redaktörer och administratörer ser aktiva utcheckningsområden som färgade
             överlagringar med vem som checkat ut och när.
+          </p>
+          <p>
+            Vill du redigera kartan direkt i webbläsaren istället för i OCAD? Se kapitlet{" "}
+            <a href="#faltredigering" className="link-primary">
+              Fältredigering
+            </a>
+            .
           </p>
 
           {showEditor ? (
@@ -337,11 +355,12 @@ export async function HelpPageContent() {
               <HelpList
                 items={[
                   "Öppna området och klicka Checka ut område (knappen bredvid karttiteln)",
-                  "Välj verktyg: rektangel eller polygon",
-                  "Rita området på kartan och bekräfta urvalet",
+                  "Välj verktyg: Panorera (standard), rektangel eller polygon",
+                  "Rita området på kartan och bekräfta urvalet — kartan använder tiles för smidigare zoom/pan (särskilt på stora kartor); första gången kan tiles byggas en stund med räknare (X av Y rutor)",
                   "Klicka Checka ut område — du kommer till utcheckningssidan",
-                  "Välj OCAD-format (t.ex. OCAD 12 eller OCAD 2018) — måste matcha din OCAD-installation",
-                  "Ladda ner utcheckning .ocd och redigera i OCAD — filen genereras av systemet; öppna och spara i OCAD innan du redigerar",
+                  "Välj OCAD-format (t.ex. OCAD 12 eller OCAD 2018) när du skapar utcheckningen — måste matcha din OCAD-installation",
+                  "På utcheckningssidan kan du ladda ner som OCAD (.ocd) i valfri stödd version, eller som OpenOrienteering Mapper (.omap)",
+                  "Öppna och spara .ocd i OCAD innan du redigerar — filen genereras av systemet. .omap öppnas i Mapper 0.9.6 eller senare",
                   "Överlappande utcheckningar blockeras — vänta tills ett område frigörs",
                 ]}
               />
@@ -350,11 +369,12 @@ export async function HelpPageContent() {
               <HelpList
                 items={[
                   "Öppna området och klicka «Importera delkarta» (bredvid Checka ut område)",
-                  "Ladda upp den redigerade .ocd-filen — guiden jämför mot aktuell kartversion",
+                  "Ladda upp den redigerade .ocd-filen — guiden visar spinner och vilket steg som pågår (uppladdning, parsning, jämförelse) medan den jämför mot aktuell kartversion",
                   "Steg 2: kontrollera att symbolnumren finns i den stora kartan — saknade symboler stoppar import",
-                  "Steg 3: blå ram på kartan visar delkartans utbredning (inzoomad). Samma kartbild som på området används — även stora filer som Mora Väst. Om den inte syns: öppna området så kartan hinner laddas, gå tillbaka och försök igen",
-                  "Steg 4: orange/röda kantobjekt; växla mellan hela kartan och bara berörda objekt, och visa även vad som raderas i originalet respektive nya/ersatta objekt",
-                  "Steg 5: se tillagda, borttagna och ändrade objekt i området — samma kartväxling och lagerfilter som i steget Kanter",
+                  "Steg 3: blå linje visar delkartans utbredning (rutnätskontur som följer objektens form och vikar). Blåtonat är den skyddade zonen där inget raderas automatiskt — 60 m in från delkartans innehåll, lika brett åt alla håll, plus eventuella tomrum där delkartan inte ritat något. Innanför den gröna streckade linjen jämförs borttag. Zooma med mushjul, nyp eller +/−, dra för att panorera, «Återställ» för att visa utbredningen igen. Status visar hur många objekt i området som jämförs (inte hela stora kartan)",
+                  "Steg 4: orange/röda kantobjekt (klippta stubbar, överskridande och objekt i skyddad zon); de raderar inte originalet. Zonen mäts mot hela objektets geometri, så en bäck eller stig vars ände når snittet skyddas även om mitten ligger långt in",
+                  "Steg 5: se tillagda, borttagna och ändrade objekt i området — samma lagerfilter som i steget Kanter. Klicka på en rad i listan för att zooma dit i kartan, eller på en markering i kartan för att välja motsvarande rad. Kryssa ur «Ta med» för en ändring som inte ska tillämpas (borttag → objektet behålls, tillägg → objektet importeras inte, ändring → originalets version behålls). Bortkryssade rader ritas grå i kartan och följer med utcheckningen, så de hoppas över även vid incheckningen",
+                  "Kartan ligger alltid kvar under markeringarna i steg 4 och 5, så du kan bedöma varje ändring mot omgivningen. Linjer och ytor ritas med sin egen form (borttag streckat), punktobjekt som ihålig ring så symbolen under syns. «Dämpa kartan» lägger en slöja över kartan när markeringarna drunknar i kartfärgerna",
                   "Steg 6: bekräfta — systemet skapar en utcheckning i efterhand och checkar in filen",
                   "Därefter granskar du diffen som vid vanlig incheckning; admin integrerar till en ny version",
                 ]}
@@ -368,6 +388,7 @@ export async function HelpPageContent() {
                   "Granska utcheckningsdiff mot aktuell version (tillagda, borttagna, ändrade)",
                   "Bekräfta integration — utcheckningen går till admin-bekräftelse",
                   "Administratör bekräftar och integrerar — en ny opublicerad kartversion skapas (publicera i versionshistoriken)",
+                  "Uppladdare i versionshistoriken är den som checkade in filen — inte administratören som integrerar",
                   "Efter integration: jämför, granska och publicera så att läsare ser ändringarna",
                   "Vid incheckning skickas e-post med .ocd-bilaga till admin och prenumeranter med «Bifoga .ocd»",
                 ]}
@@ -375,27 +396,32 @@ export async function HelpPageContent() {
             </>
           ) : (
             <p>
-              Som läsare kan du se aktiva utcheckningsområden på kartfilens sida, men du kan inte
-              skapa egna utcheckningar. Kontakta en redaktör om du behöver redigera kartor.
+              Som läsare ser du inte utcheckningsområden, aktiva utcheckningar eller
+              utcheckningshistorik. Kontakta en redaktör om du behöver redigera kartor i OCAD.
             </p>
           )}
 
-          <h3 className="font-medium text-slate-900">Synliga överlagringar</h3>
-          <p>
-            På områdessidan visas färgade ytor för alla aktiva utcheckningar. Varje färg motsvarar
-            en användare och visar vem som arbetar i området och när utcheckningen skapades. Det hjälper
-            teamet undvika parallella ändringar i samma del av kartan.
-          </p>
+          {showEditor && (
+            <>
+              <h3 className="font-medium text-slate-900">Synliga överlagringar</h3>
+              <p>
+                På områdessidan visas färgade ytor för alla aktiva utcheckningar och fältredigeringar. Varje färg
+                motsvarar en användare och visar vem som arbetar i området och när sessionen
+                skapades. Det hjälper teamet undvika parallella ändringar i samma del av kartan.
+              </p>
+            </>
+          )}
 
           {showAdmin && (
             <>
               <h3 className="font-medium text-slate-900">Administratör</h3>
               <HelpList
                 items={[
-                  "Avbryt utcheckning (tvinga avbryt) med valfri anledning om arbetet behöver stoppas",
+                  "Avbryt utcheckning eller fältredigering (tvinga avbryt) med valfri anledning om arbetet behöver stoppas",
+                  "Godkänn incheckade fältredigeringar under Admin → Utcheckningar — granskningen visar jämförelsekarta med röd/gul/grön markering av ändringarna",
                   "Bekräfta och integrera efter att användaren bekräftat diff",
                   "Bekräfta granskning (kryssruta) innan integration genomförs",
-                  "Vid full uppladdning av hel karta blockeras uppladdning vid aktiva utcheckningar — admin kan bekräfta undantag",
+                  "Vid full uppladdning av hel karta blockeras uppladdning vid aktiva utcheckningar och fältredigeringar — admin kan bekräfta undantag",
                 ]}
               />
             </>
@@ -425,6 +451,153 @@ export async function HelpPageContent() {
           )}
         </HelpSection>
 
+        <HelpSection id="faltredigering" title="Fältredigering">
+          <p>
+            Med <strong>Fältredigering</strong> redigerar du kartobjekt direkt i webbläsaren —
+            utan OCAD. Du reserverar ett delområde (max 1 km²), ändrar, raderar eller lägger till
+            objekt, och checkar in så att en administratör kan godkänna ändringarna till en ny
+            kartversion.
+          </p>
+          <p>
+            Se även{" "}
+            <a href="/produkt/faltredigering" className="link-primary">
+              produktbladet för Fältredigering
+            </a>{" "}
+            (säljande översikt med skärmdumpar från programmet — att dela eller skriva ut).
+          </p>
+          <p>
+            Fältredigering är separat från både{" "}
+            <a href="#checkout" className="link-primary">
+              OCAD-utcheckning
+            </a>{" "}
+            och{" "}
+            <a href="#kartforslag" className="link-primary">
+              Kartförslag
+            </a>
+            . Aktiva sessioner syns i listan «Aktiva utcheckningar» och som färgade ytor under
+            «Utcheckningsområden på kartan».
+          </p>
+
+          <h3 className="font-medium text-slate-900">Behörighet</h3>
+          <HelpList
+            items={[
+              "Administratörer har alltid tillgång",
+              "Läsare och redaktörer behöver rättigheten «Fältredigering» (Admin → Användare → Redigera)",
+              "Öppna via knappen «Fältredigering» på områdessidan",
+            ]}
+          />
+
+          <h3 className="font-medium text-slate-900">Starta och fortsätta</h3>
+          <HelpList
+            items={[
+              "Rita en polygon kring området (max 1 km²) — bara det området laddas i editorn",
+              "Startar i Panorera — byt till Polygon när du ska rita området",
+              "Kartvyn anpassas till utcheckningen — «Hela kartan» visar området utan stora vita marginaler",
+              "Utcheckat område markeras med röd begränsningslinje (ingen fyllnadsyta)",
+              "Lämna och fortsätt senare via «Fortsätt» i Aktiva utcheckningar eller på fältredigeringssidan",
+              "Administratör kan avbryta sessioner från områdessidan — samma som vanliga utcheckningar",
+            ]}
+          />
+
+          <h3 className="font-medium text-slate-900">Navigera och rita</h3>
+          <HelpList
+            items={[
+              "Startar i Navigera (panorera/zooma) — byt till Rita när du ska redigera",
+              "Verktyg som flytande ikoner på kartan: punkt → linje → yta → radera → GPS (GPS aktiveras efter linje/yta + vald symbol)",
+              "Välj linje eller yta och symbol först — därefter «GPS-spår» för att rita medan du går (samma minimiavstånd mellan brytpunkter som i kartförslag)",
+              "Punktsymboler placeras alltid genom att klicka på kartan — GPS-spår gäller bara linje och yta",
+              "Klicka linje- eller ytaverktyget igen för att växla vanlig → frihand (F) → ellips (E) → cirkel (C) → rektangel (R) → Bézier (B) → vanlig",
+              "Aktivt läge visas med stor bokstav (F/E/C/R/B) bakom verktygsikonen",
+              "Rektangelritning: dra längsta sidan, sedan vinkelrätt; streckad förhandsvisning; klicka för att avsluta",
+              "Cirkel: dra diametern från kant till kant, släpp för att skapa (som i OCAD)",
+              "Ellips: dra längsta axeln, släpp, sedan kortare axeln vinkelrätt genom centrum och släpp",
+              "När du ritar linje/yta: «Klar» (bock) och «Avbryt ritning» (kryss) i kartmenyn — Klar visar antal brytpunkter",
+              "Ångra upp till 10 steg via knappen under Navigera eller Ctrl/Cmd+Z",
+              "«Min position» och «GPS-spår» fungerar på georefererade kartor — spela in stigar med telefonens GPS",
+              "Kartans höjd är stabil i mobil — den hoppar inte när adressfältet visas eller döljs vid scroll",
+            ]}
+          />
+
+          <h3 className="font-medium text-slate-900">Välj och redigera objekt</h3>
+          <HelpList
+            items={[
+              "Tryck på objekt för att markera; vid överlapp håll kvar — nästa objekt markeras varje sekund",
+              "Flytta fingret för att avbryta bläddringen (t.ex. för att dra en brytpunkt)",
+              "Klicka ett befintligt kartobjekt när du skapar nytt — då kopieras dess symbol",
+              "Nya och ändrade objekt visas med riktig OCAD-symbol i editorn",
+              "Favoritsymboler per geometrityp — sparas på ditt konto och föreslås först i listan",
+              "Symbolväljaren nere på kartan är kompakt och lämnar plats för ritverktygen till höger",
+              "Symbolväljaren visar OCAD-ikoner och färger (som i teckenförklaringen) plus sökfält",
+              "I mobilen öppnas tangentbordet först när du trycker i sökfältet — inte automatiskt när du öppnar symbollistan",
+            ]}
+          />
+
+          <h3 className="font-medium text-slate-900">Brytpunkter</h3>
+          <HelpList
+            items={[
+              "Visning: X vid första punkten, punkt i mitten, fyrkant vid sista — mindre och halvtransparenta",
+              "Markörerna (brytpunkter, GPS-punkter, snäpp) behåller samma storlek på skärmen oavsett utsnittets storlek — kartans OCAD-symboler skalas som tidigare",
+              "Lägg till normal (cirkel), hörn (kvadrat) eller streck (romb); radera; växla typ normal → streck → hörn",
+              "Håll inne lägg till-ikonen för att ändra alla brytpunkter till den typen",
+              "Hörn visas som kvadrat och streck som romb på kartan",
+            ]}
+          />
+
+          <h3 className="font-medium text-slate-900">Snappning</h3>
+          <p>
+            Slå på snappning och ange tolerans i meter. Brytpunkter fästs då bara mot objekt med
+            samma symbol som du ritar eller flyttar (t.ex. höjdkurva mot höjdkurva). När du ritar
+            kan du även snappa mot startpunkten på det objekt du håller på att skapa.
+          </p>
+
+          <h3 className="font-medium text-slate-900">CAD-verktyg</h3>
+          <HelpList
+            items={[
+              "Ikoner: byt symbol, mät, vänd riktning, förenkla, mjuka hörn, Bézier — papperskorgen (radera objekt) sist",
+              "Klipp: klipp linje (klick delar, dra tar bort bit), dela yta med klipplinje kant→kant, klipp hål i yta",
+              "Sammanfoga: markera flera objekt med samma symbol — linjer med nära ändpunkter eller överlappande ytor — sedan Tillämpa",
+              "Fyll / kant / duplicera: välj symbol — samma typ kopierar, yta+linje = kant, linje+yta = fyll; kryssa i «Använd hål» för hål",
+              "Fyll yta (i CAD-verktyg): välj ytsymbol, aktivera verktyget och klicka i tomt omslutet område — den nya ytan får brytpunkterna från de begränsande objekten (och skärningar där de möts); objekt inuti blir hål. Konturer, nordlinjer och banor ignoreras. Om området inte är omslutet visas ett meddelande",
+              "Förenkla: buffert ± meter — tar bort brytpunkter på nästan rak linje; ny punkt där linjen tangerar kanten",
+              "Bézier: dra kontrollpunkterna P1/P2 för att forma kurvan, sedan «Tillämpa kurva»",
+              "Frihand: klicka linje/yta tills F visas — tryck och dra; klicka igen eller «Klar» avslutar. Utjämning 1–3 under snappning",
+              "Cirkel (C) / ellips (E): klicka linje/yta tills C eller E visas — cirkel: dra diameter och släpp; ellips: längsta axel sedan kortare axel",
+              "Rita ny Bézier: klicka linje-/ytaverktyget tills B visas — tryck-håll på brytpunkt, dra radien/tangenten, släpp; upprepa vid varje brytpunkt (hjälplinjen förhandsvisar kurvan)",
+            ]}
+          />
+
+          <h3 className="font-medium text-slate-900">Spara och checka in</h3>
+          <HelpList
+            items={[
+              "Ritverktyget (punkt/linje/yta) ligger kvar efter att du ritat — byt till «Välj / redigera» när du vill ändra brytpunkter eller använda CAD",
+              "Nya objekt du ritat kan markeras med välj-verktyget och redigeras vidare (brytpunkter, CAD)",
+              "Ändringar sparas lokalt i webbläsaren tills du checkar in — en kort toast visas uppe på kartan",
+              "Vid nätverksfel behålls arbetet lokalt",
+              "«Checka in» visar en sammanfattning — därefter väntar admin-godkännande med jämförelsekarta innan ny version skapas",
+              "Avslutade fältredigeringar ingår i utcheckningshistoriken",
+            ]}
+          />
+
+          {showAdmin && (
+            <>
+              <h3 className="font-medium text-slate-900">Administratör</h3>
+              <HelpList
+                items={[
+                  "Tilldela rättigheten under Admin → Användare → Redigera",
+                  "Godkänn incheckade fältredigeringar under Admin → Utcheckningar — jämförelsekartan visar raderade (rött), ändrade (gult) och nya (grönt) objekt",
+                  "Avbryt aktiva sessioner från områdessidan vid behov",
+                ]}
+              />
+            </>
+          )}
+
+          <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-700">
+            Fältredigering skapar en ny kartversion först efter admin-godkännande — samma
+            publiceringssteg som efter OCAD-utcheckning gäller innan läsare ser ändringarna.
+          </p>
+          <HelpProcessDiagram title="Flöde — fältredigering" chart={fieldEditFlow} />
+        </HelpSection>
+
         <HelpSection id="bana" title="Lägg bana">
           <p>
             Med <strong>Lägg bana</strong> planerar du orienteringsbanor ovanpå kartans{" "}
@@ -432,8 +605,13 @@ export async function HelpPageContent() {
             kartfilen — de är overlay-lager som kan delas med andra användare.
           </p>
           <p>
-            Öppna banredigeraren via knappen <strong>Lägg bana</strong> på områdessidan, eller
-            gå direkt till <code className="rounded bg-slate-100 px-1">/maps/[slug]/bana</code>.
+            Öppna banredigeraren via knappen <strong>Lägg bana</strong> (eller{" "}
+            <strong>Banor (antal)</strong> om banor redan finns) uppe till höger på områdessidan,
+            eller gå direkt till <code className="rounded bg-slate-100 px-1">/maps/[slug]/bana</code>.
+          </p>
+          <p>
+            Kartan i banredigeraren använder karttiles för smidig zoom och panorering även på
+            stora kartor. Första gången en version öppnas kan tiles byggas en kort stund.
           </p>
 
           <h3 className="font-medium text-slate-900">IOF-symboler 701–709</h3>
@@ -456,13 +634,16 @@ export async function HelpPageContent() {
           <h3 className="font-medium text-slate-900">Rita och redigera</h3>
           <HelpList
             items={[
-              "Välj symbol i panelen till höger och verktyg: Rita, Flytta eller Radera",
+              "Välj symbol i panelen till höger och verktyg: Rita, Flytta, Klipp eller Radera",
               "Punkt — klicka på kartan",
               "Linje — klicka punkter, dubbelklicka eller Avsluta linje",
               "Yta — klicka hörn, dubbelklicka nära start eller Avsluta yta",
               "Text — klicka och skriv i dialogrutan",
               "Flytta — dra valt objekt; vid kontroll (703) följer kontrollnumret (704) med",
               "Flytta kontrollnummer (704) separat via verktyget Flytta eller knappen nr i kontrollistan",
+              "Klipp — klicka på kontrollcirkel, bansträcka eller manuell linje (705/707) för att skapa en lucka så kartsymboler under syns; klicka igen för att ta bort",
+              "I Klipp-läge: gröna markörer visar luckor — dra för att flytta; nya luckor snäpps mot närmaste kartsymbol under",
+              "Lucka nära sträckans slut vid en kontroll påverkar inkommande sträcka; lucka närmare föregående kontroll påverkar utgående sträcka",
               "Radera — välj objekt och tryck Radera, eller använd verktyget Radera",
             ]}
           />
@@ -532,13 +713,14 @@ export async function HelpPageContent() {
           <HelpList
             items={[
               "Öppna en publicerad version via Visa karta och klicka Föreslå ändring",
-              "Välj ritverktyg som ikoner till höger på kartan: punkt, rektangel, polygon, linje eller «Radera objektet» (rött X — pekar ut var något ska tas bort; beskriv vad i kommentaren)",
+              "Välj ritverktyg som ikoner till höger på kartan (samma ikoner och ordning som i fältredigering): punkt, linje, polygon, rektangel eller «Radera objektet» (rött X — pekar ut var något ska tas bort; beskriv vad i kommentaren)",
               "«Min position» zooma till skala 1:50 och panorera till dig var 10:e sekund tills du stoppar GPS",
-              "«GPS-spår» finns som ikon i ritverktygsraden till höger (mellan linje och radera) — spelar in en linje med telefonens GPS (kräver georefererad karta)",
+              "«GPS-spår» finns som ikon i ritverktygsraden till höger (efter radera) — spelar in en linje med telefonens GPS (kräver georefererad karta)",
               "Under spårning zoomas kartan till skala 1:50 och följer din position var 10:e sekund",
               "GPS-spår filtreras (minst ca 4 m mellan punkter) och förenklas automatiskt innan linjen sparas",
               "Orimliga GPS-hopp filtreras bort och accepterade punkter utjämnas vid sämre mottagning — antal filtrerade hopp visas efter «Sluta spåra»",
               "Kartan startar i «Navigera» — välj ett ritverktyg till höger för att aktivera «Rita» och börja markera",
+              "Kartan i utcheckning och kartförslag använder tiles (snabbare zoom/pan på stora kartor); första öppningen kan bygga tiles i bakgrunden med progress (rutor kvar)",
               "Växla «Rita» / «Navigera» via ikonerna till höger — i Navigera kan du dra och nypa utan att rita; i Rita zoomar två fingrar utan att skapa markering",
               "Klicka «Lägg till ändring» på kartan när markeringen är klar — längst ned på mobil, uppe till höger på större skärm; punkt, radera och rektangel aktiveras direkt efter klick/drag",
               "Varje markering numreras (1, 2, 3 …) på kartan — inte kategorinamn",
@@ -648,8 +830,11 @@ export async function HelpPageContent() {
           </p>
 
           <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
-            Stora kartfiler kan ta upp till en minut att parsa och jämföra. Sidan uppdateras
-            automatiskt när beräkningen är klar.
+            Medan jämförelsen körs visas en spinner, förfluten tid och vilken etapp som pågår:{" "}
+            <strong>Läser kartfiler</strong> → <strong>Beräknar skillnader</strong> →{" "}
+            <strong>Skapar kartlager</strong>. Första gången kan stora kartfiler ta några minuter;
+            resultatet sparas sedan så att nästa jämförelse av samma versioner går direkt. Om något
+            går fel, använd «Uppdatera / försök igen» som räknar om från början.
           </p>
           <HelpProcessDiagram title="Flöde — jämföra versioner" chart={compareFlow} />
         </HelpSection>
@@ -724,6 +909,12 @@ export async function HelpPageContent() {
             separat fönster utan sidhuvud och navigation — bra för presentation, fältarbete eller
             arbete på en second skärm. GPS och export fungerar även i helskärmsvyn.
           </p>
+          <p>
+            Helskärmsvyn använder karttiles för snabb zoom och panorering på stora kartor. Kartan
+            läses in i sin helhet först när du klickar <strong>Exportera</strong> (knappen visar
+            «Förbereder export…» en kort stund). Behöver du visa eller dölja kartlager gör du det i
+            standardvyn för versionen.
+          </p>
 
           <h3 className="font-medium text-slate-900">Exportera utsnitt</h3>
           <p>
@@ -735,11 +926,14 @@ export async function HelpPageContent() {
               "Välj skala: 1:10 000, 1:7 500 eller 1:5 000",
               "Välj pappersformat: A4 eller A3",
               "Välj orientering: stående eller liggande",
-              "Välj utdataformat: PDF, OCAD (.ocd) eller GeoTIFF (.tif)",
+              "Välj utdataformat: PDF, OCAD (.ocd), OpenOrienteering Mapper (.omap) eller GeoTIFF (.tif)",
               "Kryssruta «Exportera endast kartförslag»: PDF och GeoTIFF ritar förslagen ovanpå kartan; OCD exporterar enbart markeringarna (inte grundkartan)",
+              "Mapper (.omap): native fil för OpenOrienteering Mapper — objekt i utsnittet, färger och förenklade symboler; georeferering följer med när kartan har EPSG",
               "GeoTIFF sparas med kartans projicerade koordinatsystem (EPSG) — kräver georefererad karta",
-              "OCD med kartförslag: välj symbol för punkt, linje och yta i dialogen — exportfilen innehåller bara förslagens objekt med kartans befintliga symboler (OCAD 12/2018), inte grundkartan",
+              "OCD med kartförslag under Visa karta: symboler väljs automatiskt från kartan — exportfilen innehåller bara förslagens objekt (OCAD 12/2018), inte grundkartan",
+              "Under Föreslå ändringar öppnas dialogen «Symboler för kartförslag» så du kan välja symbol för punkt, linje och yta innan OCD-export",
               "Exporterad OCD-fil ska öppnas normalt i OCAD; om du får internt fel vid öppning, exportera igen efter senaste uppdateringen",
+              ".omap-filer öppnas i OpenOrienteering Mapper 0.9.6 eller senare",
               "Dra exportramen på kartan till önskat utsnitt innan du exporterar",
             ]}
           />
@@ -805,6 +999,7 @@ export async function HelpPageContent() {
                 "Avvisa konton som inte ska få tillgång",
                 "Skapa konton manuellt med e-post, namn, lösenord och roll",
                 "Redigera befintliga användare (namn, e-post, roll)",
+                "Fältredigering — ge läsare eller redaktör rätt att redigera kartan i webben (max 1 km²)",
                 "Notis — prenumerera på e-post vid nya versioner och utcheckningshändelser (användare kan också styra detta i Min profil)",
                 "Bifoga .ocd — få kartfilen som bilaga i notiser (kräver Notis; endast redaktör och administratör)",
                 "Senaste inloggning visas i listan",
@@ -930,9 +1125,25 @@ export async function HelpPageContent() {
               <h3 className="font-medium text-slate-900">Jag har en .ocd som aldrig checkades ut här</h3>
               <p className="mt-1">
                 Använd <strong>Importera delkarta</strong> på områdessidan. Guiden matchar symboler,
-                visar läge och kanter och skapar sedan en utcheckning i efterhand. Objekt som går
-                över kanten raderas inte automatiskt. Därefter granskar du diffen som vid vanlig
-                incheckning, och admin integrerar.
+                visar läge som en rutnätskontur (följer vikar bättre än en enkel omslutning) med en
+                inre kärna och filtrerar bort kantklippta objekt samt objekt långt från
+                utsnittet. Kartan i guiden går att zooma och panorera, och den ligger kvar under
+                markeringarna i stegen Kanter och Ändringar så att du ser vad varje markerat objekt
+                är: linjer och ytor ritas med sin egen form, punktobjekt som ihålig ring. Ett objekt på stora kartan
+                raderas bara om hela objektet ligger i delkartans inre kärna, alltså minst 60 m in
+                från delkartans innehåll.                 Skyddszonen, objekt som går över kanten och tomrum där
+                delkartan inte ritat något behålls alltid — där går det inte att skilja «borttaget
+                av redigeraren» från «täcks inte av utsnittet». Blir någon enstaka ändring ändå fel
+                kan du kryssa bort den i listan i steg 5; då lämnas objektet orört.
+                Därefter granskar du diffen som vid vanlig incheckning, och admin integrerar.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-slate-900">Analysen i Importera delkarta tar lång tid</h3>
+              <p className="mt-1">
+                Det är normalt för stora kartor. En spinner visar aktuellt steg (ladda upp, parsa
+                OCAD-filer, bygga polygon, jämföra objekt) och förfluten tid. Låt fliken vara öppen
+                tills analysen är klar — sidan uppdateras automatiskt.
               </p>
             </div>
             <div>
@@ -958,6 +1169,19 @@ export async function HelpPageContent() {
                 stund. Om kartan fortfarande saknas: ladda om sidan. Kartbilden skapas automatiskt
                 — öppna området eller «Visa karta» och vänta tills den ritas. Ladda ner via «Ladda
                 ner» om du vill öppna filen i OCAD.
+              </p>
+            </div>
+            <div>
+              <h3 className="font-medium text-slate-900">Vad är Fältredigering?</h3>
+              <p className="mt-1">
+                Fältredigering låter dig redigera kartobjekt direkt i webbläsaren (utan OCAD) inom
+                ett utcheckat område på max 1 km². Administratörer har alltid tillgång; övriga får
+                rättigheten under Admin → Användare. Efter «Checka in» godkänner en administratör
+                ändringarna i en jämförelsekarta innan en ny version skapas. Se kapitlet{" "}
+                <a href="#faltredigering" className="link-primary">
+                  Fältredigering
+                </a>
+                .
               </p>
             </div>
             <div>
