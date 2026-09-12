@@ -358,8 +358,9 @@ export async function HelpPageContent() {
                   "Välj verktyg: Panorera (standard), rektangel eller polygon",
                   "Rita området på kartan och bekräfta urvalet — kartan använder tiles för smidigare zoom/pan (särskilt på stora kartor); första gången kan tiles byggas en stund med räknare (X av Y rutor)",
                   "Klicka Checka ut område — du kommer till utcheckningssidan",
-                  "Välj OCAD-format (t.ex. OCAD 12 eller OCAD 2018) — måste matcha din OCAD-installation",
-                  "Ladda ner utcheckning .ocd och redigera i OCAD — filen genereras av systemet; öppna och spara i OCAD innan du redigerar",
+                  "Välj OCAD-format (t.ex. OCAD 12 eller OCAD 2018) när du skapar utcheckningen — måste matcha din OCAD-installation",
+                  "På utcheckningssidan kan du ladda ner som OCAD (.ocd) i valfri stödd version, eller som OpenOrienteering Mapper (.omap)",
+                  "Öppna och spara .ocd i OCAD innan du redigerar — filen genereras av systemet. .omap öppnas i Mapper 0.9.6 eller senare",
                   "Överlappande utcheckningar blockeras — vänta tills ett område frigörs",
                 ]}
               />

@@ -20,8 +20,12 @@ import type { OcadObjectChange } from "@/lib/ocad/diff-types";
 
 import { CheckoutDiffMap } from "@/components/checkout-diff-map";
 
-import { ocadExportVersionLabel, parseOcadExportVersion } from "@/lib/ocad/ocad-export-shared";
-import type { OcadExportVersion } from "@/lib/ocad/ocad-export-shared";
+import {
+  OCAD_EXPORT_VERSIONS,
+  ocadExportVersionLabel,
+  parseOcadExportVersion,
+  type OcadExportVersion,
+} from "@/lib/ocad/ocad-export-shared";
 import { formatDate } from "@/lib/format";
 
 import { uploadCheckoutCheckin } from "@/lib/upload-client";
@@ -256,6 +260,15 @@ export function CheckoutDetailClient({
   const [error, setError] = useState<string | null>(null);
 
   const [message, setMessage] = useState<string | null>(null);
+
+  const storedOcadVersion =
+    parseOcadExportVersion(checkout.exportOcadVersion) ?? (12 as OcadExportVersion);
+  const [downloadFormat, setDownloadFormat] = useState<"ocd" | "omap">("ocd");
+  const [downloadOcadVersion, setDownloadOcadVersion] =
+    useState<OcadExportVersion>(storedOcadVersion);
+  const [downloadBusy, setDownloadBusy] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
 
   const [diff, setDiff] = useState<DiffSummary | null>(() => parseInitialDiff(checkout.diffSummaryJson));
 
@@ -789,6 +802,49 @@ export function CheckoutDetailClient({
 
 
 
+
+  async function handleDownload() {
+    setDownloadError(null);
+    setDownloadBusy(true);
+    try {
+      const params = new URLSearchParams({ format: downloadFormat });
+      if (downloadFormat === "ocd") {
+        params.set("ocadVersion", String(downloadOcadVersion));
+      }
+      const res = await fetch(
+        `/api/maps/${mapSlug}/checkouts/${checkout.id}/download?${params.toString()}`,
+      );
+      if (!res.ok) {
+        const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error ?? "Nedladdning misslyckades");
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition") ?? "";
+      const match = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(disposition);
+      const rawName = match?.[1] ? decodeURIComponent(match[1].replace(/"/g, "")) : null;
+      const fallback =
+        downloadFormat === "omap"
+          ? `${mapSlug}-utcheckning.omap`
+          : `${mapSlug}-utcheckning-v${downloadOcadVersion}.ocd`;
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = rawName || fallback;
+      link.click();
+      URL.revokeObjectURL(url);
+
+      const warningHeader =
+        res.headers.get("X-Ocad-Version-Warning") ?? res.headers.get("X-Omap-Warnings");
+      if (warningHeader) {
+        setMessage(decodeURIComponent(warningHeader));
+      }
+    } catch (err) {
+      setDownloadError(err instanceof Error ? err.message : "Nedladdning misslyckades");
+    } finally {
+      setDownloadBusy(false);
+    }
+  }
+
   return (
 
     <div className="space-y-6">
@@ -835,15 +891,11 @@ export function CheckoutDetailClient({
 
           <div>
 
-            <dt className="text-slate-500">OCAD-format</dt>
+            <dt className="text-slate-500">Skapad som</dt>
 
             <dd className="text-slate-900">
 
-              {ocadExportVersionLabel(
-
-                parseOcadExportVersion(checkout.exportOcadVersion) ?? (12 as OcadExportVersion),
-
-              )}
+              {ocadExportVersionLabel(storedOcadVersion)}
 
             </dd>
 
@@ -858,48 +910,79 @@ export function CheckoutDetailClient({
           </p>
         ) : null}
 
-        <div className="mt-4 flex flex-wrap gap-2">
-
-          <a
-
-            href={`/api/maps/${mapSlug}/checkouts/${checkout.id}/download`}
-
-            className="rounded-lg border border-ifk-blue/30 bg-ifk-blue-pale px-4 py-2 text-sm font-medium text-ifk-blue"
-
-          >
-
-            Ladda ner utcheckning .ocd (
-
-            {ocadExportVersionLabel(
-
-              parseOcadExportVersion(checkout.exportOcadVersion) ?? (12 as OcadExportVersion),
-
+        <div className="mt-4 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <p className="text-sm font-medium text-slate-800">Ladda ner utcheckning</p>
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <label htmlFor="checkout-download-format" className="mb-1 block text-xs text-slate-500">
+                Filtyp
+              </label>
+              <select
+                id="checkout-download-format"
+                value={downloadFormat}
+                onChange={(event) =>
+                  setDownloadFormat(event.target.value === "omap" ? "omap" : "ocd")
+                }
+                className="form-select min-w-[12rem]"
+              >
+                <option value="ocd">OCAD (.ocd)</option>
+                <option value="omap">OpenOrienteering Mapper (.omap)</option>
+              </select>
+            </div>
+            {downloadFormat === "ocd" && (
+              <div>
+                <label htmlFor="checkout-download-ocad-version" className="mb-1 block text-xs text-slate-500">
+                  OCAD-version
+                </label>
+                <select
+                  id="checkout-download-ocad-version"
+                  value={downloadOcadVersion}
+                  onChange={(event) =>
+                    setDownloadOcadVersion(Number(event.target.value) as OcadExportVersion)
+                  }
+                  className="form-select min-w-[10rem]"
+                >
+                  {OCAD_EXPORT_VERSIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             )}
-
-            )
-
-          </a>
-
-          {isAdmin && checkout.status !== CheckoutStatus.INTEGRATED && (
-
             <button
-
               type="button"
-
-              disabled={loading}
-
-              onClick={handleCancel}
-
-              className="rounded-lg border border-red-200 px-4 py-2 text-sm text-red-700"
-
+              disabled={downloadBusy}
+              onClick={() => void handleDownload()}
+              className="rounded-lg border border-ifk-blue/30 bg-ifk-blue-pale px-4 py-2 text-sm font-medium text-ifk-blue disabled:opacity-60"
             >
-
-              Avbryt utcheckning
-
+              {downloadBusy
+                ? "Laddar ner…"
+                : downloadFormat === "omap"
+                  ? "Ladda ner .omap"
+                  : `Ladda ner .ocd (${ocadExportVersionLabel(downloadOcadVersion)})`}
             </button>
-
+            {isAdmin && checkout.status !== CheckoutStatus.INTEGRATED && (
+              <button
+                type="button"
+                disabled={loading}
+                onClick={handleCancel}
+                className="rounded-lg border border-red-200 px-4 py-2 text-sm text-red-700"
+              >
+                Avbryt utcheckning
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-slate-500">
+            {downloadFormat === "omap"
+              ? "Mapper-filen innehåller utcheckningens objekt med förenklade symboler. Öppna i OpenOrienteering Mapper 0.9.6 eller senare."
+              : downloadOcadVersion !== storedOcadVersion
+                ? `Filen sparades som ${ocadExportVersionLabel(storedOcadVersion)}; header skrivs om till ${ocadExportVersionLabel(downloadOcadVersion)} vid nedladdning. Öppna och spara i OCAD innan du redigerar.`
+                : "Öppna och spara filen i OCAD innan du redigerar — den är genererad av systemet."}
+          </p>
+          {downloadError && (
+            <p className="text-sm text-red-700">{downloadError}</p>
           )}
-
         </div>
 
 

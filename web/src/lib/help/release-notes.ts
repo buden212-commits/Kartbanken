@@ -7,6 +7,15 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-09-12",
+    title: "Utcheckning — välj OCAD-version eller Mapper vid nedladdning",
+    items: [
+      "På utcheckningssidan kan du välja filtyp innan du laddar ner: OCAD (.ocd) eller OpenOrienteering Mapper (.omap)",
+      "För .ocd väljer du OCAD-version (10/11/12/2018) — praktiskt om du skapade utcheckningen i ett annat format än din installation",
+      "Mapper-exporten ger en native .omap med utcheckningens objekt; öppna i OpenOrienteering Mapper 0.9.6 eller senare",
+    ],
+  },
+  {
     date: "2026-09-11",
     title: "Importera delkarta — rutnätskontur som följer vikar",
     items: [
