@@ -19,6 +19,7 @@ export const releaseNotes: ReleaseNote[] = [
       "Dialogen «Symboler för kartförslag» visas bara när du exporterar OCD under Föreslå ändringar",
       "Områdessidan är tydligare: gul statusbanner överst, därefter publicerad karta, versionshistorik med uppladdning under, och utcheckningshistorik längst ned",
       "Kartförslag på kartan och Utcheckningsområden på kartan går att fälla ut så sidan blir lättare att skanna",
+      "Nedladdningsikon bredvid «Publicerad karta» på områdessidan — laddar ner den publicerade .ocd-filen",
     ],
   },
   {
