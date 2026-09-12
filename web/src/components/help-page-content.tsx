@@ -294,11 +294,13 @@ export async function HelpPageContent() {
               <h3 className="font-medium text-slate-900">Ladda upp ny version</h3>
               <HelpList
                 items={[
-                  "Öppna området och välj OCAD-fil (.ocd) i uppladdningsformuläret",
+                  "Öppna området — den publicerade kartan visas överst (gul statusbanner ligger alltid ovanför när något kräver uppmärksamhet)",
+                  "Under Versionshistorik finns uppladdningsformuläret — välj OCAD-fil (.ocd)",
                   "Lägg till en valfri kommentar, t.ex. vad som ändrats",
                   "Efter uppladdning jämförs automatiskt mot föregående version",
                   "Nya versioner är opublicerade tills du markerar dem som publicerade",
                   "Prenumeranter får e-post om ny version (om SMTP och notiser är aktiverade)",
+                  "Kartförslag på kartan och Utcheckningsområden på kartan kan fällas ut vid behov — Utcheckningshistorik ligger längst ned",
                 ]}
               />
             </>
@@ -760,7 +762,7 @@ export async function HelpPageContent() {
             <HelpList
               items={[
                 "Endast en version kan vara publicerad åt gången per område",
-                "Gul statusbanner på områdessidan när kartförslag väntar, senaste version inte är publicerad eller det finns utcheckade områden — med uppdelning per versionsnummer för kartförslag",
+                "Gul statusbanner ligger överst på områdessidan när kartförslag väntar, senaste version inte är publicerad eller det finns utcheckade områden — med uppdelning per versionsnummer för kartförslag; under den visas den publicerade kartan",
                 "Under Kartförslag anges vilken version som är publicerad för läsare",
                 "Kryssa i Publicerad i versionshistoriken för att göra versionen synlig för läsare — tidigare publicerad version avpubliceras då automatiskt",
                 "Versioner med parsningsfel kan inte publiceras",

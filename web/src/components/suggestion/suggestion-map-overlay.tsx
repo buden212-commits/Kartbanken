@@ -11,6 +11,7 @@ import {
 } from "@/lib/suggestion/geometry";
 import type { SuggestionOverlayItem, SuggestionSummary } from "@/lib/suggestion/types";
 import { SuggestionListPanel } from "@/components/suggestion/suggestion-list-panel";
+import { CollapsibleSection } from "@/components/collapsible-section";
 
 export function useSuggestionOverlays(mapSlug: string, mapVersionId?: string | null) {
   const [overlays, setOverlays] = useState<SuggestionOverlayItem[]>([]);
@@ -195,6 +196,8 @@ export function SuggestionAreaSection({
   } | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
+  const [mapRevealKey, setMapRevealKey] = useState(0);
+
   const zoomToSuggestion = useCallback(
     (suggestionId: string) => {
       const geometries = overlays
@@ -205,26 +208,38 @@ export function SuggestionAreaSection({
       fitRequestIdRef.current += 1;
       setFitGeoBbox({ bbox, requestId: fitRequestIdRef.current });
       setHighlightedId(suggestionId);
+      setMapRevealKey((key) => key + 1);
     },
     [overlays],
   );
 
   return (
     <>
-      <section className="mt-10">
-        <h2 className="text-lg font-medium text-slate-900">Kartförslag på kartan</h2>
-        <div className="mt-2">
-          <SuggestionOverviewMap
-            mapSlug={mapSlug}
-            versionId={versionId}
-            versionNumber={versionNumber}
-            fitGeoBbox={fitGeoBbox}
-          />
-        </div>
-        <p className="mt-2 text-xs text-slate-500">
-          Klicka på ett kartförslag i listan nedan för att zooma kartan till markeringen.
-        </p>
-      </section>
+      <CollapsibleSection
+        title="Kartförslag på kartan"
+        badge={
+          suggestions.length > 0 ? (
+            <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800">
+              {suggestions.length}
+            </span>
+          ) : undefined
+        }
+        description={
+          <>
+            Öppna och pågående kartförslag markerade på senaste publicerade version (v
+            {versionNumber}). Klicka på ett förslag i listan för att zooma hit.
+          </>
+        }
+        defaultOpen={false}
+        forceOpenKey={mapRevealKey > 0 ? mapRevealKey : null}
+      >
+        <SuggestionOverviewMap
+          mapSlug={mapSlug}
+          versionId={versionId}
+          versionNumber={versionNumber}
+          fitGeoBbox={fitGeoBbox}
+        />
+      </CollapsibleSection>
 
       <SuggestionListPanel
         mapSlug={mapSlug}

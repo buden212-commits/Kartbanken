@@ -17,6 +17,8 @@ export const releaseNotes: ReleaseNote[] = [
       "Mapper-exporten ger en native .omap med utcheckningens objekt; öppna i OpenOrienteering Mapper 0.9.6 eller senare",
       "Vid Visa karta → Exportera utsnitt behöver du inte längre välja «Symboler för kartförslag» — symboler väljs automatiskt från kartan",
       "Dialogen «Symboler för kartförslag» visas bara när du exporterar OCD under Föreslå ändringar",
+      "Områdessidan är tydligare: gul statusbanner överst, därefter publicerad karta, versionshistorik med uppladdning under, och utcheckningshistorik längst ned",
+      "Kartförslag på kartan och Utcheckningsområden på kartan går att fälla ut så sidan blir lättare att skanna",
     ],
   },
   {

@@ -23,6 +23,8 @@ import { Role } from "@/lib/roles";
 import { CheckoutHistoryPanel } from "@/components/checkout-history-panel";
 import { MapArchiveButton } from "@/components/map-archive-button";
 import { AreaStatusBanner } from "@/components/area-status-banner";
+import { PublishedMapPreview } from "@/components/published-map-preview";
+import { CollapsibleSection } from "@/components/collapsible-section";
 
 type PageProps = { params: Promise<{ slug: string }> };
 
@@ -202,28 +204,14 @@ export default async function MapDetailPage({ params }: PageProps) {
         />
       )}
 
-      {canUploadVersion && !mapArchived && (
-        <section className="card mt-8">
-          <HelpSectionHeading section="versioner">Ladda upp ny version</HelpSectionHeading>
-          <p className="mt-1 text-sm text-slate-600">
-            Uppladdning skapar en ny version — tidigare versioner behålls. Efter uppladdning
-            jämförs automatiskt med föregående version. Nya versioner är opublicerade tills du
-            markerar dem som publicerade.
-          </p>
-          <div className="mt-4">
-            <UploadVersionForm
-              mapSlug={map.slug}
-              isAdmin={isAdmin}
-              mapArchived={mapArchived}
-              activeCheckouts={checkoutListItems.map((checkout) => ({
-                id: checkout.id,
-                userLabel: checkout.user.name ?? checkout.user.email,
-                createdAt: checkout.createdAt,
-                objectCount: checkout.selection.objectIds.length,
-              }))}
-            />
-          </div>
-        </section>
+      {latestPublishedVersion && (
+        <PublishedMapPreview
+          mapSlug={map.slug}
+          versionId={latestPublishedVersion.id}
+          versionNumber={latestPublishedVersion.versionNumber}
+          originalFilename={latestPublishedVersion.originalFilename}
+          objectCount={latestPublishedVersion.objectCount}
+        />
       )}
 
       <section className="mt-10" id="versionshistorik">
@@ -257,6 +245,30 @@ export default async function MapDetailPage({ params }: PageProps) {
             canDelete={isAdmin}
           />
         )}
+
+        {canUploadVersion && !mapArchived && (
+          <div className="card mt-6">
+            <HelpSectionHeading section="versioner">Ladda upp ny version</HelpSectionHeading>
+            <p className="mt-1 text-sm text-slate-600">
+              Uppladdning skapar en ny version — tidigare versioner behålls. Efter uppladdning
+              jämförs automatiskt med föregående version. Nya versioner är opublicerade tills du
+              markerar dem som publicerade.
+            </p>
+            <div className="mt-4">
+              <UploadVersionForm
+                mapSlug={map.slug}
+                isAdmin={isAdmin}
+                mapArchived={mapArchived}
+                activeCheckouts={checkoutListItems.map((checkout) => ({
+                  id: checkout.id,
+                  userLabel: checkout.user.name ?? checkout.user.email,
+                  createdAt: checkout.createdAt,
+                  objectCount: checkout.selection.objectIds.length,
+                }))}
+              />
+            </div>
+          </div>
+        )}
       </section>
 
       {latestPublishedVersion &&
@@ -274,42 +286,33 @@ export default async function MapDetailPage({ params }: PageProps) {
       )}
 
       {headVersionId && activeAreaLocks.length > 0 && canSeeCheckouts && (
-        <section className="mt-10">
-          <h2 className="text-lg font-medium text-slate-900">Utcheckningsområden på kartan</h2>
-          <p className="mt-1 text-sm text-slate-600">
-            Färgade ytor visar aktiva utcheckningar och fältredigeringar (read-only).
-          </p>
+        <CollapsibleSection
+          title="Utcheckningsområden på kartan"
+          badge={
+            <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800">
+              {activeAreaLocks.length}
+            </span>
+          }
+          description="Färgade ytor visar aktiva utcheckningar och fältredigeringar (read-only)."
+          defaultOpen={false}
+        >
           <CheckoutOverviewMap
             mapSlug={map.slug}
             headVersionId={headVersionId}
             checkouts={checkoutListItems}
           />
-        </section>
+        </CollapsibleSection>
       )}
 
       {session?.user?.id && canSeeCheckouts && (
-        <>
-          <CheckoutListPanel
-            mapSlug={map.slug}
-            checkouts={checkoutListItems}
-            sessionUserId={session.user.id}
-            isAdmin={isAdmin}
-            canCheckout={canCreateCheckout && !mapArchived}
-            headVersionId={headVersionId}
-          />
-          <CheckoutHistoryPanel
-            mapSlug={map.slug}
-            items={checkoutHistory.map((row) => ({
-              id: row.id,
-              mode: row.mode,
-              status: row.status,
-              createdAt: row.createdAt.toISOString(),
-              integratedAt: row.integratedAt?.toISOString() ?? null,
-              integratedVersionId: row.integratedVersionId,
-              user: row.user,
-            }))}
-          />
-        </>
+        <CheckoutListPanel
+          mapSlug={map.slug}
+          checkouts={checkoutListItems}
+          sessionUserId={session.user.id}
+          isAdmin={isAdmin}
+          canCheckout={canCreateCheckout && !mapArchived}
+          headVersionId={headVersionId}
+        />
       )}
 
       {session?.user?.id && role && canCreateCourse(role) && (
@@ -318,6 +321,21 @@ export default async function MapDetailPage({ params }: PageProps) {
           courses={courseList}
           sessionUserId={session.user.id}
           isAdmin={role === Role.ADMIN}
+        />
+      )}
+
+      {session?.user?.id && canSeeCheckouts && (
+        <CheckoutHistoryPanel
+          mapSlug={map.slug}
+          items={checkoutHistory.map((row) => ({
+            id: row.id,
+            mode: row.mode,
+            status: row.status,
+            createdAt: row.createdAt.toISOString(),
+            integratedAt: row.integratedAt?.toISOString() ?? null,
+            integratedVersionId: row.integratedVersionId,
+            user: row.user,
+          }))}
         />
       )}
     </div>
