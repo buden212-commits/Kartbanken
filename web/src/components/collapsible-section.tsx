@@ -42,6 +42,19 @@ export function CollapsibleSection({
     setOpen(true);
   }, [forceOpenKey]);
 
+  useEffect(() => {
+    if (!id || typeof window === "undefined") return;
+
+    function syncFromHash() {
+      const hash = window.location.hash.replace(/^#/, "");
+      if (hash && hash === id) setOpen(true);
+    }
+
+    syncFromHash();
+    window.addEventListener("hashchange", syncFromHash);
+    return () => window.removeEventListener("hashchange", syncFromHash);
+  }, [id]);
+
   return (
     <section className={className} id={id}>
       <button

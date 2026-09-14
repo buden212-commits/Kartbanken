@@ -11,6 +11,7 @@ export const releaseNotes: ReleaseNote[] = [
     title: "Fler fällbara sektioner på områdessidan",
     items: [
       "Ladda upp ny version, Kartförslag, Aktiva utcheckningar, Banor och Utcheckningshistorik är fällbara och stängda som standard — sidan blir lättare att skanna",
+      "Länkar till Kartförslag och Aktiva utcheckningar (t.ex. från statusbannern) öppnar automatiskt rätt sektion",
     ],
   },
   {
