@@ -14,6 +14,7 @@ export const releaseNotes: ReleaseNote[] = [
       "Länkar till Kartförslag och Aktiva utcheckningar (t.ex. från statusbannern) öppnar automatiskt rätt sektion",
       "Åtgärdsknapparna på områdessidan (Arkivera, Checka ut, Importera delkarta, Lägg bana, Fältredigering, Föreslå ändring) har samma blå stil",
       "Under Versionshistorik visas versionslistan först, därefter Jämför versioner",
+      "Efter «Importera delkarta» visas inte längre nedladdning eller ny incheckning på utcheckningssidan — bara diff, bekräftelse och ev. Avbryt",
     ],
   },
   {

@@ -378,7 +378,7 @@ export async function HelpPageContent() {
                   "Steg 5: se tillagda, borttagna och ändrade objekt i området — samma lagerfilter som i steget Kanter. Klicka på en rad i listan för att zooma dit i kartan, eller på en markering i kartan för att välja motsvarande rad. Kryssa ur «Ta med» för en ändring som inte ska tillämpas (borttag → objektet behålls, tillägg → objektet importeras inte, ändring → originalets version behålls). Bortkryssade rader ritas grå i kartan och följer med utcheckningen, så de hoppas över även vid incheckningen",
                   "Kartan ligger alltid kvar under markeringarna i steg 4 och 5, så du kan bedöma varje ändring mot omgivningen. Linjer och ytor ritas med sin egen form (borttag streckat), punktobjekt som ihålig ring så symbolen under syns. «Dämpa kartan» lägger en slöja över kartan när markeringarna drunknar i kartfärgerna",
                   "Steg 6: bekräfta — systemet skapar en utcheckning i efterhand och checkar in filen",
-                  "Därefter granskar du diffen som vid vanlig incheckning; admin integrerar till en ny version",
+                  "Därefter granskar du diffen och bekräftar som vid vanlig incheckning — ingen ny nedladdning eller incheckning behövs; admin integrerar till en ny version",
                 ]}
               />
               <HelpProcessDiagram title="Steg för steg — importera delkarta" chart={importPartialFlow} />
@@ -386,7 +386,7 @@ export async function HelpPageContent() {
               <h3 className="font-medium text-slate-900">Checka in och integrera</h3>
               <HelpList
                 items={[
-                  "Ladda upp den redigerade .ocd-filen via Checka in på utcheckningssidan",
+                  "Efter vanlig utcheckning: ladda upp den redigerade .ocd-filen via Checka in på utcheckningssidan (gäller inte Importera delkarta — där är filen redan incheckad)",
                   "Granska utcheckningsdiff mot aktuell version (tillagda, borttagna, ändrade)",
                   "Bekräfta integration — utcheckningen går till admin-bekräftelse",
                   "Administratör bekräftar och integrerar — en ny opublicerad kartversion skapas (publicera i versionshistoriken)",
