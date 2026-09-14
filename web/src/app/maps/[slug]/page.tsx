@@ -155,10 +155,7 @@ export default async function MapDetailPage({ params }: PageProps) {
           )}
           {session?.user?.id && role && canCreateCourse(role) && !mapArchived && (
             latestPublishedVersion ? (
-              <Link
-                href={`/maps/${map.slug}/bana`}
-                className="rounded-lg bg-ifk-blue px-4 py-2 text-sm font-medium text-white transition hover:bg-ifk-blue/90"
-              >
+              <Link href={`/maps/${map.slug}/bana`} className="btn-primary">
                 {courseList.length > 0 ? `Banor (${courseList.length})` : "Lägg bana"}
               </Link>
             ) : (
@@ -171,17 +168,14 @@ export default async function MapDetailPage({ params }: PageProps) {
             )
           )}
           {canUseFieldEdit && !mapArchived && headVersionId && (
-            <Link
-              href={`/maps/${map.slug}/field-edit`}
-              className="rounded-lg border border-violet-300 bg-violet-50 px-4 py-2 text-sm font-medium text-violet-900 transition hover:border-violet-400"
-            >
+            <Link href={`/maps/${map.slug}/field-edit`} className="btn-primary">
               Fältredigering
             </Link>
           )}
           {latestPublishedVersion && role && canCreateMapSuggestion(role) && !mapArchived && (
             <Link
               href={`/maps/${map.slug}/versions/${latestPublishedVersion.id}/suggest`}
-              className="rounded-lg border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-medium text-orange-800 transition hover:border-orange-400"
+              className="btn-primary"
             >
               Föreslå ändring
             </Link>

@@ -356,7 +356,7 @@ export async function HelpPageContent() {
               <h3 className="font-medium text-slate-900">Checka ut område</h3>
               <HelpList
                 items={[
-                  "Öppna området och klicka Checka ut område (knappen bredvid karttiteln)",
+                  "Öppna området och klicka Checka ut område (blå knapp bredvid karttiteln — samma stil som övriga åtgärder)",
                   "Välj verktyg: Panorera (standard), rektangel eller polygon",
                   "Rita området på kartan och bekräfta urvalet — kartan använder tiles för smidigare zoom/pan (särskilt på stora kartor); första gången kan tiles byggas en stund med räknare (X av Y rutor)",
                   "Klicka Checka ut område — du kommer till utcheckningssidan",

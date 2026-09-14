@@ -1,11 +1,5 @@
 import Link from "next/link";
 
-const buttonClass =
-  "rounded-lg border border-ifk-blue/30 bg-ifk-blue-pale px-4 py-2 text-sm font-medium text-ifk-blue transition hover:border-ifk-blue hover:bg-ifk-blue-muted";
-
-const disabledClass =
-  "rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-400";
-
 type Props = {
   mapSlug: string;
   canCheckout: boolean;
@@ -31,13 +25,10 @@ export function CheckoutAreaCta({
   if (headVersionId) {
     return (
       <div className="flex flex-wrap gap-2">
-        <Link href={`/maps/${mapSlug}/checkout`} className={buttonClass}>
+        <Link href={`/maps/${mapSlug}/checkout`} className="btn-primary">
           Checka ut område
         </Link>
-        <Link
-          href={`/maps/${mapSlug}/importera-delkarta`}
-          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-ifk-blue hover:text-ifk-blue"
-        >
+        <Link href={`/maps/${mapSlug}/importera-delkarta`} className="btn-primary">
           Importera delkarta
         </Link>
       </div>
@@ -45,7 +36,10 @@ export function CheckoutAreaCta({
   }
 
   return (
-    <span className={disabledClass} title="Ladda upp en version först">
+    <span
+      className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-400"
+      title="Ladda upp en version först"
+    >
       Ladda upp en version först
     </span>
   );
