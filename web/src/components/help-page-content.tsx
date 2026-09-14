@@ -785,8 +785,8 @@ export async function HelpPageContent() {
         <HelpSection id="jamfor" title="Jämföra versioner">
           <p>
             Jämförelsen visar skillnader mellan två versioner: tillagda, borttagna och ändrade
-            kartobjekt. Du når jämförelsen via <strong>Jämför versioner</strong> ovanför
-            versionshistoriken (välj två valfria versioner), via knappen <strong>Jämför</strong> i
+            kartobjekt. Du når jämförelsen via <strong>Jämför versioner</strong> under
+            versionslistan (välj två valfria versioner), via knappen <strong>Jämför</strong> i
             tabellen, eller automatiskt efter uppladdning.
           </p>
 

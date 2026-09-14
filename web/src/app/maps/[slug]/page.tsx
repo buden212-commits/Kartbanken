@@ -215,6 +215,17 @@ export default async function MapDetailPage({ params }: PageProps) {
           </h2>
         </div>
 
+        {map.versions.length === 0 ? (
+          <p className="mt-4 text-sm text-slate-500">Inga versioner uppladdade ännu.</p>
+        ) : (
+          <VersionHistoryList
+            mapSlug={map.slug}
+            versions={versionHistoryItems}
+            canManagePublication={!!canManagePublication}
+            canDelete={isAdmin}
+          />
+        )}
+
         {comparableVersions.length >= 2 && (
           <div className="mt-4">
             <VersionComparePicker
@@ -227,17 +238,6 @@ export default async function MapDetailPage({ params }: PageProps) {
               }))}
             />
           </div>
-        )}
-
-        {map.versions.length === 0 ? (
-          <p className="mt-4 text-sm text-slate-500">Inga versioner uppladdade ännu.</p>
-        ) : (
-          <VersionHistoryList
-            mapSlug={map.slug}
-            versions={versionHistoryItems}
-            canManagePublication={!!canManagePublication}
-            canDelete={isAdmin}
-          />
         )}
 
         {canUploadVersion && !mapArchived && (

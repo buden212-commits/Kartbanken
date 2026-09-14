@@ -13,6 +13,7 @@ export const releaseNotes: ReleaseNote[] = [
       "Ladda upp ny version, Kartförslag, Aktiva utcheckningar, Banor och Utcheckningshistorik är fällbara och stängda som standard — sidan blir lättare att skanna",
       "Länkar till Kartförslag och Aktiva utcheckningar (t.ex. från statusbannern) öppnar automatiskt rätt sektion",
       "Åtgärdsknapparna på områdessidan (Arkivera, Checka ut, Importera delkarta, Lägg bana, Fältredigering, Föreslå ändring) har samma blå stil",
+      "Under Versionshistorik visas versionslistan först, därefter Jämför versioner",
     ],
   },
   {
