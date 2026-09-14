@@ -295,12 +295,12 @@ export async function HelpPageContent() {
               <HelpList
                 items={[
                   "Öppna området — den publicerade kartan visas överst (gul statusbanner ligger alltid ovanför när något kräver uppmärksamhet)",
-                  "Under Versionshistorik finns uppladdningsformuläret — välj OCAD-fil (.ocd)",
+                  "Under Versionshistorik finns «Ladda upp ny version» (fällbar, stängd som standard) — öppna den och välj OCAD-fil (.ocd)",
                   "Lägg till en valfri kommentar, t.ex. vad som ändrats",
                   "Efter uppladdning jämförs automatiskt mot föregående version",
                   "Nya versioner är opublicerade tills du markerar dem som publicerade",
                   "Prenumeranter får e-post om ny version (om SMTP och notiser är aktiverade)",
-                  "Kartförslag på kartan och Utcheckningsområden på kartan kan fällas ut vid behov — Utcheckningshistorik ligger längst ned",
+                  "Kartförslag, Aktiva utcheckningar, Banor, kartöversikter och Utcheckningshistorik är fällbara och stängda som standard",
                 ]}
               />
             </>

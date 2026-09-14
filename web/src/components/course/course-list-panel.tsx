@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { CollapsibleSection } from "@/components/collapsible-section";
 import type { CourseSummary } from "@/lib/course/types";
 import { formatDateOnly } from "@/lib/format";
 
@@ -98,19 +99,24 @@ export function CourseListPanel({
   }
 
   return (
-    <section className="mt-10">
-      <h2 className="text-lg font-medium text-slate-900">Banor ({courses.length})</h2>
-
+    <CollapsibleSection
+      title="Banor"
+      badge={
+        <span className="rounded-full bg-slate-200/80 px-2 py-0.5 text-xs font-medium text-slate-700">
+          {courses.length}
+        </span>
+      }
+    >
       {error && (
-        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+        <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
           {error}
         </p>
       )}
 
       {courses.length === 0 ? (
-        <p className="mt-4 text-sm text-slate-500">Inga banor skapade ännu.</p>
+        <p className="text-sm text-slate-500">Inga banor skapade ännu.</p>
       ) : (
-        <div className="mt-4 rounded-lg border border-slate-200">
+        <div className="rounded-lg border border-slate-200">
           <table className="w-full table-fixed divide-y divide-slate-200 text-sm">
             <colgroup>
               <col />
@@ -195,6 +201,6 @@ export function CourseListPanel({
           </table>
         </div>
       )}
-    </section>
+    </CollapsibleSection>
   );
 }

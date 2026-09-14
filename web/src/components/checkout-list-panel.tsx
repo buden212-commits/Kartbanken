@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { CheckoutAreaCta } from "@/components/checkout-area-cta";
+import { CollapsibleSection } from "@/components/collapsible-section";
 import {
   CheckoutMode,
   checkoutModeLabel,
@@ -58,11 +59,16 @@ export function CheckoutListPanel({
   }
 
   return (
-    <section className="mt-10" id="utcheckningar">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-medium text-slate-900">
-          Aktiva utcheckningar ({checkouts.length})
-        </h2>
+    <CollapsibleSection
+      id="utcheckningar"
+      title="Aktiva utcheckningar"
+      badge={
+        <span className="rounded-full bg-slate-200/80 px-2 py-0.5 text-xs font-medium text-slate-700">
+          {checkouts.length}
+        </span>
+      }
+    >
+      <div className="mb-3">
         <CheckoutAreaCta
           mapSlug={mapSlug}
           canCheckout={canCheckout}
@@ -72,7 +78,7 @@ export function CheckoutListPanel({
       </div>
 
       {checkouts.length === 0 ? (
-        <p className="mt-3 text-sm text-slate-500">Inga aktiva utcheckningar eller fältredigeringar.</p>
+        <p className="text-sm text-slate-500">Inga aktiva utcheckningar eller fältredigeringar.</p>
       ) : (
         <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
           <table className="w-full min-w-[720px] text-sm">
@@ -141,6 +147,6 @@ export function CheckoutListPanel({
           </table>
         </div>
       )}
-    </section>
+    </CollapsibleSection>
   );
 }

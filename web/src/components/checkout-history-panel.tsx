@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { CollapsibleSection } from "@/components/collapsible-section";
 import {
   CheckoutMode,
   CheckoutStatus,
@@ -50,12 +51,16 @@ export function CheckoutHistoryPanel({ mapSlug, items }: Props) {
   if (items.length === 0) return null;
 
   return (
-    <section className="mt-10">
-      <h2 className="text-lg font-medium text-slate-900">Utcheckningshistorik</h2>
-      <p className="mt-1 text-sm text-slate-600">
-        Avslutade utcheckningar och fältredigeringar — integrerade och avbrutna.
-      </p>
-      <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+    <CollapsibleSection
+      title="Utcheckningshistorik"
+      badge={
+        <span className="rounded-full bg-slate-200/80 px-2 py-0.5 text-xs font-medium text-slate-700">
+          {items.length}
+        </span>
+      }
+      description="Avslutade utcheckningar och fältredigeringar — integrerade och avbrutna."
+    >
+      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full min-w-[720px] text-sm">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-500">
@@ -87,6 +92,6 @@ export function CheckoutHistoryPanel({ mapSlug, items }: Props) {
           </tbody>
         </table>
       </div>
-    </section>
+    </CollapsibleSection>
   );
 }

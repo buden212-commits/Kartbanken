@@ -7,6 +7,13 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-09-14",
+    title: "Fler fällbara sektioner på områdessidan",
+    items: [
+      "Ladda upp ny version, Kartförslag, Aktiva utcheckningar, Banor och Utcheckningshistorik är fällbara och stängda som standard — sidan blir lättare att skanna",
+    ],
+  },
+  {
     date: "2026-09-12",
     title: "Snabbare karta igen — och OCAD/Mapper vid nedladdning",
     items: [

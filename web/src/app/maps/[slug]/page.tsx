@@ -10,7 +10,7 @@ import { versionVisibilityFilter } from "@/lib/maps/version-query";
 import { canViewVersion, isReader } from "@/lib/auth/version-access";
 import { prisma } from "@/lib/prisma";
 import { UploadVersionForm } from "@/components/upload-version-form";
-import { HelpSectionHeading } from "@/components/help-link-icon";
+import { HelpLinkIcon } from "@/components/help-link-icon";
 import { VersionHistoryList } from "@/components/version-history-list";
 import { VersionComparePicker } from "@/components/version-compare-picker";
 import { CheckoutAreaCta } from "@/components/checkout-area-cta";
@@ -247,27 +247,32 @@ export default async function MapDetailPage({ params }: PageProps) {
         )}
 
         {canUploadVersion && !mapArchived && (
-          <div className="card mt-6">
-            <HelpSectionHeading section="versioner">Ladda upp ny version</HelpSectionHeading>
-            <p className="mt-1 text-sm text-slate-600">
-              Uppladdning skapar en ny version — tidigare versioner behålls. Efter uppladdning
-              jämförs automatiskt med föregående version. Nya versioner är opublicerade tills du
-              markerar dem som publicerade.
-            </p>
-            <div className="mt-4">
-              <UploadVersionForm
-                mapSlug={map.slug}
-                isAdmin={isAdmin}
-                mapArchived={mapArchived}
-                activeCheckouts={checkoutListItems.map((checkout) => ({
-                  id: checkout.id,
-                  userLabel: checkout.user.name ?? checkout.user.email,
-                  createdAt: checkout.createdAt,
-                  objectCount: checkout.selection.objectIds.length,
-                }))}
-              />
-            </div>
-          </div>
+          <CollapsibleSection
+            className="mt-6"
+            title="Ladda upp ny version"
+            description={
+              <span className="inline-flex items-start gap-2">
+                <span>
+                  Uppladdning skapar en ny version — tidigare versioner behålls. Efter uppladdning
+                  jämförs automatiskt med föregående version. Nya versioner är opublicerade tills du
+                  markerar dem som publicerade.
+                </span>
+                <HelpLinkIcon section="versioner" compact className="mt-0.5" />
+              </span>
+            }
+          >
+            <UploadVersionForm
+              mapSlug={map.slug}
+              isAdmin={isAdmin}
+              mapArchived={mapArchived}
+              activeCheckouts={checkoutListItems.map((checkout) => ({
+                id: checkout.id,
+                userLabel: checkout.user.name ?? checkout.user.email,
+                createdAt: checkout.createdAt,
+                objectCount: checkout.selection.objectIds.length,
+              }))}
+            />
+          </CollapsibleSection>
         )}
       </section>
 
