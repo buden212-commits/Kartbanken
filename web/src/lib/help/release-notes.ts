@@ -15,6 +15,7 @@ export const releaseNotes: ReleaseNote[] = [
       "Rita bana genom att klicka på starten, sedan kontrollerna i den ordning de ska springas, och avsluta med mål",
       "Samma kontroll kan ingå flera gånger; vid cirkeln visas då t.ex. 2/7",
       "Kontrollistan visar besöksordning (1 · 31) och oanvända kontroller. Du kan ta bort ett besök utan att radera cirkeln",
+      "Verktyget Klipp (luckor i cirklar och sträckor) finns kvar tillsammans med Panorera och Rita bana",
     ],
   },
   {

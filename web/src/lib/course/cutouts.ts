@@ -668,7 +668,7 @@ export function renderPointWithCutoutsSvg(
   options?: {
     opacity?: number;
     selected?: boolean;
-    controlNumber?: number;
+    controlNumber?: number | string;
     textRotationDeg?: number;
   },
 ): string {

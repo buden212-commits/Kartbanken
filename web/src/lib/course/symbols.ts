@@ -316,7 +316,7 @@ export function defaultControlNumberGeoPoint(
 export function renderControlNumberNearPoint(
   cx: number,
   cy: number,
-  number: number,
+  number: number | string,
   opacity = 1,
   textRotationDeg = COURSE_TEXT_ROTATION_DEG,
 ): string {
