@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { CourseDetail, CourseObjectDto, CourseSummary } from "./types";
+import { parseSequenceJson, resolveSequence } from "./sequence";
 
 const courseWithUserSelect = {
   id: true,
@@ -49,6 +50,7 @@ export function serializeCourseDetail(
     createdAt: Date;
     updatedAt: Date;
     createdBy: { id: string; name: string | null; email: string };
+    sequenceJson?: string | null;
     objects: Array<{
       id: string;
       symbolNr: number;
@@ -81,6 +83,7 @@ export function serializeCourseDetail(
     createdBy: course.createdBy,
     objectCount: course._count?.objects ?? objects.length,
     objects,
+    sequence: resolveSequence(objects, parseSequenceJson(course.sequenceJson)),
   };
 }
 
@@ -158,6 +161,7 @@ export async function replaceCourseObjects(
     textContent: string | null;
     sortOrder: number;
   }>,
+  sequenceIndices: number[] = [],
 ) {
   return prisma.$transaction(async (tx) => {
     await tx.courseObject.deleteMany({ where: { courseId } });
@@ -166,6 +170,18 @@ export async function replaceCourseObjects(
         data: objects.map((obj) => ({ courseId, ...obj })),
       });
     }
+    const created = await tx.courseObject.findMany({
+      where: { courseId },
+      orderBy: { sortOrder: "asc" },
+      select: { id: true },
+    });
+    const sequenceIds = sequenceIndices
+      .map((index) => created[index]?.id)
+      .filter((id): id is string => typeof id === "string");
+    await tx.course.update({
+      where: { id: courseId },
+      data: { sequenceJson: JSON.stringify(sequenceIds) },
+    });
     return tx.course.findUniqueOrThrow({
       where: { id: courseId },
       include: {

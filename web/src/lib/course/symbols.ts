@@ -239,7 +239,7 @@ function escapeXml(value: string): string {
 export type PointSymbolRenderOptions = {
   opacity?: number;
   selected?: boolean;
-  controlNumber?: number;
+  controlNumber?: number | string;
   /** Angle (radians) for orienting start triangle toward next control. */
   headingRad?: number;
   textRotationDeg?: number;
@@ -316,7 +316,7 @@ export function defaultControlNumberGeoPoint(
 function renderControlNumber(
   cx: number,
   cy: number,
-  number: number,
+  number: number | string,
   color: string,
   opacity: number,
   textRotationDeg = COURSE_TEXT_ROTATION_DEG,

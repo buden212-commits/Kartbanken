@@ -12,7 +12,9 @@ import {
   COURSE_MAX_OBJECTS,
   validateCourseObjectInput,
 } from "@/lib/course/validation";
+import { validateSequenceIndices } from "@/lib/course/sequence";
 import type { CourseObjectInput } from "@/lib/course/types";
+import { COURSE_LEG_SYMBOLS } from "@/lib/course/symbols";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -77,18 +79,39 @@ export async function PUT(request: Request, { params }: RouteParams) {
     validated.push(result.value);
   }
 
-  const sorted = validated
+  const originalOrder = validated.map((_, i) => i);
+  const sortedOrder = originalOrder
     .slice()
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map((obj, index) => ({
+    .sort((a, b) => validated[a]!.sortOrder - validated[b]!.sortOrder);
+  const oldToNew = new Array<number>(validated.length);
+  sortedOrder.forEach((oldIndex, newIndex) => {
+    oldToNew[oldIndex] = newIndex;
+  });
+
+  const sorted = sortedOrder.map((oldIndex, index) => {
+    const obj = validated[oldIndex]!;
+    return {
       symbolNr: obj.symbolNr,
       objectType: obj.objectType,
       geometryJson: JSON.stringify(obj.geometry),
       textContent: obj.textContent ?? null,
       sortOrder: index,
-    }));
+    };
+  });
 
-  const updated = await replaceCourseObjects(id, sorted);
+  const sequenceCheck = validateSequenceIndices(validated, record.sequence);
+  if (!sequenceCheck.ok) {
+    return NextResponse.json({ error: sequenceCheck.error }, { status: 400 });
+  }
+
+  const sequenceIndices =
+    sequenceCheck.indices == null
+      ? sorted
+          .map((obj, index) => (COURSE_LEG_SYMBOLS.has(obj.symbolNr) ? index : -1))
+          .filter((index) => index >= 0)
+      : sequenceCheck.indices.map((oldIndex) => oldToNew[oldIndex]!);
+
+  const updated = await replaceCourseObjects(id, sorted, sequenceIndices);
 
   return NextResponse.json({
     ...serializeCourseDetail(updated),

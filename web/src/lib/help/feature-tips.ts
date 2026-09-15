@@ -55,7 +55,7 @@ export const featureTips: FeatureTip[] = [
   {
     id: "bana",
     title: "Lägg bana på kartan",
-    body: "Planera orienteringsbanor med IOF-symboler 701–709 — banor påverkar inte själva kartfilen.",
+    body: "Lägg ut start och kontroller (kod 31+), rita sedan banan genom att klicka i ordning. Panorera kartan med verktyget Panorera.",
     helpSectionId: "bana",
     roles: [Role.READER, Role.EDITOR, Role.ADMIN],
     weight: 7,

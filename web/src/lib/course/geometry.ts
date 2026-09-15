@@ -8,6 +8,7 @@ import {
   controlNumberHitTolerance,
   isControlNumberObject,
 } from "./control-numbers";
+import { pointsAlongSequence } from "./sequence";
 import {
   COURSE_LEG_SYMBOLS,
   getPointSymbolLegGap,
@@ -172,26 +173,31 @@ export function hitTestTopObjectForDelete<T extends CourseObjectDto | EditorObje
   return sorted.find((o) => hitTestObject(geoPoint, o, tolerance));
 }
 
-/** Sum leg distances start → controls → finish in sortOrder (701/703/706). */
+/** Sum leg distances along the course sequence (701/703/706). */
 export function computeCourseLengthMeters(
   objects: Array<CourseObjectDto | EditorObject>,
   mapScale = 15000,
+  sequence?: string[] | null,
 ): number {
-  const legPoints = objects
-    .slice()
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-    .filter(
-      (o) =>
-        o.objectType === CourseObjectType.POINT &&
-        o.geometry.type === "Point" &&
-        COURSE_LEG_SYMBOLS.has(o.symbolNr),
-    );
+  const legPoints =
+    sequence != null
+      ? pointsAlongSequence(objects, sequence)
+      : objects
+          .slice()
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .filter(
+            (o) =>
+              o.objectType === CourseObjectType.POINT &&
+              o.geometry.type === "Point" &&
+              COURSE_LEG_SYMBOLS.has(o.symbolNr),
+          );
 
   let totalMapUnits = 0;
   for (let i = 0; i < legPoints.length - 1; i++) {
     const a = legPoints[i]!;
     const b = legPoints[i + 1]!;
     if (a.geometry.type !== "Point" || b.geometry.type !== "Point") continue;
+    if (a === b) continue;
     totalMapUnits += distance2d(a.geometry.coordinates, b.geometry.coordinates);
   }
 
@@ -275,7 +281,7 @@ export function renderObjectSvg(
   options?: {
     opacity?: number;
     selected?: boolean;
-    controlNumber?: number;
+    controlNumber?: number | string;
     headingRad?: number;
     textRotationDeg?: number;
     skipText?: boolean;
@@ -332,18 +338,21 @@ export function renderObjectSvg(
 export function renderCourseLegsSvg(
   objects: Array<CourseObjectDto | EditorObject>,
   transform: SvgRootTransform,
-  options?: { opacity?: number },
+  options?: { opacity?: number; sequence?: string[] | null },
 ): string {
   const opacity = options?.opacity ?? 1;
-  const sorted = objects
-    .slice()
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-    .filter(
-      (o) =>
-        o.objectType === "POINT" &&
-        o.geometry.type === "Point" &&
-        COURSE_LEG_SYMBOLS.has(o.symbolNr),
-    );
+  const sorted =
+    options?.sequence != null
+      ? pointsAlongSequence(objects, options.sequence)
+      : objects
+          .slice()
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .filter(
+            (o) =>
+              o.objectType === "POINT" &&
+              o.geometry.type === "Point" &&
+              COURSE_LEG_SYMBOLS.has(o.symbolNr),
+          );
 
   if (sorted.length < 2) return "";
 
@@ -352,6 +361,7 @@ export function renderCourseLegsSvg(
     const a = sorted[i]!;
     const b = sorted[i + 1]!;
     if (a.geometry.type !== "Point" || b.geometry.type !== "Point") continue;
+    if (a === b) continue;
     const [x1, y1] = geoToSvgUserPoint(a.geometry.coordinates, transform);
     const [x2, y2] = geoToSvgUserPoint(b.geometry.coordinates, transform);
     const gapStart = getPointSymbolLegGap(a.symbolNr);
@@ -370,24 +380,31 @@ export function renderCourseOverlaySvg(
   transform: SvgRootTransform,
   options?: {
     opacity?: number;
-    controlNumbers?: Map<string, number>;
+    controlNumbers?: Map<string, number | string>;
     selectedId?: string | null;
     drawLegs?: boolean;
     textRotationDeg?: number;
     skipText?: boolean;
+    sequence?: string[] | null;
   },
 ): string {
   const sorted = objects.slice().sort((a, b) => a.sortOrder - b.sortOrder);
-  const legPoints = sorted.filter(
-    (o) =>
-      o.objectType === "POINT" &&
-      o.geometry.type === "Point" &&
-      COURSE_LEG_SYMBOLS.has(o.symbolNr),
-  );
+  const legPoints =
+    options?.sequence != null
+      ? pointsAlongSequence(objects, options.sequence)
+      : sorted.filter(
+          (o) =>
+            o.objectType === "POINT" &&
+            o.geometry.type === "Point" &&
+            COURSE_LEG_SYMBOLS.has(o.symbolNr),
+        );
 
   const legs =
     options?.drawLegs !== false
-      ? renderCourseLegsSvg(objects, transform, { opacity: options?.opacity })
+      ? renderCourseLegsSvg(objects, transform, {
+          opacity: options?.opacity,
+          sequence: options?.sequence,
+        })
       : "";
 
   const objectMarkup = sorted
@@ -422,7 +439,7 @@ export function renderCourseExportTextSvg(
   objects: Array<CourseObjectDto | EditorObject>,
   transform: SvgRootTransform,
   frame: ExportFrame,
-  controlNumbers?: Map<string, number>,
+  controlNumbers?: Map<string, number | string>,
 ): string {
   const { centerX, centerY } = frame;
   const rotationDeg = PDF_EXPORT_ROTATION_DEG;
@@ -473,4 +490,25 @@ export function renumberSortOrder<T extends { sortOrder: number }>(objects: T[])
 
 export function computeHitTolerance(viewBoxWidth: number, viewBoxHeight: number): number {
   return Math.max(viewBoxWidth, viewBoxHeight) * 0.015;
+}
+
+/** First network point (start/control/finish), resolving 704 hits to their control. */
+export function hitTestCourseNetworkPoint<T extends CourseObjectDto | EditorObject>(
+  geoPoint: [number, number],
+  objects: T[],
+  tolerance: number,
+  resolveNumber: (objects: T[], numberId: string) => T | undefined,
+): T | undefined {
+  const candidates = objects.filter(
+    (o) =>
+      COURSE_LEG_SYMBOLS.has(o.symbolNr) ||
+      isControlNumberObject(o as EditorObject),
+  );
+  const hit = hitTestTopObject(geoPoint, candidates, tolerance);
+  if (!hit) return undefined;
+  if (isControlNumberObject(hit as EditorObject)) {
+    const id = "clientId" in hit ? (hit as EditorObject).clientId : hit.id;
+    return resolveNumber(objects, id);
+  }
+  return hit;
 }

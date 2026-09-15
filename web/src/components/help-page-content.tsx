@@ -131,7 +131,8 @@ export async function HelpPageContent() {
           <p className="mt-4">Banplanering:</p>
           <ol className="list-decimal space-y-2 pl-5">
             <li>Öppna Lägg bana på områdessidan.</li>
-            <li>Rita start, kontroller och mål med IOF-symboler 701–709.</li>
+            <li>Lägg ut start och de kontroller du vill använda (kontrollerna får kod 31, 32 …).</li>
+            <li>Välj Rita bana och klicka start, sedan kontrollerna i banordning. Avsluta med mål.</li>
             <li>Spara banan och exportera som PDF vid behov.</li>
           </ol>
           <HelpProcessDiagram
@@ -454,11 +455,11 @@ export async function HelpPageContent() {
           </p>
           <HelpList
             items={[
-              "701 Start — triangel (punkt)",
-              "703 Kontroll — cirkel (punkt); banlinjer dras automatiskt mellan start, kontroller och mål",
-              "704 Kontrollnummer — text; nummer sätts automatiskt vid nya kontroller",
+              "701 Start — triangel (punkt); läggs ut i ritläget, klickas först när du ritar banan",
+              "703 Kontroll — cirkel (punkt); får kod 31, 32 … när den läggs ut. Banlinjer dras först när du ritar banan",
+              "704 Kontrollnummer — text vid cirkeln; visar koden tills kontrollen ingår i banan, därefter besöksnummer (1, 2/7 …)",
               "705 Banlinje — linje",
-              "706 Mål — dubbelcirkel (punkt)",
+              "706 Mål — dubbelcirkel (punkt); klicka på målet för att avsluta banan",
               "707 Markerad sträcka — streckad linje",
               "709 Förbudsområde — yta med skraffering",
             ]}
@@ -467,22 +468,27 @@ export async function HelpPageContent() {
           <h3 className="font-medium text-slate-900">Rita och redigera</h3>
           <HelpList
             items={[
-              "Välj symbol i panelen till höger och verktyg: Rita, Flytta eller Radera",
+              "Panorera — dra kartan. Zooma med +/−, mushjul eller nyp",
+              "Rita — välj symbol i panelen till höger och klicka ut start, kontroller och mål (och ev. andra symboler)",
+              "Rita bana — klicka först på starten, sedan på de kontroller som ska ingå, och avsluta med mål. Samma kontroll får ingå flera gånger",
+              "Ångra sista tar bort det senaste besöket utan att radera cirkeln",
               "Punkt — klicka på kartan",
               "Linje — klicka punkter, dubbelklicka eller Avsluta linje",
               "Yta — klicka hörn, dubbelklicka nära start eller Avsluta yta",
               "Text — klicka och skriv i dialogrutan",
               "Flytta — dra valt objekt; vid kontroll (703) följer kontrollnumret (704) med",
               "Flytta kontrollnummer (704) separat via verktyget Flytta eller knappen nr i kontrollistan",
-              "Radera — välj objekt och tryck Radera, eller använd verktyget Radera",
+              "Radera — tar bort cirkeln från kartan (och alla besök av den kontrollen)",
             ]}
           />
 
           <h3 className="font-medium text-slate-900">Kontrollista och banlängd</h3>
           <p>
-            Kontrollistan visar start, alla numrerade kontroller och mål i banordning. Banlängd
-            beräknas live utifrån banlinjerna mellan start, kontroller och mål, och visas både i
-            verktygsraden och i kontrollistan. Klicka på en punkt i listan för att zooma in på den.
+            Kontrollistan visar banan i besöksordning: start, kontroller som <strong>1 · 31</strong>{" "}
+            (besöksnummer och kod) och mål. Kontroller som är utlagda men inte ingår i banan listas
+            under <strong>Oanvända</strong>. Banlängd beräknas längs banans sträckor. Klicka på en
+            punkt i listan för att zooma in på den. Krysset tar bort ett besök från banan men lämnar
+            cirkeln kvar.
           </p>
 
           <h3 className="font-medium text-slate-900">Spara och dela</h3>
@@ -974,9 +980,11 @@ export async function HelpPageContent() {
             <div>
               <h3 className="font-medium text-slate-900">Vad är Lägg bana?</h3>
               <p className="mt-1">
-                Lägg bana är ett verktyg för att rita orienteringsbanor ovanpå kartan med IOF-symboler
-                701–709. Banor sparas separat och påverkar inte kartfilen. Du kan spara privata eller
-                publika banor, jämföra med skuggbana och exportera som PDF.
+                Lägg bana är ett verktyg för att planera orienteringsbanor ovanpå kartan. Du lägger
+                först ut start och kontroller (kod 31 och uppåt), sedan ritar du banan genom att
+                klicka på dem i den ordning de ska springas. Banor sparas separat och påverkar inte
+                kartfilen. Du kan spara privata eller publika banor, jämföra med skuggbana och
+                exportera som PDF.
               </p>
             </div>
             <div>

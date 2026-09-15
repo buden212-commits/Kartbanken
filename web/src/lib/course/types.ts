@@ -11,7 +11,7 @@ export type CourseObjectTypeValue =
 export type CoursePointGeometry = {
   type: "Point";
   coordinates: [number, number];
-  /** 704 only: 1-based index among 703 controls in visit order. */
+  /** 704 only: 1-based index among 703 controls in placement order. */
   linkedControlIndex?: number;
 };
 
@@ -49,9 +49,11 @@ export type CourseSummary = {
 
 export type CourseDetail = CourseSummary & {
   objects: CourseObjectDto[];
+  /** Object ids for start/controls/finish in course visit order. Duplicates allowed. */
+  sequence: string[];
 };
 
-export type EditorTool = "draw" | "move" | "delete";
+export type EditorTool = "pan" | "draw" | "course" | "move" | "delete";
 
 export type EditorObject = CourseObjectDto & {
   /** Client-only temp id before first save */
