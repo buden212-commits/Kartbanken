@@ -8,7 +8,7 @@ import type { CourseSymbolGeometry } from "@/lib/course/symbols";
 import { getCourseSymbol } from "@/lib/course/symbols";
 import type { CourseDetail, CourseSummary, EditorTool } from "@/lib/course/types";
 
-export { buildControlNumberMap } from "@/lib/course/control-numbers";
+export { hydrateCourseEditor } from "@/lib/course/control-numbers";
 
 type Props = {
   selectedNr: number;
@@ -68,7 +68,9 @@ export function geometryForSymbol(symbolNr: number): CourseSymbolGeometry {
 }
 
 export const TOOL_LABELS: Record<EditorTool, string> = {
+  pan: "Panorera",
   draw: "Rita",
+  course: "Rita bana",
   move: "Flytta",
   delete: "Radera",
   clip: "Klipp",

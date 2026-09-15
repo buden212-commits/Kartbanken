@@ -8,7 +8,6 @@ import { CourseControlList } from "@/components/course/course-control-list";
 import { CoursePdfPanel } from "@/components/course/course-pdf-panel";
 import {
   CourseSymbolPanel,
-  buildControlNumberMap,
   geometryForSymbol,
   TOOL_LABELS,
 } from "@/components/course/course-symbol-panel";
@@ -19,10 +18,11 @@ import { CourseObjectType } from "@/lib/course/types";
 import {
   defaultControlNumberForControl,
   ensureControlNumbers,
+  findControlForNumberObject,
   findControlNumberObject,
   getControlsSorted,
+  hydrateCourseEditor,
   isControlNumberObject,
-  migrateLegacyControlNumbers,
   resyncControlNumberIndices,
 } from "@/lib/course/control-numbers";
 import {
@@ -50,10 +50,22 @@ import {
   findNearestMapFeatureNearSegment,
 } from "@/lib/ocad/map-hit-index";
 import {
+  appendVisit,
+  buildCourseVisits,
+  canAppendVisit,
+  courseHint,
+  nextControlCode,
+  removeObjectFromSequence,
+  removeVisitAt,
+  undoLastVisit,
+  unusedControls,
+} from "@/lib/course/sequence";
+import {
   computeCourseLengthMeters,
   computeHitTolerance,
   courseObjectsBbox,
   formatCourseLengthKm,
+  hitTestCourseNetworkPoint,
   hitTestTopObject,
   hitTestTopObjectForDelete,
   objectCentroid,
@@ -146,11 +158,13 @@ export function CourseEditorClient({
   const courseNameRef = useRef("Ny bana");
   const [isPublic, setIsPublic] = useState(false);
   const [objects, setObjects] = useState<EditorObject[]>([]);
+  const [sequence, setSequence] = useState<string[]>([]);
   const [courses, setCourses] = useState<CourseSummary[]>([]);
   const [ghostCourseId, setGhostCourseId] = useState<string | null>(null);
   const [ghostObjects, setGhostObjects] = useState<EditorObject[]>([]);
+  const [ghostSequence, setGhostSequence] = useState<string[]>([]);
   const [selectedSymbol, setSelectedSymbol] = useState(703);
-  const [tool, setTool] = useState<EditorTool>("draw");
+  const [tool, setTool] = useState<EditorTool>("pan");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -192,13 +206,27 @@ export function CourseEditorClient({
   const [mapHitIndex, setMapHitIndex] = useState<MapHitIndexEntry[]>([]);
   const [mapIndexReady, setMapIndexReady] = useState(false);
 
-  const activeGeometry = geometryForSymbol(selectedSymbol);
-  const controlNumbers = useMemo(() => buildControlNumberMap(objects), [objects]);
+  const visits = useMemo(() => buildCourseVisits(objects, sequence), [objects, sequence]);
+  const unused = useMemo(() => unusedControls(objects, sequence), [objects, sequence]);
   const courseLengthMeters = useMemo(
-    () => computeCourseLengthMeters(objects, mapScale),
-    [objects, mapScale],
+    () => computeCourseLengthMeters(objects, mapScale, sequence),
+    [objects, mapScale, sequence],
   );
   const courseLengthLabel = formatCourseLengthKm(courseLengthMeters);
+  const courseStatusHint = useMemo(
+    () => (tool === "course" ? courseHint(sequence, objects) : null),
+    [tool, sequence, objects],
+  );
+
+  const applyCourseState = useCallback(
+    (nextObjects: EditorObject[], nextSequence: string[], markDirty = true) => {
+      const synced = ensureControlNumbers(renumberSortOrder(nextObjects), nextSequence);
+      setObjects(synced);
+      setSequence(nextSequence);
+      if (markDirty) setDirty(true);
+    },
+    [],
+  );
 
   const loadCourses = useCallback(async () => {
     const res = await fetch(`/api/maps/${mapSlug}/courses`);
@@ -216,19 +244,23 @@ export function CourseEditorClient({
         return;
       }
       const data = await res.json();
-      const loadedObjects = migrateLegacyControlNumbers(detailToEditorObjects(data.objects));
+      const loadedObjects = hydrateCourseEditor(
+        detailToEditorObjects(data.objects),
+        data.sequence ?? null,
+      );
       setCourseId(data.id);
       setCourseName(data.name);
       courseNameRef.current = data.name;
       setIsPublic(data.isPublic);
-      setObjects(loadedObjects);
+      setObjects(loadedObjects.objects);
+      setSequence(loadedObjects.sequence);
       setDirty(false);
       setSelectedId(null);
       setLineDraft([]);
       setPolygonDraft([]);
       setError(null);
 
-      const bbox = courseObjectsBbox(loadedObjects);
+      const bbox = courseObjectsBbox(loadedObjects.objects);
       if (bbox) {
         fitRequestIdRef.current += 1;
         setFocusTarget(null);
@@ -248,12 +280,18 @@ export function CourseEditorClient({
       setGhostCourseId(id);
       if (!id) {
         setGhostObjects([]);
+        setGhostSequence([]);
         return;
       }
       const res = await fetch(`/api/maps/${mapSlug}/courses/${id}`);
       if (res.ok) {
         const data = await res.json();
-        setGhostObjects(detailToEditorObjects(data.objects));
+        const hydrated = hydrateCourseEditor(
+          detailToEditorObjects(data.objects),
+          data.sequence ?? null,
+        );
+        setGhostObjects(hydrated.objects);
+        setGhostSequence(hydrated.sequence);
       }
     },
     [mapSlug],
@@ -293,10 +331,10 @@ export function CourseEditorClient({
   const addObject = useCallback((obj: Omit<EditorObject, "sortOrder">) => {
     setObjects((prev) => {
       const next = [...prev, { ...obj, sortOrder: prev.length }];
-      return renumberSortOrder(next);
+      return ensureControlNumbers(renumberSortOrder(next), sequence);
     });
     setDirty(true);
-  }, []);
+  }, [sequence]);
 
   const updateObject = useCallback((clientId: string, patch: Partial<EditorObject>) => {
     setObjects((prev) =>
@@ -315,11 +353,15 @@ export function CourseEditorClient({
           next = next.filter((o) => o.clientId !== linked.clientId);
         }
       }
-      return ensureControlNumbers(renumberSortOrder(next));
+      const nextSequence = target && (target.symbolNr === 701 || target.symbolNr === 703 || target.symbolNr === 706)
+        ? removeObjectFromSequence(sequence, clientId)
+        : sequence;
+      setSequence(nextSequence);
+      return ensureControlNumbers(renumberSortOrder(next), nextSequence);
     });
     setSelectedId(null);
     setDirty(true);
-  }, []);
+  }, [sequence]);
 
   const finishLine = useCallback(() => {
     if (lineDraft.length < 2) {
@@ -546,7 +588,27 @@ export function CourseEditorClient({
         return;
       }
 
-      if (tool === "move") return;
+      if (tool === "move" || tool === "pan") return;
+
+      if (tool === "course") {
+        const vb = parseViewBoxString(viewBoxRef.current);
+        const tol = computeHitTolerance(vb?.width ?? 1000, vb?.height ?? 1000);
+        const hit = hitTestCourseNetworkPoint(geo, objects, tol, findControlForNumberObject);
+        if (!hit) {
+          setError("Klicka på en utlagd start, kontroll eller mål.");
+          return;
+        }
+        const check = canAppendVisit(objects, sequence, hit);
+        if (!check.ok) {
+          setError(check.reason);
+          return;
+        }
+        const nextSequence = appendVisit(sequence, hit.clientId);
+        applyCourseState(objects, nextSequence);
+        setError(null);
+        setSuccess(null);
+        return;
+      }
 
       const sym = getCourseSymbol(selectedSymbol);
       if (!sym) return;
@@ -555,26 +617,24 @@ export function CourseEditorClient({
 
       if (geoType === "point") {
         if (selectedSymbol === 703) {
-          setObjects((prev) => {
-            const synced = resyncControlNumberIndices(prev);
-            const controlIndex = getControlsSorted(synced).length + 1;
-            const controlId = newClientId();
-            const controlObj: EditorObject = {
-              clientId: controlId,
-              id: "",
-              symbolNr: 703,
-              objectType: CourseObjectType.POINT,
-              geometry: { type: "Point", coordinates: geo },
-              textContent: null,
-              sortOrder: synced.length,
-            };
-            const numberObj: EditorObject = {
-              ...defaultControlNumberForControl(geo, controlIndex),
-              sortOrder: synced.length + 1,
-            };
-            return renumberSortOrder([...synced, controlObj, numberObj]);
-          });
-          setDirty(true);
+          const synced = resyncControlNumberIndices(objects, sequence);
+          const controlIndex = getControlsSorted(synced).length + 1;
+          const code = nextControlCode(synced);
+          const controlId = newClientId();
+          const controlObj: EditorObject = {
+            clientId: controlId,
+            id: "",
+            symbolNr: 703,
+            objectType: CourseObjectType.POINT,
+            geometry: { type: "Point", coordinates: geo },
+            textContent: String(code),
+            sortOrder: synced.length,
+          };
+          const numberObj: EditorObject = {
+            ...defaultControlNumberForControl(geo, String(code), controlIndex),
+            sortOrder: synced.length + 1,
+          };
+          applyCourseState([...synced, controlObj, numberObj], sequence);
           return;
         }
 
@@ -615,12 +675,14 @@ export function CourseEditorClient({
     },
     [
       addObject,
+      applyCourseState,
       canEdit,
       finishPolygon,
       objects,
       polygonDraft,
       removeObject,
       selectedSymbol,
+      sequence,
       tool,
       handleClipClick,
     ],
@@ -669,6 +731,10 @@ export function CourseEditorClient({
       const now = Date.now();
       const isDoubleClick = now - lastClickRef.current < 350;
       lastClickRef.current = now;
+
+      if (isDoubleClick && tool === "course") {
+        return;
+      }
 
       if (isDoubleClick && tool === "draw" && geometryForSymbol(selectedSymbol) === "line") {
         finishLine();
@@ -810,6 +876,9 @@ export function CourseEditorClient({
           textContent: o.textContent,
           sortOrder: o.sortOrder,
         })),
+        sequence: sequence
+          .map((id) => objects.findIndex((o) => o.clientId === id))
+          .filter((index) => index >= 0),
       };
 
       const objRes = await fetch(`/api/maps/${mapSlug}/courses/${id}/objects`, {
@@ -824,7 +893,12 @@ export function CourseEditorClient({
       }
 
       const saved = await objRes.json();
-      setObjects(migrateLegacyControlNumbers(detailToEditorObjects(saved.objects)));
+      const hydrated = hydrateCourseEditor(
+        detailToEditorObjects(saved.objects),
+        saved.sequence ?? null,
+      );
+      setObjects(hydrated.objects);
+      setSequence(hydrated.sequence);
       setDirty(false);
       setSuccess("Banan sparades");
       await loadCourses();
@@ -842,8 +916,12 @@ export function CourseEditorClient({
     courseNameRef.current = "Ny bana";
     setIsPublic(false);
     setObjects([]);
+    setSequence([]);
     setDirty(false);
     setSelectedId(null);
+    setLineDraft([]);
+    setPolygonDraft([]);
+    setTool("pan");
   }
 
   async function handleDeleteCourse() {
@@ -865,10 +943,12 @@ export function CourseEditorClient({
       courseNameRef.current = "Ny bana";
       setIsPublic(false);
       setObjects([]);
+      setSequence([]);
       setDirty(false);
       setSelectedId(null);
       setLineDraft([]);
       setPolygonDraft([]);
+      setTool("pan");
       setSuccess("Banan raderades");
       await loadCourses();
       router.refresh();
@@ -924,10 +1004,12 @@ export function CourseEditorClient({
 
       const ghostMarkup = renderCourseOverlaySvg(ghostObjects, rootTransform, {
         opacity: 0.45,
+        sequence: ghostSequence,
       });
 
       const activeMarkup = renderCourseOverlaySvg(objects, rootTransform, {
         selectedId,
+        sequence,
       });
 
       const markerMarkup =
@@ -970,8 +1052,20 @@ export function CourseEditorClient({
         </g>
       );
     },
-    [ghostObjects, lineDraft, objects, polygonDraft, selectedId, tool],
+    [ghostObjects, ghostSequence, lineDraft, objects, polygonDraft, selectedId, sequence, tool],
   );
+
+  function handleUndoLastVisit() {
+    if (!canEdit || sequence.length === 0) return;
+    applyCourseState(objects, undoLastVisit(sequence));
+    setError(null);
+  }
+
+  function handleRemoveVisit(sequenceIndex: number) {
+    if (!canEdit) return;
+    applyCourseState(objects, removeVisitAt(sequence, sequenceIndex));
+    setError(null);
+  }
 
   const toolbar = (
     <div className="flex flex-wrap items-center gap-2">
@@ -979,12 +1073,15 @@ export function CourseEditorClient({
       <HelpLinkIcon section="bana" />
       <span className="text-xs text-slate-500">· Publicerad version v{headVersionNumber}</span>
       <span className="text-xs font-medium text-slate-700">Banlängd: {courseLengthLabel}</span>
-      {(["draw", "move", "clip", "delete"] as EditorTool[]).map((t) => (
+      {(["pan", "draw", "course", "move", "clip", "delete"] as EditorTool[]).map((t) => (
         <button
           key={t}
           type="button"
-          disabled={!canEdit}
-          onClick={() => setTool(t)}
+          disabled={!canEdit && t !== "pan"}
+          onClick={() => {
+            setTool(t);
+            setError(null);
+          }}
           className={`rounded-md px-2 py-1 text-xs ${
             tool === t
               ? "bg-ifk-blue text-white"
@@ -1001,6 +1098,15 @@ export function CourseEditorClient({
             ? "snäpps mot kartsymbol"
             : "laddar kartindex…"}
         </span>
+      )}
+      {canEdit && sequence.length > 0 && (
+        <button
+          type="button"
+          onClick={handleUndoLastVisit}
+          className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:border-ifk-blue"
+        >
+          Ångra sista
+        </button>
       )}
       {geometryForSymbol(selectedSymbol) === "line" && lineDraft.length > 0 && (
         <button
@@ -1019,6 +1125,9 @@ export function CourseEditorClient({
         >
           Avsluta yta
         </button>
+      )}
+      {courseStatusHint && (
+        <span className="w-full text-xs text-slate-500 sm:w-auto">{courseStatusHint}</span>
       )}
     </div>
   );
@@ -1135,8 +1244,8 @@ export function CourseEditorClient({
             fullscreen
             exportEnabled={false}
             showLayerPanel={false}
-            interactionMode={canEdit ? "draw" : "navigate"}
-            drawPointerHandlers={canEdit ? drawPointerHandlers : undefined}
+            interactionMode={canEdit && tool !== "pan" ? "draw" : "navigate"}
+            drawPointerHandlers={canEdit && tool !== "pan" ? drawPointerHandlers : undefined}
             renderSvgOverlay={renderSvgOverlay}
             headerContent={toolbar}
             focusTarget={focusTarget}
@@ -1153,15 +1262,22 @@ export function CourseEditorClient({
         </div>
         <CourseControlList
           objects={objects}
-          controlNumbers={controlNumbers}
+          visits={visits}
+          unused={unused}
           selectedId={selectedId}
           courseLengthLabel={courseLengthLabel}
+          canEdit={canEdit}
           onSelect={setSelectedId}
           onFocus={focusOnObject}
+          onRemoveVisit={handleRemoveVisit}
         />
         <CourseSymbolPanel
           selectedNr={selectedSymbol}
-          onSelect={setSelectedSymbol}
+          onSelect={(nr) => {
+            setSelectedSymbol(nr);
+            setTool("draw");
+            setError(null);
+          }}
         />
       </div>
 

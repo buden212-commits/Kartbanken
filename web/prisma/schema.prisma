@@ -199,16 +199,17 @@ model AppSettings {
 }
 
 model Course {
-  id          String         @id @default(cuid())
-  mapFileId   String
-  name        String
-  createdById String
-  isPublic    Boolean        @default(false)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  mapFile     MapFile        @relation(fields: [mapFileId], references: [id], onDelete: Cascade)
-  createdBy   User           @relation(fields: [createdById], references: [id])
-  objects     CourseObject[]
+  id           String         @id @default(cuid())
+  mapFileId    String
+  name         String
+  createdById  String
+  isPublic     Boolean        @default(false)
+  sequenceJson String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  mapFile      MapFile        @relation(fields: [mapFileId], references: [id], onDelete: Cascade)
+  createdBy    User           @relation(fields: [createdById], references: [id])
+  objects      CourseObject[]
 
   @@index([mapFileId, isPublic])
 }

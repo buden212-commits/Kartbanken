@@ -25,7 +25,7 @@ export type CourseLegGap = {
 export type CoursePointGeometry = {
   type: "Point";
   coordinates: [number, number];
-  /** 704 only: 1-based index among 703 controls in visit order. */
+  /** 704 only: 1-based index among 703 controls in placement order. */
   linkedControlIndex?: number;
   /** Gaps in control circle stroke (703, 706, 702). */
   cutouts?: CourseCircleCutout[];
@@ -76,9 +76,11 @@ export type CourseSummary = {
 
 export type CourseDetail = CourseSummary & {
   objects: CourseObjectDto[];
+  /** Object ids for start/controls/finish in course visit order. Duplicates allowed. */
+  sequence: string[];
 };
 
-export type EditorTool = "draw" | "move" | "delete" | "clip";
+export type EditorTool = "pan" | "draw" | "course" | "move" | "delete" | "clip";
 
 export type EditorObject = CourseObjectDto & {
   /** Client-only temp id before first save */

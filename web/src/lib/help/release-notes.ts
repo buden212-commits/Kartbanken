@@ -7,6 +7,17 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-09-15",
+    title: "Lägg bana — panorera, kontrollkoder och rita bana",
+    items: [
+      "Nytt verktyg Panorera — dra kartan utan att lägga ut symboler (zooma med +/−, hjul eller nyp som tidigare)",
+      "Lägg först ut start och kontroller; kontrollerna får kod 31, 32, 33 …",
+      "Rita bana genom att klicka på starten, sedan kontrollerna i den ordning de ska springas, och avsluta med mål",
+      "Samma kontroll kan ingå flera gånger; vid cirkeln visas då t.ex. 2/7",
+      "Kontrollistan visar besöksordning (1 · 31) och oanvända kontroller. Du kan ta bort ett besök utan att radera cirkeln",
+    ],
+  },
+  {
     date: "2026-09-14",
     title: "Fler fällbara sektioner på områdessidan",
     items: [

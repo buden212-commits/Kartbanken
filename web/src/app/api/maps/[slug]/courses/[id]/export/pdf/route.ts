@@ -13,8 +13,8 @@ import {
   exportFrameFromExtent,
   paperSizeMm,
 } from "@/lib/course/pdf-scale";
-import { migrateLegacyControlNumbers } from "@/lib/course/control-numbers";
-import { isControlSymbol } from "@/lib/course/symbols";
+import { hydrateCourseEditor } from "@/lib/course/control-numbers";
+import { buildCourseVisits, objectsForPrintedCourse } from "@/lib/course/sequence";
 import { getLatestPublishedVersion } from "@/lib/maps/version-context";
 import { extractSvgInner } from "@/lib/ocad/svg-utils";
 import {
@@ -82,10 +82,21 @@ export async function GET(request: Request, { params }: RouteParams) {
   }
 
   const detail = serializeCourseDetail(course);
+  const hydrated = hydrateCourseEditor(
+    detail.objects.map((o) => ({ ...o, clientId: o.id })),
+    detail.sequence,
+  );
+  const exportEditorObjects = objectsForPrintedCourse(hydrated.objects, hydrated.sequence);
+  const exportObjects = exportEditorObjects.map(({ clientId, ...o }) => ({ ...o, id: clientId }));
+  const printSequence = hydrated.sequence.filter((id) =>
+    exportEditorObjects.some((o) => o.clientId === id),
+  );
   const { rootTransform, ocadMapScale } = extractSvgInner(svgText);
   const fileMapScale = ocadMapScale ?? 15000;
 
-  const geoBbox = courseObjectsBbox(detail.objects);
+  const geoBbox = courseObjectsBbox(
+    printSequence.length > 0 ? exportObjects : detail.objects,
+  );
   if (!geoBbox) {
     return NextResponse.json(
       { error: "Banan har inga objekt att centrera PDF-exporten på" },
@@ -123,12 +134,8 @@ export async function GET(request: Request, { params }: RouteParams) {
     );
   }
 
-  const exportObjects = migrateLegacyControlNumbers(
-    detail.objects.map((o) => ({ ...o, clientId: o.id })),
-  ).map(({ clientId, ...o }) => ({ ...o, id: clientId }));
-
   const courseLengthLabel = formatCourseLengthKm(
-    computeCourseLengthMeters(exportObjects, fileMapScale),
+    computeCourseLengthMeters(exportObjects, fileMapScale, printSequence),
   );
 
   const exportSvg = buildCourseExportSvg(
@@ -138,6 +145,7 @@ export async function GET(request: Request, { params }: RouteParams) {
     rootTransform,
     undefined,
     { name: course.name, lengthLabel: courseLengthLabel, mapScale: scale },
+    printSequence,
   );
 
   await logAction(session.user.id, "COURSE_PDF_EXPORT", "Course", id, {
@@ -163,13 +171,18 @@ export async function GET(request: Request, { params }: RouteParams) {
       widthMm,
       heightMm,
       controlList: includeControlList
-        ? detail.objects
-            .filter((o) => isControlSymbol(o.symbolNr))
-            .map((o, i) => ({
-              number: i + 1,
-              symbolNr: o.symbolNr,
-              text: o.textContent,
-            }))
+        ? buildCourseVisits(hydrated.objects, hydrated.sequence).map((visit) => ({
+            number: visit.visitNumber ?? 0,
+            symbolNr: visit.symbolNr,
+            text:
+              visit.symbolNr === 701
+                ? "Start"
+                : visit.symbolNr === 706
+                  ? "Mål"
+                  : visit.code != null
+                    ? String(visit.code)
+                    : null,
+          }))
         : [],
     });
   }

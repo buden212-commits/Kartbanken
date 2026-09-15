@@ -63,8 +63,9 @@ export function buildCourseExportSvg(
   frame: ExportFrame,
   objects: CourseObjectDto[],
   rootTransform: SvgRootTransform = IDENTITY_SVG_TRANSFORM,
-  controlNumbers?: Map<string, number>,
+  controlNumbers?: Map<string, number | string>,
   courseInfo?: { name: string; lengthLabel: string; mapScale?: number },
+  sequence?: string[] | null,
 ): string {
   const pixelWidth = Math.max(1, Math.round((frame.widthMm / 25.4) * 200));
   const pixelHeight = Math.max(1, Math.round((frame.heightMm / 25.4) * 200));
@@ -83,6 +84,7 @@ export function buildCourseExportSvg(
   const overlayMarkup = renderCourseOverlaySvg(objects, rootTransform, {
     controlNumbers,
     skipText: true,
+    sequence,
   });
   const exportTextMarkup = renderCourseExportTextSvg(
     objects,

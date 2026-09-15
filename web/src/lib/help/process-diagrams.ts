@@ -150,9 +150,9 @@ flowchart TD
 
 export const courseFlow = `
 flowchart TD
-  A[Lägg bana på områdessidan] --> B[Välj IOF-symbol och verktyg]
-  B --> C[Rita start, kontroller och mål]
-  C --> D[Spara med namn]
+  A[Lägg bana på områdessidan] --> B[Lägg ut start och kontroller]
+  B --> C[Rita bana genom att klicka i ordning]
+  C --> D[Avsluta med mål och spara]
   D --> E{Gör publik?}
   E -->|Ja| F[Alla kan öppna]
   E -->|Nej| G[Endast du ser banan]

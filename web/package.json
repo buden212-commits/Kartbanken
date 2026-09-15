@@ -14,6 +14,7 @@
     "test:subset-diff": "tsx scripts/test-subset-diff.mts",
     "test:import-partial": "tsx scripts/test-import-partial-analysis.mts",
     "test:course-pdf-scale": "tsx scripts/test-course-pdf-scale.mts",
+    "test:course-sequence": "tsx scripts/test-course-sequence.mts",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
