@@ -1,16 +1,16 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { canAdmin, canCheckout, canCreateCourse, canCreateMapSuggestion, canReviewMapSuggestion, canUpload, canViewCheckouts } from "@/lib/auth/permissions";
+import { canAdmin, canCheckout, canCreateCourse, canCreateMapSuggestion, canReviewMapSuggestion, canUpload, canViewCheckouts, userCanFieldEdit } from "@/lib/auth/permissions";
 import { MapTitleEditor } from "@/components/map-title-editor";
-import { findActiveCheckoutsForMap, findCheckoutHistoryForMap, getHeadVersionId, serializeCheckoutResponse } from "@/lib/checkout/repository";
+import { findActiveAreaLocksForMap, findCheckoutHistoryForMap, getHeadVersionId, serializeCheckoutResponse } from "@/lib/checkout/repository";
 import { isMapArchived } from "@/lib/maps/archive-map";
 import { listCoursesForMap, serializeCourseSummary } from "@/lib/course/repository";
 import { versionVisibilityFilter } from "@/lib/maps/version-query";
 import { canViewVersion, isReader } from "@/lib/auth/version-access";
 import { prisma } from "@/lib/prisma";
 import { UploadVersionForm } from "@/components/upload-version-form";
-import { HelpSectionHeading } from "@/components/help-link-icon";
+import { HelpLinkIcon } from "@/components/help-link-icon";
 import { VersionHistoryList } from "@/components/version-history-list";
 import { VersionComparePicker } from "@/components/version-compare-picker";
 import { CheckoutAreaCta } from "@/components/checkout-area-cta";
@@ -37,8 +37,7 @@ export default async function MapDetailPage({ params }: PageProps) {
   const canCreateCheckout = !!(session && role && canCheckout(role));
   const canSeeCheckouts = !!(session && role && canViewCheckouts(role));
   const isAdmin = !!(session && role && canAdmin(role));
-  const canSuggest =
-    !!(session?.user?.id && role && canCreateMapSuggestion(role));
+  const canUseFieldEdit = !!(session && userCanFieldEdit(session.user));
 
   const map = await prisma.mapFile.findUnique({
     where: { slug },
@@ -60,9 +59,9 @@ export default async function MapDetailPage({ params }: PageProps) {
   const mapArchived = isMapArchived(map.archivedAt);
   const checkoutHistory = await findCheckoutHistoryForMap(map.id);
 
-  const activeCheckouts = await findActiveCheckoutsForMap(map.id);
+  const activeAreaLocks = await findActiveAreaLocksForMap(map.id);
   const headVersionId = await getHeadVersionId(map.id);
-  const checkoutListItems = activeCheckouts.map(serializeCheckoutResponse);
+  const checkoutListItems = activeAreaLocks.map(serializeCheckoutResponse);
 
   const pendingSuggestionBreakdown =
     session?.user?.id ? await listPendingSuggestionsByVersion(map.id) : [];
@@ -73,7 +72,7 @@ export default async function MapDetailPage({ params }: PageProps) {
       : [];
 
   const suggestionList =
-    canSuggest
+    session?.user?.id && role && canCreateMapSuggestion(role)
       ? await (async () => {
           const [rows, latestPublished] = await Promise.all([
             listPendingSuggestionsForMap(map.id),
@@ -154,10 +153,29 @@ export default async function MapDetailPage({ params }: PageProps) {
               headVersionId={headVersionId}
             />
           )}
-          {latestPublishedVersion && canSuggest && !mapArchived && (
+          {session?.user?.id && role && canCreateCourse(role) && !mapArchived && (
+            latestPublishedVersion ? (
+              <Link href={`/maps/${map.slug}/bana`} className="btn-primary">
+                {courseList.length > 0 ? `Banor (${courseList.length})` : "Lägg bana"}
+              </Link>
+            ) : (
+              <span
+                title="Kräver en publicerad kartversion"
+                className="cursor-not-allowed rounded-lg bg-slate-200 px-4 py-2 text-sm font-medium text-slate-500"
+              >
+                Lägg bana
+              </span>
+            )
+          )}
+          {canUseFieldEdit && !mapArchived && headVersionId && (
+            <Link href={`/maps/${map.slug}/field-edit`} className="btn-primary">
+              Fältredigering
+            </Link>
+          )}
+          {latestPublishedVersion && role && canCreateMapSuggestion(role) && !mapArchived && (
             <Link
               href={`/maps/${map.slug}/versions/${latestPublishedVersion.id}/suggest`}
-              className="rounded-lg border border-orange-300 bg-orange-50 px-4 py-2 text-sm font-medium text-orange-800 transition hover:border-orange-400"
+              className="btn-primary"
             >
               Föreslå ändring
             </Link>
@@ -174,7 +192,7 @@ export default async function MapDetailPage({ params }: PageProps) {
           publishedVersionNumber={latestPublishedVersion?.versionNumber ?? null}
           publishedVersionId={latestPublishedVersion?.id ?? null}
           suggestionBreakdown={pendingSuggestionBreakdown}
-          activeCheckoutCount={activeCheckouts.length}
+          activeCheckoutCount={activeAreaLocks.length}
           showVersionStatus={canManagePublication}
           showCheckoutStatus={canSeeCheckouts}
         />
@@ -185,6 +203,8 @@ export default async function MapDetailPage({ params }: PageProps) {
           mapSlug={map.slug}
           versionId={latestPublishedVersion.id}
           versionNumber={latestPublishedVersion.versionNumber}
+          originalFilename={latestPublishedVersion.originalFilename}
+          objectCount={latestPublishedVersion.objectCount}
         />
       )}
 
@@ -194,6 +214,17 @@ export default async function MapDetailPage({ params }: PageProps) {
             Versionshistorik ({map.versions.length})
           </h2>
         </div>
+
+        {map.versions.length === 0 ? (
+          <p className="mt-4 text-sm text-slate-500">Inga versioner uppladdade ännu.</p>
+        ) : (
+          <VersionHistoryList
+            mapSlug={map.slug}
+            versions={versionHistoryItems}
+            canManagePublication={!!canManagePublication}
+            canDelete={isAdmin}
+          />
+        )}
 
         {comparableVersions.length >= 2 && (
           <div className="mt-4">
@@ -209,58 +240,60 @@ export default async function MapDetailPage({ params }: PageProps) {
           </div>
         )}
 
-        {map.versions.length === 0 ? (
-          <p className="mt-4 text-sm text-slate-500">Inga versioner uppladdade ännu.</p>
-        ) : (
-          <VersionHistoryList
-            mapSlug={map.slug}
-            versions={versionHistoryItems}
-            canManagePublication={!!canManagePublication}
-            canDelete={isAdmin}
-          />
-        )}
-
         {canUploadVersion && !mapArchived && (
-          <div className="card mt-6">
-            <HelpSectionHeading section="versioner">Ladda upp ny version</HelpSectionHeading>
-            <p className="mt-1 text-sm text-slate-600">
-              Uppladdning skapar en ny version — tidigare versioner behålls. Efter uppladdning
-              jämförs automatiskt med föregående version. Nya versioner är opublicerade tills du
-              markerar dem som publicerade.
-            </p>
-            <div className="mt-4">
-              <UploadVersionForm
-                mapSlug={map.slug}
-                isAdmin={isAdmin}
-                mapArchived={mapArchived}
-                activeCheckouts={checkoutListItems.map((checkout) => ({
-                  id: checkout.id,
-                  userLabel: checkout.user.name ?? checkout.user.email,
-                  createdAt: checkout.createdAt,
-                  objectCount: checkout.selection.objectIds.length,
-                }))}
-              />
-            </div>
-          </div>
+          <CollapsibleSection
+            className="mt-6"
+            title="Ladda upp ny version"
+            description={
+              <span className="inline-flex items-start gap-2">
+                <span>
+                  Uppladdning skapar en ny version — tidigare versioner behålls. Efter uppladdning
+                  jämförs automatiskt med föregående version. Nya versioner är opublicerade tills du
+                  markerar dem som publicerade.
+                </span>
+                <HelpLinkIcon section="versioner" compact className="mt-0.5" />
+              </span>
+            }
+          >
+            <UploadVersionForm
+              mapSlug={map.slug}
+              isAdmin={isAdmin}
+              mapArchived={mapArchived}
+              activeCheckouts={checkoutListItems.map((checkout) => ({
+                id: checkout.id,
+                userLabel: checkout.user.name ?? checkout.user.email,
+                createdAt: checkout.createdAt,
+                objectCount: checkout.selection.objectIds.length,
+              }))}
+            />
+          </CollapsibleSection>
         )}
       </section>
 
-      {latestPublishedVersion && canSuggest && (
+      {latestPublishedVersion &&
+        session?.user?.id &&
+        role &&
+        canCreateMapSuggestion(role) && (
         <SuggestionAreaSection
           mapSlug={map.slug}
           versionId={latestPublishedVersion.id}
           versionNumber={latestPublishedVersion.versionNumber}
           suggestions={suggestionList}
-          canReview={!!(role && canReviewMapSuggestion(role))}
+          canReview={canReviewMapSuggestion(role)}
           isAdmin={role === Role.ADMIN}
         />
       )}
 
-      {headVersionId && activeCheckouts.length > 0 && canSeeCheckouts && (
+      {headVersionId && activeAreaLocks.length > 0 && canSeeCheckouts && (
         <CollapsibleSection
           title="Utcheckningsområden på kartan"
-          description="Färgade ytor visar vem som checkat ut vad (read-only)."
-          defaultOpen
+          badge={
+            <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800">
+              {activeAreaLocks.length}
+            </span>
+          }
+          description="Färgade ytor visar aktiva utcheckningar och fältredigeringar (read-only)."
+          defaultOpen={false}
         >
           <CheckoutOverviewMap
             mapSlug={map.slug}
@@ -287,7 +320,6 @@ export default async function MapDetailPage({ params }: PageProps) {
           courses={courseList}
           sessionUserId={session.user.id}
           isAdmin={role === Role.ADMIN}
-          publishedVersionId={latestPublishedVersion?.id ?? null}
         />
       )}
 
@@ -296,6 +328,7 @@ export default async function MapDetailPage({ params }: PageProps) {
           mapSlug={map.slug}
           items={checkoutHistory.map((row) => ({
             id: row.id,
+            mode: row.mode,
             status: row.status,
             createdAt: row.createdAt.toISOString(),
             integratedAt: row.integratedAt?.toISOString() ?? null,

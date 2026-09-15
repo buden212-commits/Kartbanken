@@ -1,69 +1,87 @@
 "use client";
 
-import { useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 
 type Props = {
-  title: ReactNode;
+  title: string;
+  /** Optional count/badge shown after the title. */
+  badge?: ReactNode;
+  /** Short description shown when expanded. */
   description?: ReactNode;
-  /** Extra content on the right side of the header (e.g. actions). */
-  headerAside?: ReactNode;
+  /** Start expanded. Default collapsed. */
   defaultOpen?: boolean;
-  /** Controlled open state. When set, overrides internal state. */
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
+  /**
+   * When this value changes (and is non-nullish), the section expands.
+   * Useful when another control needs to reveal the content (e.g. zoom-to).
+   */
+  forceOpenKey?: number | string | null;
+  children: ReactNode;
   className?: string;
   id?: string;
-  children: ReactNode;
 };
 
+/**
+ * Area-page section that can be collapsed to keep the page scannable.
+ * Pattern matches MapLayerPanel (aria-expanded + ▸/▾).
+ */
 export function CollapsibleSection({
   title,
+  badge,
   description,
-  headerAside,
   defaultOpen = false,
-  open: openControlled,
-  onOpenChange,
+  forceOpenKey = null,
+  children,
   className = "mt-10",
   id,
-  children,
 }: Props) {
-  const [openUncontrolled, setOpenUncontrolled] = useState(defaultOpen);
-  const open = openControlled ?? openUncontrolled;
-  const panelId = useId();
+  const [open, setOpen] = useState(defaultOpen);
+  const contentId = useId();
 
-  function setOpen(next: boolean) {
-    onOpenChange?.(next);
-    if (openControlled === undefined) {
-      setOpenUncontrolled(next);
+  useEffect(() => {
+    if (forceOpenKey == null) return;
+    setOpen(true);
+  }, [forceOpenKey]);
+
+  useEffect(() => {
+    if (!id || typeof window === "undefined") return;
+
+    function syncFromHash() {
+      const hash = window.location.hash.replace(/^#/, "");
+      if (hash && hash === id) setOpen(true);
     }
-  }
+
+    syncFromHash();
+    window.addEventListener("hashchange", syncFromHash);
+    return () => window.removeEventListener("hashchange", syncFromHash);
+  }, [id]);
 
   return (
     <section className={className} id={id}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <button
-          type="button"
-          className="group flex min-w-0 flex-1 items-start gap-2 text-left"
-          aria-expanded={open}
-          aria-controls={panelId}
-          onClick={() => setOpen(!open)}
-        >
-          <span className="mt-1 shrink-0 text-sm text-slate-400" aria-hidden>
-            {open ? "▾" : "▸"}
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-left transition hover:border-slate-300 hover:bg-slate-100/80"
+        aria-expanded={open}
+        aria-controls={contentId}
+      >
+        <span className="min-w-0">
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="text-lg font-medium text-slate-900">{title}</span>
+            {badge}
           </span>
-          <span className="min-w-0">
-            <span className="block text-lg font-medium text-slate-900 group-hover:text-ifk-blue">
-              {title}
+          {!open && (
+            <span className="mt-0.5 block text-xs text-slate-500">
+              Klicka för att visa
             </span>
-            {description && (
-              <span className="mt-1 block text-sm text-slate-600">{description}</span>
-            )}
-          </span>
-        </button>
-        {headerAside}
-      </div>
+          )}
+        </span>
+        <span className="shrink-0 text-sm text-slate-500" aria-hidden>
+          {open ? "▾" : "▸"}
+        </span>
+      </button>
       {open && (
-        <div id={panelId} className="mt-4">
+        <div id={contentId} className="mt-3">
+          {description && <div className="mb-2 text-sm text-slate-600">{description}</div>}
           {children}
         </div>
       )}

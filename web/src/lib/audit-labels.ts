@@ -132,6 +132,18 @@ export function formatAuditActivity(action: string, metadataRaw: string | null):
       const ref = mapRef(metadata);
       return ref ? `Utcheckning avbruten — ${ref}` : "Utcheckning avbruten";
     }
+    case "FIELD_EDIT_CREATED": {
+      const ref = mapRef(metadata);
+      return ref ? `Fältredigering startad — ${ref}` : "Fältredigering startad";
+    }
+    case "FIELD_EDIT_PUBLISHED": {
+      const ref = mapRef(metadata);
+      return ref ? `Fältredigering publicerad — ${ref}` : "Fältredigering publicerad";
+    }
+    case "FIELD_EDIT_CANCELLED": {
+      const ref = mapRef(metadata);
+      return ref ? `Fältredigering avbruten — ${ref}` : "Fältredigering avbruten";
+    }
     case "CHECKOUT_REMINDER_SENT": {
       const ref = mapRef(metadata);
       const days = metaString(metadata, "days");
@@ -235,6 +247,14 @@ export function formatAuditActivity(action: string, metadataRaw: string | null):
       const epsg = metaString(metadata, "epsg");
       if (ref && epsg) return `GeoTIFF exporterad — ${ref}, ${epsg}`;
       return ref ? `GeoTIFF exporterad — ${ref}` : "GeoTIFF exporterad";
+    }
+    case "MAP_OMAP_EXPORT": {
+      const ref = mapRef(metadata);
+      const count = metadata?.objectCount;
+      if (ref && typeof count === "number") {
+        return `Mapper (.omap) exporterad — ${ref}, ${count} objekt`;
+      }
+      return ref ? `Mapper (.omap) exporterad — ${ref}` : "Mapper (.omap) exporterad";
     }
     default:
       return action;

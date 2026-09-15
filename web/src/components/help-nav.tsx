@@ -3,6 +3,7 @@ import Link from "next/link";
 export type HelpNavKey =
   | "hub"
   | "guide"
+  | "sjalvstudier"
   | "buggar"
   | "forbattringar"
   | "release-notes";
@@ -10,6 +11,7 @@ export type HelpNavKey =
 const links: { href: string; key: HelpNavKey; label: string }[] = [
   { href: "/hjalp", key: "hub", label: "Översikt" },
   { href: "/hjalp/guide", key: "guide", label: "Guide" },
+  { href: "/hjalp/sjalvstudier", key: "sjalvstudier", label: "Självstudier" },
   { href: "/hjalp/buggar", key: "buggar", label: "Rapportera bugg" },
   { href: "/hjalp/forbattringar", key: "forbattringar", label: "Förbättringsförslag" },
   { href: "/hjalp/release-notes", key: "release-notes", label: "Release notes" },

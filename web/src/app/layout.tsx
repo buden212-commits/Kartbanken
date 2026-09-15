@@ -27,6 +27,8 @@ export default async function RootLayout({
 }>) {
   const pathname = (await headers()).get("x-pathname") ?? "";
   const isMapViewer = /\/maps\/[^/]+\/versions\/[^/]+\/viewer/.test(pathname);
+  const isProductSheet = pathname === "/produkt" || pathname.startsWith("/produkt/");
+  const hideChrome = isMapViewer || isProductSheet;
 
   return (
     <html
@@ -34,11 +36,11 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body
-        className={`${isMapViewer ? "h-full" : "flex min-h-full flex-col"} bg-background text-slate-900`}
+        className={`${hideChrome ? "h-full" : "flex min-h-full flex-col"} bg-background text-slate-900`}
       >
         <SessionProvider>
-          {!isMapViewer && <AppHeader />}
-          <main className={isMapViewer ? "h-full" : "flex-1"}>{children}</main>
+          {!hideChrome && <AppHeader />}
+          <main className={hideChrome ? "h-full" : "flex-1"}>{children}</main>
         </SessionProvider>
       </body>
     </html>

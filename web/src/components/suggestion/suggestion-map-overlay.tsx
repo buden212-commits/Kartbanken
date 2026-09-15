@@ -2,7 +2,6 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CollapsibleSection } from "@/components/collapsible-section";
 import { DiffMapPanel } from "@/components/diff-map-panel";
 import { type SvgRootTransform } from "@/lib/ocad/svg-coords";
 import {
@@ -11,8 +10,8 @@ import {
   renderSuggestionGeometrySvg,
 } from "@/lib/suggestion/geometry";
 import type { SuggestionOverlayItem, SuggestionSummary } from "@/lib/suggestion/types";
-import { SuggestionStatus } from "@/lib/suggestion/types";
 import { SuggestionListPanel } from "@/components/suggestion/suggestion-list-panel";
+import { CollapsibleSection } from "@/components/collapsible-section";
 
 export function useSuggestionOverlays(mapSlug: string, mapVersionId?: string | null) {
   const [overlays, setOverlays] = useState<SuggestionOverlayItem[]>([]);
@@ -165,6 +164,8 @@ export function SuggestionOverviewMap({
         title="Kartförslag på kartan"
         mapSlug={mapSlug}
         versionId={versionId}
+        basemap="tiles"
+        exportEnabled={false}
         renderSvgOverlay={renderOverlay}
         fitGeoBbox={fitGeoBbox}
       />
@@ -194,11 +195,8 @@ export function SuggestionAreaSection({
     requestId: number;
   } | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
-  const openCount = suggestions.filter(
-    (s) =>
-      s.status === SuggestionStatus.OPEN || s.status === SuggestionStatus.IN_PROGRESS,
-  ).length;
-  const [mapSectionOpen, setMapSectionOpen] = useState(openCount > 0);
+
+  const [mapRevealKey, setMapRevealKey] = useState(0);
 
   const zoomToSuggestion = useCallback(
     (suggestionId: string) => {
@@ -207,10 +205,10 @@ export function SuggestionAreaSection({
         .map((item) => item.geometry);
       const bbox = bboxFromSuggestionGeometries(geometries);
       if (!bbox) return;
-      setMapSectionOpen(true);
       fitRequestIdRef.current += 1;
       setFitGeoBbox({ bbox, requestId: fitRequestIdRef.current });
       setHighlightedId(suggestionId);
+      setMapRevealKey((key) => key + 1);
     },
     [overlays],
   );
@@ -219,9 +217,21 @@ export function SuggestionAreaSection({
     <>
       <CollapsibleSection
         title="Kartförslag på kartan"
-        description="Öppna och pågående markeringar på senaste publicerade version."
-        open={mapSectionOpen}
-        onOpenChange={setMapSectionOpen}
+        badge={
+          suggestions.length > 0 ? (
+            <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800">
+              {suggestions.length}
+            </span>
+          ) : undefined
+        }
+        description={
+          <>
+            Öppna och pågående kartförslag markerade på senaste publicerade version (v
+            {versionNumber}). Klicka på ett förslag i listan för att zooma hit.
+          </>
+        }
+        defaultOpen={false}
+        forceOpenKey={mapRevealKey > 0 ? mapRevealKey : null}
       >
         <SuggestionOverviewMap
           mapSlug={mapSlug}
@@ -229,9 +239,6 @@ export function SuggestionAreaSection({
           versionNumber={versionNumber}
           fitGeoBbox={fitGeoBbox}
         />
-        <p className="mt-2 text-xs text-slate-500">
-          Klicka på ett kartförslag i listan nedan för att zooma kartan till markeringen.
-        </p>
       </CollapsibleSection>
 
       <SuggestionListPanel

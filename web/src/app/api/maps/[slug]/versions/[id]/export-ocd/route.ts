@@ -7,6 +7,7 @@ import {
 import { cropOcadBuffer, markAllActiveObjectsDeleted, applyOcadTargetVersion } from "@/lib/ocad/ocad-export-server";
 import {
   appendSuggestionsToOcadBuffer,
+  autoPickOcdSuggestionSymbols,
   validateOcdSuggestionSymbolMapping,
   type OcdSuggestionSymbolMapping,
 } from "@/lib/ocad/ocad-suggestion-export";
@@ -70,11 +71,17 @@ function parseExportRequest(body: unknown): ExportOcdRequest {
     throw new Error("Exportområdet har ogiltig storlek");
   }
 
-  if (includeSuggestions && !validateOcdSuggestionSymbolMapping(suggestionSymbols)) {
+  const parsedSymbols = validateOcdSuggestionSymbolMapping(suggestionSymbols);
+  if (includeSuggestions && suggestionSymbols != null && !parsedSymbols) {
     throw new Error("Ogiltig symbolmappning för kartförslag");
   }
 
-  return { svgFrame, ocadVersion, includeSuggestions: !!includeSuggestions, suggestionSymbols };
+  return {
+    svgFrame,
+    ocadVersion,
+    includeSuggestions: !!includeSuggestions,
+    suggestionSymbols: parsedSymbols ?? undefined,
+  };
 }
 
 export async function POST(request: Request, { params }: RouteParams) {
@@ -118,12 +125,16 @@ export async function POST(request: Request, { params }: RouteParams) {
     let appendedSuggestions = 0;
     const suggestionWarnings: string[] = [];
 
-    if (exportRequest.includeSuggestions && exportRequest.suggestionSymbols) {
+    if (exportRequest.includeSuggestions) {
       const overlays = await listSuggestionOverlaysForVersion(lookup.map.id, version.id);
       const geometries = overlays.map((item) => item.geometry);
       if (geometries.length === 0) {
         throw new Error("Inga öppna eller pågående kartförslag att exportera.");
       }
+
+      const suggestionSymbols =
+        exportRequest.suggestionSymbols ??
+        (await autoPickOcdSuggestionSymbols(sourceBuffer));
 
       const cleared = markAllActiveObjectsDeleted(sourceBuffer);
       outputBuffer = cleared.buffer;
@@ -138,7 +149,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       const appendResult = await appendSuggestionsToOcadBuffer(
         outputBuffer,
         geometries,
-        exportRequest.suggestionSymbols,
+        suggestionSymbols,
         { symbolSourceBuffer: sourceBuffer },
       );
       outputBuffer = appendResult.buffer;

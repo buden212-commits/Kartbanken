@@ -14,6 +14,7 @@ async function loadAuthUser(userId: string) {
       name: true,
       email: true,
       role: true,
+      canFieldEdit: true,
       mustChangePassword: true,
       passwordExpiresAt: true,
     },
@@ -33,6 +34,7 @@ function applyDbUserToToken(
   token.name = dbUser.name;
   token.email = dbUser.email;
   token.role = dbUser.role as RoleType;
+  token.canFieldEdit = dbUser.canFieldEdit;
   token.mustChangePassword = dbUser.mustChangePassword || expiredTemp;
   delete token.error;
   return token;
@@ -95,6 +97,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           email: user.email,
           name: user.name,
           role: user.role as RoleType,
+          canFieldEdit: user.canFieldEdit,
           mustChangePassword: user.mustChangePassword,
         };
       },
@@ -110,6 +113,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.name = user.name;
         token.email = user.email;
         token.role = (user as { role?: RoleType }).role ?? Role.PENDING;
+        token.canFieldEdit = (user as { canFieldEdit?: boolean }).canFieldEdit ?? false;
         token.mustChangePassword =
           (user as { mustChangePassword?: boolean }).mustChangePassword ?? false;
         return token;
@@ -142,6 +146,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           session.user.email = token.email as string;
         }
         session.user.role = (token.role as RoleType) ?? Role.PENDING;
+        session.user.canFieldEdit = token.canFieldEdit === true;
         session.user.mustChangePassword = token.mustChangePassword === true;
       }
       return session;

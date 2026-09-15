@@ -1,5 +1,5 @@
 import { bboxFromGeometry } from "./overlap";
-import { CheckoutSelectionType, type Bbox } from "./types";
+import { CheckoutSelectionType, type Bbox, type PolygonRing } from "./types";
 import { compareOcadObjects } from "@/lib/ocad/diff";
 import type { NormalizedOcadObject, OcadParseSummary } from "@/lib/ocad/types";
 import type {
@@ -8,6 +8,19 @@ import type {
   ImportPartialAnalysis,
   ImportSymbolRow,
 } from "./import-partial-types";
+import {
+  bboxFromRing,
+  buildImportPolygonWithMeta,
+  edgeSnapForRing,
+  expandRing,
+  filterObjectsIntersectingPolygon,
+  IMPORT_EDGE_BUFFER_METERS,
+  isLikelyClippedByPolygon,
+  objectCrossesPolygon,
+  objectFullyInsidePolygon,
+  objectFullyInsideCore,
+  objectInEdgeBufferZone,
+} from "./import-partial-polygon";
 
 export type {
   ImportDiffSample,
@@ -16,11 +29,49 @@ export type {
   ImportSymbolRow,
 } from "./import-partial-types";
 
+export {
+  bboxFromRing,
+  buildImportPolygonFromObjects,
+  buildImportPolygonWithMeta,
+  edgeSnapForRing,
+  expandRing,
+  filterObjectsIntersectingPolygon,
+  IMPORT_EDGE_BUFFER_METERS,
+  isLikelyClippedByPolygon,
+  objectCrossesPolygon,
+  objectFullyInsideCore,
+  objectFullyInsidePolygon,
+  objectInEdgeBufferZone,
+  objectIntersectsPolygon,
+  shrinkRing,
+} from "./import-partial-polygon";
+
 const DIFF_TOLERANCE_M = Number(process.env.DIFF_SPATIAL_TOLERANCE_M ?? 2);
+/** Punkter per objektkontur i kartbilden — nog för formen utan att svälla svaret. */
+const MAX_OUTLINE_POINTS = 24;
 const MAX_EDGE_SAMPLES = 80;
 const MAX_DIFF_SAMPLES = 40;
-const MAX_DIFF_MAP_SAMPLES = 300;
+/** Listan i guiden bygger på samma urval, och bara det som listas går att kryssa bort. */
+const MAX_DIFF_MAP_SAMPLES = 1000;
 const MAX_SYMBOL_ROWS = 80;
+
+/** Centimeter räcker gott för en kontur på skärmen och håller nere svarets storlek. */
+function roundPoint(point: [number, number]): [number, number] {
+  return [Math.round(point[0] * 100) / 100, Math.round(point[1] * 100) / 100];
+}
+
+function sampleOutline(object: NormalizedOcadObject): [number, number][] | null {
+  const vertices = object.vertices;
+  if (!vertices || vertices.length < 2) return null;
+  if (vertices.length <= MAX_OUTLINE_POINTS) return vertices.map(roundPoint);
+  const stride = (vertices.length - 1) / (MAX_OUTLINE_POINTS - 1);
+  const points: [number, number][] = [];
+  for (let i = 0; i < MAX_OUTLINE_POINTS; i++) {
+    points.push(roundPoint(vertices[Math.round(i * stride)]!));
+  }
+  points[points.length - 1] = roundPoint(vertices[vertices.length - 1]!);
+  return points;
+}
 
 function bboxFromTuple(bounds: number[] | null): Bbox | null {
   if (!bounds || bounds.length < 4) return null;
@@ -72,6 +123,7 @@ function bboxContains(outer: Bbox, inner: Bbox): boolean {
   );
 }
 
+/** @deprecated Prefer objectIntersectsPolygon — retained for AABB helpers/tests. */
 export function objectIntersectsBbox(object: NormalizedOcadObject, bbox: Bbox): boolean {
   return (
     object.bbox[0] <= bbox.maxX &&
@@ -81,6 +133,7 @@ export function objectIntersectsBbox(object: NormalizedOcadObject, bbox: Bbox): 
   );
 }
 
+/** @deprecated Prefer objectCrossesPolygon. */
 export function objectCrossesBbox(object: NormalizedOcadObject, bbox: Bbox): boolean {
   if (!objectIntersectsBbox(object, bbox)) return false;
   return (
@@ -104,6 +157,7 @@ function edgeSnap(extent: Bbox): number {
   return Math.max(50, (extent.maxX - extent.minX) * 0.005, (extent.maxY - extent.minY) * 0.005);
 }
 
+/** @deprecated Prefer isLikelyClippedByPolygon. */
 export function isLikelyClipped(object: NormalizedOcadObject, extent: Bbox): boolean {
   const snap = edgeSnap(extent);
   if (object.vertices && object.vertices.length >= 2) {
@@ -149,10 +203,13 @@ export function analyzeImportPartial(input: {
   const warnings: string[] = [];
 
   const headSymbolNums = new Set(input.head.symbolNums);
-  const extent = bboxFromObjects(input.partial.objects);
+  const polygon = buildImportPolygonWithMeta(input.partial.objects);
+  const ring = polygon?.ring ?? null;
+  const extent = ring ? bboxFromRing(ring) : bboxFromObjects(input.partial.objects);
   const headBounds = bboxFromTuple(input.head.bounds) ?? bboxFromObjects(input.head.objects);
+  const snap = ring ? edgeSnapForRing(ring) : 50;
 
-  if (!extent || input.partial.objects.length === 0) {
+  if (!extent || !ring || input.partial.objects.length === 0) {
     blockers.push("Delkartan innehåller inga kartobjekt att importera.");
   }
 
@@ -202,9 +259,15 @@ export function analyzeImportPartial(input: {
     );
   }
 
-  const extentForHead = extent ?? { minX: 0, minY: 0, maxX: 0, maxY: 0 };
-  const headInArea = extent
-    ? input.head.objects.filter((object) => objectIntersectsBbox(object, extentForHead))
+  const activeRing: PolygonRing = ring ?? [
+    [0, 0],
+    [0, 0],
+    [0, 0],
+  ];
+
+  // AABB → polygon: hoppa över objekt långt från delkartan.
+  const headInArea = ring
+    ? filterObjectsIntersectingPolygon(input.head.objects, activeRing)
     : [];
 
   const onlyInHeadUsedByPartialArea: ImportSymbolRow[] = [];
@@ -220,21 +283,33 @@ export function analyzeImportPartial(input: {
     });
   }
 
-  const edgeSource = input.partial.objects;
   const edgeObjects: ImportEdgeObject[] = [];
   let interiorCount = 0;
   let likelyClippedCount = 0;
+  const clippedPartialIndices = new Set<number>();
+  // Kantzonen kompenserar för att rutnätskonturen ligger något utanför de
+  // yttersta objekten, så att ~IMPORT_EDGE_BUFFER_METERS verkligt kartinnehåll
+  // skyddas i stället för tom yta mellan datat och ringen.
+  const edgeBufferMeters = polygon?.edgeBufferMeters ?? IMPORT_EDGE_BUFFER_METERS;
+  const ringBufferMeters = polygon?.ringBufferMeters ?? IMPORT_EDGE_BUFFER_METERS;
+  const coreRings = polygon?.coreRings ?? [];
+  const core = polygon?.core ?? null;
 
-  if (extent) {
-    for (const object of edgeSource) {
-      const crosses = objectCrossesBbox(object, extent);
-      const clipped = isLikelyClipped(object, extent);
-      if (objectFullyInsideBbox(object, extent) && !crosses) {
+  if (ring) {
+    for (const object of input.partial.objects) {
+      const crosses = objectCrossesPolygon(object, activeRing);
+      const clipped = isLikelyClippedByPolygon(object, activeRing, snap);
+      const inEdgeBelt = objectInEdgeBufferZone(object, activeRing, ringBufferMeters);
+      if (objectFullyInsidePolygon(object, activeRing) && !crosses && !clipped && !inEdgeBelt) {
         interiorCount += 1;
       }
-      if (crosses || clipped) {
-        if (clipped) likelyClippedCount += 1;
+      if (crosses || clipped || inEdgeBelt) {
+        if (clipped) {
+          likelyClippedCount += 1;
+          clippedPartialIndices.add(object.objectIndex);
+        }
         if (edgeObjects.length < MAX_EDGE_SAMPLES) {
+          const outline = sampleOutline(object);
           edgeObjects.push({
             objectIndex: object.objectIndex,
             symbolNumber: object.symbolNumber,
@@ -243,6 +318,7 @@ export function analyzeImportPartial(input: {
             centroid: object.centroid,
             bbox: object.bbox,
             likelyClipped: clipped,
+            ...(outline ? { outline } : {}),
           });
         }
       }
@@ -251,26 +327,41 @@ export function analyzeImportPartial(input: {
 
   if (likelyClippedCount > 0) {
     warnings.push(
-      `${likelyClippedCount} objekt ser ut att sluta vid randen — de kan vara klippta i OCAD och ska inte ersätta originalet utanför området.`,
+      `${likelyClippedCount} objekt ser ut att vara klippta mot delkartans kant — de ingår inte i jämförelsen (ersätter inte originalet).`,
     );
   }
 
-  const baseline = extent
-    ? input.head.objects.filter((object) => objectIntersectsBbox(object, extent))
-    : [];
+  const baseline = headInArea;
+  const partialForDiff = input.partial.objects.filter(
+    (object) => !clippedPartialIndices.has(object.objectIndex),
+  );
+
   const diff = compareOcadObjects(
     baseline,
-    input.partial.objects,
+    partialForDiff,
     { fileNameA: input.head.fileName, fileNameB: input.partial.fileName },
     { toleranceMeters: DIFF_TOLERANCE_M, matchByObjectIndex: false },
   );
 
+  // Borttag kräver att hela objektet ligger i kärnan. Det skyddar både snittet
+  // och inre tomrum där delkartan saknar innehåll — där går det inte att skilja
+  // "borttaget av redigeraren" från "täcks inte av utsnittet".
   const protectedRemovals = new Set(
-    baseline.filter((object) => extent && objectCrossesBbox(object, extent)).map((o) => o.objectIndex),
+    baseline
+      .filter((object) => {
+        if (!ring) return false;
+        if (objectCrossesPolygon(object, activeRing)) return true;
+        if (objectInEdgeBufferZone(object, activeRing, ringBufferMeters)) return true;
+        return core ? !objectFullyInsideCore(object, core) : false;
+      })
+      .map((o) => o.objectIndex),
   );
 
   const appliedChanges = diff.changes.filter((change) => {
-    if (change.changeType === "added") return true;
+    if (change.changeType === "added") {
+      // Extra safety: never treat clipped stubs as new map content.
+      return !clippedPartialIndices.has(change.objectIndex);
+    }
     if (protectedRemovals.has(change.objectIndex)) return false;
     return true;
   });
@@ -278,7 +369,7 @@ export function analyzeImportPartial(input: {
   const skippedEdge = diff.changes.length - appliedChanges.length;
   if (skippedEdge > 0) {
     warnings.push(
-      `${skippedEdge} kantöverskridande objekt i den stora kartan tas inte bort automatiskt (de går utanför delkartans ram).`,
+      `${skippedEdge} objekt hoppades över i jämförelsen — de ligger i skyddszonen (${edgeBufferMeters} m från delkartans innehåll), går över kanten, eller ligger i ett tomrum där delkartan inte ritat något.`,
     );
   }
 
@@ -286,15 +377,29 @@ export function analyzeImportPartial(input: {
   const removed = appliedChanges.filter((c) => c.changeType === "removed").length;
   const modified = appliedChanges.filter((c) => c.changeType === "modified").length;
 
-  const toDiffSample = (change: (typeof appliedChanges)[number]): ImportDiffSample => ({
-    changeType: change.changeType,
-    objectIndex: change.objectIndex,
-    symbolNumber: change.symbolNumber,
-    symbolName: change.symbolName,
-    type: change.type,
-    centroid: change.centroid,
-    bbox: change.bbox,
-  });
+  // Formen på det som ändras säger mer än en ruta runt det. Vertexkedjan tas med
+  // (glesad) så kartbilden kan rita själva diket eller stigen, inte bara en bbox.
+  const baselineByIndex = new Map(baseline.map((object) => [object.objectIndex, object]));
+  const partialByIndex = new Map(
+    input.partial.objects.map((object) => [object.objectIndex, object]),
+  );
+  const toDiffSample = (change: (typeof appliedChanges)[number]): ImportDiffSample => {
+    const source =
+      change.changeType === "removed"
+        ? baselineByIndex.get(change.objectIndex)
+        : partialByIndex.get(change.objectIndex);
+    const outline = source ? sampleOutline(source) : null;
+    return {
+      changeType: change.changeType,
+      objectIndex: change.objectIndex,
+      symbolNumber: change.symbolNumber,
+      symbolName: change.symbolName,
+      type: change.type,
+      centroid: change.centroid,
+      bbox: change.bbox,
+      ...(outline ? { outline } : {}),
+    };
+  };
 
   matched.sort((a, b) => b.countPartial - a.countPartial);
   onlyInPartial.sort((a, b) => b.countPartial - a.countPartial);
@@ -302,6 +407,13 @@ export function analyzeImportPartial(input: {
 
   return {
     extent: extent ?? { minX: 0, minY: 0, maxX: 0, maxY: 0 },
+    ring: ring ?? [],
+    coreRing: coreRings[0] ?? [],
+    coreRings,
+    edgeBufferMeters,
+    ringBufferMeters,
+    headObjectsInArea: headInArea.length,
+    headObjectsTotal: input.head.objects.length,
     extentInsideHead,
     headBounds,
     symbols: {
@@ -331,6 +443,12 @@ export function selectionBboxFromAnalysis(analysis: ImportPartialAnalysis): Bbox
 }
 
 export function checkoutGeometryFromAnalysis(analysis: ImportPartialAnalysis) {
+  if (analysis.ring.length >= 3) {
+    return {
+      type: CheckoutSelectionType.POLYGON,
+      ring: expandRing(analysis.ring),
+    } as const;
+  }
   const bbox = selectionBboxFromAnalysis(analysis);
   return {
     type: CheckoutSelectionType.BBOX,
@@ -340,6 +458,10 @@ export function checkoutGeometryFromAnalysis(analysis: ImportPartialAnalysis) {
 
 export function importExtentFromAnalysis(analysis: ImportPartialAnalysis): Bbox {
   return analysis.extent;
+}
+
+export function importRingFromAnalysis(analysis: ImportPartialAnalysis): PolygonRing {
+  return analysis.ring;
 }
 
 export { bboxFromGeometry };

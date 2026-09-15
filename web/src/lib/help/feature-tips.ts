@@ -53,6 +53,14 @@ export const featureTips: FeatureTip[] = [
     weight: 9,
   },
   {
+    id: "faltredigering",
+    title: "Fältredigering i webben",
+    body: "Redigera kartobjekt direkt i webbläsaren inom ett utcheckat område — utan OCAD. Kräver rättighet från admin.",
+    helpSectionId: "faltredigering",
+    roles: [Role.READER, Role.EDITOR, Role.ADMIN],
+    weight: 8,
+  },
+  {
     id: "bana",
     title: "Lägg bana på kartan",
     body: "Planera orienteringsbanor med IOF-symboler 701–709 — banor påverkar inte själva kartfilen.",

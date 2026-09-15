@@ -14,9 +14,9 @@ Vid commit eller deploy av app-ändringar under `web/src/` eller `web/prisma/mig
 Kontroller:
 
 - **Commit** — pre-commit-hooken `check-help-updated.mts` (aktivera med `npm run hooks:install`)
-- **Deploy** — `npm run deploy` / `npm run deploy:prod` kör hjälpkontroll före Vercel; Vercel-build kör samma check via `buildCommand`
+- **Deploy** — `npm run deploy` kör `check-help-deploy.mts` före Vercel; Vercel-build kör samma check via `buildCommand`
 
-Använd `npm run deploy:prod` (med `VERCEL_TOKEN`) eller `npm run deploy` i stället för `npx vercel deploy` direkt.
+Använd alltid `npm run deploy` i stället för `npx vercel deploy` direkt.
 
 ## Produktiondeploy
 

@@ -71,6 +71,7 @@ export const TOOL_LABELS: Record<EditorTool, string> = {
   draw: "Rita",
   move: "Flytta",
   delete: "Radera",
+  clip: "Klipp",
 };
 
 export type { CourseDetail, CourseSummary };

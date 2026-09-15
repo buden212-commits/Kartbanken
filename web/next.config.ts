@@ -31,6 +31,19 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["ocad2geojson"],
+  outputFileTracingIncludes: {
+    "/hjalp/sjalvstudier": ["./src/lib/help/course-material.md"],
+    "/api/maps/[slug]/versions/[id]/tiles/**": [
+      "./node_modules/@img/sharp-linux-x64/**",
+      "./node_modules/@img/sharp-libvips-linux-x64/**",
+      "./node_modules/sharp/**",
+    ],
+    "/api/maps/[slug]/versions/[id]/export-geotiff": [
+      "./node_modules/@img/sharp-linux-x64/**",
+      "./node_modules/@img/sharp-libvips-linux-x64/**",
+      "./node_modules/sharp/**",
+    ],
+  },
   experimental: {
     serverActions: {
       bodySizeLimit: "100mb",

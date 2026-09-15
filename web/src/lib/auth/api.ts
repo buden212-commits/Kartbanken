@@ -1,5 +1,5 @@
 import { auth } from "@/auth";
-import { canAdmin, canDownload, canUpload, isApproved } from "@/lib/auth/permissions";
+import { canAdmin, canDownload, canUpload, isApproved, userCanFieldEdit } from "@/lib/auth/permissions";
 import type { Role as RoleType } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
@@ -10,6 +10,7 @@ export type AuthSession = {
     email: string;
     name?: string | null;
     role: RoleType;
+    canFieldEdit?: boolean;
     mustChangePassword?: boolean;
   };
 };
@@ -27,6 +28,7 @@ async function sessionFromDb(): Promise<AuthSession | NextResponse> {
       email: true,
       name: true,
       role: true,
+      canFieldEdit: true,
       mustChangePassword: true,
     },
   });
@@ -41,6 +43,7 @@ async function sessionFromDb(): Promise<AuthSession | NextResponse> {
       email: dbUser.email,
       name: dbUser.name,
       role: dbUser.role as RoleType,
+      canFieldEdit: dbUser.canFieldEdit,
       mustChangePassword: dbUser.mustChangePassword,
     },
   };
@@ -73,6 +76,15 @@ export async function requireUpload(): Promise<AuthSession | NextResponse> {
   if (session instanceof NextResponse) return session;
   if (!canUpload(session.user.role)) {
     return NextResponse.json({ error: "Ingen uppladdningsrättighet" }, { status: 403 });
+  }
+  return session;
+}
+
+export async function requireFieldEdit(): Promise<AuthSession | NextResponse> {
+  const session = await requireSession();
+  if (session instanceof NextResponse) return session;
+  if (!userCanFieldEdit(session.user)) {
+    return NextResponse.json({ error: "Ingen fältredigeringsrättighet" }, { status: 403 });
   }
   return session;
 }

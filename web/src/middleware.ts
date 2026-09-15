@@ -9,6 +9,7 @@ export default auth((req) => {
 
   const isAuthRoute = pathname.startsWith("/api/auth");
   const isPublicAuth = pathname === "/login" || pathname === "/register";
+  const isPublicProduct = pathname === "/produkt" || pathname.startsWith("/produkt/");
   const isChangePasswordPage = pathname === "/byt-losenord";
 
   if (isAuthRoute) {
@@ -18,6 +19,14 @@ export default auth((req) => {
   // Vercel Cron anropar med Bearer CRON_SECRET — ingen session-cookie.
   if (pathname.startsWith("/api/cron/")) {
     return NextResponse.next();
+  }
+
+  if (isPublicProduct) {
+    const requestHeaders = new Headers(req.headers);
+    requestHeaders.set("x-pathname", pathname);
+    return NextResponse.next({
+      request: { headers: requestHeaders },
+    });
   }
 
   if (isChangePasswordPage) {

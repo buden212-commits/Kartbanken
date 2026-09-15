@@ -11,10 +11,24 @@ export default async function HelpHubPage() {
 
   const cards = [
     {
+      href: "/produkt/faltredigering",
+      title: "Produktblad — Fältredigering",
+      description:
+        "Säljande översikt med skärmdumpar från programmet: område, editor, GPS och incheckning.",
+      badge: "Nytt",
+    },
+    {
       href: "/hjalp/guide",
       title: "Användarguide",
       description:
         "Kom igång, roller, områden, versioner, utcheckning, banor, kartförslag, jämförelse och export.",
+      badge: null,
+    },
+    {
+      href: "/hjalp/sjalvstudier",
+      title: "Självstudier",
+      description:
+        "Kursmaterial med övningar och användarfall — uppdelat för läsare, redaktörer och administratörer.",
       badge: null,
     },
     {

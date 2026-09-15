@@ -537,6 +537,8 @@ export function SuggestionDetailClient({
           title="Plats på kartan"
           mapSlug={mapSlug}
           versionId={suggestion.mapVersionId}
+          basemap="tiles"
+          exportEnabled={false}
           interactionMode={editMode && redrawMarking ? "draw" : "navigate"}
           drawPointerHandlers={editMode && redrawMarking ? drawPointerHandlers : undefined}
           fitGeoBbox={fitGeoBbox}

@@ -10,6 +10,7 @@ import {
   SuggestionStatus,
   formatSuggestionStatusAttribution,
 } from "@/lib/suggestion/types";
+import { CollapsibleSection } from "@/components/collapsible-section";
 import { SuggestionLocationConfidenceBadge } from "@/components/suggestion/suggestion-location-confidence-field";
 import { formatDateOnly } from "@/lib/format";
 
@@ -101,50 +102,59 @@ export function SuggestionListPanel({
     router.refresh();
   }
 
+  const badgeLabel = `${openCount} öppna${inProgressCount > 0 ? `, ${inProgressCount} pågår` : ""}`;
+
   return (
-    <section className="mt-10" id="kartforslag">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-medium text-slate-900">
-          Kartförslag ({openCount} öppna
-          {inProgressCount > 0 ? `, ${inProgressCount} pågår` : ""})
-        </h2>
-        <div className="flex flex-wrap items-center gap-2">
-          {publishedVersionId && (
-            <Link
-              href={`/maps/${mapSlug}/versions/${publishedVersionId}/suggest`}
-              className="rounded-lg bg-orange-600 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-orange-700"
-            >
-              Föreslå ändring
-            </Link>
+    <CollapsibleSection
+      id="kartforslag"
+      title="Kartförslag"
+      badge={
+        <span className="rounded-full bg-slate-200/80 px-2 py-0.5 text-xs font-medium text-slate-700">
+          {badgeLabel}
+        </span>
+      }
+      description={
+        <>
+          Öppna och pågående förslag från alla versioner. Kartan ovan visar senaste publicerade
+          version.
+          {publishedVersionNumber != null && (
+            <>
+              {" "}
+              Publicerad version: <strong>v{publishedVersionNumber}</strong>.
+            </>
           )}
-          {exportableCount > 0 && (
-            <button
-              type="button"
-              disabled={exportingPdf}
-              onClick={() => void handleExportPdf()}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-            >
-              {exportingPdf ? "Exporterar…" : `Exportera PDF (${exportableCount})`}
-            </button>
-          )}
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+        </>
+      }
+    >
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        {publishedVersionId && (
+          <Link
+            href={`/maps/${mapSlug}/versions/${publishedVersionId}/suggest`}
+            className="rounded-lg bg-orange-600 px-4 py-1.5 text-sm font-medium text-white transition hover:bg-orange-700"
           >
+            Föreslå ändring
+          </Link>
+        )}
+        {exportableCount > 0 && (
+          <button
+            type="button"
+            disabled={exportingPdf}
+            onClick={() => void handleExportPdf()}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            {exportingPdf ? "Exporterar…" : `Exportera PDF (${exportableCount})`}
+          </button>
+        )}
+        <select
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+        >
           <option value="ALL">Alla aktiva</option>
           <option value="OPEN">Öppna</option>
           <option value="IN_PROGRESS">Pågår</option>
         </select>
-        </div>
       </div>
-      <p className="mt-1 text-sm text-slate-600">
-        Öppna och pågående förslag från alla versioner. Kartan ovan visar senaste publicerade
-        version.
-        {publishedVersionNumber != null && (
-          <> Publicerad version: <strong>v{publishedVersionNumber}</strong>.</>
-        )}
-      </p>
 
       {error && (
         <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
@@ -239,6 +249,6 @@ export function SuggestionListPanel({
           Kartförslag kräver en publicerad kartversion.
         </p>
       )}
-    </section>
+    </CollapsibleSection>
   );
 }

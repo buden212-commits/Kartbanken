@@ -16,6 +16,7 @@ import {
   type OcadMapLayer,
 } from "./layers";
 import { extractKartramFromOcad, serializeKartramForSvg } from "./kartram";
+import { rewriteSvgRootTag } from "./svg-root";
 import type { SvgBounds } from "./svg-utils";
 
 const require = createRequire(import.meta.url);
@@ -428,32 +429,64 @@ export function buildPreviewSvgPath(mapFileId: string, versionNumber: number): s
   return `maps/${mapFileId}/v${versionNumber}/preview.svg`;
 }
 
+function viewBoxString(bounds: SvgBounds): string {
+  return `${bounds.minX} ${bounds.minY} ${bounds.maxX - bounds.minX} ${bounds.maxY - bounds.minY}`;
+}
+
+function boundsEqual(a: SvgBounds, b: SvgBounds): boolean {
+  return (
+    a.minX === b.minX && a.minY === b.minY && a.maxX === b.maxX && a.maxY === b.maxY
+  );
+}
+
 export async function generateAndStorePreviewSvg(
   buffer: Buffer,
   storagePath: string,
+  options?: {
+    /**
+     * Override SVG viewBox after render. Receives object bounds used for the
+     * OCAD Y-flip transform so callers can map selection geometry correctly.
+     */
+    viewBoundsFromSelection?: (objectBounds: SvgBounds) => SvgBounds;
+  },
 ): Promise<SvgBounds | null> {
   // Stora kartor (t.ex. Mora Väst ~20 MB OCD → ~30 MB SVG): använd platt SVG.
   // Layered-render (per symbol) kan OOM:a i Vercel after()/preview och lämna versionen i PROCESSING.
   const preferFlat = buffer.length >= 15_000_000;
+  const resolveViewBounds = (objectBounds: SvgBounds | null): SvgBounds | null => {
+    if (!objectBounds) return null;
+    if (!options?.viewBoundsFromSelection) return objectBounds;
+    return options.viewBoundsFromSelection(objectBounds);
+  };
+
+  const storeWithOptionalViewBox = async (
+    svg: string,
+    objectBounds: SvgBounds | null,
+  ): Promise<SvgBounds | null> => {
+    const viewBounds = resolveViewBounds(objectBounds);
+    let out = svg;
+    if (viewBounds && objectBounds && !boundsEqual(viewBounds, objectBounds)) {
+      out = rewriteSvgRootTag(svg, { viewBox: viewBoxString(viewBounds) });
+    }
+    await uploadFile(storagePath, Buffer.from(out, "utf-8"));
+    return viewBounds ?? objectBounds;
+  };
 
   if (preferFlat) {
     const ocadFile = (await readOcad(buffer, { quietWarnings: true })) as OcadFile;
-    const bounds = boundsFromOcad(ocadFile);
-    const svg = await generateOcadSvgFlat(buffer, ocadFile, bounds);
-    await uploadFile(storagePath, Buffer.from(svg, "utf-8"));
-    return bounds;
+    const objectBounds = boundsFromOcad(ocadFile);
+    const svg = await generateOcadSvgFlat(buffer, ocadFile, objectBounds);
+    return storeWithOptionalViewBox(svg, objectBounds);
   }
 
   try {
-    const { svg, bounds } = await generateOcadSvgLayered(buffer);
-    await uploadFile(storagePath, Buffer.from(svg, "utf-8"));
-    return bounds;
+    const { svg, bounds: objectBounds } = await generateOcadSvgLayered(buffer);
+    return storeWithOptionalViewBox(svg, objectBounds);
   } catch (err) {
     console.error("Layered SVG-generering misslyckades, använder platt SVG:", err);
     const ocadFile = (await readOcad(buffer, { quietWarnings: true })) as OcadFile;
-    const bounds = boundsFromOcad(ocadFile);
-    const svg = await generateOcadSvgFlat(buffer, ocadFile, bounds);
-    await uploadFile(storagePath, Buffer.from(svg, "utf-8"));
-    return bounds;
+    const objectBounds = boundsFromOcad(ocadFile);
+    const svg = await generateOcadSvgFlat(buffer, ocadFile, objectBounds);
+    return storeWithOptionalViewBox(svg, objectBounds);
   }
 }
