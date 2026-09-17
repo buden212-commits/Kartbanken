@@ -33,21 +33,17 @@ import {
   toggleCutout,
   toggleLegGap,
   toggleLineGap,
-  applyClipMarkerDrag,
   cutoutContainsAngle,
   controlClipRadiusGeo,
-  hitTestCutoutMarker,
   cumulativeLineDistances,
-  renderCutoutMarkersSvg,
-  type CutoutMarkerHit,
+  DEFAULT_LEG_GAP_LENGTH,
 } from "@/lib/course/cutouts";
 import type { MapHitIndexEntry } from "@/lib/ocad/map-hit-index";
 import {
-  angleTowardFeature,
   distanceAlongSegmentTowardFeature,
-  distanceFromEndTowardFeature,
-  findNearestMapFeature,
   findNearestMapFeatureNearSegment,
+  snapCutoutAngleToNearbyFeature,
+  snapDistanceAlongSegment,
 } from "@/lib/ocad/map-hit-index";
 import {
   appendVisit,
@@ -60,6 +56,7 @@ import {
   undoLastVisit,
   unusedControls,
 } from "@/lib/course/sequence";
+import { CONTROL_LAYER_SYMBOLS, keepControlLayer } from "@/lib/course/control-layer";
 import {
   computeCourseLengthMeters,
   computeHitTolerance,
@@ -201,7 +198,6 @@ export function CourseEditorClient({
     linkedNumberOriginalGeometry?: EditorObject["geometry"];
   } | null>(null);
   const lastClickRef = useRef<number>(0);
-  const clipDragRef = useRef<CutoutMarkerHit | null>(null);
 
   const [mapHitIndex, setMapHitIndex] = useState<MapHitIndexEntry[]>([]);
   const [mapIndexReady, setMapIndexReady] = useState(false);
@@ -227,6 +223,18 @@ export function CourseEditorClient({
     },
     [],
   );
+
+  const loadLayer = useCallback(async () => {
+    const res = await fetch(`/api/maps/${mapSlug}/course-layer`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const loaded = hydrateCourseEditor(
+      detailToEditorObjects(data.objects ?? []),
+      [],
+    );
+    setObjects(loaded.objects);
+    setSequence([]);
+  }, [mapSlug]);
 
   const loadCourses = useCallback(async () => {
     const res = await fetch(`/api/maps/${mapSlug}/courses`);
@@ -302,6 +310,14 @@ export function CourseEditorClient({
   }, [loadCourses]);
 
   useEffect(() => {
+    if (initialCourseId) {
+      loadCourse(initialCourseId);
+    } else {
+      void loadLayer();
+    }
+  }, [initialCourseId, loadCourse, loadLayer]);
+
+  useEffect(() => {
     let cancelled = false;
     setMapIndexReady(false);
     fetch(`/api/maps/${mapSlug}/versions/${headVersionId}/map-hit-index`)
@@ -321,12 +337,6 @@ export function CourseEditorClient({
       cancelled = true;
     };
   }, [mapSlug, headVersionId]);
-
-  useEffect(() => {
-    if (initialCourseId) {
-      loadCourse(initialCourseId);
-    }
-  }, [initialCourseId, loadCourse]);
 
   const addObject = useCallback((obj: Omit<EditorObject, "sortOrder">) => {
     setObjects((prev) => {
@@ -400,46 +410,9 @@ export function CourseEditorClient({
     (geo: [number, number]) => {
       const vb = parseViewBoxString(viewBoxRef.current);
       const tol = computeHitTolerance(vb?.width ?? 1000, vb?.height ?? 1000);
-      const snapRadius = tol * 4;
+      const snapRadius = DEFAULT_LEG_GAP_LENGTH;
 
-      const markerHit = hitTestCutoutMarker(geo, objects, tol * 1.5);
-      if (markerHit) {
-        setSelectedId(markerHit.objectId);
-        return;
-      }
-
-      const controlHit = objects
-        .slice()
-        .sort((a, b) => b.sortOrder - a.sortOrder)
-        .find((o) => hitTestControlForClip(geo, o, tol));
-      if (controlHit?.geometry.type === "Point") {
-        const pointGeo = controlHit.geometry as CoursePointGeometry;
-        let angle = angleFromCenter(pointGeo.coordinates, geo);
-        const removing = (pointGeo.cutouts ?? []).some((c) =>
-          cutoutContainsAngle(c, angle),
-        );
-        if (!removing && mapHitIndex.length > 0) {
-          const feature = findNearestMapFeature(
-            mapHitIndex,
-            pointGeo.coordinates,
-            controlClipRadiusGeo(controlHit.symbolNr) * 1.8,
-          );
-          if (feature) {
-            angle = angleTowardFeature(pointGeo.coordinates, feature);
-          }
-        }
-        const cutouts = toggleCutout(pointGeo.cutouts, angle);
-        updateObject(controlHit.clientId, {
-          geometry: {
-            ...pointGeo,
-            cutouts: cutouts.length > 0 ? cutouts : undefined,
-          },
-        });
-        setSelectedId(controlHit.clientId);
-        return;
-      }
-
-      const legHit = hitTestCourseLeg(geo, objects, tol);
+      const legHit = hitTestCourseLeg(geo, objects, tol, sequence);
       if (legHit && legHit.fromControl.geometry.type === "Point") {
         if (legHit.atEndControl && legHit.toControl.geometry.type === "Point") {
           const to = legHit.toControl as EditorObject;
@@ -453,15 +426,15 @@ export function CourseEditorClient({
           if (!removing && mapHitIndex.length > 0) {
             const a = legHit.fromControl.geometry.coordinates as [number, number];
             const b = legHit.toControl.geometry.coordinates as [number, number];
-            const feature = findNearestMapFeatureNearSegment(
+            const snapped = snapDistanceAlongSegment(
               mapHitIndex,
               a,
               b,
+              geo,
+              legHit.distanceFromStart,
               snapRadius,
             );
-            if (feature) {
-              distFromEnd = distanceFromEndTowardFeature(a, b, feature);
-            }
+            distFromEnd = legHit.fullLen - snapped;
           }
           const incomingLegGaps = toggleLegGap(
             pointGeo.incomingLegGaps,
@@ -487,15 +460,14 @@ export function CourseEditorClient({
           if (!removing && mapHitIndex.length > 0) {
             const a = legHit.fromControl.geometry.coordinates as [number, number];
             const b = legHit.toControl.geometry.coordinates as [number, number];
-            const feature = findNearestMapFeatureNearSegment(
+            distFromStart = snapDistanceAlongSegment(
               mapHitIndex,
               a,
               b,
+              geo,
+              distFromStart,
               snapRadius,
             );
-            if (feature) {
-              distFromStart = distanceAlongSegmentTowardFeature(a, b, feature);
-            }
           }
           const legGaps = toggleLegGap(pointGeo.legGaps, distFromStart);
           updateObject(from.clientId, {
@@ -506,6 +478,36 @@ export function CourseEditorClient({
           });
           setSelectedId(from.clientId);
         }
+        return;
+      }
+
+      const controlHit = objects
+        .slice()
+        .sort((a, b) => b.sortOrder - a.sortOrder)
+        .find((o) => hitTestControlForClip(geo, o, tol));
+      if (controlHit?.geometry.type === "Point") {
+        const pointGeo = controlHit.geometry as CoursePointGeometry;
+        let angle = angleFromCenter(pointGeo.coordinates, geo);
+        const removing = (pointGeo.cutouts ?? []).some((c) =>
+          cutoutContainsAngle(c, angle),
+        );
+        if (!removing && mapHitIndex.length > 0) {
+          angle = snapCutoutAngleToNearbyFeature(
+            mapHitIndex,
+            pointGeo.coordinates,
+            geo,
+            controlClipRadiusGeo(controlHit.symbolNr),
+            angle,
+          );
+        }
+        const cutouts = toggleCutout(pointGeo.cutouts, angle);
+        updateObject(controlHit.clientId, {
+          geometry: {
+            ...pointGeo,
+            cutouts: cutouts.length > 0 ? cutouts : undefined,
+          },
+        });
+        setSelectedId(controlHit.clientId);
         return;
       }
 
@@ -566,7 +568,7 @@ export function CourseEditorClient({
         return;
       }
     },
-    [mapHitIndex, objects, updateObject],
+    [mapHitIndex, objects, sequence, updateObject],
   );
 
   const handleMapClickGeo = useCallback(
@@ -694,17 +696,6 @@ export function CourseEditorClient({
       if (!pt) return;
       const geo = svgUserToGeoPoint(pt, rootTransformRef.current);
 
-      if (tool === "clip" && canEdit) {
-        const vb = parseViewBoxString(viewBoxRef.current);
-        const tol = computeHitTolerance(vb?.width ?? 1000, vb?.height ?? 1000);
-        const marker = hitTestCutoutMarker(geo, objects, tol * 1.5);
-        if (marker) {
-          clipDragRef.current = marker;
-          setSelectedId(marker.objectId);
-          return;
-        }
-      }
-
       if (tool === "move" && canEdit) {
         const vb = parseViewBoxString(viewBoxRef.current);
         const tol = computeHitTolerance(vb?.width ?? 1000, vb?.height ?? 1000);
@@ -762,16 +753,6 @@ export function CourseEditorClient({
 
   const handlePointerMove = useCallback(
     (_e: React.PointerEvent, svg: SVGSVGElement) => {
-      const clipDrag = clipDragRef.current;
-      if (clipDrag && tool === "clip") {
-        const pt = screenToSvgPoint(svg, _e.clientX, _e.clientY);
-        if (!pt) return;
-        const geo = svgUserToGeoPoint(pt, rootTransformRef.current);
-        setObjects((prev) => applyClipMarkerDrag(prev, clipDrag, geo));
-        setDirty(true);
-        return;
-      }
-
       const move = moveRef.current;
       if (!move || tool !== "move") return;
       const pt = screenToSvgPoint(svg, _e.clientX, _e.clientY);
@@ -803,7 +784,6 @@ export function CourseEditorClient({
 
   const handlePointerUp = useCallback(() => {
     moveRef.current = null;
-    clipDragRef.current = null;
   }, []);
 
   const drawPointerHandlers = useMemo<MapDrawPointerHandlers>(
@@ -870,6 +850,7 @@ export function CourseEditorClient({
 
       const payload = {
         objects: objects.map((o) => ({
+          id: o.id || undefined,
           symbolNr: o.symbolNr,
           objectType: o.objectType,
           geometry: o.geometry,
@@ -915,7 +896,7 @@ export function CourseEditorClient({
     setCourseName("Ny bana");
     courseNameRef.current = "Ny bana";
     setIsPublic(false);
-    setObjects([]);
+    setObjects(ensureControlNumbers(keepControlLayer(objects), []));
     setSequence([]);
     setDirty(false);
     setSelectedId(null);
@@ -942,7 +923,7 @@ export function CourseEditorClient({
       setCourseName("Ny bana");
       courseNameRef.current = "Ny bana";
       setIsPublic(false);
-      setObjects([]);
+      setObjects(ensureControlNumbers(keepControlLayer(objects), []));
       setSequence([]);
       setDirty(false);
       setSelectedId(null);
@@ -1005,6 +986,7 @@ export function CourseEditorClient({
       const ghostMarkup = renderCourseOverlaySvg(ghostObjects, rootTransform, {
         opacity: 0.45,
         sequence: ghostSequence,
+        omitSymbolNrs: [...CONTROL_LAYER_SYMBOLS],
       });
 
       const activeMarkup = renderCourseOverlaySvg(objects, rootTransform, {
@@ -1012,23 +994,12 @@ export function CourseEditorClient({
         sequence,
       });
 
-      const markerMarkup =
-        tool === "clip"
-          ? renderCutoutMarkersSvg(objects, rootTransform, {
-              selectedId,
-              showAll: true,
-            })
-          : "";
-
       return (
         <g data-course-overlay="true">
           {ghostObjects.length > 0 && (
             <g opacity={0.5} dangerouslySetInnerHTML={{ __html: ghostMarkup }} />
           )}
           <g dangerouslySetInnerHTML={{ __html: activeMarkup }} />
-          {markerMarkup && (
-            <g dangerouslySetInnerHTML={{ __html: markerMarkup }} />
-          )}
           {draftLinePoints && (
             <polyline
               points={draftLinePoints}
@@ -1052,7 +1023,7 @@ export function CourseEditorClient({
         </g>
       );
     },
-    [ghostObjects, ghostSequence, lineDraft, objects, polygonDraft, selectedId, sequence, tool],
+    [ghostObjects, ghostSequence, lineDraft, objects, polygonDraft, selectedId, sequence],
   );
 
   function handleUndoLastVisit() {
@@ -1093,9 +1064,9 @@ export function CourseEditorClient({
       ))}
       {tool === "clip" && canEdit && (
         <span className="text-xs text-teal-700">
-          Klicka för lucka · dra grön markör ·{" "}
+          Klicka för lucka · klicka igen för att ta bort ·{" "}
           {mapIndexReady && mapHitIndex.length > 0
-            ? "snäpps mot kartsymbol"
+            ? "luckan följer klicket"
             : "laddar kartindex…"}
         </span>
       )}

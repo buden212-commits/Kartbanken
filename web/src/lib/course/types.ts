@@ -27,6 +27,8 @@ export type CoursePointGeometry = {
   coordinates: [number, number];
   /** 704 only: 1-based index among 703 controls in placement order. */
   linkedControlIndex?: number;
+  /** 704 only: client/id of the linked 703 control. */
+  linkedControlId?: string;
   /** Gaps in control circle stroke (703, 706, 702). */
   cutouts?: CourseCircleCutout[];
   /** Gaps on auto-leg toward next control. */

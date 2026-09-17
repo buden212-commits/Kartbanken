@@ -72,6 +72,74 @@ export function angleTowardFeature(
   return Math.atan2(feature.c[1] - center[1], feature.c[0] - center[0]);
 }
 
+function angularDifference(a: number, b: number): number {
+  const twoPi = Math.PI * 2;
+  const na = ((a % twoPi) + twoPi) % twoPi;
+  const nb = ((b % twoPi) + twoPi) % twoPi;
+  let diff = Math.abs(na - nb);
+  if (diff > Math.PI) diff = twoPi - diff;
+  return diff;
+}
+
+/**
+ * Snap a control-circle cutout toward a map symbol under the click.
+ * Ignores the control-site feature at the circle center (its direction is noise)
+ * and symbols whose angle is far from the click.
+ */
+export function snapCutoutAngleToNearbyFeature(
+  index: MapHitIndexEntry[],
+  center: [number, number],
+  click: [number, number],
+  circleRadius: number,
+  clickAngle: number,
+): number {
+  const maxDistFromClick = circleRadius * 0.85;
+  const minDistFromCenter = circleRadius * 0.4;
+  const maxAngleDiff = Math.PI / 3;
+
+  let bestAngle: number | null = null;
+  let bestDist = maxDistFromClick;
+
+  for (const entry of index) {
+    const distFromCenter = distance2d(center, entry.c);
+    if (distFromCenter < minDistFromCenter) continue;
+    const distFromClick = distance2d(click, entry.c);
+    if (distFromClick >= bestDist) continue;
+    const featureAngle = angleTowardFeature(center, entry);
+    if (angularDifference(featureAngle, clickAngle) > maxAngleDiff) continue;
+    bestDist = distFromClick;
+    bestAngle = featureAngle;
+  }
+
+  return bestAngle ?? clickAngle;
+}
+
+/** Snap a click along A→B toward a nearby map symbol, otherwise keep the click distance. */
+export function snapDistanceAlongSegment(
+  index: MapHitIndexEntry[],
+  a: [number, number],
+  b: [number, number],
+  click: [number, number],
+  clickDistance: number,
+  maxDistFromClick: number,
+): number {
+  let bestDist = maxDistFromClick;
+  let bestDistance = clickDistance;
+  const full = distance2d(a, b);
+
+  for (const entry of index) {
+    const distFromClick = distance2d(click, entry.c);
+    if (distFromClick >= bestDist) continue;
+    const along = distanceAlongSegmentTowardFeature(a, b, entry);
+    if (along < 0 || along > full) continue;
+    if (Math.abs(along - clickDistance) > maxDistFromClick * 2) continue;
+    bestDist = distFromClick;
+    bestDistance = along;
+  }
+
+  return bestDistance;
+}
+
 /** Distance from segment start A along A→B to nearest point to feature. */
 export function distanceAlongSegmentTowardFeature(
   a: [number, number],

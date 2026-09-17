@@ -286,9 +286,14 @@ export function removeObjectFromSequence(sequence: string[], objectId: string): 
 export function courseHint(sequence: string[], objects: CoursePoint[]): string {
   if (sequence.length === 0) {
     const hasStart = objects.some((o) => o.symbolNr === 701);
-    return hasStart
-      ? "Klicka på starten för att börja banan."
-      : "Lägg ut start och kontroller först. Välj sedan Rita bana.";
+    const hasControls = objects.some((o) => o.symbolNr === 703);
+    if (hasStart) {
+      return "Klicka på starten för att börja banan.";
+    }
+    if (hasControls) {
+      return "Lägg ut start. Kontroller och mål på lagret ligger kvar på kartan.";
+    }
+    return "Lägg ut start och kontroller först. Välj sedan Rita bana.";
   }
   const last = lastSequenceObject(objects, sequence);
   if (last?.symbolNr === 706) {

@@ -6,7 +6,7 @@ import {
 import {
   getCourseById,
   replaceCourseObjects,
-  serializeCourseDetail,
+  toCourseDetail,
 } from "@/lib/course/repository";
 import {
   COURSE_MAX_OBJECTS,
@@ -91,6 +91,7 @@ export async function PUT(request: Request, { params }: RouteParams) {
   const sorted = sortedOrder.map((oldIndex, index) => {
     const obj = validated[oldIndex]!;
     return {
+      id: obj.id,
       symbolNr: obj.symbolNr,
       objectType: obj.objectType,
       geometryJson: JSON.stringify(obj.geometry),
@@ -111,10 +112,11 @@ export async function PUT(request: Request, { params }: RouteParams) {
           .filter((index) => index >= 0)
       : sequenceCheck.indices.map((oldIndex) => oldToNew[oldIndex]!);
 
-  const updated = await replaceCourseObjects(id, sorted, sequenceIndices);
+  const updated = await replaceCourseObjects(id, map.id, sorted, sequenceIndices);
+  const detail = await toCourseDetail(updated);
 
   return NextResponse.json({
-    ...serializeCourseDetail(updated),
+    ...detail,
     warnings: warnings.length > 0 ? warnings : undefined,
   });
 }

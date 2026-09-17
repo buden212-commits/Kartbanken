@@ -133,9 +133,9 @@ export async function HelpPageContent() {
           <p className="mt-4">Banplanering:</p>
           <ol className="list-decimal space-y-2 pl-5">
             <li>Öppna Lägg bana på områdessidan.</li>
-            <li>Lägg ut start och de kontroller du vill använda (kontrollerna får kod 31, 32 …).</li>
+            <li>Lägg ut start, kontroller (kod 31, 32 …) och mål. De ligger kvar på kartan till nästa bana.</li>
             <li>Välj Rita bana och klicka start, sedan kontrollerna i banordning. Avsluta med mål.</li>
-            <li>Spara banan och exportera som PDF vid behov.</li>
+            <li>Spara banan. När du väljer Ny bana ligger start, kontroller och mål kvar — rita nästa bana genom att klicka i ordning.</li>
           </ol>
           <p className="mt-4">Fältredigering (direkt i webben):</p>
           <ol className="list-decimal space-y-2 pl-5">
@@ -624,11 +624,11 @@ export async function HelpPageContent() {
           </p>
           <HelpList
             items={[
-              "701 Start — triangel (punkt); läggs ut i ritläget, klickas först när du ritar banan",
-              "703 Kontroll — cirkel (punkt); får kod 31, 32 … när den läggs ut. Banlinjer dras först när du ritar banan",
+              "701 Start — triangel (punkt); ligger på kartans kontrollager, klickas först när du ritar banan",
+              "703 Kontroll — cirkel (punkt); får kod 31, 32 … och ligger på kartans kontrollager, gemensamt för alla banor",
               "704 Kontrollnummer — text vid cirkeln; visar koden tills kontrollen ingår i banan, därefter besöksnummer (1, 2/7 …)",
               "705 Banlinje — linje",
-              "706 Mål — dubbelcirkel (punkt); klicka på målet för att avsluta banan",
+              "706 Mål — dubbelcirkel (punkt); ligger på kartans kontrollager, klicka på målet för att avsluta banan",
               "707 Markerad sträcka — streckad linje",
               "709 Förbudsområde — yta med skraffering",
             ]}
@@ -647,10 +647,10 @@ export async function HelpPageContent() {
               "Text — klicka och skriv i dialogrutan",
               "Flytta — dra valt objekt; vid kontroll (703) följer kontrollnumret (704) med",
               "Flytta kontrollnummer (704) separat via verktyget Flytta eller knappen nr i kontrollistan",
-              "Klipp — klicka på kontrollcirkel, bansträcka eller manuell linje (705/707) för att skapa en lucka så kartsymboler under syns; klicka igen för att ta bort",
-              "I Klipp-läge: gröna markörer visar luckor — dra för att flytta; nya luckor snäpps mot närmaste kartsymbol under",
+              "Klipp — klicka på kontrollcirkel eller bansträcka mellan kontrollerna (eller manuell linje 705/707) för att skapa en lucka så kartsymboler under syns; klicka igen för att ta bort",
+              "Luckan öppnas där du klickar och snäpps bara mot en kartsymbol som ligger nära klicket",
               "Lucka nära sträckans slut vid en kontroll påverkar inkommande sträcka; lucka närmare föregående kontroll påverkar utgående sträcka",
-              "Radera — tar bort cirkeln från kartan (och alla besök av den kontrollen). Du kan också välja objekt och trycka Radera",
+              "Radera — tar bort symbolen från kontrollagret (start, kontroll eller mål). Du kan också välja objekt och trycka Radera",
             ]}
           />
 
@@ -662,6 +662,12 @@ export async function HelpPageContent() {
             punkt i listan för att zooma in på den. Krysset tar bort ett besök från banan men lämnar
             cirkeln kvar.
           </p>
+          <p>
+            Start, mål och kontroller med kod 31 och uppåt är ett{" "}
+            <strong>kontrollager på kartan</strong>, inte en del av en enskild bana. De syns
+            därför när du öppnar eller skapar nästa bana. Banordningen (vilka du klickar i Rita
+            bana) är däremot unik per bana.
+          </p>
 
           <h3 className="font-medium text-slate-900">Spara och dela</h3>
           <HelpList
@@ -670,8 +676,8 @@ export async function HelpPageContent() {
               "Nya banor är privata som standard — kryssa i Gör publik för att dela med alla",
               "Privata banor syns bara för dig; publika banor kan öppnas av alla godkända användare",
               "Öppna befintlig bana via listan Öppna bana… eller från banlistan på områdessidan",
-              "Ny bana — starta om utan att spara ändringar i aktuell bana",
-              "Radera bana — tar bort banan permanent (ägare eller administratör)",
+              "Ny bana — startar om banordningen men behåller kontrollagret (start, 31, 32 … och mål)",
+              "Radera bana — tar bort banan men inte start, kontroller och mål på kartan (ägare eller administratör)",
             ]}
           />
 
@@ -695,6 +701,7 @@ export async function HelpPageContent() {
               "Utskriftsområdet centreras automatiskt på den valda banans utbredning",
               "PDF roteras +7° enligt IOF-utskriftsstandard",
               "Bannamn och banlängd skrivs ut nederst till vänster i magenta",
+              "Luckor i cirklar och sträckor följer med i PDF:en",
             ]}
           />
           <p className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-700">
@@ -1196,10 +1203,10 @@ export async function HelpPageContent() {
               <h3 className="font-medium text-slate-900">Vad är Lägg bana?</h3>
               <p className="mt-1">
                 Lägg bana är ett verktyg för att planera orienteringsbanor ovanpå kartan. Du lägger
-                först ut start och kontroller (kod 31 och uppåt), sedan ritar du banan genom att
-                klicka på dem i den ordning de ska springas. Banor sparas separat och påverkar inte
-                kartfilen. Du kan spara privata eller publika banor, jämföra med skuggbana och
-                exportera som PDF.
+                först ut start, kontroller (kod 31 och uppåt) och mål; de ligger kvar på kartan till
+                nästa bana. Sedan ritar du banan genom att klicka på dem i den ordning de ska
+                springas. Banor sparas separat och påverkar inte kartfilen. Du kan spara privata
+                eller publika banor, jämföra med skuggbana och exportera som PDF.
               </p>
             </div>
             <div>

@@ -7,8 +7,8 @@ import {
 import {
   createCourse,
   listCoursesForMap,
-  serializeCourseDetail,
   serializeCourseSummary,
+  toCourseDetail,
 } from "@/lib/course/repository";
 import { validateCourseName } from "@/lib/course/validation";
 import { prisma } from "@/lib/prisma";
@@ -83,5 +83,5 @@ export async function POST(request: Request, { params }: RouteParams) {
     isPublic,
   });
 
-  return NextResponse.json(serializeCourseDetail(course), { status: 201 });
+  return NextResponse.json(await toCourseDetail(course), { status: 201 });
 }

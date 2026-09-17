@@ -36,12 +36,20 @@ export function findControlNumberObject(
   objects: EditorObject[],
   controlClientId: string,
 ): EditorObject | undefined {
+  const byId = objects.find(
+    (o) =>
+      o.symbolNr === 704 &&
+      isPointGeometry(o.geometry) &&
+      o.geometry.linkedControlId === controlClientId,
+  );
+  if (byId) return byId;
   const index = controlIndexFor(objects, controlClientId);
   if (index <= 0) return undefined;
   return objects.find(
     (o) =>
       o.symbolNr === 704 &&
       isPointGeometry(o.geometry) &&
+      o.geometry.linkedControlId == null &&
       o.geometry.linkedControlIndex === index,
   );
 }
@@ -91,6 +99,7 @@ export function ensureControlNumbers(
           type: "Point",
           coordinates: numCoords,
           linkedControlIndex: index,
+          linkedControlId: control.clientId,
         },
         textContent: label,
         sortOrder: next.length,
@@ -99,12 +108,16 @@ export function ensureControlNumbers(
       changed = true;
     } else {
       const geo = numberObj.geometry as CoursePointGeometry;
-      if (geo.linkedControlIndex !== index || numberObj.textContent !== label) {
+      if (
+        geo.linkedControlIndex !== index ||
+        geo.linkedControlId !== control.clientId ||
+        numberObj.textContent !== label
+      ) {
         const idx = next.findIndex((o) => o.clientId === numberObj!.clientId);
         if (idx >= 0) {
           next[idx] = {
             ...numberObj,
-            geometry: { ...geo, linkedControlIndex: index },
+            geometry: { ...geo, linkedControlIndex: index, linkedControlId: control.clientId },
             textContent: label,
           };
           changed = true;

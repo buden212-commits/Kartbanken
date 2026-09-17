@@ -9,6 +9,7 @@ import {
   assignMissingControlCodes,
   buildMapLabelMap,
   canAppendVisit,
+  courseHint,
   nextControlCode,
   parseControlCode,
   removeVisitAt,
@@ -16,6 +17,10 @@ import {
   unusedControls,
 } from "../src/lib/course/sequence";
 import { computeCourseLengthMeters } from "../src/lib/course/geometry";
+import {
+  keepControlLayer,
+  mergeLayerAndCourseObjects,
+} from "../src/lib/course/control-layer";
 
 let passed = 0;
 let failed = 0;
@@ -100,6 +105,34 @@ assert(
 assert(
   computeCourseLengthMeters(withFar, 15000, null) > lengthShort,
   "legacy length includes unused far control",
+);
+
+const kept = keepControlLayer([start, c31, c32, finish, extra]);
+assert(
+  kept.every((o) => o.symbolNr === 701 || o.symbolNr === 703 || o.symbolNr === 704 || o.symbolNr === 706),
+  "new course keeps control layer including start and finish",
+);
+assert(kept.some((o) => o.clientId === "c31"), "kept control 31");
+assert(kept.some((o) => o.clientId === "s"), "kept start on control layer");
+assert(kept.some((o) => o.clientId === "f"), "kept finish on control layer");
+
+const merged = mergeLayerAndCourseObjects(
+  [
+    { id: "s", symbolNr: 701, objectType: CourseObjectType.POINT, geometry: { type: "Point", coordinates: [1, 0] }, textContent: null, sortOrder: 0 },
+    { id: "c31", symbolNr: 703, objectType: CourseObjectType.POINT, geometry: { type: "Point", coordinates: [0, 0] }, textContent: "31", sortOrder: 1 },
+    { id: "f", symbolNr: 706, objectType: CourseObjectType.POINT, geometry: { type: "Point", coordinates: [2, 0] }, textContent: null, sortOrder: 2 },
+  ],
+  [
+    { id: "c31", symbolNr: 703, objectType: CourseObjectType.POINT, geometry: { type: "Point", coordinates: [0, 0] }, textContent: "31", sortOrder: 1 },
+  ],
+);
+assert(merged.filter((o) => o.id === "c31").length === 1, "merge does not duplicate layer ids");
+assert(merged.some((o) => o.id === "s"), "merge keeps layer start");
+assert(merged.some((o) => o.id === "f"), "merge keeps layer finish");
+
+assert(
+  courseHint([], [c31, c32]).includes("ligger kvar"),
+  "hint mentions leftover controls when start is missing",
 );
 
 if (failed > 0) {

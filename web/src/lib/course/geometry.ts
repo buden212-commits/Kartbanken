@@ -571,8 +571,10 @@ export function renderCourseOverlaySvg(
     textRotationDeg?: number;
     skipText?: boolean;
     sequence?: string[] | null;
+    omitSymbolNrs?: number[];
   },
 ): string {
+  const skipSymbols = new Set(options?.omitSymbolNrs ?? []);
   const sorted = objects.slice().sort((a, b) => a.sortOrder - b.sortOrder);
   const legPoints =
     options?.sequence != null
@@ -594,6 +596,7 @@ export function renderCourseOverlaySvg(
 
   const objectMarkup = sorted
     .map((obj) => {
+      if (skipSymbols.has(obj.symbolNr)) return "";
       const id = "clientId" in obj ? obj.clientId : obj.id;
       let heading: number | undefined;
       if (obj.symbolNr === 701 && obj.geometry.type === "Point") {

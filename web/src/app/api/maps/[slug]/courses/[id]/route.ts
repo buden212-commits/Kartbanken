@@ -8,7 +8,7 @@ import {
 import {
   deleteCourse,
   getCourseById,
-  serializeCourseDetail,
+  toCourseDetail,
   updateCourse,
 } from "@/lib/course/repository";
 import { validateCourseName } from "@/lib/course/validation";
@@ -43,7 +43,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
   const denied = assertCourseViewAccess(session, result.course!);
   if (denied) return denied;
 
-  return NextResponse.json(serializeCourseDetail(result.course!));
+  return NextResponse.json(await toCourseDetail(result.course!));
 }
 
 export async function PATCH(request: Request, { params }: RouteParams) {
@@ -94,7 +94,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     ...updates,
   });
 
-  return NextResponse.json(serializeCourseDetail(course));
+  return NextResponse.json(await toCourseDetail(course));
 }
 
 export async function DELETE(_request: Request, { params }: RouteParams) {

@@ -5,8 +5,7 @@ import {
   buildCourseExportSvg,
   parseExportQueryParams,
 } from "@/lib/course/build-export-svg";
-import { getCourseById } from "@/lib/course/repository";
-import { serializeCourseDetail } from "@/lib/course/repository";
+import { getCourseById, toCourseDetail } from "@/lib/course/repository";
 import {
   parseCourseScale,
   exportFrameFromCenter,
@@ -81,7 +80,7 @@ export async function GET(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Kunde inte läsa kartpreview" }, { status: 500 });
   }
 
-  const detail = serializeCourseDetail(course);
+  const detail = await toCourseDetail(course);
   const hydrated = hydrateCourseEditor(
     detail.objects.map((o) => ({ ...o, clientId: o.id })),
     detail.sequence,

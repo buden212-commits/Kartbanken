@@ -214,7 +214,7 @@ Banor ritas ovanpå kartans **publicerade** version. Banor sparas separat och **
 2. Välj symbol i panelen till höger (701–709, IOF magenta).
 3. Verktyg: **Rita**, **Flytta**, **Klipp**, **Radera**.
 4. Lägg **start** (701), **kontroller** (703), **mål** (706) — banlinjer dras automatiskt.
-5. **Klipp:** skapa luckor i kontrollcirkel eller sträcka så kartsymboler under syns; dra grön markör för att flytta lucka.
+5. **Klipp:** klicka på kontrollcirkel eller bansträcka för en lucka så kartsymboler under syns; klicka igen för att ta bort. Luckorna följer med i PDF-exporten.
 6. Spara bana, välj **Gör publik** om andra ska se den.
 7. **Skuggbana:** visa annan bana halvtransparent för jämförelse.
 8. **PDF-export** längst ned i banredigeraren.

@@ -153,6 +153,8 @@ flowchart TD
   A[Lägg bana på områdessidan] --> B[Lägg ut start och kontroller]
   B --> C[Rita bana genom att klicka i ordning]
   C --> D[Avsluta med mål och spara]
+  D --> N[Ny bana — start, kontroller och mål ligger kvar]
+  N --> B
   D --> E{Gör publik?}
   E -->|Ja| F[Alla kan öppna]
   E -->|Nej| G[Endast du ser banan]

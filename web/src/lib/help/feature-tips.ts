@@ -63,7 +63,7 @@ export const featureTips: FeatureTip[] = [
   {
     id: "bana",
     title: "Lägg bana på kartan",
-    body: "Lägg ut start och kontroller (kod 31+), rita sedan banan genom att klicka i ordning. Panorera kartan med verktyget Panorera.",
+    body: "Start, mål och kontroller 31, 32 … ligger på kartan och följer med till nästa bana. Rita banan genom att klicka i ordning.",
     helpSectionId: "bana",
     roles: [Role.READER, Role.EDITOR, Role.ADMIN],
     weight: 7,

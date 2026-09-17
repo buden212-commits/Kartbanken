@@ -7,6 +7,25 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-09-17",
+    title: "Klipp i cirklar och sträckor",
+    items: [
+      "Luckan i en kontrollcirkel öppnas där du klickar. Om en kartsymbol ligger nära klicket snäpps luckan dit — inte mot symbolen i cirkelns mitt",
+      "Du kan klippa även bansträckan mellan kontrollerna. Klicka igen på luckan för att ta bort den",
+      "Luckor i cirklar och sträckor följer med i PDF-exporten (spara banan först)",
+      "De gröna prickarna vid luckor visas inte längre",
+    ],
+  },
+  {
+    date: "2026-09-16",
+    title: "Kontrollager — start, kontroller och mål på kartan",
+    items: [
+      "Start, mål och kontroller med kod 31 och uppåt ligger på ett eget lager på kartan och följer med när du gör nästa bana",
+      "Ny bana rensar banordningen — triangeln, cirklarna, koderna och målet ligger kvar",
+      "Radera bana tar inte bort lagret. Radera en symbol om du vill ta bort den från kartan",
+    ],
+  },
+  {
     date: "2026-09-15",
     title: "Lägg bana — panorera, kontrollkoder och rita bana",
     items: [

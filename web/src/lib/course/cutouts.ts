@@ -1,4 +1,5 @@
 import { geoToSvgUserPoint, type SvgRootTransform } from "@/lib/ocad/svg-coords";
+import { pointsAlongSequence } from "./sequence";
 import type {
   CourseCircleCutout,
   CourseGeometry,
@@ -208,7 +209,7 @@ function visibleArcIntervals(cutouts: CourseCircleCutout[]): AngleInterval[] {
   return visible;
 }
 
-/** Render control circle as arc polylines with optional cutouts. */
+/** Render control circle as SVG arcs with optional cutouts (paths survive PDF rasterization). */
 export function renderCircleWithCutoutsSvg(
   centerGeo: [number, number],
   radiusGeo: number,
@@ -226,16 +227,13 @@ export function renderCircleWithCutoutsSvg(
   for (const arc of arcs) {
     const span = arc.end - arc.start;
     if (span < 0.01) continue;
-    const steps = Math.max(4, Math.ceil((span / (Math.PI * 2)) * 32));
-    const points: string[] = [];
-    for (let i = 0; i <= steps; i++) {
-      const t = arc.start + (span * i) / steps;
-      const geo = geoPointOnCircle(centerGeo, radiusGeo, t);
-      const [sx, sy] = geoToSvgUserPoint(geo, transform);
-      points.push(`${sx},${sy}`);
-    }
+    const startGeo = geoPointOnCircle(centerGeo, radiusGeo, arc.start);
+    const endGeo = geoPointOnCircle(centerGeo, radiusGeo, arc.end);
+    const [sx, sy] = geoToSvgUserPoint(startGeo, transform);
+    const [ex, ey] = geoToSvgUserPoint(endGeo, transform);
+    const large = span > Math.PI ? 1 : 0;
     segments.push(
-      `<polyline points="${points.join(" ")}" fill="none" stroke="${stroke}" stroke-opacity="${opacity}" stroke-width="${strokeW}" stroke-linecap="round"/>`,
+      `<path d="M ${sx} ${sy} A ${radiusGeo} ${radiusGeo} 0 ${large} 0 ${ex} ${ey}" fill="none" stroke="${stroke}" stroke-opacity="${opacity}" stroke-width="${strokeW}" stroke-linecap="round"/>`,
     );
   }
 
@@ -516,16 +514,20 @@ export function hitTestCourseLeg(
   geoPoint: [number, number],
   objects: Array<CourseObjectDto | EditorObject>,
   tolerance: number,
+  sequence?: string[] | null,
 ): CourseLegHit | null {
-  const legPoints = objects
-    .slice()
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-    .filter(
-      (o) =>
-        o.objectType === CourseObjectType.POINT &&
-        o.geometry.type === "Point" &&
-        COURSE_LEG_SYMBOLS.has(o.symbolNr),
-    );
+  const legPoints =
+    sequence != null
+      ? pointsAlongSequence(objects, sequence)
+      : objects
+          .slice()
+          .sort((a, b) => a.sortOrder - b.sortOrder)
+          .filter(
+            (o) =>
+              o.objectType === CourseObjectType.POINT &&
+              o.geometry.type === "Point" &&
+              COURSE_LEG_SYMBOLS.has(o.symbolNr),
+          );
 
   let best: { hit: CourseLegHit; dist: number } | null = null;
 
