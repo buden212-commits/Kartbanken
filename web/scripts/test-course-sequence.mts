@@ -21,6 +21,10 @@ import {
   keepControlLayer,
   mergeLayerAndCourseObjects,
 } from "../src/lib/course/control-layer";
+import {
+  claimControlNumberAndPrune,
+  ensureControlNumbers,
+} from "../src/lib/course/control-numbers";
 
 let passed = 0;
 let failed = 0;
@@ -134,6 +138,59 @@ assert(
   courseHint([], [c31, c32]).includes("ligger kvar"),
   "hint mentions leftover controls when start is missing",
 );
+
+function textNumber(
+  clientId: string,
+  controlId: string | undefined,
+  index: number,
+  label: string,
+  sortOrder: number,
+  coords: [number, number] = [380, 0],
+): EditorObject {
+  return {
+    clientId,
+    id: clientId,
+    symbolNr: 704,
+    objectType: CourseObjectType.TEXT,
+    geometry: {
+      type: "Point",
+      coordinates: coords,
+      linkedControlIndex: index,
+      ...(controlId ? { linkedControlId: controlId } : {}),
+    },
+    textContent: label,
+    sortOrder,
+  };
+}
+
+const c33 = point("c33id", 703, 0, "33");
+const numLinked = textNumber("n-good", "c33id", 1, "2", 1);
+const numOrphan = textNumber("n-stale", "tmp_old", 1, "33", 2);
+const afterEmpty = ensureControlNumbers([c33, numLinked, numOrphan], []);
+const afterEmpty704 = afterEmpty.filter((o) => o.symbolNr === 704);
+assert(afterEmpty704.length === 1, "empty sequence prunes duplicate 704");
+assert(afterEmpty704[0]?.textContent === "33", "empty sequence shows control code, not visit number");
+
+const afterStale = ensureControlNumbers(
+  [c33, textNumber("n-stale-only", "tmp_old", 1, "33", 1)],
+  [],
+);
+assert(afterStale.filter((o) => o.symbolNr === 704).length === 1, "stale tmp_ id still matches by index");
+assert(
+  afterStale.find((o) => o.symbolNr === 704)?.geometry.type === "Point" &&
+    (afterStale.find((o) => o.symbolNr === 704)?.geometry as { linkedControlId?: string })
+      .linkedControlId === "c33id",
+  "stale 704 is relinked to persisted control id",
+);
+
+const claimed = claimControlNumberAndPrune(
+  [c33, numLinked, numOrphan],
+  "n-stale",
+  [],
+);
+const claimed704 = claimed.filter((o) => o.symbolNr === 704);
+assert(claimed704.length === 1, "claiming a number drops the copy underneath");
+assert(claimed704[0]?.clientId === "n-stale", "the number you grabbed is the one that remains");
 
 if (failed > 0) {
   console.error(`${failed} failed, ${passed} passed`);

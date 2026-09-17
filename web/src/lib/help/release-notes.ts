@@ -8,12 +8,13 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-17",
-    title: "Klipp i cirklar och sträckor",
+    title: "Klipp i cirklar och sträckor, en siffra per kontroll",
     items: [
       "Luckan i en kontrollcirkel öppnas där du klickar. Om en kartsymbol ligger nära klicket snäpps luckan dit — inte mot symbolen i cirkelns mitt",
       "Du kan klippa även bansträckan mellan kontrollerna. Klicka igen på luckan för att ta bort den",
       "Luckor i cirklar och sträckor följer med i PDF-exporten (spara banan först)",
       "De gröna prickarna vid luckor visas inte längre",
+      "Ny bana tar bort besöksnumren (1, 2, 3 …). Kvar ligger start, mål och en kod 31, 32 … per kontroll — inte dubbla siffror",
     ],
   },
   {

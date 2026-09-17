@@ -16,6 +16,7 @@ import { HelpLinkIcon } from "@/components/help-link-icon";
 import type { CourseSummary, EditorObject, EditorTool, CoursePointGeometry, CourseLineGeometry } from "@/lib/course/types";
 import { CourseObjectType } from "@/lib/course/types";
 import {
+  claimControlNumberAndPrune,
   defaultControlNumberForControl,
   ensureControlNumbers,
   findControlForNumberObject,
@@ -223,6 +224,15 @@ export function CourseEditorClient({
     },
     [],
   );
+
+  useEffect(() => {
+    const extraNumbers =
+      objects.filter((o) => o.symbolNr === 704).length >
+      objects.filter((o) => o.symbolNr === 703).length;
+    if (!extraNumbers) return;
+    const next = ensureControlNumbers(objects, sequence);
+    if (next !== objects) setObjects(next);
+  }, [objects, sequence]);
 
   const loadLayer = useCallback(async () => {
     const res = await fetch(`/api/maps/${mapSlug}/course-layer`);
@@ -633,7 +643,7 @@ export function CourseEditorClient({
             sortOrder: synced.length,
           };
           const numberObj: EditorObject = {
-            ...defaultControlNumberForControl(geo, String(code), controlIndex),
+            ...defaultControlNumberForControl(geo, String(code), controlIndex, controlId),
             sortOrder: synced.length + 1,
           };
           applyCourseState([...synced, controlObj, numberObj], sequence);
@@ -701,14 +711,22 @@ export function CourseEditorClient({
         const tol = computeHitTolerance(vb?.width ?? 1000, vb?.height ?? 1000);
         const hit = hitTestTopObject(geo, objects, tol);
         if (hit) {
+          let working = objects;
+          if (hit.symbolNr === 704) {
+            working = claimControlNumberAndPrune(objects, hit.clientId, sequence);
+          } else if (hit.symbolNr === 703) {
+            working = ensureControlNumbers(objects, sequence);
+          }
+          if (working !== objects) setObjects(working);
+          const current = working.find((o) => o.clientId === hit.clientId) ?? hit;
           setSelectedId(hit.clientId);
           const moveState: NonNullable<typeof moveRef.current> = {
             objectId: hit.clientId,
             startGeo: geo,
-            originalGeometry: hit.geometry,
+            originalGeometry: current.geometry,
           };
           if (hit.symbolNr === 703) {
-            const linked = findControlNumberObject(objects, hit.clientId);
+            const linked = findControlNumberObject(working, hit.clientId);
             if (linked) {
               moveState.linkedNumberId = linked.clientId;
               moveState.linkedNumberOriginalGeometry = linked.geometry;
@@ -748,7 +766,7 @@ export function CourseEditorClient({
 
       handleMapClickGeo(geo);
     },
-    [canEdit, finishLine, handleMapClickGeo, objects, selectedSymbol, tool],
+    [canEdit, finishLine, handleMapClickGeo, objects, selectedSymbol, sequence, tool],
   );
 
   const handlePointerMove = useCallback(
@@ -896,8 +914,7 @@ export function CourseEditorClient({
     setCourseName("Ny bana");
     courseNameRef.current = "Ny bana";
     setIsPublic(false);
-    setObjects(ensureControlNumbers(keepControlLayer(objects), []));
-    setSequence([]);
+    applyCourseState(keepControlLayer(objects), [], false);
     setDirty(false);
     setSelectedId(null);
     setLineDraft([]);
@@ -923,8 +940,7 @@ export function CourseEditorClient({
       setCourseName("Ny bana");
       courseNameRef.current = "Ny bana";
       setIsPublic(false);
-      setObjects(ensureControlNumbers(keepControlLayer(objects), []));
-      setSequence([]);
+      applyCourseState(keepControlLayer(objects), [], false);
       setDirty(false);
       setSelectedId(null);
       setLineDraft([]);

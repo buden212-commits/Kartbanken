@@ -135,7 +135,7 @@ export async function HelpPageContent() {
             <li>Öppna Lägg bana på områdessidan.</li>
             <li>Lägg ut start, kontroller (kod 31, 32 …) och mål. De ligger kvar på kartan till nästa bana.</li>
             <li>Välj Rita bana och klicka start, sedan kontrollerna i banordning. Avsluta med mål.</li>
-            <li>Spara banan. När du väljer Ny bana ligger start, kontroller och mål kvar — rita nästa bana genom att klicka i ordning.</li>
+            <li>Spara banan. När du väljer Ny bana ligger start, kontroller och mål kvar; besöksnumren 1, 2, 3 … försvinner så att koderna 31, 32 … syns igen. Rita nästa bana genom att klicka i ordning.</li>
           </ol>
           <p className="mt-4">Fältredigering (direkt i webben):</p>
           <ol className="list-decimal space-y-2 pl-5">
@@ -676,7 +676,7 @@ export async function HelpPageContent() {
               "Nya banor är privata som standard — kryssa i Gör publik för att dela med alla",
               "Privata banor syns bara för dig; publika banor kan öppnas av alla godkända användare",
               "Öppna befintlig bana via listan Öppna bana… eller från banlistan på områdessidan",
-              "Ny bana — startar om banordningen men behåller kontrollagret (start, 31, 32 … och mål)",
+              "Ny bana — startar om banordningen men behåller kontrollagret (start, 31, 32 … och mål). Besöksnumren 1, 2, 3 … försvinner",
               "Radera bana — tar bort banan men inte start, kontroller och mål på kartan (ägare eller administratör)",
             ]}
           />
