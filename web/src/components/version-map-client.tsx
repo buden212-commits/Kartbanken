@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { MapBackLink } from "@/components/map-name";
 import { DiffMapPanel } from "@/components/diff-map-panel";
 import { useSuggestionMapOverlayControls } from "@/components/suggestion/suggestion-map-overlay";
 
 type Props = {
   mapSlug: string;
   mapTitle: string;
+  areaType?: string | null;
   versionId: string;
   versionNumber: number;
   fileName: string;
@@ -18,6 +20,7 @@ type Props = {
 export function VersionMapClient({
   mapSlug,
   mapTitle,
+  areaType,
   versionId,
   versionNumber,
   fileName,
@@ -30,9 +33,7 @@ export function VersionMapClient({
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
-      <Link href={`/maps/${mapSlug}`} className="link-muted text-sm">
-        ← {mapTitle}
-      </Link>
+      <MapBackLink href={`/maps/${mapSlug}`} title={mapTitle} areaType={areaType} />
 
       <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
         <div>

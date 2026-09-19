@@ -1,6 +1,8 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 import type { StorageDashboardData } from "@/lib/admin/storage-stats";
 import { formatBytes } from "@/lib/format";
+import { MapName } from "@/components/map-name";
 
 type Props = {
   data: StorageDashboardData;
@@ -35,7 +37,7 @@ function HorizontalBar({
   href,
   suffix,
 }: {
-  label: string;
+  label: ReactNode;
   value: number;
   max: number;
   href?: string;
@@ -45,7 +47,7 @@ function HorizontalBar({
 
   return (
     <div>
-      <div className="mb-1 flex items-baseline justify-between gap-3 text-sm">
+      <div className="mb-1 flex items-center justify-between gap-3 text-sm">
         {href ? (
           <Link href={href} className="font-medium text-ifk-blue hover:text-ifk-blue-hover">
             {label}
@@ -118,7 +120,7 @@ export function AdminStorageDashboard({ data }: Props) {
               {topMaps.map((map) => (
                 <HorizontalBar
                   key={map.id}
-                  label={map.title}
+                  label={<MapName title={map.title} areaType={map.areaType} />}
                   value={map.versionBytes}
                   max={maxMapBytes}
                   href={`/maps/${map.slug}`}
@@ -181,7 +183,7 @@ export function AdminStorageDashboard({ data }: Props) {
             .map((map) => (
               <HorizontalBar
                 key={`versions-${map.id}`}
-                label={map.title}
+                label={<MapName title={map.title} areaType={map.areaType} />}
                 value={map.versionCount}
                 max={Math.max(...maps.map((row) => row.versionCount), 1)}
                 href={`/maps/${map.slug}`}
@@ -214,7 +216,7 @@ export function AdminStorageDashboard({ data }: Props) {
                     href={`/maps/${map.slug}`}
                     className="font-medium text-ifk-blue hover:text-ifk-blue-hover"
                   >
-                    {map.title}
+                    <MapName title={map.title} areaType={map.areaType} />
                   </Link>
                 </td>
                 <td className="py-3 pr-4 text-right tabular-nums text-slate-800">

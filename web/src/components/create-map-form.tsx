@@ -2,11 +2,14 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { AreaTypePicker } from "@/components/area-type-picker";
+import { DEFAULT_AREA_TYPE, type AreaType } from "@/lib/maps/area-types";
 
 export function CreateMapForm() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [areaType, setAreaType] = useState<AreaType>(DEFAULT_AREA_TYPE);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -26,7 +29,7 @@ export function CreateMapForm() {
     const res = await fetch("/api/maps", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, description }),
+      body: JSON.stringify({ title, description, areaType }),
     });
 
     setLoading(false);
@@ -56,6 +59,9 @@ export function CreateMapForm() {
           placeholder="t.ex. Mora Väst med Venjan"
           className="form-input"
         />
+      </div>
+      <div className="sm:col-span-2">
+        <AreaTypePicker value={areaType} onChange={setAreaType} disabled={loading} />
       </div>
       <div className="sm:col-span-2">
         <label htmlFor="description" className="form-label">

@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { MapBackLink } from "@/components/map-name";
 import { DiffViewClient, type DiffSummary, type LayerPaths } from "@/components/diff-view-client";
 import type { OcadObjectChange } from "@/lib/ocad/diff-types";
 import type { VersionDiffProgress } from "@/lib/ocad/version-diff-progress";
@@ -34,6 +34,7 @@ type CompareResponse =
 type Props = {
   mapSlug: string;
   mapTitle: string;
+  areaType?: string | null;
   v1: string;
   v2: string;
 };
@@ -55,7 +56,7 @@ function formatElapsed(totalSec: number): string {
   return `${m} min ${s.toString().padStart(2, "0")} s`;
 }
 
-export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
+export function ComparePageClient({ mapSlug, mapTitle, areaType, v1, v2 }: Props) {
   const router = useRouter();
   const [data, setData] = useState<CompareResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -117,9 +118,7 @@ export function ComparePageClient({ mapSlug, mapTitle, v1, v2 }: Props) {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
-      <Link href={`/maps/${mapSlug}`} className="link-muted text-sm">
-        ← {mapTitle}
-      </Link>
+      <MapBackLink href={`/maps/${mapSlug}`} title={mapTitle} areaType={areaType} />
 
       <h1 className="mt-4 text-2xl font-semibold text-slate-900 sm:text-3xl">Jämför versioner</h1>
       <p className="mt-2 text-slate-600">

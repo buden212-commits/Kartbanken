@@ -237,7 +237,7 @@ export async function HelpPageContent() {
                 <tr>
                   <td className="px-4 py-3 font-medium">Administratör</td>
                   <td className="px-4 py-3">
-                    Allt redaktör kan, plus skapa områden, redigera områdesnamn, radera områden,
+                    Allt redaktör kan, plus skapa områden, redigera områdesnamn och typ, radera områden,
                     godkänna konton, avbryta utcheckningar och fältredigeringar, integrera
                     incheckningar, tilldela fältredigering och hantera systeminställningar.
                     Administratörer har alltid fältredigering.
@@ -261,7 +261,8 @@ export async function HelpPageContent() {
 
         <HelpSection id="omraden" title="Områden">
           <p>
-            Startsidan visar alla kartområden i klubben. Varje rad visar områdesnamn, senaste
+            Startsidan visar alla kartområden i klubben. Varje rad visar områdesnamn med typikon
+            (träd för orientering, hus för sprint, cykel för MTBO, skidor för SkidO), senaste
             version, uppladdningsdatum, filstorlek och vem som laddade upp. Listan visas först;
             formuläret <strong>Skapa nytt kartområde</strong> finns under listan.
           </p>
@@ -270,9 +271,11 @@ export async function HelpPageContent() {
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
               <p className="font-medium text-slate-900">Administratörer</p>
               <p className="mt-1">
-                Skapa nya områden med namn och valfri beskrivning. Ett område är en logisk
+                Skapa nya områden med namn, typ och valfri beskrivning. Typen (Orientering, Sprint,
+                MTBO eller SkidO) ger en ikon till vänster om namnet. Ett område är en logisk
                 behållare — den första versionen laddas upp på områdets detaljsida. Ändra
-                visningsnamnet via ikonen <strong>Redigera namn</strong> bredvid titeln (URL:en
+                visningsnamn och typ via ikonen <strong>Redigera namn och typ</strong> bredvid
+                titeln (URL:en
                 ändras inte). Radera område via papperskorg-ikonen — detta tar bort alla versioner
                 och tillhörande data permanent.
               </p>
@@ -281,7 +284,7 @@ export async function HelpPageContent() {
           <HelpProcessDiagram
             title="Flöde — områden"
             chart={areaManagement}
-            caption="Alla godkända användare bläddrar och öppnar områden; skapa, byta namn och radera kräver administratör."
+            caption="Alla godkända användare bläddrar och öppnar områden; skapa, byta namn/typ och radera kräver administratör."
           />
         </HelpSection>
 
@@ -1081,7 +1084,8 @@ export async function HelpPageContent() {
 
             <h3 className="font-medium text-slate-900">Skapa och hantera områden</h3>
             <p>
-              Endast administratörer kan skapa nya områden på startsidan. Redigera namn, arkivera
+              Endast administratörer kan skapa nya områden på startsidan. Välj typ (Orientering,
+              Sprint, MTBO eller SkidO) redan vid skapandet. Redigera namn och typ, arkivera
               (döljer från startsidan) eller radera område via ikonerna bredvid titeln på områdessidan.
             </p>
             <HelpProcessDiagram title="Flöde — användarhantering" chart={adminUserFlow} />

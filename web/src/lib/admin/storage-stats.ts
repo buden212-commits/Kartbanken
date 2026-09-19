@@ -5,6 +5,7 @@ export type MapStorageRow = {
   id: string;
   slug: string;
   title: string;
+  areaType: string;
   versionBytes: number;
   versionCount: number;
   checkoutFileCount: number;
@@ -56,7 +57,7 @@ function buildRecentMonthKeys(months: number): string[] {
 export async function getStorageDashboardData(): Promise<StorageDashboardData> {
   const [maps, versionGroups, recentVersions, checkoutCounts, courseCounts] = await Promise.all([
     prisma.mapFile.findMany({
-      select: { id: true, slug: true, title: true },
+      select: { id: true, slug: true, title: true, areaType: true },
       orderBy: { title: "asc" },
     }),
     prisma.mapVersion.groupBy({
@@ -112,6 +113,7 @@ export async function getStorageDashboardData(): Promise<StorageDashboardData> {
       id: map.id,
       slug: map.slug,
       title: map.title,
+      areaType: map.areaType,
       versionBytes: version?.bytes ?? 0,
       versionCount: version?.count ?? 0,
       checkoutFileCount: checkoutByMap.get(map.id) ?? 0,

@@ -15,6 +15,7 @@ export type AuditAction =
   | "ROLE_CHANGE"
   | "MAP_CREATE"
   | "MAP_RENAMED"
+  | "MAP_TYPE_CHANGED"
   | "MAP_ARCHIVED"
   | "MAP_UNARCHIVED"
   | "MAP_DELETED"

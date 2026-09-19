@@ -43,6 +43,7 @@ export default async function VersionMapPage({ params }: PageProps) {
     <VersionMapClient
       mapSlug={slug}
       mapTitle={lookup.map.title}
+      areaType={lookup.map.areaType}
       versionId={version.id}
       versionNumber={version.versionNumber}
       fileName={version.originalFilename}

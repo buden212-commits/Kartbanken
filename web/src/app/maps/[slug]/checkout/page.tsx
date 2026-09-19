@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { canCheckout } from "@/lib/auth/permissions";
 import { findActiveAreaLocksForMap, getHeadVersionId } from "@/lib/checkout/repository";
 import { serializeCheckoutResponse } from "@/lib/checkout/repository";
+import { MapBackLink } from "@/components/map-name";
 import { CheckoutPageClient } from "@/components/checkout-page-client";
 import { HelpLinkIcon } from "@/components/help-link-icon";
 import { readOcadHeaderVersion } from "@/lib/ocad/ocad-export-server";
@@ -46,9 +46,7 @@ export default async function CheckoutCreatePage({ params }: PageProps) {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
-      <Link href={`/maps/${slug}`} className="link-muted text-sm">
-        ← {map.title}
-      </Link>
+      <MapBackLink href={`/maps/${slug}`} title={map.title} areaType={map.areaType} />
       <div className="mt-4 flex items-start justify-between gap-3">
         <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">Checka ut område</h1>
         <HelpLinkIcon section="checkout" className="mt-1 shrink-0" />

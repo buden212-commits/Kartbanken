@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import {
@@ -7,6 +6,7 @@ import {
   canUpload,
 } from "@/lib/auth/permissions";
 import { getCheckoutById, serializeCheckoutResponse } from "@/lib/checkout/repository";
+import { MapBackLink, MapName } from "@/components/map-name";
 import { CheckoutDetailClient } from "@/components/checkout-detail-client";
 import {
   CheckoutVersionContextBanner,
@@ -70,15 +70,14 @@ export default async function CheckoutDetailPage({ params }: PageProps) {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
-      <Link href={`/maps/${slug}`} className="link-muted text-sm">
-        ← {map.title}
-      </Link>
+      <MapBackLink href={`/maps/${slug}`} title={map.title} areaType={map.areaType} />
       <div className="mt-4 flex items-start justify-between gap-3">
         <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">Utcheckning</h1>
         <HelpLinkIcon section="checkout" className="mt-1 shrink-0" />
       </div>
       <p className="mt-2 text-sm text-slate-600">
-        {checkout.user.name ?? checkout.user.email} · {map.title}
+        {checkout.user.name ?? checkout.user.email} ·{" "}
+        <MapName title={map.title} areaType={map.areaType} />
       </p>
 
       <div className="mt-6 space-y-6">
@@ -95,6 +94,7 @@ export default async function CheckoutDetailPage({ params }: PageProps) {
         <CheckoutDetailClient
           mapSlug={map.slug}
           mapTitle={map.title}
+          areaType={map.areaType}
           checkout={{
             ...serialized,
             diffSummaryJson: serialized.diffSummaryJson,

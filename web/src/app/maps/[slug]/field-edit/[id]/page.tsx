@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { canAdmin, userCanFieldEdit } from "@/lib/auth/permissions";
 import { getCheckoutById } from "@/lib/checkout/repository";
 import { CheckoutMode, CheckoutStatus, parseSelectionJson } from "@/lib/checkout/types";
+import { MapBackLink } from "@/components/map-name";
 import { FieldEditPendingClient } from "@/components/field-edit/field-edit-pending-client";
 import { FieldEditSessionClient } from "@/components/field-edit/field-edit-session-client";
 import { buildFieldEditReviewSummary } from "@/lib/field-edit/review-summary";
@@ -53,9 +53,7 @@ export default async function FieldEditSessionPage({ params }: PageProps) {
     }
     return (
       <div className="mx-auto max-w-6xl px-2 py-4 sm:px-6 sm:py-12">
-        <Link href={`/maps/${slug}`} className="link-muted text-sm">
-          ← {map.title}
-        </Link>
+        <MapBackLink href={`/maps/${slug}`} title={map.title} areaType={map.areaType} />
         <h1 className="mt-3 text-xl font-semibold text-slate-900 sm:mt-4 sm:text-3xl">
           Fältredigering — granskning
         </h1>
@@ -63,6 +61,7 @@ export default async function FieldEditSessionPage({ params }: PageProps) {
           <FieldEditPendingClient
             mapSlug={map.slug}
             mapTitle={map.title}
+            areaType={map.areaType}
             sessionId={checkout.id}
             summary={summary}
             selection={selection}
@@ -85,9 +84,7 @@ export default async function FieldEditSessionPage({ params }: PageProps) {
 
   return (
     <div className="mx-auto max-w-6xl px-2 py-4 sm:px-6 sm:py-12">
-      <Link href={`/maps/${slug}`} className="link-muted text-sm">
-        ← {map.title}
-      </Link>
+      <MapBackLink href={`/maps/${slug}`} title={map.title} areaType={map.areaType} />
       <h1 className="mt-3 text-xl font-semibold text-slate-900 sm:mt-4 sm:text-3xl">Fältredigering</h1>
       <p className="mt-2 hidden text-sm text-slate-600 sm:block">
         Redigera kartan i fält. Checka in för jämförelse — en administratör godkänner innan ny version
@@ -98,6 +95,7 @@ export default async function FieldEditSessionPage({ params }: PageProps) {
         <FieldEditSessionClient
           mapSlug={map.slug}
           mapTitle={map.title}
+          areaType={map.areaType}
           sessionId={checkout.id}
           selection={selection}
           initialOps={ops}

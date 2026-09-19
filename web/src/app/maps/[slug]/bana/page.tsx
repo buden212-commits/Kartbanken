@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { canCreateCourse, canEditCourse, canViewCourse } from "@/lib/auth/permissions";
+import { MapName } from "@/components/map-name";
 import { CourseEditorClient } from "@/components/course/course-editor-client";
 import { getLatestPublishedVersion } from "@/lib/maps/version-context";
 import { prisma } from "@/lib/prisma";
@@ -28,7 +29,7 @@ export default async function CourseEditorPage({ params, searchParams }: PagePro
 
   const map = await prisma.mapFile.findUnique({
     where: { slug },
-    select: { id: true, title: true },
+    select: { id: true, title: true, areaType: true },
   });
   if (!map) notFound();
 
@@ -39,7 +40,7 @@ export default async function CourseEditorPage({ params, searchParams }: PagePro
         <h1 className="text-lg font-medium text-slate-900">Lägg bana</h1>
         <p className="mt-3 text-sm text-slate-600">
           Banläggning kräver en publicerad kartversion. Det finns ingen publicerad version av{" "}
-          <strong>{map.title}</strong> ännu.
+          <MapName title={map.title} areaType={map.areaType} className="font-semibold" /> ännu.
         </p>
         <Link
           href={`/maps/${slug}`}
@@ -68,6 +69,7 @@ export default async function CourseEditorPage({ params, searchParams }: PagePro
     <CourseEditorClient
       mapSlug={slug}
       mapTitle={map.title}
+      areaType={map.areaType}
       headVersionId={publishedVersion.id}
       headVersionNumber={publishedVersion.versionNumber}
       initialCourseId={courseId ?? null}

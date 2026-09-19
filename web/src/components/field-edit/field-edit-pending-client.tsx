@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { MapName } from "@/components/map-name";
 import { FieldEditReviewMap } from "@/components/field-edit/field-edit-review-map";
 import type { CheckoutSelection } from "@/lib/checkout/types";
 import type { FieldEditReviewSummary } from "@/lib/field-edit/review-summary";
@@ -11,6 +12,7 @@ import type { FieldEditOps } from "@/lib/field-edit/types";
 type Props = {
   mapSlug: string;
   mapTitle: string;
+  areaType?: string | null;
   sessionId: string;
   summary: FieldEditReviewSummary;
   selection: CheckoutSelection;
@@ -23,6 +25,7 @@ type Props = {
 export function FieldEditPendingClient({
   mapSlug,
   mapTitle,
+  areaType,
   sessionId,
   summary,
   selection,
@@ -81,7 +84,12 @@ export function FieldEditPendingClient({
         <p className="mt-1 text-sm text-amber-900">
           {isOwner && !isAdmin
             ? "Din fältredigering är incheckad och väntar på att en administratör godkänner den."
-            : `Fältredigering av ${ownerLabel} på ${mapTitle} väntar på godkännande.`}
+            : (
+                <>
+                  Fältredigering av {ownerLabel} på <MapName title={mapTitle} areaType={areaType} /> väntar på
+                  godkännande.
+                </>
+              )}
         </p>
       </div>
 

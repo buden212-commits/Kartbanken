@@ -8,6 +8,15 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-17",
+    title: "Typ på kartområden — sprint, MTBO, skidO och orientering",
+    items: [
+      "När du skapar ett område väljer du typ i listan Typ: Orientering (träd), Sprint (hus), MTBO (cykel) eller SkidO (skidor)",
+      "Samma val finns när du klickar pennan bredvid områdesnamnet (Redigera namn och typ). Ikonen visas till vänster om namnet",
+      "Befintliga områden räknas som Orientering tills du ändrar typen",
+    ],
+  },
+  {
+    date: "2026-09-17",
     title: "Klipp i cirklar och sträckor, en siffra per kontroll",
     items: [
       "Luckan i en kontrollcirkel öppnas där du klickar. Om en kartsymbol ligger nära klicket snäpps luckan dit — inte mot symbolen i cirkelns mitt",

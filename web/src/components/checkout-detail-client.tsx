@@ -38,6 +38,7 @@ import {
 } from "@/lib/checkout/integration-warnings";
 
 import { IntegrationWarningsPanel } from "@/components/integration-warnings-panel";
+import { MapName } from "@/components/map-name";
 import { HelpSectionHeading } from "@/components/help-link-icon";
 import { readApiError } from "@/lib/api/read-api-error";
 
@@ -118,6 +119,7 @@ type Props = {
   mapSlug: string;
 
   mapTitle: string;
+  areaType?: string | null;
 
   checkout: CheckoutData;
 
@@ -238,6 +240,7 @@ export function CheckoutDetailClient({
   mapSlug,
 
   mapTitle,
+  areaType,
 
   checkout,
 
@@ -1237,7 +1240,7 @@ export function CheckoutDetailClient({
 
             Granska diff ovan. Efter din bekräftelse krävs admin-godkännande innan ändringar slås ihop
 
-            med {mapTitle}.
+            med <MapName title={mapTitle} areaType={areaType} />.
 
           </p>
 

@@ -27,6 +27,7 @@ export default async function SuggestMapChangePage({ params }: PageProps) {
     <SuggestionCreateClient
       mapSlug={slug}
       mapTitle={lookup.map.title}
+      areaType={lookup.map.areaType}
       versionId={lookup.version.id}
       versionNumber={lookup.version.versionNumber}
     />

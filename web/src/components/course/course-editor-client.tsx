@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { MapBackLink } from "@/components/map-name";
 import { DiffMapPanel, type MapDrawPointerHandlers } from "@/components/diff-map-panel";
 import { CourseControlList } from "@/components/course/course-control-list";
 import { CoursePdfPanel } from "@/components/course/course-pdf-panel";
@@ -78,6 +78,7 @@ import { geoToSvgUserPoint, svgUserToGeoPoint, type SvgRootTransform } from "@/l
 type Props = {
   mapSlug: string;
   mapTitle: string;
+  areaType?: string | null;
   headVersionId: string;
   headVersionNumber: number;
   initialCourseId?: string | null;
@@ -145,6 +146,7 @@ function detailToEditorObjects(
 export function CourseEditorClient({
   mapSlug,
   mapTitle,
+  areaType,
   headVersionId,
   headVersionNumber,
   initialCourseId,
@@ -1201,12 +1203,12 @@ export function CourseEditorClient({
           )}
         </>
       )}
-      <Link
+      <MapBackLink
         href={`/maps/${mapSlug}`}
+        title={mapTitle}
+        areaType={areaType}
         className="ml-auto text-xs text-slate-500 hover:text-ifk-blue"
-      >
-        ← {mapTitle}
-      </Link>
+      />
     </div>
   );
 

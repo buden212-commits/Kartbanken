@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { MapBackLink } from "@/components/map-name";
 import { DiffMapPanel, type MapDrawPointerHandlers } from "@/components/diff-map-panel";
 import { HelpSectionHeading } from "@/components/help-link-icon";
 import { screenToSvgPoint } from "@/lib/ocad/map-hit-test";
@@ -59,6 +60,7 @@ type VersionOption = {
 type Props = {
   mapSlug: string;
   mapTitle: string;
+  areaType?: string | null;
   suggestion: SuggestionDetail;
   canReview: boolean;
   isOwner: boolean;
@@ -83,6 +85,7 @@ function statusBadgeClass(status: SuggestionStatusValue): string {
 export function SuggestionDetailClient({
   mapSlug,
   mapTitle,
+  areaType,
   suggestion: initial,
   canReview,
   isOwner,
@@ -367,9 +370,7 @@ export function SuggestionDetailClient({
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
-      <Link href={`/maps/${mapSlug}`} className="link-muted text-sm">
-        ← {mapTitle}
-      </Link>
+      <MapBackLink href={`/maps/${mapSlug}`} title={mapTitle} areaType={areaType} />
 
       <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
         <div>

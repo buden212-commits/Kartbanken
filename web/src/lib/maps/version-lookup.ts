@@ -14,7 +14,7 @@ export async function getMapVersionOr404(
   slug: string,
   versionId: string,
 ): Promise<
-  | { map: { id: string; slug: string; title: string }; version: MapVersionAccess }
+  | { map: { id: string; slug: string; title: string; areaType: string }; version: MapVersionAccess }
   | NextResponse
 > {
   const map = await prisma.mapFile.findUnique({ where: { slug } });

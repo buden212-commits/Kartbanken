@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { userCanFieldEdit } from "@/lib/auth/permissions";
 import { findActiveAreaLocksForMap, findActiveFieldEditsForMap, getHeadVersionId, serializeCheckoutResponse } from "@/lib/checkout/repository";
+import { MapBackLink } from "@/components/map-name";
 import { FieldEditCreateClient } from "@/components/field-edit/field-edit-create-client";
 import { HelpLinkIcon } from "@/components/help-link-icon";
 import { readMapScaleFromBuffer } from "@/lib/field-edit/scale";
@@ -48,9 +48,7 @@ export default async function FieldEditCreatePage({ params }: PageProps) {
 
   return (
     <div className="mx-auto max-w-6xl px-2 py-4 sm:px-6 sm:py-12">
-      <Link href={`/maps/${slug}`} className="link-muted text-sm">
-        ← {map.title}
-      </Link>
+      <MapBackLink href={`/maps/${slug}`} title={map.title} areaType={map.areaType} />
       <div className="mt-4 flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">Fältredigering</h1>

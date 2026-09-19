@@ -54,5 +54,5 @@ export default async function ComparePage({ params, searchParams }: PageProps) {
     notFound();
   }
 
-  return <ComparePageClient mapSlug={slug} mapTitle={map.title} v1={v1} v2={v2} />;
+  return <ComparePageClient mapSlug={slug} mapTitle={map.title} areaType={map.areaType} v1={v1} v2={v2} />;
 }

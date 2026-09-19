@@ -2,12 +2,16 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { AreaTypePicker } from "@/components/area-type-picker";
 import { MapDeleteButton } from "@/components/map-delete-button";
 import { HelpLinkIcon } from "@/components/help-link-icon";
+import { MapName } from "@/components/map-name";
+import { coerceAreaType, type AreaType } from "@/lib/maps/area-types";
 
 type Props = {
   mapSlug: string;
   initialTitle: string;
+  initialAreaType?: string | null;
   canEdit: boolean;
   showDelete?: boolean;
 };
@@ -34,24 +38,29 @@ function PencilIcon() {
 export function MapTitleEditor({
   mapSlug,
   initialTitle,
+  initialAreaType,
   canEdit,
   showDelete = false,
 }: Props) {
   const router = useRouter();
   const [title, setTitle] = useState(initialTitle);
+  const [areaType, setAreaType] = useState<AreaType>(() => coerceAreaType(initialAreaType));
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(initialTitle);
+  const [draftType, setDraftType] = useState<AreaType>(() => coerceAreaType(initialAreaType));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function startEdit() {
     setDraft(title);
+    setDraftType(areaType);
     setError(null);
     setEditing(true);
   }
 
   function cancelEdit() {
     setDraft(title);
+    setDraftType(areaType);
     setError(null);
     setEditing(false);
   }
@@ -71,20 +80,21 @@ export function MapTitleEditor({
       const res = await fetch(`/api/maps/${mapSlug}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: nextTitle }),
+        body: JSON.stringify({ title: nextTitle, areaType: draftType }),
       });
 
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(data.error ?? "Kunde inte spara namn");
+        throw new Error(data.error ?? "Kunde inte spara");
       }
 
-      const data = (await res.json()) as { title: string };
+      const data = (await res.json()) as { title: string; areaType?: string };
       setTitle(data.title);
+      setAreaType(coerceAreaType(data.areaType ?? draftType));
       setEditing(false);
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Kunde inte spara namn");
+      setError(err instanceof Error ? err.message : "Kunde inte spara");
     } finally {
       setSaving(false);
     }
@@ -92,24 +102,28 @@ export function MapTitleEditor({
 
   if (!canEdit) {
     return (
-      <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">{title}</h1>
+      <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">
+        <MapName title={title} areaType={areaType} />
+      </h1>
     );
   }
 
   if (!editing) {
     return (
       <div className="flex flex-wrap items-center gap-1.5">
-        <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">{title}</h1>
+        <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">
+          <MapName title={title} areaType={areaType} />
+        </h1>
         <HelpLinkIcon section="omraden" />
         <button
           type="button"
-          aria-label="Redigera namn"
+          aria-label="Redigera namn och typ"
           onClick={startEdit}
           className={iconBtn}
         >
           <PencilIcon />
           <span role="tooltip" className={tooltip}>
-            Redigera namn
+            Redigera namn och typ
           </span>
         </button>
         {showDelete && (
@@ -134,8 +148,16 @@ export function MapTitleEditor({
         disabled={saving}
         className="form-input"
       />
+      <div className="mt-3">
+        <AreaTypePicker
+          id="map-area-type"
+          value={draftType}
+          onChange={setDraftType}
+          disabled={saving}
+        />
+      </div>
       <p className="mt-1 text-xs text-slate-500">
-        URL-adressen ({mapSlug}) ändras inte — bara visningsnamnet.
+        URL-adressen ({mapSlug}) ändras inte — bara visningsnamnet och typen.
       </p>
       {error && (
         <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">

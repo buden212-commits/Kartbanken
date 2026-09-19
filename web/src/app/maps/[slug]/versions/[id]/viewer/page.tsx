@@ -44,6 +44,7 @@ export default async function FullscreenMapPage({ params }: PageProps) {
     <FullscreenMapViewer
       mapSlug={slug}
       mapTitle={lookup.map.title}
+      areaType={lookup.map.areaType}
       versionId={version.id}
       versionNumber={version.versionNumber}
       publishedVersionId={publishedVersion?.id}

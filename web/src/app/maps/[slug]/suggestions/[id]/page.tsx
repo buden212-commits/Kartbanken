@@ -25,7 +25,7 @@ export default async function SuggestionDetailPage({ params }: PageProps) {
 
   const map = await prisma.mapFile.findUnique({
     where: { slug },
-    select: { id: true, title: true },
+    select: { id: true, title: true, areaType: true },
   });
   if (!map) notFound();
 
@@ -55,6 +55,7 @@ export default async function SuggestionDetailPage({ params }: PageProps) {
     <SuggestionDetailClient
       mapSlug={slug}
       mapTitle={map.title}
+      areaType={map.areaType}
       suggestion={serializeSuggestionDetail(suggestion, latestPublishedVersionNumber)}
       canReview={canReviewMapSuggestion(session.user.role)}
       isOwner={suggestion.createdById === session.user.id}

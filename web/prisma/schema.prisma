@@ -79,6 +79,8 @@ model MapFile {
   slug        String        @unique
   title       String
   description String?
+  /// SPRINT | MTBO | SKIDO | ORIENTEERING
+  areaType    String        @default("ORIENTEERING")
   archivedAt  DateTime?
   createdAt   DateTime      @default(now())
   createdById String?

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { MapName } from "@/components/map-name";
 import {
   ImportPartialMapPreview,
   type ImportPartialMapHandle,
@@ -31,6 +32,7 @@ const STEPS: { id: StepId; title: string; hint: string }[] = [
 type Props = {
   mapSlug: string;
   mapTitle: string;
+  areaType?: string | null;
   headVersionId: string;
 };
 
@@ -70,7 +72,7 @@ function WorkingSpinner({ className = "" }: { className?: string }) {
   );
 }
 
-export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props) {
+export function ImportPartialWizard({ mapSlug, mapTitle, areaType, headVersionId }: Props) {
   const router = useRouter();
   const [step, setStep] = useState<StepId>("upload");
   const [fileName, setFileName] = useState<string | null>(null);
@@ -273,7 +275,7 @@ export function ImportPartialWizard({ mapSlug, mapTitle, headVersionId }: Props)
 
       <p className="text-sm text-slate-600">{STEPS[stepIndex]?.hint}</p>
       <p className="text-xs text-slate-500">
-        Jämförs mot {mapTitle}, aktuell version. Inget skrivs till kartan förrän sista steget.
+        Jämförs mot <MapName title={mapTitle} areaType={areaType} />, aktuell version. Inget skrivs till kartan förrän sista steget.
       </p>
 
       {error && (

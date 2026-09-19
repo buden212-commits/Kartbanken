@@ -222,7 +222,7 @@ export async function findPendingAdminCheckouts() {
       userConfirmedAt: true,
       createdAt: true,
       user: { select: { id: true, name: true, email: true } },
-      mapFile: { select: { slug: true, title: true } },
+      mapFile: { select: { slug: true, title: true, areaType: true } },
     },
     orderBy: { userConfirmedAt: "asc" },
   });

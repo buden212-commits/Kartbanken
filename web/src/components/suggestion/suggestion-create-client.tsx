@@ -10,6 +10,7 @@ import {
   useState,
   type MutableRefObject,
 } from "react";
+import { MapName } from "@/components/map-name";
 import { DiffMapPanel, type MapDrawPointerHandlers } from "@/components/diff-map-panel";
 import { HelpLinkIcon } from "@/components/help-link-icon";
 import { isGeoreferencedCrs, wgs84ToMapCoord, type OcadCrsInfo } from "@/lib/ocad/crs";
@@ -53,6 +54,7 @@ type DrawTool = SuggestionDrawTool;
 type Props = {
   mapSlug: string;
   mapTitle: string;
+  areaType?: string | null;
   versionId: string;
   versionNumber: number;
 };
@@ -190,6 +192,7 @@ const GPS_LINE_RENDER_MS = 2000;
 export function SuggestionCreateClient({
   mapSlug,
   mapTitle,
+  areaType,
   versionId,
   versionNumber,
 }: Props) {
@@ -742,7 +745,7 @@ export function SuggestionCreateClient({
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Föreslå kartändring</h1>
           <p className="mt-2 text-sm text-slate-600">
-            {mapTitle} · v{versionNumber}. Markera plats eller område på kartan, skriv vad som bör
+            <MapName title={mapTitle} areaType={areaType} /> · v{versionNumber}. Markera plats eller område på kartan, skriv vad som bör
             ändras och spara. Förslaget påverkar inte kartfilen — en redaktör granskar det separat.
           </p>
         </div>

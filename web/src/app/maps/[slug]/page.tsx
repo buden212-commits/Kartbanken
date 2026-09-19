@@ -45,6 +45,7 @@ export default async function MapDetailPage({ params }: PageProps) {
       id: true,
       slug: true,
       title: true,
+      areaType: true,
       description: true,
       archivedAt: true,
       versions: {
@@ -132,6 +133,7 @@ export default async function MapDetailPage({ params }: PageProps) {
           <MapTitleEditor
             mapSlug={map.slug}
             initialTitle={map.title}
+            initialAreaType={map.areaType}
             canEdit={isAdmin}
             showDelete={isAdmin}
           />

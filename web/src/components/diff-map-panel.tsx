@@ -130,6 +130,8 @@ type Props = {
   onDrawInterrupt?: () => void;
   /** Replaces the default map title in the toolbar row. */
   headerContent?: ReactNode;
+  /** Shown to the left of the title (e.g. area type icon). */
+  titleLeading?: ReactNode;
   /** Extra row below the main toolbar (e.g. checkout draw tools). */
   secondaryHeaderContent?: ReactNode;
   /** Floating controls inside the map viewport (e.g. draw tool icons). */
@@ -332,6 +334,7 @@ export function DiffMapPanel({
   drawPointerHandlers,
   onDrawInterrupt,
   headerContent,
+  titleLeading,
   secondaryHeaderContent,
   mapToolbarOverlay,
   unboxed = false,
@@ -1649,7 +1652,12 @@ export function DiffMapPanel({
       } ${fullscreen ? "h-full min-h-0" : ""}`}
     >
       <div className="flex flex-col gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:px-4">
-        {headerContent ?? <h3 className="text-sm font-medium text-slate-800">{title}</h3>}
+        {headerContent ?? (
+          <h3 className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-800">
+            {titleLeading}
+            {title}
+          </h3>
+        )}
         <div className="flex flex-wrap items-center gap-2 text-slate-600">
           <button
             type="button"

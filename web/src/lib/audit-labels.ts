@@ -89,6 +89,14 @@ export function formatAuditActivity(action: string, metadataRaw: string | null):
       if (previous && next) return `Kartfil omdöpt — "${previous}" → "${next}"`;
       return "Kartfil omdöpt";
     }
+    case "MAP_TYPE_CHANGED": {
+      const previous = metaString(metadata, "previousType");
+      const next = metaString(metadata, "newType");
+      const title = metaString(metadata, "title");
+      if (previous && next && title) return `Områdestyp ändrad — ${title} (${previous} → ${next})`;
+      if (previous && next) return `Områdestyp ändrad — ${previous} → ${next}`;
+      return "Områdestyp ändrad";
+    }
     case "MAP_DELETED": {
       const title = metaString(metadata, "title");
       return title ? `Kartfil raderad — ${title}` : "Kartfil raderad";

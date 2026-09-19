@@ -67,7 +67,7 @@ flowchart TD
 
   subgraph admin ["Endast administratör"]
     L --> N[Skapa nytt kartområde]
-    O --> E[Redigera visningsnamn]
+    O --> E[Redigera namn och typ]
     O --> X[Radera område permanent]
     N --> U[Första version laddas upp på områdessidan]
   end

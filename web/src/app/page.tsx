@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { CreateMapForm } from "@/components/create-map-form";
 import { HelpSectionHeading } from "@/components/help-link-icon";
 import { FeatureTipCard } from "@/components/feature-tip-card";
+import { MapName } from "@/components/map-name";
 import { canAdmin } from "@/lib/auth/permissions";
 import { formatBytes, formatDate } from "@/lib/format";
 import { pickFeatureTip } from "@/lib/help/feature-tips";
@@ -21,6 +22,7 @@ export default async function HomePage() {
       id: true,
       slug: true,
       title: true,
+      areaType: true,
       description: true,
       archivedAt: true,
       versions: {
@@ -96,7 +98,7 @@ export default async function HomePage() {
                       href={`/maps/${map.slug}`}
                       className="link-primary text-base"
                     >
-                      {map.title}
+                      <MapName title={map.title} areaType={map.areaType} />
                     </Link>
                     {map.archivedAt && isAdmin && (
                       <span className="ml-2 rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-600">
@@ -159,7 +161,7 @@ export default async function HomePage() {
                       <tr key={map.id} className="border-b border-slate-100 last:border-0">
                         <td className="px-4 py-3 pr-4">
                           <Link href={`/maps/${map.slug}`} className="link-primary">
-                            {map.title}
+                            <MapName title={map.title} areaType={map.areaType} />
                           </Link>
                           {map.archivedAt && isAdmin && (
                             <span className="ml-2 rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-600">

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { AdminNav } from "@/components/admin-nav";
 import { HelpSectionHeading } from "@/components/help-link-icon";
+import { MapName } from "@/components/map-name";
 import { canAdmin } from "@/lib/auth/permissions";
 import { findPendingAdminCheckouts } from "@/lib/checkout/repository";
 import { CheckoutMode, checkoutModeLabel, checkoutStatusLabel, CheckoutStatus } from "@/lib/checkout/types";
@@ -59,7 +60,7 @@ export default async function AdminCheckoutsPage() {
                       </td>
                       <td className="px-4 py-3">
                         <Link href={`/maps/${row.mapFile.slug}`} className="link-primary">
-                          {row.mapFile.title}
+                          <MapName title={row.mapFile.title} areaType={row.mapFile.areaType} />
                         </Link>
                       </td>
                       <td className="px-4 py-3 text-slate-700">

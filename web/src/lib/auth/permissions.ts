@@ -128,7 +128,7 @@ export function roleLabel(role: RoleType): string {
 export function roleDescription(role: RoleType): string {
   switch (role) {
     case Role.ADMIN:
-      return "Allt redaktör kan, plus skapa områden, redigera områdesnamn, radera områden, godkänna konton, avbryta utcheckningar, integrera incheckningar, tilldela fältredigering och hantera systeminställningar.";
+      return "Allt redaktör kan, plus skapa områden, redigera områdesnamn och typ, radera områden, godkänna konton, avbryta utcheckningar, integrera incheckningar, tilldela fältredigering och hantera systeminställningar.";
     case Role.EDITOR:
       return "Allt läsare kan, plus ladda upp versioner, publicera/avpublicera, se opublicerade versioner och checka ut/in områden för OCAD-redigering.";
     case Role.READER:

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { MapTypeIcon } from "@/components/map-type-icon";
 import { DiffMapPanel, type MapDrawPointerHandlers } from "@/components/diff-map-panel";
 import { fieldEditOverlaySvg } from "@/components/field-edit/field-edit-overlay";
 import { fieldEditScreenMarkersSvg } from "@/components/field-edit/field-edit-screen-markers";
@@ -151,6 +152,7 @@ import {
 type Props = {
   mapSlug: string;
   mapTitle: string;
+  areaType?: string | null;
   sessionId: string;
   selection: CheckoutSelection;
   initialOps: FieldEditOps;
@@ -209,6 +211,7 @@ function mapHitTolerance(svg: SVGSVGElement, screenPx: number): number {
 export function FieldEditSessionClient({
   mapSlug,
   mapTitle,
+  areaType,
   sessionId,
   selection,
   initialOps,
@@ -3746,6 +3749,7 @@ export function FieldEditSessionClient({
       <DiffMapPanel
         previewUrl={`/api/maps/${mapSlug}/field-edits/${sessionId}/preview`}
         title={mapTitle}
+        titleLeading={<MapTypeIcon areaType={areaType} />}
         mapSlug={mapSlug}
         versionId={sessionId}
         exportEnabled={false}

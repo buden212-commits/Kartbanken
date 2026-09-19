@@ -3,6 +3,7 @@ import { requireAdmin, requireSession } from "@/lib/auth/api";
 import { canAdmin } from "@/lib/auth/permissions";
 import { setMapArchived } from "@/lib/maps/archive-map";
 import { deleteMapFile } from "@/lib/maps/delete-map";
+import { parseAreaType } from "@/lib/maps/area-types";
 import { versionVisibilityFilter } from "@/lib/maps/version-query";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
@@ -47,6 +48,7 @@ export async function GET(_request: Request, { params }: RouteParams) {
     id: map.id,
     slug: map.slug,
     title: map.title,
+    areaType: map.areaType,
     description: map.description,
     archivedAt: map.archivedAt,
     createdAt: map.createdAt,
@@ -78,9 +80,9 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
   const { slug } = await params;
 
-  let body: { title?: string; archived?: boolean };
+  let body: { title?: string; archived?: boolean; areaType?: string };
   try {
-    body = (await request.json()) as { title?: string; archived?: boolean };
+    body = (await request.json()) as { title?: string; archived?: boolean; areaType?: string };
   } catch {
     return NextResponse.json({ error: "Ogiltig JSON" }, { status: 400 });
   }
@@ -99,16 +101,29 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     return NextResponse.json(updated);
   }
 
-  const title = body.title?.trim();
-  if (!title) {
+  const title = body.title !== undefined ? body.title.trim() : undefined;
+  if (body.title !== undefined && !title) {
     return NextResponse.json({ error: "Titel krävs" }, { status: 400 });
   }
 
-  if (title === map.title) {
+  const nextAreaType = body.areaType !== undefined ? parseAreaType(body.areaType) : undefined;
+  if (body.areaType !== undefined && !nextAreaType) {
+    return NextResponse.json({ error: "Ogiltig områdestyp" }, { status: 400 });
+  }
+
+  if (title === undefined && nextAreaType === undefined) {
+    return NextResponse.json({ error: "Titel eller typ krävs" }, { status: 400 });
+  }
+
+  const titleUnchanged = title === undefined || title === map.title;
+  const typeUnchanged = nextAreaType === undefined || nextAreaType === map.areaType;
+
+  if (titleUnchanged && typeUnchanged) {
     return NextResponse.json({
       id: map.id,
       slug: map.slug,
       title: map.title,
+      areaType: map.areaType,
       description: map.description,
       archivedAt: map.archivedAt,
     });
@@ -116,15 +131,28 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
   const updated = await prisma.mapFile.update({
     where: { id: map.id },
-    data: { title },
-    select: { id: true, slug: true, title: true, description: true, archivedAt: true },
+    data: {
+      ...(title && !titleUnchanged ? { title } : {}),
+      ...(nextAreaType && !typeUnchanged ? { areaType: nextAreaType } : {}),
+    },
+    select: { id: true, slug: true, title: true, areaType: true, description: true, archivedAt: true },
   });
 
-  await logAction(session.user.id, "MAP_RENAMED", "MapFile", map.id, {
-    slug: map.slug,
-    previousTitle: map.title,
-    newTitle: title,
-  });
+  if (!titleUnchanged) {
+    await logAction(session.user.id, "MAP_RENAMED", "MapFile", map.id, {
+      slug: map.slug,
+      previousTitle: map.title,
+      newTitle: title,
+    });
+  }
+  if (!typeUnchanged) {
+    await logAction(session.user.id, "MAP_TYPE_CHANGED", "MapFile", map.id, {
+      slug: map.slug,
+      title: updated.title,
+      previousType: map.areaType,
+      newType: nextAreaType,
+    });
+  }
 
   return NextResponse.json(updated);
 }

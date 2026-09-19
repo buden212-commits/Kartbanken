@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { MapName } from "@/components/map-name";
 import { DiffMapPanel } from "@/components/diff-map-panel";
 
 type Props = {
   mapSlug: string;
   mapTitle: string;
+  areaType?: string | null;
   versionId: string;
   versionNumber: number;
   publishedVersionId?: string;
@@ -14,6 +16,7 @@ type Props = {
 export function FullscreenMapViewer({
   mapSlug,
   mapTitle,
+  areaType,
   versionId,
   versionNumber,
   publishedVersionId,
@@ -24,7 +27,9 @@ export function FullscreenMapViewer({
     <div className="flex h-dvh flex-col bg-white">
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2 sm:px-4">
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-slate-900">{mapTitle}</p>
+          <p className="truncate text-sm font-medium text-slate-900">
+            <MapName title={mapTitle} areaType={areaType} />
+          </p>
           <p className="text-xs text-slate-500">v{versionNumber}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">

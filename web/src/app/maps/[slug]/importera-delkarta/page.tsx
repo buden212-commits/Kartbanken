@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { canCheckout } from "@/lib/auth/permissions";
+import { MapBackLink } from "@/components/map-name";
 import { ImportPartialWizard } from "@/components/import-partial-wizard";
 import { HelpLinkIcon } from "@/components/help-link-icon";
 import { getHeadVersionId } from "@/lib/checkout/repository";
@@ -19,7 +19,7 @@ export default async function ImportPartialPage({ params }: PageProps) {
 
   const map = await prisma.mapFile.findUnique({
     where: { slug },
-    select: { slug: true, title: true, archivedAt: true, id: true },
+    select: { slug: true, title: true, areaType: true, archivedAt: true, id: true },
   });
   if (!map) notFound();
   if (map.archivedAt) redirect(`/maps/${slug}`);
@@ -29,9 +29,7 @@ export default async function ImportPartialPage({ params }: PageProps) {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
-      <Link href={`/maps/${slug}`} className="link-muted text-sm">
-        ← {map.title}
-      </Link>
+      <MapBackLink href={`/maps/${slug}`} title={map.title} areaType={map.areaType} />
       <div className="mt-4 flex items-start justify-between gap-3">
         <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">Importera delkarta</h1>
         <HelpLinkIcon section="checkout" className="mt-1 shrink-0" />
@@ -44,6 +42,7 @@ export default async function ImportPartialPage({ params }: PageProps) {
         <ImportPartialWizard
           mapSlug={map.slug}
           mapTitle={map.title}
+          areaType={map.areaType}
           headVersionId={headVersionId}
         />
       </div>

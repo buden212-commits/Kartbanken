@@ -3,6 +3,7 @@ import { requireAdmin, requireSession } from "@/lib/auth/api";
 import { canAdmin } from "@/lib/auth/permissions";
 import { mapListWhereForRole, versionVisibilityFilter } from "@/lib/maps/version-query";
 import { prisma } from "@/lib/prisma";
+import { DEFAULT_AREA_TYPE, parseAreaType } from "@/lib/maps/area-types";
 import { slugify, uniqueSlug } from "@/lib/slug";
 import { NextResponse } from "next/server";
 
@@ -51,6 +52,7 @@ export async function GET() {
         id: map.id,
         slug: map.slug,
         title: map.title,
+        areaType: map.areaType,
         description: map.description,
         createdAt: map.createdAt,
         latestVersion: latest
@@ -75,7 +77,7 @@ export async function POST(request: Request) {
   const session = await requireAdmin();
   if (session instanceof NextResponse) return session;
 
-  let body: { title?: string; description?: string; slug?: string };
+  let body: { title?: string; description?: string; slug?: string; areaType?: string };
   try {
     body = await request.json();
   } catch {
@@ -85,6 +87,11 @@ export async function POST(request: Request) {
   const title = body.title?.trim();
   if (!title) {
     return NextResponse.json({ error: "Titel krävs" }, { status: 400 });
+  }
+
+  const areaType = parseAreaType(body.areaType);
+  if (body.areaType !== undefined && !areaType) {
+    return NextResponse.json({ error: "Ogiltig områdestyp" }, { status: 400 });
   }
 
   const description = body.description?.trim() || null;
@@ -109,11 +116,16 @@ export async function POST(request: Request) {
       title,
       slug,
       description,
+      areaType: areaType ?? DEFAULT_AREA_TYPE,
       createdById: session.user.id,
     },
   });
 
-  await logAction(session.user.id, "MAP_CREATE", "MapFile", map.id, { title, slug });
+  await logAction(session.user.id, "MAP_CREATE", "MapFile", map.id, {
+    title,
+    slug,
+    areaType: map.areaType,
+  });
 
   return NextResponse.json(map, { status: 201 });
 }
