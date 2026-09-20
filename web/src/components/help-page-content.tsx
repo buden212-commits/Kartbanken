@@ -392,7 +392,7 @@ export async function HelpPageContent() {
                 items={[
                   "Efter vanlig utcheckning: ladda upp den redigerade .ocd-filen via Checka in på utcheckningssidan (gäller inte Importera delkarta — där är filen redan incheckad)",
                   "Granska utcheckningsdiff (tillagda, borttagna, ändrade). Systemet jämför din incheckning med utcheckningsfilen — sidan uppdateras automatiskt. Om det tar lång tid visas «Starta om diff-beräkning»",
-                  "Bekräfta integration — utcheckningen går till admin-bekräftelse",
+                  "Bekräfta integration — utcheckningen går till admin-bekräftelse. Administratör som öppnar någon annans incheckning kan också godkänna den (knappen «Godkänn incheckning»)",
                   "Administratör bekräftar och integrerar — en ny opublicerad kartversion skapas (publicera i versionshistoriken)",
                   "Uppladdare i versionshistoriken är den som checkade in filen — inte administratören som integrerar",
                   "Efter integration: jämför, granska och publicera så att läsare ser ändringarna",

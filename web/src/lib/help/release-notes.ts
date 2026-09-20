@@ -8,6 +8,13 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-20",
+    title: "Admin kan godkänna andras incheckningar",
+    items: [
+      "Som administratör ser du knappen «Godkänn incheckning» på utcheckningssidan även när någon annan checkat in — därefter «Bekräfta och integrera» som tidigare",
+    ],
+  },
+  {
+    date: "2026-09-20",
     title: "Snabbare utcheckningsdiff efter incheckning",
     items: [
       "Diff efter incheckning läser bara utcheckningsfilen och din incheckning när det går — inte hela kartan i onödan",

@@ -775,7 +775,7 @@ export function CheckoutDetailClient({
 
   const canUserConfirm =
 
-    isOwner && checkout.status === CheckoutStatus.CHECKED_IN && !!diff;
+    (isOwner || isAdmin) && checkout.status === CheckoutStatus.CHECKED_IN && !!diff;
 
 
 
@@ -1245,15 +1245,20 @@ export function CheckoutDetailClient({
 
       {canUserConfirm && (
 
-        <section className="card">
+        <section className="card border-emerald-200 bg-emerald-50/40">
 
           <HelpSectionHeading section="checkout">Bekräfta integration</HelpSectionHeading>
 
           <p className="mt-2 text-sm text-slate-600">
 
-            Granska diff ovan. Efter din bekräftelse krävs admin-godkännande innan ändringar slås ihop
-
-            med <MapName title={mapTitle} areaType={areaType} />.
+            {isAdmin && !isOwner ? (
+              "Som administratör kan du godkänna incheckningen. Därefter integrerar du ändringarna till en ny kartversion."
+            ) : (
+              <>
+                Granska diff ovan. Efter din bekräftelse krävs admin-godkännande innan ändringar
+                slås ihop med <MapName title={mapTitle} areaType={areaType} />.
+              </>
+            )}
 
           </p>
 
@@ -1278,6 +1283,10 @@ export function CheckoutDetailClient({
                 Bekräftar…
 
               </>
+
+            ) : isAdmin && !isOwner ? (
+
+              "Godkänn incheckning"
 
             ) : (
 
