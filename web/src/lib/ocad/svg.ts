@@ -416,13 +416,17 @@ export async function generateOcadSvgFiltered(
   buffer: Buffer,
   objectIndices: Set<number>,
   viewBounds: SvgBounds,
+  /** Redan parsad fil — undvik ny readOcad när anroparen har den. */
+  ocadFile?: unknown,
 ): Promise<string> {
-  const ocadFile = (await readOcad(buffer, { quietWarnings: true })) as OcadFile;
-  const filtered = filterObjectsByIndex(ocadFile, objectIndices);
+  const file =
+    (ocadFile as OcadFile | undefined) ??
+    ((await readOcad(buffer, { quietWarnings: true })) as OcadFile);
+  const filtered = filterObjectsByIndex(file, objectIndices);
   const document = new DOMImplementation().createDocument(null, null, null);
-  const svgElement = ocadToSvg(ocadFile, { document, objects: filtered }) as Element;
-  applySvgMetadata(svgElement, ocadFile);
-  return serializeSvg(svgElement, viewBounds, ocadFile);
+  const svgElement = ocadToSvg(file, { document, objects: filtered }) as Element;
+  applySvgMetadata(svgElement, file);
+  return serializeSvg(svgElement, viewBounds, file);
 }
 
 export function buildPreviewSvgPath(mapFileId: string, versionNumber: number): string {

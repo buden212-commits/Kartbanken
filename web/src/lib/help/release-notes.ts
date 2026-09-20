@@ -8,11 +8,12 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-20",
-    title: "Snabbare och säkrare utcheckningsdiff efter incheckning",
+    title: "Snabbare utcheckningsdiff efter incheckning",
     items: [
-      "Efter incheckning startas diff-beräkningen om automatiskt om bakgrundsjobbet inte kom igång — du behöver inte vänta tio minuter eller ladda om sidan",
+      "Diff efter incheckning läser bara utcheckningsfilen och din incheckning när det går — inte hela kartan i onödan",
+      "Om du checkar in samma fil som du laddade ner blir resultatet klart nästan genast",
+      "Efter incheckning startas diff-beräkningen om automatiskt om bakgrundsjobbet inte kom igång",
       "Om beräkningen tar mer än ungefär två minuter kan du starta om den manuellt från utcheckningssidan",
-      "Om diffen inte blir klar inom tolv minuter får du ett tydligt fel med möjlighet att försöka igen",
     ],
   },
   {

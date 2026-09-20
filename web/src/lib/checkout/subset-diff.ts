@@ -18,8 +18,9 @@ import {
   generateDiffLayerSvgs,
   type DiffLayerPaths,
 } from "@/lib/ocad/diff-layers";
-import { parseOcadBuffer } from "@/lib/ocad/read";
+import { parseOcadBufferWithFile } from "@/lib/ocad/read";
 import type { NormalizedOcadObject } from "@/lib/ocad/types";
+import type { OcadParseSummary } from "@/lib/ocad/types";
 import { readStoredFile } from "@/lib/storage";
 import { prisma } from "@/lib/prisma";
 import {
@@ -120,6 +121,11 @@ function buildEmptyCheckoutSubsetDiff(input: {
   };
 }
 
+type ParsedWithFile = {
+  summary: OcadParseSummary;
+  ocadFile: unknown;
+};
+
 export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<CheckoutSubsetDiffResult> {
   const checkout = await prisma.mapCheckout.findUnique({
     where: { id: checkoutId },
@@ -152,36 +158,55 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
   const selection = parseSelectionJson(checkout.selectionJson);
   const selectionObjectIds = new Set(selection.objectIds);
   const importPartial = selection.importPartial === true;
+  // Samma version-id räcker: olika versioner ⇒ head har ändrats sedan utcheckning.
+  const headChangedSinceCheckout = checkout.baseVersionId !== headVersion.id;
 
-  const readTasks: Promise<Buffer>[] = [
-    readStoredFile(headVersion.storagePath),
-    readStoredFile(checkout.checkinStoragePath),
-    readStoredFile(checkout.baseVersion.storagePath),
-  ];
+  const checkinBuffer = await readStoredFile(checkout.checkinStoragePath);
+
+  let exportBuffer: Buffer | undefined;
+  let headBuffer: Buffer | undefined;
+  let checkinParsed: ParsedWithFile;
+  let exportParsed: ParsedWithFile | undefined;
+  let headParsed: ParsedWithFile | undefined;
+
   if (checkout.exportStoragePath) {
-    readTasks.push(readStoredFile(checkout.exportStoragePath));
+    exportBuffer = await readStoredFile(checkout.exportStoragePath);
+
+    // Oförändrad incheckning: hoppa över all OCAD-parsning.
+    if (buffersContentEqual(checkinBuffer, exportBuffer)) {
+      const scopedObjectIds = [...selectionObjectIds];
+      return buildEmptyCheckoutSubsetDiff({
+        headVersionId: headVersion.id,
+        baseVersionId: checkout.baseVersionId,
+        headChangedSinceCheckout,
+        scopedObjectIds,
+        fileNameA: "checkout-export.ocd",
+        fileNameB: "checkin-subset.ocd",
+        objectCountA: scopedObjectIds.length,
+        objectCountB: scopedObjectIds.length,
+      });
+    }
+
+    const [exportResult, checkinResult] = await Promise.all([
+      parseOcadBufferWithFile(exportBuffer, "checkout-export.ocd"),
+      parseOcadBufferWithFile(checkinBuffer, "checkin.ocd"),
+    ]);
+    exportParsed = exportResult;
+    checkinParsed = checkinResult;
+  } else {
+    // Utan export behövs head för baseline (filtrerat urval).
+    headBuffer = await readStoredFile(headVersion.storagePath);
+    const [headResult, checkinResult] = await Promise.all([
+      parseOcadBufferWithFile(headBuffer, headVersion.originalFilename),
+      parseOcadBufferWithFile(checkinBuffer, "checkin.ocd"),
+    ]);
+    headParsed = headResult;
+    checkinParsed = checkinResult;
   }
 
-  const fileBuffers = await Promise.all(readTasks);
-  const headBuffer = fileBuffers[0]!;
-  const checkinBuffer = fileBuffers[1]!;
-  const baseBuffer = fileBuffers[2]!;
-  const exportBuffer = checkout.exportStoragePath ? fileBuffers[3] : undefined;
-
-  const parseTasks: Promise<Awaited<ReturnType<typeof parseOcadBuffer>>>[] = [
-    parseOcadBuffer(headBuffer, headVersion.originalFilename),
-    parseOcadBuffer(checkinBuffer, "checkin.ocd"),
-    parseOcadBuffer(baseBuffer, checkout.baseVersion.originalFilename),
-  ];
-  if (exportBuffer) {
-    parseTasks.push(parseOcadBuffer(exportBuffer, "checkout-export.ocd"));
-  }
-
-  const parseResults = await Promise.all(parseTasks);
-  const headSummary = parseResults[0]!;
-  const checkinSummary = parseResults[1]!;
-  const baseSummary = parseResults[2]!;
-  const exportSummary = exportBuffer ? parseResults[3] : undefined;
+  const checkinSummary = checkinParsed.summary;
+  const exportSummary = exportParsed?.summary;
+  const headSummary = headParsed?.summary;
 
   const checkinObjectIds = objectIdsFromParsed(checkinSummary.objects);
   const exportObjectIds = exportSummary ? objectIdsFromParsed(exportSummary.objects) : null;
@@ -192,15 +217,11 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
   );
   const scopedObjectIds = [...diffScopeIds];
 
-  const headChangedSinceCheckoutDetailed =
-    checkout.baseVersionId !== headVersion.id ||
-    baseSummary.objectCount !== headSummary.objectCount;
-
   // Baseline A = exported checkout file when available (exactly what the user edited).
   // Fall back to head objects filtered by scope ids.
   let baselineObjects = exportSummary
     ? exportSummary.objects
-    : filterObjectsByIds(headSummary.objects, diffScopeIds);
+    : filterObjectsByIds(headSummary!.objects, diffScopeIds);
 
   const importRing: PolygonRing | null =
     importPartial && selection.importRing && selection.importRing.length >= 3
@@ -246,7 +267,7 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
   const emptyDiffInput = {
     headVersionId: headVersion.id,
     baseVersionId: checkout.baseVersionId,
-    headChangedSinceCheckout: headChangedSinceCheckoutDetailed,
+    headChangedSinceCheckout,
     scopedObjectIds,
     fileNameA: exportSummary ? "checkout-export.ocd" : headVersion.originalFilename,
     fileNameB: "checkin-subset.ocd",
@@ -254,17 +275,13 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
     objectCountB: checkinObjects.length,
   };
 
-  if (exportBuffer && buffersContentEqual(checkinBuffer, exportBuffer)) {
-    return buildEmptyCheckoutSubsetDiff(emptyDiffInput);
-  }
-
   if (exportSummary && objectMultisetsEqual(baselineObjects, checkinObjects)) {
     return buildEmptyCheckoutSubsetDiff(emptyDiffInput);
   }
 
   if (
     !exportSummary &&
-    !headChangedSinceCheckoutDetailed &&
+    !headChangedSinceCheckout &&
     objectMultisetsEqual(baselineObjects, checkinObjects)
   ) {
     return buildEmptyCheckoutSubsetDiff(emptyDiffInput);
@@ -357,12 +374,32 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
   if (changes.length > 0) {
     try {
       // Removed objects live in the baseline file (export or head); added/modified in checkin.
-      const removedSourceBuffer = exportBuffer ?? headBuffer;
-      layerPaths = await generateDiffLayerSvgs(removedSourceBuffer, checkinBuffer, changes, {
-        added: buildCheckoutDiffLayerPath(checkout.mapFileId, checkoutId, "added"),
-        removed: buildCheckoutDiffLayerPath(checkout.mapFileId, checkoutId, "removed"),
-        modified: buildCheckoutDiffLayerPath(checkout.mapFileId, checkoutId, "modified"),
-      });
+      let removedSourceBuffer = exportBuffer;
+      let removedOcadFile = exportParsed?.ocadFile;
+
+      if (!removedSourceBuffer || !removedOcadFile) {
+        if (!headBuffer || !headParsed) {
+          headBuffer = await readStoredFile(headVersion.storagePath);
+          headParsed = await parseOcadBufferWithFile(headBuffer, headVersion.originalFilename);
+        }
+        removedSourceBuffer = headBuffer;
+        removedOcadFile = headParsed.ocadFile;
+      }
+
+      layerPaths = await generateDiffLayerSvgs(
+        removedSourceBuffer,
+        checkinBuffer,
+        changes,
+        {
+          added: buildCheckoutDiffLayerPath(checkout.mapFileId, checkoutId, "added"),
+          removed: buildCheckoutDiffLayerPath(checkout.mapFileId, checkoutId, "removed"),
+          modified: buildCheckoutDiffLayerPath(checkout.mapFileId, checkoutId, "modified"),
+        },
+        {
+          ocadFileA: removedOcadFile,
+          ocadFileB: checkinParsed.ocadFile,
+        },
+      );
     } catch (layerErr) {
       console.error("Checkout diff-lager misslyckades:", layerErr);
     }
@@ -377,7 +414,7 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
     bySymbol: buildSymbolSummariesFromChanges(changes),
     headVersionId: headVersion.id,
     baseVersionId: checkout.baseVersionId,
-    headChangedSinceCheckout: headChangedSinceCheckoutDetailed,
+    headChangedSinceCheckout,
     scopedObjectIds,
     outOfScopeWarnings,
     layerPaths,

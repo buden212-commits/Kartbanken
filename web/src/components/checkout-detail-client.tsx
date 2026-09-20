@@ -1090,7 +1090,9 @@ export function CheckoutDetailClient({
 
               <p className="mt-2 text-sm text-amber-800">
 
-                Incheckning mottagen. Jämför {objectCount} objekt i urvalet mot aktuell version.
+                Incheckning mottagen. Läser kartfiler och beräknar skillnader för urvalet
+
+                ({objectCount} objekt).
 
               </p>
 

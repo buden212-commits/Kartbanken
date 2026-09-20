@@ -11,6 +11,11 @@ const { readOcad } = require("ocad2geojson") as {
   }>;
 };
 
+type OcadFileForLayers = {
+  getBounds: () => number[];
+  objects: unknown[];
+};
+
 export type DiffLayerKind = "added" | "removed" | "modified";
 
 export type DiffLayerPaths = {
@@ -18,6 +23,13 @@ export type DiffLayerPaths = {
   removed: string;
   modified: string;
   bounds: SvgBounds;
+};
+
+export type DiffLayerOcadFiles = {
+  /** Baseline / removed-källa (export eller head). */
+  ocadFileA?: unknown;
+  /** Checkin / added+modified-källa. */
+  ocadFileB?: unknown;
 };
 
 export function buildDiffLayerPath(
@@ -64,6 +76,7 @@ export async function generateDiffLayerSvgs(
     removed: string;
     modified: string;
   },
+  ocadFiles?: DiffLayerOcadFiles,
 ): Promise<DiffLayerPaths> {
   const addedIndices = new Set<number>();
   const removedIndices = new Set<number>();
@@ -80,6 +93,7 @@ export async function generateDiffLayerSvgs(
     bufferB,
     { added: addedIndices, removed: removedIndices, modified: modifiedIndices },
     storagePaths,
+    ocadFiles,
   );
 }
 
@@ -96,18 +110,32 @@ export async function generateDiffLayerSvgsFromIndices(
     removed: string;
     modified: string;
   },
+  ocadFiles?: DiffLayerOcadFiles,
 ): Promise<DiffLayerPaths> {
-  const ocadFileB = await readOcad(bufferB, { quietWarnings: true });
+  const ocadFileB = (ocadFiles?.ocadFileB as OcadFileForLayers | undefined)
+    ?? ((await readOcad(bufferB, { quietWarnings: true })) as OcadFileForLayers);
+  const ocadFileA = (ocadFiles?.ocadFileA as OcadFileForLayers | undefined)
+    ?? ((await readOcad(bufferA, { quietWarnings: true })) as OcadFileForLayers);
   const viewBounds = boundsFromOcadFile(ocadFileB);
 
   // Renderingarna delar parsad fil och körs efter varandra för att hålla minnestoppen nere.
-  const addedSvg = await generateOcadSvgFiltered(bufferB, indices.added, viewBounds);
+  const addedSvg = await generateOcadSvgFiltered(bufferB, indices.added, viewBounds, ocadFileB);
   await uploadFile(storagePaths.added, Buffer.from(addedSvg, "utf-8"));
 
-  const modifiedSvg = await generateOcadSvgFiltered(bufferB, indices.modified, viewBounds);
+  const modifiedSvg = await generateOcadSvgFiltered(
+    bufferB,
+    indices.modified,
+    viewBounds,
+    ocadFileB,
+  );
   await uploadFile(storagePaths.modified, Buffer.from(modifiedSvg, "utf-8"));
 
-  const removedSvg = await generateOcadSvgFiltered(bufferA, indices.removed, viewBounds);
+  const removedSvg = await generateOcadSvgFiltered(
+    bufferA,
+    indices.removed,
+    viewBounds,
+    ocadFileA,
+  );
   await uploadFile(storagePaths.removed, Buffer.from(removedSvg, "utf-8"));
 
   return { ...storagePaths, bounds: viewBounds };
