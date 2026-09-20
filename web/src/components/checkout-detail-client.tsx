@@ -1104,6 +1104,17 @@ export function CheckoutDetailClient({
 
               <p className="mt-1 text-xs text-slate-500">Sidan uppdateras automatiskt när diff är klar.</p>
 
+              {elapsedSec >= 120 && (
+                <button
+                  type="button"
+                  disabled={retryingDiff}
+                  onClick={() => void handleRetryDiff()}
+                  className="mt-4 rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm text-amber-900 disabled:opacity-50"
+                >
+                  {retryingDiff ? "Startar om…" : "Starta om diff-beräkning"}
+                </button>
+              )}
+
             </div>
 
           </div>

@@ -5,10 +5,12 @@ import {
 } from "@/lib/auth/permissions";
 import { getCheckoutById } from "@/lib/checkout/repository";
 import {
+  CHECKOUT_DIFF_STALE_MESSAGE,
+  isCheckoutDiffStale,
   markCheckoutDiffPending,
   parseCheckoutDiffFromRecord,
   scheduleCheckoutSubsetDiff,
-  shouldRetryCheckoutDiff,
+  storeCheckoutDiffError,
 } from "@/lib/checkout/diff-status";
 import { CheckoutStatus } from "@/lib/checkout/types";
 import { prisma } from "@/lib/prisma";
@@ -81,10 +83,14 @@ export async function GET(_request: Request, { params }: RouteParams) {
   if (
     checkout.status === CheckoutStatus.CHECKED_IN &&
     checkout.checkinStoragePath &&
-    shouldRetryCheckoutDiff(parsed)
+    parsed.status === "pending"
   ) {
-    await markCheckoutDiffPending(checkout.id);
-    scheduleCheckoutSubsetDiff(checkout.id);
+    if (isCheckoutDiffStale(parsed)) {
+      await storeCheckoutDiffError(checkout.id, new Error(CHECKOUT_DIFF_STALE_MESSAGE));
+    } else {
+      // Säkerställ att bakgrundsarbete körs även om initial after()-callback aldrig startade (Vercel).
+      scheduleCheckoutSubsetDiff(checkout.id);
+    }
     checkout = (await getCheckoutById(checkout.mapFileId, checkout.id)) ?? checkout;
     parsed = parseCheckoutDiffFromRecord(checkout);
   }

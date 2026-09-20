@@ -7,6 +7,15 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-09-20",
+    title: "Snabbare och säkrare utcheckningsdiff efter incheckning",
+    items: [
+      "Efter incheckning startas diff-beräkningen om automatiskt om bakgrundsjobbet inte kom igång — du behöver inte vänta tio minuter eller ladda om sidan",
+      "Om beräkningen tar mer än ungefär två minuter kan du starta om den manuellt från utcheckningssidan",
+      "Om diffen inte blir klar inom tolv minuter får du ett tydligt fel med möjlighet att försöka igen",
+    ],
+  },
+  {
     date: "2026-09-17",
     title: "Typ på kartområden — sprint, MTBO, skidO och orientering",
     items: [
