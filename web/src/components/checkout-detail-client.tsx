@@ -320,96 +320,85 @@ export function CheckoutDetailClient({
 
 
   const fetchDiffStatus = useCallback(async (): Promise<DiffStatusResponse | null> => {
-
     const res = await fetch(`/api/maps/${mapSlug}/checkouts/${checkout.id}/diff`);
-
     if (!res.ok) return null;
-
     return (await res.json()) as DiffStatusResponse;
-
   }, [mapSlug, checkout.id]);
 
-
+  const applyDiffStatus = useCallback(
+    (data: DiffStatusResponse) => {
+      setDiffStatus(data.status);
+      if (data.status === "ready") {
+        setDiff(data.summary);
+        setDiffError(null);
+        setObjectCount(data.objectCount);
+        router.refresh();
+      } else if (data.status === "error") {
+        setDiff(null);
+        setDiffError(data.error);
+        setObjectCount(data.objectCount);
+      } else if (data.status === "pending") {
+        setDiff(null);
+        setDiffError(null);
+        setObjectCount(data.objectCount);
+        setDiffStartedAt(data.startedAt);
+      }
+    },
+    [router],
+  );
 
   useEffect(() => {
-
     if (checkout.status !== CheckoutStatus.CHECKED_IN) {
-
       setDiffStatus(null);
-
       return;
-
     }
 
-
+    // Redan klar från servern — ingen omberäkning.
+    if (initialDiff) {
+      setDiffStatus("ready");
+      return;
+    }
 
     let cancelled = false;
+    let computeInFlight = false;
 
-
-
-    async function poll() {
-
-      const data = await fetchDiffStatus();
-
-      if (cancelled || !data) return;
-
-
-
-      setDiffStatus(data.status);
-
-      if (data.status === "ready") {
-
-        setDiff(data.summary);
-
-        setDiffError(null);
-
-        setObjectCount(data.objectCount);
-
-        router.refresh();
-
-      } else if (data.status === "error") {
-
-        setDiff(null);
-
-        setDiffError(data.error);
-
-        setObjectCount(data.objectCount);
-
-      } else if (data.status === "pending") {
-
-        setDiff(null);
-
-        setDiffError(null);
-
-        setObjectCount(data.objectCount);
-
-        setDiffStartedAt(data.startedAt);
-
+    async function kickCompute(force: boolean) {
+      if (computeInFlight) return;
+      computeInFlight = true;
+      try {
+        const res = await fetch(`/api/maps/${mapSlug}/checkouts/${checkout.id}/diff`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ force }),
+        });
+        if (cancelled || !res.ok) return;
+        applyDiffStatus((await res.json()) as DiffStatusResponse);
+      } finally {
+        computeInFlight = false;
       }
-
     }
 
+    async function poll() {
+      const data = await fetchDiffStatus();
+      if (cancelled || !data) return;
+      applyDiffStatus(data);
 
+      if (data.status === "pending") {
+        // Soft kick: kör beräkning om ingen annan redan gör det (lease på servern).
+        void kickCompute(false);
+      }
+    }
 
     void poll();
-
     const timer = setInterval(() => {
-
       void poll();
-
     }, 3000);
 
-
-
     return () => {
-
       cancelled = true;
-
       clearInterval(timer);
-
     };
-
-  }, [checkout.status, fetchDiffStatus, router]);
+  }, [checkout.status, checkout.id, mapSlug, fetchDiffStatus, applyDiffStatus, initialDiff]);
 
 
 
@@ -452,59 +441,37 @@ export function CheckoutDetailClient({
 
 
   async function handleRetryDiff() {
-
     setRetryingDiff(true);
-
     setDiffError(null);
-
     setDiffStatus("pending");
-
     setDiffStartedAt(new Date().toISOString());
-
     setElapsedSec(0);
 
-
-
     const res = await fetch(`/api/maps/${mapSlug}/checkouts/${checkout.id}/diff`, {
-
       method: "POST",
-
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ force: true }),
     });
-
     setRetryingDiff(false);
 
-
-
     if (!res.ok) {
-
       const data = await res.json().catch(() => ({}));
-
       setDiffError((data as { error?: string }).error ?? "Kunde inte starta om diff");
-
       setDiffStatus("error");
-
       return;
-
     }
-
-
 
     const data = (await res.json()) as DiffStatusResponse;
-
     setDiffStatus(data.status);
-
     if (data.status === "ready") {
-
       setDiff(data.summary);
-
+      setDiffError(null);
       router.refresh();
-
     } else if (data.status === "pending") {
-
       setDiffStartedAt(data.startedAt);
-
+    } else if (data.status === "error") {
+      setDiffError(data.error);
     }
-
   }
 
 
@@ -1089,22 +1056,14 @@ export function CheckoutDetailClient({
               <h2 className="text-lg font-medium text-amber-900">Beräknar utcheckningsdiff</h2>
 
               <p className="mt-2 text-sm text-amber-800">
-
-                Incheckning mottagen. Jämför {objectCount} objekt i urvalet mot aktuell version.
-
+                Incheckning mottagen. Jämför {objectCount} objekt mot utcheckningsfilen.
               </p>
-
               <p className="mt-2 text-sm text-slate-600">
-
                 Förfluten tid: {formatElapsed(elapsedSec)}
-
-                {elapsedSec >= 30 && " — stora kartfiler kan ta upp till några minuter."}
-
+                {elapsedSec >= 30 && " — normalt klart inom en minut."}
               </p>
-
               <p className="mt-1 text-xs text-slate-500">Sidan uppdateras automatiskt när diff är klar.</p>
-
-              {elapsedSec >= 120 && (
+              {elapsedSec >= 45 && (
                 <button
                   type="button"
                   disabled={retryingDiff}

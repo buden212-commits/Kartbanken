@@ -11,8 +11,9 @@ export const releaseNotes: ReleaseNote[] = [
     title: "Utcheckningsdiff fungerar på stora grundkartor",
     items: [
       "Efter incheckning jämförs bara utcheckningsfilen med din incheckning — hela grundkartan behöver inte tolkas om",
-      "Diff-beräkningen körs i själva sidans anrop i stället för ett bakgrundsjobb som ofta avbröts på stora kartor",
-      "«Försök beräkna diff igen» väntar tills resultatet är klart, så du slipper fel om att beräkningen tog för lång tid i onödan",
+      "Diff-beräkningen körs i ett enda anrop när sidan laddas (inte via bakgrundsjobb som kunde hänga i flera minuter)",
+      "«Försök beräkna diff igen» / «Starta om» väntar tills resultatet är klart",
+      "Om beräkningen inte blir klar inom ungefär sex minuter får du ett tydligt fel i stället för att vänta i det oändliga",
     ],
   },
   {

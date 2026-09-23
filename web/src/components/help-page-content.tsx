@@ -1253,8 +1253,8 @@ export async function HelpPageContent() {
               <h3 className="font-medium text-slate-900">Utcheckningsdiffen tar lång tid efter incheckning</h3>
               <p className="mt-1">
                 Diffen jämför din incheckning med utcheckningsfilen (inte hela grundkartan), så även
-                stora kartor ska normalt bli klara inom någon minut. Sidan uppdateras automatiskt.
-                Om något går fel: använd «Försök beräkna diff igen».
+                stora kartor ska normalt bli klara inom någon minut. Sidan startar beräkningen
+                automatiskt. Om något går fel: använd «Försök beräkna diff igen» eller «Starta om».
               </p>
             </div>
             <div>

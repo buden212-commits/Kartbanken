@@ -16,7 +16,7 @@ import { CheckoutStatus } from "@/lib/checkout/types";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
-/** Inline beräkning (som import-partial) — after() dör ofta tyst på stora OCAD-filer. */
+/** Inline beräkning på POST — undvik after() som dör tyst på Vercel. */
 export const maxDuration = 300;
 
 type RouteParams = { params: Promise<{ slug: string; id: string }> };
@@ -72,6 +72,7 @@ function buildDiffResponse(checkout: NonNullable<Awaited<ReturnType<typeof getCh
   });
 }
 
+/** Endast status — tung beräkning körs via POST så pollar inte staplar långa anrop. */
 export async function GET(_request: Request, { params }: RouteParams) {
   const session = await requireSession();
   if (session instanceof NextResponse) return session;
@@ -81,27 +82,22 @@ export async function GET(_request: Request, { params }: RouteParams) {
   if ("error" in result && result.error) return result.error;
 
   let checkout = result.checkout!;
-  let parsed = parseCheckoutDiffFromRecord(checkout);
+  const parsed = parseCheckoutDiffFromRecord(checkout);
 
   if (
     checkout.status === CheckoutStatus.CHECKED_IN &&
     checkout.checkinStoragePath &&
-    parsed.status === "pending"
+    parsed.status === "pending" &&
+    isCheckoutDiffStale(parsed)
   ) {
-    if (isCheckoutDiffStale(parsed)) {
-      await storeCheckoutDiffError(checkout.id, new Error(CHECKOUT_DIFF_STALE_MESSAGE));
-    } else {
-      // Kör inline — undvik after() som ofta aldrig startar eller dödas på Vercel.
-      await runCheckoutSubsetDiffJob(checkout.id);
-    }
+    await storeCheckoutDiffError(checkout.id, new Error(CHECKOUT_DIFF_STALE_MESSAGE));
     checkout = (await getCheckoutById(checkout.mapFileId, checkout.id)) ?? checkout;
-    parsed = parseCheckoutDiffFromRecord(checkout);
   }
 
   return buildDiffResponse(checkout);
 }
 
-export async function POST(_request: Request, { params }: RouteParams) {
+export async function POST(request: Request, { params }: RouteParams) {
   const session = await requireSession();
   if (session instanceof NextResponse) return session;
 
@@ -118,9 +114,25 @@ export async function POST(_request: Request, { params }: RouteParams) {
     );
   }
 
-  // Always recompute so cached results can be refreshed after parser/diff fixes.
-  await markCheckoutDiffPending(checkout.id);
-  await runCheckoutSubsetDiffJob(checkout.id);
+  let force = true;
+  try {
+    const body = (await request.json()) as { force?: boolean };
+    if (body && typeof body.force === "boolean") force = body.force;
+  } catch {
+    // Tom body = manuell omstart → tvinga omberäkning.
+  }
+
+  const parsed = parseCheckoutDiffFromRecord(checkout);
+  if (!force && parsed.status === "ready") {
+    return buildDiffResponse(checkout);
+  }
+
+  if (force || parsed.status === "error" || parsed.status === "pending") {
+    if (force || parsed.status === "error") {
+      await markCheckoutDiffPending(checkout.id);
+    }
+    await runCheckoutSubsetDiffJob(checkout.id);
+  }
 
   const refreshed = await getCheckoutById(checkout.mapFileId, checkout.id);
   return buildDiffResponse(refreshed ?? checkout);

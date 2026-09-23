@@ -1,4 +1,3 @@
-import { runAfterResponse } from "@/lib/background";
 import { prisma } from "@/lib/prisma";
 import {
   computeCheckoutSubsetDiff,
@@ -14,13 +13,13 @@ const CHECKOUT_DIFF_STATUSES: CheckoutStatus[] = [
 ];
 
 /**
- * Lease så parallella pollar/POST inte kör om en beräkning som redan pågår.
- * Matchar maxDuration för diff-API-routen (300 s).
+ * Lease så parallella POST inte kör om en beräkning som redan pågår.
+ * Kortare än maxDuration så en död serverless-körning inte blockerar i fem minuter.
  */
-const CHECKOUT_DIFF_LEASE_MS = 5 * 60 * 1000;
+const CHECKOUT_DIFF_LEASE_MS = 90 * 1000;
 
 /** Efter detta markeras diffen som fel så användaren kan starta om manuellt. */
-const CHECKOUT_DIFF_STALE_MS = 12 * 60 * 1000;
+const CHECKOUT_DIFF_STALE_MS = 6 * 60 * 1000;
 
 export const CHECKOUT_DIFF_STALE_MESSAGE =
   "Diff-beräkningen tog för lång tid. Försök beräkna igen — om problemet kvarstår kan filen vara för stor.";
@@ -203,9 +202,8 @@ export function isCheckoutDiffStale(parsed: ParsedCheckoutDiff): boolean {
 }
 
 /**
- * Kör subset-diff med lease. Anropas inline från GET/POST /diff (och ev. after()
- * som fallback efter incheckning). Flera pollar kan träffa samtidigt; bara en
- * claimad körning beräknar.
+ * Kör subset-diff med lease. Anropas inline från POST /diff.
+ * Flera samtidiga anrop: bara en claimad körning beräknar.
  */
 export async function runCheckoutSubsetDiffJob(checkoutId: string): Promise<void> {
   const checkout = await prisma.mapCheckout.findUnique({
@@ -263,16 +261,9 @@ export async function runCheckoutSubsetDiffJob(checkoutId: string): Promise<void
 }
 
 /**
- * Best-effort bakgrundsstart efter incheckning. Pålitlig körning sker inline via
- * GET/POST /diff (klienten pollar) — after() dör ofta tyst på Vercel.
+ * @deprecated Använd POST /diff inline i stället. after() dör ofta tyst på Vercel
+ * och kunde stjäla lease utan att bli klar.
  */
 export function scheduleCheckoutSubsetDiff(checkoutId: string): void {
-  runAfterResponse(async () => {
-    try {
-      await runCheckoutSubsetDiffJob(checkoutId);
-    } catch (err) {
-      console.error("Checkout subset diff failed:", err);
-      await storeCheckoutDiffError(checkoutId, err);
-    }
-  });
+  void checkoutId;
 }
