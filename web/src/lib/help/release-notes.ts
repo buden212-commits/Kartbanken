@@ -7,6 +7,15 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-09-23",
+    title: "Utcheckningsdiff fungerar på stora grundkartor",
+    items: [
+      "Efter incheckning jämförs bara utcheckningsfilen med din incheckning — hela grundkartan behöver inte tolkas om",
+      "Diff-beräkningen körs i själva sidans anrop i stället för ett bakgrundsjobb som ofta avbröts på stora kartor",
+      "«Försök beräkna diff igen» väntar tills resultatet är klart, så du slipper fel om att beräkningen tog för lång tid i onödan",
+    ],
+  },
+  {
     date: "2026-09-20",
     title: "Snabbare och säkrare utcheckningsdiff efter incheckning",
     items: [

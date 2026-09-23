@@ -391,7 +391,7 @@ export async function HelpPageContent() {
               <HelpList
                 items={[
                   "Efter vanlig utcheckning: ladda upp den redigerade .ocd-filen via Checka in på utcheckningssidan (gäller inte Importera delkarta — där är filen redan incheckad)",
-                  "Granska utcheckningsdiff mot aktuell version (tillagda, borttagna, ändrade). Sidan uppdateras automatiskt; vid stora filer kan det ta några minuter. Om det tar lång tid visas «Starta om diff-beräkning»",
+                  "Granska utcheckningsdiff (tillagda, borttagna, ändrade). Sidan uppdateras automatiskt. Om något går fel: «Försök beräkna diff igen»",
                   "Bekräfta integration — utcheckningen går till admin-bekräftelse",
                   "Administratör bekräftar och integrerar — en ny opublicerad kartversion skapas (publicera i versionshistoriken)",
                   "Uppladdare i versionshistoriken är den som checkade in filen — inte administratören som integrerar",
@@ -1252,10 +1252,9 @@ export async function HelpPageContent() {
             <div>
               <h3 className="font-medium text-slate-900">Utcheckningsdiffen tar lång tid efter incheckning</h3>
               <p className="mt-1">
-                Det är normalt för stora kartor — sidan pollar och startar om beräkningen automatiskt
-                om den inte kom igång. Efter ungefär två minuter kan du använda «Starta om
-                diff-beräkning». Om det misslyckas helt visas ett fel med samma möjlighet att försöka
-                igen.
+                Diffen jämför din incheckning med utcheckningsfilen (inte hela grundkartan), så även
+                stora kartor ska normalt bli klara inom någon minut. Sidan uppdateras automatiskt.
+                Om något går fel: använd «Försök beräkna diff igen».
               </p>
             </div>
             <div>

@@ -9,12 +9,15 @@ import {
   isCheckoutDiffStale,
   markCheckoutDiffPending,
   parseCheckoutDiffFromRecord,
-  scheduleCheckoutSubsetDiff,
+  runCheckoutSubsetDiffJob,
   storeCheckoutDiffError,
 } from "@/lib/checkout/diff-status";
 import { CheckoutStatus } from "@/lib/checkout/types";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+
+/** Inline beräkning (som import-partial) — after() dör ofta tyst på stora OCAD-filer. */
+export const maxDuration = 300;
 
 type RouteParams = { params: Promise<{ slug: string; id: string }> };
 
@@ -88,8 +91,8 @@ export async function GET(_request: Request, { params }: RouteParams) {
     if (isCheckoutDiffStale(parsed)) {
       await storeCheckoutDiffError(checkout.id, new Error(CHECKOUT_DIFF_STALE_MESSAGE));
     } else {
-      // Säkerställ att bakgrundsarbete körs även om initial after()-callback aldrig startade (Vercel).
-      scheduleCheckoutSubsetDiff(checkout.id);
+      // Kör inline — undvik after() som ofta aldrig startar eller dödas på Vercel.
+      await runCheckoutSubsetDiffJob(checkout.id);
     }
     checkout = (await getCheckoutById(checkout.mapFileId, checkout.id)) ?? checkout;
     parsed = parseCheckoutDiffFromRecord(checkout);
@@ -117,7 +120,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
 
   // Always recompute so cached results can be refreshed after parser/diff fixes.
   await markCheckoutDiffPending(checkout.id);
-  scheduleCheckoutSubsetDiff(checkout.id);
+  await runCheckoutSubsetDiffJob(checkout.id);
 
   const refreshed = await getCheckoutById(checkout.mapFileId, checkout.id);
   return buildDiffResponse(refreshed ?? checkout);

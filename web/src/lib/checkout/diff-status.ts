@@ -14,8 +14,8 @@ const CHECKOUT_DIFF_STATUSES: CheckoutStatus[] = [
 ];
 
 /**
- * Lease så parallella after()-callbacks (polling) inte kör om en beräkning som redan pågår.
- * Matchar ungefär maxDuration för API-routes (300 s).
+ * Lease så parallella pollar/POST inte kör om en beräkning som redan pågår.
+ * Matchar maxDuration för diff-API-routen (300 s).
  */
 const CHECKOUT_DIFF_LEASE_MS = 5 * 60 * 1000;
 
@@ -203,8 +203,9 @@ export function isCheckoutDiffStale(parsed: ParsedCheckoutDiff): boolean {
 }
 
 /**
- * Kör subset-diff med lease. Anropas från after() — flera pollar kan schemalägga
- * samtidigt; bara en claimad körning beräknar (som verify/compare).
+ * Kör subset-diff med lease. Anropas inline från GET/POST /diff (och ev. after()
+ * som fallback efter incheckning). Flera pollar kan träffa samtidigt; bara en
+ * claimad körning beräknar.
  */
 export async function runCheckoutSubsetDiffJob(checkoutId: string): Promise<void> {
   const checkout = await prisma.mapCheckout.findUnique({
@@ -262,8 +263,8 @@ export async function runCheckoutSubsetDiffJob(checkoutId: string): Promise<void
 }
 
 /**
- * Schemalägg subset-diff efter HTTP-svar.
- * Anropa även vid varje pending-poll — after() startar ofta aldrig på stora OCAD-filer (Vercel).
+ * Best-effort bakgrundsstart efter incheckning. Pålitlig körning sker inline via
+ * GET/POST /diff (klienten pollar) — after() dör ofta tyst på Vercel.
  */
 export function scheduleCheckoutSubsetDiff(checkoutId: string): void {
   runAfterResponse(async () => {

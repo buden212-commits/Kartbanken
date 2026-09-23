@@ -120,16 +120,30 @@ function buildEmptyCheckoutSubsetDiff(input: {
   };
 }
 
+function headChangedSinceCheckoutFromCounts(
+  baseVersionId: string,
+  headVersionId: string,
+  baseObjectCount: number | null | undefined,
+  headObjectCount: number | null | undefined,
+): boolean {
+  if (baseVersionId !== headVersionId) return true;
+  if (baseObjectCount == null || headObjectCount == null) return false;
+  return baseObjectCount !== headObjectCount;
+}
+
 export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<CheckoutSubsetDiffResult> {
   const checkout = await prisma.mapCheckout.findUnique({
     where: { id: checkoutId },
     include: {
-      baseVersion: true,
+      baseVersion: {
+        select: { id: true, objectCount: true, originalFilename: true, storagePath: true },
+      },
       mapFile: {
         include: {
           versions: {
             orderBy: { versionNumber: "desc" },
             take: 1,
+            select: { id: true, objectCount: true, originalFilename: true, storagePath: true },
           },
         },
       },
@@ -153,35 +167,55 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
   const selectionObjectIds = new Set(selection.objectIds);
   const importPartial = selection.importPartial === true;
 
-  const readTasks: Promise<Buffer>[] = [
-    readStoredFile(headVersion.storagePath),
-    readStoredFile(checkout.checkinStoragePath),
-    readStoredFile(checkout.baseVersion.storagePath),
-  ];
+  // objectCount från DB — undvik att parsa hela grundkartan (~20 MB) bara för flaggan.
+  const headChangedSinceCheckoutDetailed = headChangedSinceCheckoutFromCounts(
+    checkout.baseVersionId,
+    headVersion.id,
+    checkout.baseVersion.objectCount,
+    headVersion.objectCount,
+  );
+
+  const checkinBuffer = await readStoredFile(checkout.checkinStoragePath);
+
+  // Normal väg: jämför utchecknings-export ↔ incheckning. Då behövs varken head eller base.
+  let exportBuffer: Buffer | undefined;
+  let headBuffer: Buffer | undefined;
+  let checkinSummary: Awaited<ReturnType<typeof parseOcadBuffer>>;
+  let exportSummary: Awaited<ReturnType<typeof parseOcadBuffer>> | undefined;
+  let headSummary: Awaited<ReturnType<typeof parseOcadBuffer>> | undefined;
+
   if (checkout.exportStoragePath) {
-    readTasks.push(readStoredFile(checkout.exportStoragePath));
+    exportBuffer = await readStoredFile(checkout.exportStoragePath);
+
+    if (buffersContentEqual(checkinBuffer, exportBuffer)) {
+      return buildEmptyCheckoutSubsetDiff({
+        headVersionId: headVersion.id,
+        baseVersionId: checkout.baseVersionId,
+        headChangedSinceCheckout: headChangedSinceCheckoutDetailed,
+        scopedObjectIds: [...selectionObjectIds],
+        fileNameA: "checkout-export.ocd",
+        fileNameB: "checkin-subset.ocd",
+        objectCountA: selectionObjectIds.size,
+        objectCountB: selectionObjectIds.size,
+      });
+    }
+
+    const parsed = await Promise.all([
+      parseOcadBuffer(checkinBuffer, "checkin.ocd"),
+      parseOcadBuffer(exportBuffer, "checkout-export.ocd"),
+    ]);
+    checkinSummary = parsed[0]!;
+    exportSummary = parsed[1]!;
+  } else {
+    // Äldre utcheckningar utan sparad export — baseline från head filtrerad på scope.
+    headBuffer = await readStoredFile(headVersion.storagePath);
+    const parsed = await Promise.all([
+      parseOcadBuffer(checkinBuffer, "checkin.ocd"),
+      parseOcadBuffer(headBuffer, headVersion.originalFilename),
+    ]);
+    checkinSummary = parsed[0]!;
+    headSummary = parsed[1]!;
   }
-
-  const fileBuffers = await Promise.all(readTasks);
-  const headBuffer = fileBuffers[0]!;
-  const checkinBuffer = fileBuffers[1]!;
-  const baseBuffer = fileBuffers[2]!;
-  const exportBuffer = checkout.exportStoragePath ? fileBuffers[3] : undefined;
-
-  const parseTasks: Promise<Awaited<ReturnType<typeof parseOcadBuffer>>>[] = [
-    parseOcadBuffer(headBuffer, headVersion.originalFilename),
-    parseOcadBuffer(checkinBuffer, "checkin.ocd"),
-    parseOcadBuffer(baseBuffer, checkout.baseVersion.originalFilename),
-  ];
-  if (exportBuffer) {
-    parseTasks.push(parseOcadBuffer(exportBuffer, "checkout-export.ocd"));
-  }
-
-  const parseResults = await Promise.all(parseTasks);
-  const headSummary = parseResults[0]!;
-  const checkinSummary = parseResults[1]!;
-  const baseSummary = parseResults[2]!;
-  const exportSummary = exportBuffer ? parseResults[3] : undefined;
 
   const checkinObjectIds = objectIdsFromParsed(checkinSummary.objects);
   const exportObjectIds = exportSummary ? objectIdsFromParsed(exportSummary.objects) : null;
@@ -192,15 +226,11 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
   );
   const scopedObjectIds = [...diffScopeIds];
 
-  const headChangedSinceCheckoutDetailed =
-    checkout.baseVersionId !== headVersion.id ||
-    baseSummary.objectCount !== headSummary.objectCount;
-
   // Baseline A = exported checkout file when available (exactly what the user edited).
   // Fall back to head objects filtered by scope ids.
   let baselineObjects = exportSummary
     ? exportSummary.objects
-    : filterObjectsByIds(headSummary.objects, diffScopeIds);
+    : filterObjectsByIds(headSummary!.objects, diffScopeIds);
 
   const importRing: PolygonRing | null =
     importPartial && selection.importRing && selection.importRing.length >= 3
@@ -253,10 +283,6 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
     objectCountA: baselineObjects.length,
     objectCountB: checkinObjects.length,
   };
-
-  if (exportBuffer && buffersContentEqual(checkinBuffer, exportBuffer)) {
-    return buildEmptyCheckoutSubsetDiff(emptyDiffInput);
-  }
 
   if (exportSummary && objectMultisetsEqual(baselineObjects, checkinObjects)) {
     return buildEmptyCheckoutSubsetDiff(emptyDiffInput);
@@ -358,6 +384,9 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
     try {
       // Removed objects live in the baseline file (export or head); added/modified in checkin.
       const removedSourceBuffer = exportBuffer ?? headBuffer;
+      if (!removedSourceBuffer) {
+        throw new Error("Saknar basfil för diff-lager");
+      }
       layerPaths = await generateDiffLayerSvgs(removedSourceBuffer, checkinBuffer, changes, {
         added: buildCheckoutDiffLayerPath(checkout.mapFileId, checkoutId, "added"),
         removed: buildCheckoutDiffLayerPath(checkout.mapFileId, checkoutId, "removed"),
