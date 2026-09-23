@@ -131,6 +131,19 @@ function headChangedSinceCheckoutFromCounts(
   return baseObjectCount !== headObjectCount;
 }
 
+/**
+ * cropOcadBuffer markerar borttagna objekt men behåller hela filstorleken.
+ * Sådana «export»-filer (~20 MB) får ocad2geojson att hänga — jämför då mot basversionen
+ * filtrerad på urvalet i stället (samma objekt som utcheckningen avsåg).
+ */
+function isPathologicalCheckoutExport(exportBuffer: Buffer, checkinBuffer: Buffer): boolean {
+  const exportBytes = exportBuffer.byteLength;
+  const checkinBytes = checkinBuffer.byteLength;
+  if (exportBytes < 3_000_000) return false;
+  if (checkinBytes > 0 && exportBytes >= checkinBytes * 4) return true;
+  return exportBytes >= 15_000_000;
+}
+
 export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<CheckoutSubsetDiffResult> {
   const checkout = await prisma.mapCheckout.findUnique({
     where: { id: checkoutId },
@@ -177,12 +190,14 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
 
   const checkinBuffer = await readStoredFile(checkout.checkinStoragePath);
 
-  // Normal väg: jämför utchecknings-export ↔ incheckning. Då behövs varken head eller base.
+  // Normal väg: jämför kompakt utchecknings-export ↔ incheckning.
+  // Patologisk (helkarta med mark-as-deleted): basversion + urval — exporten får parsern att hänga.
   let exportBuffer: Buffer | undefined;
-  let headBuffer: Buffer | undefined;
+  let baselineSourceBuffer: Buffer | undefined;
   let checkinSummary: Awaited<ReturnType<typeof parseOcadBuffer>>;
   let exportSummary: Awaited<ReturnType<typeof parseOcadBuffer>> | undefined;
   let headSummary: Awaited<ReturnType<typeof parseOcadBuffer>> | undefined;
+  let usedPathologicalExportFallback = false;
 
   if (checkout.exportStoragePath) {
     exportBuffer = await readStoredFile(checkout.exportStoragePath);
@@ -200,18 +215,31 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
       });
     }
 
-    const parsed = await Promise.all([
-      parseOcadBuffer(checkinBuffer, "checkin.ocd"),
-      parseOcadBuffer(exportBuffer, "checkout-export.ocd"),
-    ]);
-    checkinSummary = parsed[0]!;
-    exportSummary = parsed[1]!;
+    if (isPathologicalCheckoutExport(exportBuffer, checkinBuffer)) {
+      usedPathologicalExportFallback = true;
+      baselineSourceBuffer = await readStoredFile(checkout.baseVersion.storagePath);
+      const parsed = await Promise.all([
+        parseOcadBuffer(checkinBuffer, "checkin.ocd"),
+        parseOcadBuffer(baselineSourceBuffer, checkout.baseVersion.originalFilename),
+      ]);
+      checkinSummary = parsed[0]!;
+      headSummary = parsed[1]!;
+      exportBuffer = undefined;
+    } else {
+      baselineSourceBuffer = exportBuffer;
+      const parsed = await Promise.all([
+        parseOcadBuffer(checkinBuffer, "checkin.ocd"),
+        parseOcadBuffer(exportBuffer, "checkout-export.ocd"),
+      ]);
+      checkinSummary = parsed[0]!;
+      exportSummary = parsed[1]!;
+    }
   } else {
     // Äldre utcheckningar utan sparad export — baseline från head filtrerad på scope.
-    headBuffer = await readStoredFile(headVersion.storagePath);
+    baselineSourceBuffer = await readStoredFile(headVersion.storagePath);
     const parsed = await Promise.all([
       parseOcadBuffer(checkinBuffer, "checkin.ocd"),
-      parseOcadBuffer(headBuffer, headVersion.originalFilename),
+      parseOcadBuffer(baselineSourceBuffer, headVersion.originalFilename),
     ]);
     checkinSummary = parsed[0]!;
     headSummary = parsed[1]!;
@@ -219,15 +247,15 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
 
   const checkinObjectIds = objectIdsFromParsed(checkinSummary.objects);
   const exportObjectIds = exportSummary ? objectIdsFromParsed(exportSummary.objects) : null;
-  const diffScopeIds = resolveCheckoutDiffScopeIds(
-    selectionObjectIds,
-    exportObjectIds,
-    checkinObjectIds,
-  );
+  // Vid patologisk export har OCAD ofta omindexerat objekten i den sparade delkartan —
+  // använd hela urvalet som baseline och spatial matchning (inte objectIndex).
+  const diffScopeIds = usedPathologicalExportFallback
+    ? selectionObjectIds
+    : resolveCheckoutDiffScopeIds(selectionObjectIds, exportObjectIds, checkinObjectIds);
   const scopedObjectIds = [...diffScopeIds];
+  const matchByObjectIndex = !importPartial && !usedPathologicalExportFallback;
 
-  // Baseline A = exported checkout file when available (exactly what the user edited).
-  // Fall back to head objects filtered by scope ids.
+  // Baseline A = kompakt export när den finns; annars bas/head filtrerad på urval.
   let baselineObjects = exportSummary
     ? exportSummary.objects
     : filterObjectsByIds(headSummary!.objects, diffScopeIds);
@@ -278,7 +306,11 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
     baseVersionId: checkout.baseVersionId,
     headChangedSinceCheckout: headChangedSinceCheckoutDetailed,
     scopedObjectIds,
-    fileNameA: exportSummary ? "checkout-export.ocd" : headVersion.originalFilename,
+    fileNameA: exportSummary
+      ? "checkout-export.ocd"
+      : usedPathologicalExportFallback
+        ? checkout.baseVersion.originalFilename
+        : headVersion.originalFilename,
     fileNameB: "checkin-subset.ocd",
     objectCountA: baselineObjects.length,
     objectCountB: checkinObjects.length,
@@ -303,7 +335,7 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
       fileNameA: emptyDiffInput.fileNameA,
       fileNameB: "checkin-subset.ocd",
     },
-    { toleranceMeters: TOLERANCE, matchByObjectIndex: !importPartial },
+    { toleranceMeters: TOLERANCE, matchByObjectIndex },
   );
 
   // Guard against false add/remove from rematching noise when content bags match.
@@ -322,6 +354,12 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
   );
 
   let changes = scopedChanges;
+
+  if (usedPathologicalExportFallback) {
+    outOfScopeWarnings.push(
+      "Utcheckningsfilen i lagringen var en fullstor karta (markering av borttagna objekt). Diffen jämfördes mot basversionen inom urvalet i stället.",
+    );
+  }
 
   // Redaktören kan kryssa bort enskilda ändringar i importguiden. Integrationen
   // applicerar exakt den här listan, så en bortkryssad rad når aldrig kartan.
@@ -382,8 +420,8 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
   let layerPaths: DiffLayerPaths | null = null;
   if (changes.length > 0) {
     try {
-      // Removed objects live in the baseline file (export or head); added/modified in checkin.
-      const removedSourceBuffer = exportBuffer ?? headBuffer;
+      // Removed objects live in the baseline file (export or base/head); added/modified in checkin.
+      const removedSourceBuffer = baselineSourceBuffer;
       if (!removedSourceBuffer) {
         throw new Error("Saknar basfil för diff-lager");
       }
