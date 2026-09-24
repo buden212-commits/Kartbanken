@@ -45,8 +45,9 @@ export type OcadDiffOptions = {
    */
   maxChanges?: number;
   /**
-   * Prefer pairing objects with the same OCAD objectIndex before spatial matching.
-   * Default true for all diff-typer (hybrid objectIndex + spatial).
+   * After exact geometryHash matching, also pair remaining objects with the same
+   * OCAD objectIndex (before spatial nearest-centroid). Default true.
+   * Set false for import-partial / reindex-safe paths.
    */
   matchByObjectIndex?: boolean;
 };

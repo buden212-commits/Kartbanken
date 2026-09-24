@@ -391,7 +391,8 @@ export async function HelpPageContent() {
               <HelpList
                 items={[
                   "Efter vanlig utcheckning: ladda upp den redigerade .ocd-filen via Checka in på utcheckningssidan (gäller inte Importera delkarta — där är filen redan incheckad)",
-                  "Granska utcheckningsdiff (tillagda, borttagna, ändrade). Sidan uppdateras automatiskt. Om något går fel: «Försök beräkna diff igen»",
+                  "Granska utcheckningsdiff (tillagda, borttagna, ändrade). Diffen matchar i första hand på samma geometri, så oförändrade objekt med nytt index i OCAD inte blir «nya». Sidan uppdateras automatiskt. Om något går fel: «Försök beräkna diff igen»",
+                  "Validering vid incheckning varnar om incheckningsfilen har exakta dubbletter (identisk symbol och geometri), eller om tillagda objekt är kopior av något som redan finns — granska innan du bekräftar",
                   "Bekräfta integration — utcheckningen går till admin-bekräftelse",
                   "Administratör bekräftar och integrerar — en ny opublicerad kartversion skapas (publicera i versionshistoriken)",
                   "Uppladdare i versionshistoriken är den som checkade in filen — inte administratören som integrerar",

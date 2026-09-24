@@ -39,6 +39,7 @@ export type CheckoutDiffSummary = {
   baseVersionId?: string;
   headChangedSinceCheckout?: boolean;
   outOfScopeWarnings?: string[];
+  validationWarnings?: string[];
   bySymbol?: Record<string, { added: number; removed: number; modified: number }>;
   changes?: unknown[];
   layerPaths?: CheckoutDiffLayerPaths | null;

@@ -6,6 +6,10 @@ import { compareOcadObjects } from "../src/lib/ocad/diff";
 import type { NormalizedOcadObject } from "../src/lib/ocad/types";
 import { normalizeFromGeoJson } from "../src/lib/ocad/normalize";
 import {
+  buildCheckinDuplicateValidationWarnings,
+  findExactDuplicateGroups,
+} from "../src/lib/ocad/exact-duplicates";
+import {
   buffersContentEqual,
   filterObjectsByIds,
   objectIdsFromParsed,
@@ -146,15 +150,57 @@ assert(
   "object index 1 within tolerance must not appear as modified",
 );
 
-// Index-first matching: far move with same objectIndex must count as modified, not remove+add
+// Index matching after geometry: far move with same objectIndex must count as modified, not remove+add
 const farMoveDiff = compareOcadObjects(
   [makeObject(14630, 112000, "hash-old", [23775, -56296])],
   [makeObject(14630, 112000, "hash-new-pos", [23897, -56317])],
   { fileNameA: "export.ocd", fileNameB: "checkin.ocd" },
   { toleranceMeters: 2, matchByObjectIndex: true },
 );
-assert(farMoveDiff.modified === 1, `index-first far move expected modified, got ${farMoveDiff.modified}`);
-assert(farMoveDiff.added === 0 && farMoveDiff.removed === 0, "index-first far move must not be remove+add");
+assert(farMoveDiff.modified === 1, `index-after-geometry far move expected modified, got ${farMoveDiff.modified}`);
+assert(farMoveDiff.added === 0 && farMoveDiff.removed === 0, "index-after-geometry far move must not be remove+add");
+
+// Geometry before index: remapped objectIndex with identical geometry must stay unchanged
+const remappedExport = [
+  makeObject(5, 101, "hash-tree", [100, 200]),
+  makeObject(6, 102, "hash-path", [300, 400]),
+];
+const remappedCheckin = [
+  makeObject(6, 101, "hash-tree", [100, 200]), // same tree, new index
+  makeObject(5, 102, "hash-path", [300, 400]), // same path, swapped index
+];
+const remappedDiff = compareOcadObjects(
+  remappedExport,
+  remappedCheckin,
+  { fileNameA: "export.ocd", fileNameB: "checkin.ocd" },
+  { toleranceMeters: 2, matchByObjectIndex: true },
+);
+assert(
+  remappedDiff.added === 0 && remappedDiff.removed === 0 && remappedDiff.modified === 0,
+  `geometry-first remapped indices must be unchanged, got add=${remappedDiff.added} rem=${remappedDiff.removed} mod=${remappedDiff.modified}`,
+);
+
+// Remapped index reused by a different object while the original geometry lives under a new index
+const remapConflictExport = [
+  makeObject(5, 101, "hash-a", [100, 200]),
+  makeObject(10, 101, "hash-b", [500, 600]),
+];
+const remapConflictCheckin = [
+  makeObject(5, 101, "hash-b", [500, 600]), // index 5 now holds former object 10
+  makeObject(99, 101, "hash-a", [100, 200]), // former object 5 under new index
+];
+const remapConflictDiff = compareOcadObjects(
+  remapConflictExport,
+  remapConflictCheckin,
+  { fileNameA: "export.ocd", fileNameB: "checkin.ocd" },
+  { toleranceMeters: 2, matchByObjectIndex: true },
+);
+assert(
+  remapConflictDiff.added === 0 &&
+    remapConflictDiff.removed === 0 &&
+    remapConflictDiff.modified === 0,
+  `geometry-first must pair by hash despite conflicting indices, got add=${remapConflictDiff.added} rem=${remapConflictDiff.removed} mod=${remapConflictDiff.modified}`,
+);
 
 // Hausdorff: små vertex-justeringar på linjer räknas som oförändrade inom tolerans
 const lineA = makeLineObject(10, 501, "line-h1", [
@@ -225,5 +271,42 @@ const mixedFeatures = [
 const normalized = normalizeFromGeoJson(mixedFeatures, new Map([[101000, "Stig"]]));
 assert(normalized.length === 1, "symbol-element features must be skipped");
 assert(normalized[0]?.objectIndex === 7, "only real object should remain");
+
+// Exact duplicate validation
+const dupObjects = [
+  makeObject(1, 101, "hash-dup", [100, 200]),
+  makeObject(2, 101, "hash-dup", [100, 200]),
+  makeObject(3, 102, "hash-other", [300, 400]),
+];
+const dupGroups = findExactDuplicateGroups(dupObjects);
+assert(dupGroups.length === 1, "expected one duplicate group");
+assert(dupGroups[0]?.count === 2, "duplicate group should have count 2");
+assert(dupGroups[0]?.objectIndices.join(",") === "1,2", "duplicate indices should be 1,2");
+
+const baselineForValidation = [makeObject(1, 101, "hash-dup", [100, 200])];
+const checkinWithExtraCopy = [
+  makeObject(1, 101, "hash-dup", [100, 200]),
+  makeObject(50, 101, "hash-dup", [100, 200]),
+];
+const addedCopyDiff = compareOcadObjects(
+  baselineForValidation,
+  checkinWithExtraCopy,
+  { fileNameA: "export.ocd", fileNameB: "checkin.ocd" },
+  { toleranceMeters: 2 },
+);
+assert(addedCopyDiff.added === 1, "extra identical object should be added");
+const validationWarnings = buildCheckinDuplicateValidationWarnings(
+  checkinWithExtraCopy,
+  baselineForValidation,
+  addedCopyDiff.changes.filter((c) => c.changeType === "added"),
+);
+assert(
+  validationWarnings.some((w) => w.includes("dubblett")),
+  `expected internal duplicate warning, got: ${validationWarnings.join(" | ")}`,
+);
+assert(
+  validationWarnings.some((w) => w.includes("exakta kopior")),
+  `expected added-copy warning, got: ${validationWarnings.join(" | ")}`,
+);
 
 console.log("subset diff tests passed");

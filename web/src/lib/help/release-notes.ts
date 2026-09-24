@@ -7,6 +7,14 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-09-24",
+    title: "Säkrare matchning och dubblettvalidering vid incheckning",
+    items: [
+      "Incheckningsdiffen matchar först på exakt samma geometri (symbol + form), sedan objektindex — oförändrade objekt som fått nytt index i OCAD räknas inte längre felaktigt som nya",
+      "Efter incheckning visas en validering om filen innehåller exakta dubbletter, eller om tillagda objekt är identiska kopior av något som redan finns i utcheckningen",
+    ],
+  },
+  {
     date: "2026-09-23",
     title: "Utcheckningsdiff fungerar på stora grundkartor",
     items: [

@@ -319,6 +319,7 @@ export async function integrateCheckout(checkoutId: string): Promise<Integration
           headChangedSinceCheckout: diff.headChangedSinceCheckout,
           scopedObjectIds: diff.scopedObjectIds,
           outOfScopeWarnings: diff.outOfScopeWarnings,
+          validationWarnings: diff.validationWarnings,
           bySymbol: diff.bySymbol,
           changes: diff.changes,
           integrationWarnings: warnings,

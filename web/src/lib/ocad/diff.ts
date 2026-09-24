@@ -53,7 +53,72 @@ function pairIsModified(a: IndexedObject, b: IndexedObject, tolerance: number): 
   return isGeometryModified(a, b, tolerance);
 }
 
-function matchByObjectIndexFirst(
+/**
+ * Pair objects with identical geometryHash first (ignores objectIndex).
+ * Candidates must also lie within tolerance — identical real geometry shares a
+ * centroid; a distance check avoids pairing hash collisions / synthetic mismatches.
+ * Prevents remapped OCAD indices from turning unchanged objects into add+remove.
+ */
+function matchByExactGeometryHash(
+  groupA: IndexedObject[],
+  groupB: IndexedObject[],
+  tolerance: number,
+): {
+  matched: MatchedPair[];
+  remainingA: IndexedObject[];
+  remainingB: IndexedObject[];
+} {
+  const hashBuckets = new Map<string, IndexedObject[]>();
+  for (const obj of groupA) {
+    const bucket = hashBuckets.get(obj.geometryHash) ?? [];
+    bucket.push(obj);
+    hashBuckets.set(obj.geometryHash, bucket);
+  }
+
+  const matched: MatchedPair[] = [];
+  const usedA = new Set<number>();
+  const usedB = new Set<number>();
+
+  for (const objB of groupB) {
+    const candidates = (hashBuckets.get(objB.geometryHash) ?? []).filter(
+      (candidate) => !usedA.has(candidate.id),
+    );
+    if (candidates.length === 0) continue;
+
+    let best: IndexedObject | null = null;
+    let bestDist = tolerance;
+    for (const candidate of candidates) {
+      const dist = distance(candidate.centroid, objB.centroid);
+      if (dist <= bestDist) {
+        bestDist = dist;
+        best = candidate;
+      }
+    }
+    if (!best) continue;
+
+    usedA.add(best.id);
+    usedB.add(objB.id);
+    matched.push({
+      a: best,
+      b: objB,
+      // Identical hash ⇒ unchanged unless text somehow diverged (already in hash).
+      modified: pairIsModified(best, objB, tolerance),
+    });
+  }
+
+  return {
+    matched,
+    remainingA: groupA.filter((obj) => !usedA.has(obj.id)),
+    remainingB: groupB.filter((obj) => !usedB.has(obj.id)),
+  };
+}
+
+/**
+ * Pair remaining objects that share the same OCAD objectIndex.
+ * Used after exact-geometry matching so remapped clones are not stolen by index.
+ * Catches real edits that moved far but kept the same index.
+ */
+function matchByObjectIndex(
   groupA: IndexedObject[],
   groupB: IndexedObject[],
   tolerance: number,
@@ -97,69 +162,34 @@ function matchByObjectIndexFirst(
   };
 }
 
-function matchSymbolGroup(
+function matchSpatially(
   groupA: IndexedObject[],
   groupB: IndexedObject[],
   tolerance: number,
-  preferObjectIndex: boolean,
 ): {
   matched: MatchedPair[];
   unmatchedA: IndexedObject[];
   unmatchedB: IndexedObject[];
 } {
-  let seedMatched: MatchedPair[] = [];
-  let workA = groupA;
-  let workB = groupB;
-
-  if (preferObjectIndex) {
-    const indexed = matchByObjectIndexFirst(groupA, groupB, tolerance);
-    seedMatched = indexed.matched;
-    workA = indexed.remainingA;
-    workB = indexed.remainingB;
-  }
-
-  const availableA = new Set(workA.map((o) => o.id));
-  const byIdA = new Map(workA.map((o) => [o.id, o]));
-  const matched: MatchedPair[] = [...seedMatched];
+  const availableA = new Set(groupA.map((o) => o.id));
+  const byIdA = new Map(groupA.map((o) => [o.id, o]));
+  const matched: MatchedPair[] = [];
   const unmatchedB: IndexedObject[] = [];
+  const index = buildSpatialIndex(groupA, tolerance);
 
-  const hashBuckets = new Map<string, number[]>();
-  for (const obj of workA) {
-    const bucket = hashBuckets.get(obj.geometryHash) ?? [];
-    bucket.push(obj.id);
-    hashBuckets.set(obj.geometryHash, bucket);
-  }
-
-  const index = buildSpatialIndex(workA, tolerance);
-
-  for (const objB of workB) {
+  for (const objB of groupB) {
     let bestId: number | null = null;
     let bestDist = tolerance;
 
-    const hashCandidates = (hashBuckets.get(objB.geometryHash) ?? []).filter((id) =>
-      availableA.has(id),
-    );
-    for (const candidateId of hashCandidates) {
-      const objA = byIdA.get(candidateId);
-      if (!objA) continue;
-      const dist = distance(objA.centroid, objB.centroid);
-      if (dist <= bestDist) {
-        bestDist = dist;
-        bestId = candidateId;
-      }
-    }
-
-    if (bestId === null) {
-      for (const key of neighborCellKeys(objB.centroid[0], objB.centroid[1], tolerance)) {
-        for (const candidateId of index.get(key) ?? []) {
-          if (!availableA.has(candidateId)) continue;
-          const objA = byIdA.get(candidateId);
-          if (!objA) continue;
-          const dist = distance(objA.centroid, objB.centroid);
-          if (dist <= bestDist) {
-            bestDist = dist;
-            bestId = candidateId;
-          }
+    for (const key of neighborCellKeys(objB.centroid[0], objB.centroid[1], tolerance)) {
+      for (const candidateId of index.get(key) ?? []) {
+        if (!availableA.has(candidateId)) continue;
+        const objA = byIdA.get(candidateId);
+        if (!objA) continue;
+        const dist = distance(objA.centroid, objB.centroid);
+        if (dist <= bestDist) {
+          bestDist = dist;
+          bestId = candidateId;
         }
       }
     }
@@ -178,12 +208,50 @@ function matchSymbolGroup(
     });
   }
 
+  return {
+    matched,
+    unmatchedA: groupA.filter((o) => availableA.has(o.id)),
+    unmatchedB,
+  };
+}
+
+/**
+ * Match order within a symbol group:
+ * 1. Exact geometryHash (stable across OCAD reindex)
+ * 2. Same objectIndex (far moves / real edits that kept the index)
+ * 3. Spatial nearest centroid within tolerance
+ */
+function matchSymbolGroup(
+  groupA: IndexedObject[],
+  groupB: IndexedObject[],
+  tolerance: number,
+  preferObjectIndex: boolean,
+): {
+  matched: MatchedPair[];
+  unmatchedA: IndexedObject[];
+  unmatchedB: IndexedObject[];
+} {
+  const byHash = matchByExactGeometryHash(groupA, groupB, tolerance);
+  let workA = byHash.remainingA;
+  let workB = byHash.remainingB;
+  const matched: MatchedPair[] = [...byHash.matched];
+
+  if (preferObjectIndex) {
+    const byIndex = matchByObjectIndex(workA, workB, tolerance);
+    matched.push(...byIndex.matched);
+    workA = byIndex.remainingA;
+    workB = byIndex.remainingB;
+  }
+
+  const spatial = matchSpatially(workA, workB, tolerance);
+  matched.push(...spatial.matched);
+
   markSwappedGeometryPairs(matched);
 
   return {
     matched,
-    unmatchedA: workA.filter((o) => availableA.has(o.id)),
-    unmatchedB,
+    unmatchedA: spatial.unmatchedA,
+    unmatchedB: spatial.unmatchedB,
   };
 }
 

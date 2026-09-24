@@ -18,6 +18,7 @@ import {
   generateDiffLayerSvgs,
   type DiffLayerPaths,
 } from "@/lib/ocad/diff-layers";
+import { buildCheckinDuplicateValidationWarnings } from "@/lib/ocad/exact-duplicates";
 import { parseOcadBuffer } from "@/lib/ocad/read";
 import type { NormalizedOcadObject } from "@/lib/ocad/types";
 import { readStoredFile } from "@/lib/storage";
@@ -39,6 +40,8 @@ export type CheckoutSubsetDiffResult = OcadDiffResult & {
   headChangedSinceCheckout: boolean;
   scopedObjectIds: string[];
   outOfScopeWarnings: string[];
+  /** Exakta dubbletter i incheckningen / tillägg som kopierar befintlig geometri. */
+  validationWarnings: string[];
   layerPaths: DiffLayerPaths | null;
 };
 
@@ -100,6 +103,7 @@ function buildEmptyCheckoutSubsetDiff(input: {
   fileNameB: string;
   objectCountA: number;
   objectCountB: number;
+  validationWarnings?: string[];
 }): CheckoutSubsetDiffResult {
   return {
     ...buildEmptyOcadDiffResult(
@@ -116,6 +120,7 @@ function buildEmptyCheckoutSubsetDiff(input: {
     headChangedSinceCheckout: input.headChangedSinceCheckout,
     scopedObjectIds: input.scopedObjectIds,
     outOfScopeWarnings: [],
+    validationWarnings: input.validationWarnings ?? [],
     layerPaths: null,
   };
 }
@@ -316,8 +321,17 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
     objectCountB: checkinObjects.length,
   };
 
+  const emptyValidationWarnings = buildCheckinDuplicateValidationWarnings(
+    checkinObjects,
+    baselineObjects,
+    [],
+  );
+
   if (exportSummary && objectMultisetsEqual(baselineObjects, checkinObjects)) {
-    return buildEmptyCheckoutSubsetDiff(emptyDiffInput);
+    return buildEmptyCheckoutSubsetDiff({
+      ...emptyDiffInput,
+      validationWarnings: emptyValidationWarnings,
+    });
   }
 
   if (
@@ -325,7 +339,10 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
     !headChangedSinceCheckoutDetailed &&
     objectMultisetsEqual(baselineObjects, checkinObjects)
   ) {
-    return buildEmptyCheckoutSubsetDiff(emptyDiffInput);
+    return buildEmptyCheckoutSubsetDiff({
+      ...emptyDiffInput,
+      validationWarnings: emptyValidationWarnings,
+    });
   }
 
   const diff = compareOcadObjects(
@@ -344,7 +361,10 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
     diff.added + diff.removed > 0 &&
     objectMultisetsEqual(baselineObjects, checkinObjects)
   ) {
-    return buildEmptyCheckoutSubsetDiff(emptyDiffInput);
+    return buildEmptyCheckoutSubsetDiff({
+      ...emptyDiffInput,
+      validationWarnings: emptyValidationWarnings,
+    });
   }
 
   const { changes: scopedChanges, outOfScopeWarnings } = filterChangesToScope(
@@ -435,10 +455,17 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
     }
   }
 
+  const addedChanges = changes.filter((change) => change.changeType === "added");
+  const validationWarnings = buildCheckinDuplicateValidationWarnings(
+    checkinObjects,
+    baselineObjects,
+    addedChanges,
+  );
+
   return {
     ...diff,
     changes,
-    added: changes.filter((change) => change.changeType === "added").length,
+    added: addedChanges.length,
     removed: changes.filter((change) => change.changeType === "removed").length,
     modified: changes.filter((change) => change.changeType === "modified").length,
     bySymbol: buildSymbolSummariesFromChanges(changes),
@@ -447,6 +474,7 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
     headChangedSinceCheckout: headChangedSinceCheckoutDetailed,
     scopedObjectIds,
     outOfScopeWarnings,
+    validationWarnings,
     layerPaths,
   };
 }
@@ -467,6 +495,7 @@ export async function storeCheckoutDiffSummary(
         headChangedSinceCheckout: diff.headChangedSinceCheckout,
         scopedObjectIds: diff.scopedObjectIds,
         outOfScopeWarnings: diff.outOfScopeWarnings,
+        validationWarnings: diff.validationWarnings,
         bySymbol: diff.bySymbol,
         changes: diff.changes,
         layerPaths: diff.layerPaths,
