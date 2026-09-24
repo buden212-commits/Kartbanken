@@ -28,8 +28,9 @@ export default async function AdminCheckoutsPage() {
           Utcheckningar som väntar på integration ({pending.length})
         </HelpSectionHeading>
         <p className="mt-1 text-sm text-slate-600">
-          Användaren har bekräftat diff — admin måste integrera innan ändringarna blir en ny version.
-          Gäller både OCAD-utcheckningar och fältredigeringar.
+          Incheckade utcheckningar som väntar på granskning eller integration — admin kan
+          integrera även innan ägaren bekräftat. Gäller både OCAD-utcheckningar och
+          fältredigeringar.
         </p>
 
         {pending.length === 0 ? (

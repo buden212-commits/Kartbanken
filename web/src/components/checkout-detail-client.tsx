@@ -744,13 +744,19 @@ export function CheckoutDetailClient({
 
   const canUserConfirm =
 
-    isOwner && checkout.status === CheckoutStatus.CHECKED_IN && !!diff;
+    isOwner && !isAdmin && checkout.status === CheckoutStatus.CHECKED_IN && !!diff;
 
 
 
   const canAdminIntegrate =
 
-    isAdmin && checkout.status === CheckoutStatus.PENDING_ADMIN_CONFIRM;
+    isAdmin &&
+
+    !!diff &&
+
+    (checkout.status === CheckoutStatus.PENDING_ADMIN_CONFIRM ||
+
+      checkout.status === CheckoutStatus.CHECKED_IN);
 
 
 
@@ -1292,7 +1298,9 @@ export function CheckoutDetailClient({
 
           <p className="mt-2 text-sm text-slate-600">
 
-            Skapar ny kartversion med integrerade ändringar mot aktuell version.
+            {checkout.status === CheckoutStatus.CHECKED_IN
+              ? "Ägaren har inte bekräftat ännu. Som admin kan du granska diffen och integrera direkt — då räknas det som bekräftelse."
+              : "Skapar ny kartversion med integrerade ändringar mot aktuell version."}
 
           </p>
 

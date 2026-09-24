@@ -11,7 +11,7 @@ import {
   parseCheckoutDiffFromRecord,
   parseStoredCheckoutDiffJson,
 } from "@/lib/checkout/diff-status";
-import { getCheckoutById } from "@/lib/checkout/repository";
+import { getCheckoutById, confirmCheckoutByUser } from "@/lib/checkout/repository";
 import { CheckoutStatus } from "@/lib/checkout/types";
 import { notifyCheckoutIntegrated, queueNotifyAdminOfNewUpload } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
@@ -43,7 +43,10 @@ export async function POST(_request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Utcheckning hittades inte" }, { status: 404 });
   }
 
-  if (checkout.status !== CheckoutStatus.PENDING_ADMIN_CONFIRM) {
+  if (
+    checkout.status !== CheckoutStatus.PENDING_ADMIN_CONFIRM &&
+    checkout.status !== CheckoutStatus.CHECKED_IN
+  ) {
     return NextResponse.json(
       { error: "Utcheckningen väntar inte på admin-bekräftelse" },
       { status: 400 },
@@ -62,6 +65,18 @@ export async function POST(_request: Request, { params }: RouteParams) {
       { error: `Diff misslyckades: ${diffStatus.error}` },
       { status: 409 },
     );
+  }
+  if (checkout.status === CheckoutStatus.CHECKED_IN && diffStatus.status !== "ready") {
+    return NextResponse.json({ error: "Diff saknas för utcheckning" }, { status: 409 });
+  }
+
+  // Admin may integrate directly from CHECKED_IN (before owner confirm).
+  if (checkout.status === CheckoutStatus.CHECKED_IN) {
+    await confirmCheckoutByUser(checkout.id);
+    await logAction(session.user.id, "CHECKOUT_USER_CONFIRMED", "MapCheckout", checkout.id, {
+      mapSlug: slug,
+      byAdmin: true,
+    });
   }
 
   const storedDiff = parseStoredCheckoutDiffJson(checkout.diffSummaryJson);

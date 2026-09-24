@@ -393,7 +393,7 @@ export async function HelpPageContent() {
                   "Efter vanlig utcheckning: ladda upp den redigerade .ocd-filen via Checka in på utcheckningssidan (gäller inte Importera delkarta — där är filen redan incheckad)",
                   "Granska utcheckningsdiff (tillagda, borttagna, ändrade). Diffen matchar i första hand på samma geometri, så oförändrade objekt med nytt index i OCAD inte blir «nya». Sidan uppdateras automatiskt. Om något går fel: «Försök beräkna diff igen»",
                   "Validering vid incheckning varnar om incheckningsfilen har exakta dubbletter (identisk symbol och geometri), eller om tillagda objekt är kopior av något som redan finns — granska innan du bekräftar",
-                  "Bekräfta integration — utcheckningen går till admin-bekräftelse",
+                  "Bekräfta integration — utcheckningen går till admin-bekräftelse (admin kan också integrera direkt utan din bekräftelse)",
                   "Administratör bekräftar och integrerar — en ny opublicerad kartversion skapas (publicera i versionshistoriken)",
                   "Uppladdare i versionshistoriken är den som checkade in filen — inte administratören som integrerar",
                   "Efter integration: jämför, granska och publicera så att läsare ser ändringarna",
@@ -426,7 +426,7 @@ export async function HelpPageContent() {
                 items={[
                   "Avbryt utcheckning eller fältredigering (tvinga avbryt) med valfri anledning om arbetet behöver stoppas",
                   "Godkänn incheckade fältredigeringar under Admin → Utcheckningar — granskningen visar jämförelsekarta med röd/gul/grön markering av ändringarna",
-                  "Bekräfta och integrera efter att användaren bekräftat diff",
+                  "Bekräfta och integrera när diffen är klar — du behöver inte vänta på att ägaren bekräftat först",
                   "Bekräfta granskning (kryssruta) innan integration genomförs",
                   "Vid full uppladdning av hel karta blockeras uppladdning vid aktiva utcheckningar och fältredigeringar — admin kan bekräfta undantag",
                 ]}

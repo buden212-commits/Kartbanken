@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-24",
+    title: "Admin kan godkänna incheckning utan föregående användarbekräftelse",
+    items: [
+      "Som admin ser du «Bekräfta och integrera» även när utcheckningen just är incheckad (innan ägaren klickat bekräfta)",
+      "Admin → Utcheckningar listar både incheckade och användarbekräftade utcheckningar som väntar",
+    ],
+  },
+  {
+    date: "2026-09-24",
     title: "Säkrare matchning och dubblettvalidering vid incheckning",
     items: [
       "Incheckningsdiffen matchar först på exakt samma geometri (symbol + form), sedan objektindex — oförändrade objekt som fått nytt index i OCAD räknas inte längre felaktigt som nya",

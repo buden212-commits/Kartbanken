@@ -213,7 +213,12 @@ export async function findCheckoutHistoryForMap(mapFileId: string, limit = 20) {
 
 export async function findPendingAdminCheckouts() {
   return prisma.mapCheckout.findMany({
-    where: { status: CheckoutStatus.PENDING_ADMIN_CONFIRM },
+    where: {
+      status: {
+        in: [CheckoutStatus.CHECKED_IN, CheckoutStatus.PENDING_ADMIN_CONFIRM],
+      },
+      checkinStoragePath: { not: null },
+    },
     select: {
       id: true,
       mapFileId: true,
@@ -224,7 +229,7 @@ export async function findPendingAdminCheckouts() {
       user: { select: { id: true, name: true, email: true } },
       mapFile: { select: { slug: true, title: true, areaType: true } },
     },
-    orderBy: { userConfirmedAt: "asc" },
+    orderBy: [{ status: "desc" }, { userConfirmedAt: "asc" }, { createdAt: "asc" }],
   });
 }
 
