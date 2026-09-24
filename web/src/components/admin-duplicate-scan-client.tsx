@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { DuplicateScanMapOption, DuplicateScanResult } from "@/lib/admin/duplicate-scan";
 import type { ExactDuplicateGroup } from "@/lib/ocad/exact-duplicates";
@@ -73,6 +73,7 @@ export function AdminDuplicateScanClient({ maps }: Props) {
   const [result, setResult] = useState<DuplicateScanResult | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [fitRequestId, setFitRequestId] = useState(0);
+  const mapSectionRef = useRef<HTMLElement | null>(null);
 
   function handleMapChange(nextMapId: string) {
     setMapId(nextMapId);
@@ -109,6 +110,14 @@ export function AdminDuplicateScanClient({ maps }: Props) {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (!result || result.duplicateGroupCount === 0) return;
+    const frame = window.requestAnimationFrame(() => {
+      mapSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [result]);
 
   const selectedGroup = useMemo(
     () => result?.groups.find((group) => group.key === selectedKey) ?? null,
@@ -155,12 +164,7 @@ export function AdminDuplicateScanClient({ maps }: Props) {
             const r = selected ? 11 : 8;
             return (
               <g key={group.key} transform={`translate(${point.x} ${point.y})`}>
-                <circle
-                  r={r + 2}
-                  fill="none"
-                  stroke="white"
-                  strokeWidth={2}
-                />
+                <circle r={r + 2} fill="none" stroke="white" strokeWidth={2} />
                 <circle
                   r={r}
                   fill={selected ? "#b45309" : "#f59e0b"}
@@ -204,8 +208,10 @@ export function AdminDuplicateScanClient({ maps }: Props) {
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Välj karta och version</h2>
           <p className="mt-1 text-sm text-slate-600">
-            Skannar efter objekt med identisk symbol, geometri och text (exakta dubbletter). Stora
-            kartor kan ta någon minut.
+            Skanna en version efter exakta dubbletter (samma symbol, geometri och text). När
+            skanningen är klar visas resultatet{" "}
+            <strong>direkt på en karta här på sidan</strong> — du behöver inte öppna något
+            separat.
           </p>
         </div>
 
@@ -274,61 +280,79 @@ export function AdminDuplicateScanClient({ maps }: Props) {
       )}
 
       {result && (
-        <section className="card space-y-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">Resultat</h2>
-              <p className="mt-1 text-sm text-slate-600">
-                <MapName title={result.map.title} areaType={result.map.areaType} /> · v
-                {result.version.versionNumber}
-                {result.version.isPublished ? " (publicerad)" : ""} · {result.objectCount} objekt ·{" "}
-                {(result.scanDurationMs / 1000).toFixed(1)} s
-              </p>
-            </div>
-            <Link
-              href={`/maps/${result.map.slug}`}
-              className="text-sm text-ifk-blue hover:underline"
-            >
-              Öppna område
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <div className="rounded-lg bg-slate-50 px-3 py-2 text-center text-sm">
-              <p className="text-xs text-slate-500">Dubblettgrupper</p>
-              <p className="mt-1 text-xl font-semibold text-slate-900">
-                {result.duplicateGroupCount}
-              </p>
-            </div>
-            <div className="rounded-lg bg-amber-50 px-3 py-2 text-center text-sm text-amber-950">
-              <p className="text-xs text-amber-800">Extra objekt</p>
-              <p className="mt-1 text-xl font-semibold">{result.extraDuplicateCount}</p>
-            </div>
-            <div className="col-span-2 rounded-lg bg-slate-50 px-3 py-2 text-center text-sm sm:col-span-1">
-              <p className="text-xs text-slate-500">Fil</p>
-              <p className="mt-1 truncate text-sm font-medium text-slate-800">
-                {result.version.originalFilename}
-              </p>
-            </div>
-          </div>
-
-          {result.duplicateGroupCount === 0 ? (
-            <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
-              Inga exakta dubbletter hittades.
-            </p>
-          ) : (
-            <>
+        <>
+          <section className="card space-y-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm font-medium text-slate-800">Karta</p>
-                  <p className="text-xs text-slate-500">
-                    Orangemarkörer visar dubbletter (siffran = antal). Klicka markör eller rad för
-                    att zooma.
+                <h2 className="text-lg font-semibold text-slate-900">Sammanfattning</h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  <MapName title={result.map.title} areaType={result.map.areaType} /> · v
+                  {result.version.versionNumber}
+                  {result.version.isPublished ? " (publicerad)" : ""} · {result.objectCount} objekt
+                  · {(result.scanDurationMs / 1000).toFixed(1)} s
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {result.duplicateGroupCount > 0 && (
+                  <a
+                    href="#dubblett-karta"
+                    className="rounded-lg bg-amber-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-600"
+                  >
+                    Visa dubbletter på kartan ↓
+                  </a>
+                )}
+                <Link
+                  href={`/maps/${result.map.slug}`}
+                  className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                >
+                  Till områdessidan
+                </Link>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className="rounded-lg bg-slate-50 px-3 py-2 text-center text-sm">
+                <p className="text-xs text-slate-500">Dubblettgrupper</p>
+                <p className="mt-1 text-xl font-semibold text-slate-900">
+                  {result.duplicateGroupCount}
+                </p>
+              </div>
+              <div className="rounded-lg bg-amber-50 px-3 py-2 text-center text-sm text-amber-950">
+                <p className="text-xs text-amber-800">Extra objekt</p>
+                <p className="mt-1 text-xl font-semibold">{result.extraDuplicateCount}</p>
+              </div>
+              <div className="col-span-2 rounded-lg bg-slate-50 px-3 py-2 text-center text-sm sm:col-span-1">
+                <p className="text-xs text-slate-500">Fil</p>
+                <p className="mt-1 truncate text-sm font-medium text-slate-800">
+                  {result.version.originalFilename}
+                </p>
+              </div>
+            </div>
+
+            {result.duplicateGroupCount === 0 && (
+              <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+                Inga exakta dubbletter hittades — ingen karta behövs.
+              </p>
+            )}
+          </section>
+
+          {result.duplicateGroupCount > 0 && (
+            <>
+              <section
+                id="dubblett-karta"
+                ref={mapSectionRef}
+                className="scroll-mt-4 space-y-3 rounded-xl border-2 border-amber-300 bg-amber-50/40 p-4 sm:p-5"
+              >
+                <div>
+                  <h2 className="text-xl font-semibold text-slate-900">Dubbletter på kartan</h2>
+                  <p className="mt-1 text-sm text-slate-700">
+                    Orangemarkörer visar var dubbletterna ligger (siffran = antal kopior). Klicka
+                    en markör eller en rad i listan nedan för att zooma.
                   </p>
                 </div>
                 <DiffMapPanel
                   previewUrl={`/api/maps/${result.map.slug}/versions/${result.version.id}/preview`}
-                  title="Dubbletter"
+                  title="Dubbletter på kartan"
                   mapSlug={result.map.slug}
                   versionId={result.version.id}
                   basemap="tiles"
@@ -344,72 +368,83 @@ export function AdminDuplicateScanClient({ maps }: Props) {
                   }}
                   fitGeoBbox={fitGeoBbox}
                   renderScreenOverlay={renderScreenOverlay}
-                  viewportClassName="h-[min(65svh,520px)] min-h-[280px]"
+                  viewportClassName="h-[min(70svh,560px)] min-h-[320px]"
                 />
-              </div>
+              </section>
 
-              {result.groupsTruncated && (
-                <p className="text-sm text-amber-800">
-                  Visar de {result.groups.length} största grupperna av totalt{" "}
-                  {result.duplicateGroupCount}.
+              <section className="card space-y-3">
+                <h2 className="text-lg font-semibold text-slate-900">Lista</h2>
+                {result.groupsTruncated && (
+                  <p className="text-sm text-amber-800">
+                    Visar de {result.groups.length} största grupperna av totalt{" "}
+                    {result.duplicateGroupCount}.
+                  </p>
+                )}
+                <div className="overflow-x-auto rounded-xl border border-slate-200">
+                  <table className="w-full min-w-[720px] text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-500">
+                        <th className="px-3 py-2 font-medium">Symbol</th>
+                        <th className="px-3 py-2 font-medium">Typ</th>
+                        <th className="px-3 py-2 font-medium">Antal</th>
+                        <th className="px-3 py-2 font-medium">Läge</th>
+                        <th className="px-3 py-2 font-medium">Objektindex</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {result.groups.map((group) => {
+                        const selected = group.key === selectedKey;
+                        return (
+                          <tr
+                            key={group.key}
+                            className={`cursor-pointer border-b border-slate-100 last:border-0 ${
+                              selected ? "bg-amber-50" : "hover:bg-slate-50"
+                            }`}
+                            onClick={() => {
+                              selectGroup(selected ? null : group.key);
+                              mapSectionRef.current?.scrollIntoView({
+                                behavior: "smooth",
+                                block: "nearest",
+                              });
+                            }}
+                          >
+                            <td className="px-3 py-2 text-slate-900">
+                              <span className="font-medium">
+                                {formatOcadSymbolNumber(group.symbolNumber)}
+                              </span>{" "}
+                              {group.symbolName}
+                              {group.text ? (
+                                <span className="mt-0.5 block text-xs text-slate-500">
+                                  text «{group.text}»
+                                </span>
+                              ) : null}
+                            </td>
+                            <td className="px-3 py-2 text-slate-600">
+                              {objectTypeLabel(group.type)}
+                            </td>
+                            <td className="px-3 py-2 tabular-nums text-slate-900">
+                              ×{group.count}
+                            </td>
+                            <td className="px-3 py-2 font-mono text-xs text-slate-600">
+                              ({Math.round(group.centroid[0])}, {Math.round(group.centroid[1])})
+                            </td>
+                            <td className="px-3 py-2 font-mono text-xs text-slate-600">
+                              {formatIndices(group.objectIndices)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Exakt dubblett = samma symbolnummer, samma geometrihash och samma text. Ta bort
+                  överflödiga kopior i OCAD Desktop och ladda upp en ny version.
                 </p>
-              )}
-              <div className="overflow-x-auto rounded-xl border border-slate-200">
-                <table className="w-full min-w-[720px] text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50 text-left text-slate-500">
-                      <th className="px-3 py-2 font-medium">Symbol</th>
-                      <th className="px-3 py-2 font-medium">Typ</th>
-                      <th className="px-3 py-2 font-medium">Antal</th>
-                      <th className="px-3 py-2 font-medium">Läge</th>
-                      <th className="px-3 py-2 font-medium">Objektindex</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {result.groups.map((group) => {
-                      const selected = group.key === selectedKey;
-                      return (
-                        <tr
-                          key={group.key}
-                          className={`cursor-pointer border-b border-slate-100 last:border-0 ${
-                            selected ? "bg-amber-50" : "hover:bg-slate-50"
-                          }`}
-                          onClick={() => selectGroup(selected ? null : group.key)}
-                        >
-                          <td className="px-3 py-2 text-slate-900">
-                            <span className="font-medium">
-                              {formatOcadSymbolNumber(group.symbolNumber)}
-                            </span>{" "}
-                            {group.symbolName}
-                            {group.text ? (
-                              <span className="mt-0.5 block text-xs text-slate-500">
-                                text «{group.text}»
-                              </span>
-                            ) : null}
-                          </td>
-                          <td className="px-3 py-2 text-slate-600">
-                            {objectTypeLabel(group.type)}
-                          </td>
-                          <td className="px-3 py-2 tabular-nums text-slate-900">×{group.count}</td>
-                          <td className="px-3 py-2 font-mono text-xs text-slate-600">
-                            ({Math.round(group.centroid[0])}, {Math.round(group.centroid[1])})
-                          </td>
-                          <td className="px-3 py-2 font-mono text-xs text-slate-600">
-                            {formatIndices(group.objectIndices)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              <p className="text-xs text-slate-500">
-                Exakt dubblett = samma symbolnummer, samma geometrihash och samma text. Ta bort
-                överflödiga kopior i OCAD Desktop och ladda upp en ny version.
-              </p>
+              </section>
             </>
           )}
-        </section>
+        </>
       )}
     </div>
   );
