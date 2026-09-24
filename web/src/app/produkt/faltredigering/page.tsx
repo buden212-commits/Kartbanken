@@ -5,13 +5,11 @@ import { FieldEditorProductSheet } from "@/components/produkt/field-editor-produ
 const syne = Syne({
   subsets: ["latin"],
   variable: "--font-fe-display",
-  weight: ["600", "700", "800"],
 });
 
 const manrope = Manrope({
   subsets: ["latin"],
   variable: "--font-fe-body",
-  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
