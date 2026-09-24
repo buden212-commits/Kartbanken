@@ -12,6 +12,7 @@ export const releaseNotes: ReleaseNote[] = [
     items: [
       "Under Admin → Dubbletter kan du välja område och version och skanna efter objekt med identisk symbol och geometri",
       "Resultatet visas på en karta på samma sida (orange markörer) och i en lista — klicka «Visa dubbletter på kartan» eller markör/rad för att zooma",
+      "Dubblettkartan använder förhandsvisning i stället för karttiles, så den inte fastnar på «Kunde inte bygga karttiles»",
     ],
   },
   {

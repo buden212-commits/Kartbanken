@@ -347,7 +347,8 @@ export function AdminDuplicateScanClient({ maps }: Props) {
                   <h2 className="text-xl font-semibold text-slate-900">Dubbletter på kartan</h2>
                   <p className="mt-1 text-sm text-slate-700">
                     Orangemarkörer visar var dubbletterna ligger (siffran = antal kopior). Klicka
-                    en markör eller en rad i listan nedan för att zooma.
+                    en markör eller en rad i listan nedan för att zooma. Kartan laddas som
+                    förhandsvisning (utan tile-bygge) så den ska komma upp även på stora filer.
                   </p>
                 </div>
                 <DiffMapPanel
@@ -355,7 +356,7 @@ export function AdminDuplicateScanClient({ maps }: Props) {
                   title="Dubbletter på kartan"
                   mapSlug={result.map.slug}
                   versionId={result.version.id}
-                  basemap="tiles"
+                  basemap="svg"
                   exportEnabled={false}
                   showLayerPanel={false}
                   focusTarget={focusTarget}
