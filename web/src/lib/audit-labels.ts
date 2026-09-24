@@ -136,6 +136,15 @@ export function formatAuditActivity(action: string, metadataRaw: string | null):
       const ref = mapRef(metadata);
       return ref ? `Utcheckning integrerad — ${ref}` : "Utcheckning integrerad";
     }
+    case "ADMIN_DUPLICATE_SCAN": {
+      const ref = mapRef(metadata);
+      const groups = metadata?.duplicateGroupCount;
+      const extras = metadata?.extraDuplicateCount;
+      if (ref && typeof groups === "number" && typeof extras === "number") {
+        return `Dubblettskanning — ${ref}: ${groups} grupper, ${extras} extra objekt`;
+      }
+      return ref ? `Dubblettskanning — ${ref}` : "Dubblettskanning";
+    }
     case "CHECKOUT_CANCELLED": {
       const ref = mapRef(metadata);
       return ref ? `Utcheckning avbruten — ${ref}` : "Utcheckning avbruten";

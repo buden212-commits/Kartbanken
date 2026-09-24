@@ -987,6 +987,7 @@ export async function HelpPageContent() {
               Administratörer hanterar systemet via flikarna{" "}
               <Link href="/admin/users" className="link-primary">Användare</Link>,{" "}
               <Link href="/admin/checkouts" className="link-primary">Utcheckningar</Link>,{" "}
+              <Link href="/admin/dubbletter" className="link-primary">Dubbletter</Link>,{" "}
               <Link href="/admin/lagring" className="link-primary">Lagring</Link>,{" "}
               <Link href="/admin/loggning" className="link-primary">Loggning</Link>,{" "}
               <Link href="/admin/feedback" className="link-primary">Feedback</Link> och{" "}
@@ -1004,6 +1005,15 @@ export async function HelpPageContent() {
               Kopiera gärna utchecknings-id från felrutan vid felsökning. Stora kartor kan ta längre
               tid — vänta tills sidan svarar. Om fel visas: ladda om sidan; ibland är integrationen
               redan klar trots felmeddelandet.
+            </p>
+
+            <h3 className="font-medium text-slate-900">Dubbletter</h3>
+            <p>
+              På <Link href="/admin/dubbletter" className="link-primary">/admin/dubbletter</Link>{" "}
+              kan du validera en kartversion: välj område och version och skanna efter exakta
+              dubbletter (samma symbol, geometri och text). Resultatet visar grupper, antal extra
+              objekt, läge och objektindex — ta bort överflödiga kopior i OCAD och ladda upp en ny
+              version.
             </p>
 
             <h3 className="font-medium text-slate-900">Användarhantering</h3>

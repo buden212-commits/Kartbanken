@@ -50,7 +50,8 @@ export type AuditAction =
   | "MAP_OMAP_EXPORT"
   | "FEEDBACK_CREATED"
   | "FEEDBACK_REVIEWED"
-  | "FEEDBACK_VOTED";
+  | "FEEDBACK_VOTED"
+  | "ADMIN_DUPLICATE_SCAN";
 
 export type EmailSentAuditMetadata = {
   kind: "checkin" | "new_upload" | "test";

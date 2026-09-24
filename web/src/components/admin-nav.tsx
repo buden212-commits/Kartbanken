@@ -1,12 +1,20 @@
 import Link from "next/link";
 
 type AdminNavProps = {
-  active: "users" | "loggning" | "settings" | "lagring" | "checkouts" | "feedback";
+  active:
+    | "users"
+    | "loggning"
+    | "settings"
+    | "lagring"
+    | "checkouts"
+    | "feedback"
+    | "dubbletter";
 };
 
 const links = [
   { href: "/admin/users", key: "users" as const, label: "Användare" },
   { href: "/admin/checkouts", key: "checkouts" as const, label: "Utcheckningar" },
+  { href: "/admin/dubbletter", key: "dubbletter" as const, label: "Dubbletter" },
   { href: "/admin/feedback", key: "feedback" as const, label: "Feedback" },
   { href: "/admin/lagring", key: "lagring" as const, label: "Lagring" },
   { href: "/admin/loggning", key: "loggning" as const, label: "Loggning" },

@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-24",
+    title: "Adminverktyg för att hitta exakta dubbletter i kartan",
+    items: [
+      "Under Admin → Dubbletter kan du välja område och version och skanna efter objekt med identisk symbol och geometri",
+      "Resultatet visar antal dubblettgrupper, hur många extra objekt det handlar om, läge och objektindex",
+    ],
+  },
+  {
+    date: "2026-09-24",
     title: "Admin kan godkänna incheckning utan föregående användarbekräftelse",
     items: [
       "Som admin ser du «Bekräfta och integrera» även när utcheckningen just är incheckad (innan ägaren klickat bekräfta)",
