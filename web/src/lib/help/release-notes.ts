@@ -11,7 +11,7 @@ export const releaseNotes: ReleaseNote[] = [
     title: "Adminverktyg för att hitta exakta dubbletter i kartan",
     items: [
       "Under Admin → Dubbletter kan du välja område och version och skanna efter objekt med identisk symbol och geometri",
-      "Resultatet visar antal dubblettgrupper, hur många extra objekt det handlar om, läge och objektindex",
+      "Resultatet visas på en karta med orangemarkörer (siffran = antal kopior) och i en lista — klicka markör eller rad för att zooma",
     ],
   },
   {

@@ -1011,9 +1011,9 @@ export async function HelpPageContent() {
             <p>
               På <Link href="/admin/dubbletter" className="link-primary">/admin/dubbletter</Link>{" "}
               kan du validera en kartversion: välj område och version och skanna efter exakta
-              dubbletter (samma symbol, geometri och text). Resultatet visar grupper, antal extra
-              objekt, läge och objektindex — ta bort överflödiga kopior i OCAD och ladda upp en ny
-              version.
+              dubbletter (samma symbol, geometri och text). Resultatet visas på en karta med
+              orangemarkörer och i en lista med antal, läge och objektindex — klicka markör eller
+              rad för att zooma. Ta bort överflödiga kopior i OCAD och ladda upp en ny version.
             </p>
 
             <h3 className="font-medium text-slate-900">Användarhantering</h3>

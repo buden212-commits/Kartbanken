@@ -1,11 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import type { DuplicateScanMapOption, DuplicateScanResult } from "@/lib/admin/duplicate-scan";
+import type { ExactDuplicateGroup } from "@/lib/ocad/exact-duplicates";
+import type { OcadObjectChange } from "@/lib/ocad/diff-types";
 import { formatOcadSymbolNumber } from "@/lib/ocad/layers";
 import { objectTypeLabel } from "@/lib/checkout/integration-warnings";
 import { MapName } from "@/components/map-name";
+import { DiffMapPanel } from "@/components/diff-map-panel";
 import { formatBytes } from "@/lib/format";
 import { readApiError } from "@/lib/api/read-api-error";
 
@@ -13,9 +16,49 @@ type Props = {
   maps: DuplicateScanMapOption[];
 };
 
+const FOCUS_PAD_M = 25;
+
 function formatIndices(indices: number[], max = 12): string {
   if (indices.length <= max) return indices.join(", ");
   return `${indices.slice(0, max).join(", ")} … (+${indices.length - max})`;
+}
+
+function groupBbox(group: ExactDuplicateGroup): [number, number, number, number] {
+  const [cx, cy] = group.centroid;
+  return [cx - FOCUS_PAD_M, cy - FOCUS_PAD_M, cx + FOCUS_PAD_M, cy + FOCUS_PAD_M];
+}
+
+function groupsToFitBbox(
+  groups: ExactDuplicateGroup[],
+): [number, number, number, number] | null {
+  if (groups.length === 0) return null;
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const group of groups) {
+    const [cx, cy] = group.centroid;
+    minX = Math.min(minX, cx);
+    minY = Math.min(minY, cy);
+    maxX = Math.max(maxX, cx);
+    maxY = Math.max(maxY, cy);
+  }
+  const pad = Math.max(FOCUS_PAD_M * 2, (maxX - minX) * 0.08, (maxY - minY) * 0.08);
+  return [minX - pad, minY - pad, maxX + pad, maxY + pad];
+}
+
+function groupToChange(group: ExactDuplicateGroup): OcadObjectChange {
+  return {
+    changeType: "modified",
+    objectIndex: group.objectIndices[0] ?? -1,
+    symbolNumber: group.symbolNumber,
+    symbolName: group.symbolName,
+    type: group.type,
+    centroid: group.centroid,
+    bbox: groupBbox(group),
+    text: group.text,
+    geometryHash: group.geometryHash,
+  };
 }
 
 export function AdminDuplicateScanClient({ maps }: Props) {
@@ -28,6 +71,8 @@ export function AdminDuplicateScanClient({ maps }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<DuplicateScanResult | null>(null);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [fitRequestId, setFitRequestId] = useState(0);
 
   function handleMapChange(nextMapId: string) {
     setMapId(nextMapId);
@@ -35,6 +80,7 @@ export function AdminDuplicateScanClient({ maps }: Props) {
     setVersionId(next?.versions[0]?.id ?? "");
     setResult(null);
     setError(null);
+    setSelectedKey(null);
   }
 
   async function handleScan() {
@@ -42,6 +88,7 @@ export function AdminDuplicateScanClient({ maps }: Props) {
     setLoading(true);
     setError(null);
     setResult(null);
+    setSelectedKey(null);
     try {
       const res = await fetch("/api/admin/duplicates/scan", {
         method: "POST",
@@ -55,11 +102,92 @@ export function AdminDuplicateScanClient({ maps }: Props) {
       }
       const data = (await res.json()) as DuplicateScanResult;
       setResult(data);
+      setFitRequestId((id) => id + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Skanning misslyckades");
     } finally {
       setLoading(false);
     }
+  }
+
+  const selectedGroup = useMemo(
+    () => result?.groups.find((group) => group.key === selectedKey) ?? null,
+    [result, selectedKey],
+  );
+
+  const clickableItems = useMemo(() => {
+    if (!result?.groups.length) return [];
+    return result.groups.map((group, index) => ({
+      change: groupToChange(group),
+      index,
+    }));
+  }, [result]);
+
+  const focusTarget = useMemo(() => {
+    if (!selectedGroup) return null;
+    return {
+      bbox: groupBbox(selectedGroup),
+      centroid: selectedGroup.centroid,
+      objectType: selectedGroup.type,
+    };
+  }, [selectedGroup]);
+
+  const fitGeoBbox = useMemo(() => {
+    if (!result?.groups.length || selectedKey) return null;
+    const bbox = groupsToFitBbox(result.groups);
+    if (!bbox) return null;
+    return { bbox, requestId: fitRequestId };
+  }, [result, selectedKey, fitRequestId]);
+
+  const renderScreenOverlay = useCallback(
+    ({
+      projectGeo,
+    }: {
+      projectGeo: (geo: [number, number]) => { x: number; y: number } | null;
+    }) => {
+      if (!result?.groups.length) return null;
+      return (
+        <g>
+          {result.groups.map((group) => {
+            const point = projectGeo(group.centroid);
+            if (!point) return null;
+            const selected = group.key === selectedKey;
+            const r = selected ? 11 : 8;
+            return (
+              <g key={group.key} transform={`translate(${point.x} ${point.y})`}>
+                <circle
+                  r={r + 2}
+                  fill="none"
+                  stroke="white"
+                  strokeWidth={2}
+                />
+                <circle
+                  r={r}
+                  fill={selected ? "#b45309" : "#f59e0b"}
+                  stroke={selected ? "#78350f" : "#b45309"}
+                  strokeWidth={1.5}
+                />
+                <text
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                  fill="white"
+                  fontSize={selected ? 11 : 10}
+                  fontWeight={700}
+                  style={{ pointerEvents: "none" }}
+                >
+                  {group.count > 9 ? "9+" : group.count}
+                </text>
+              </g>
+            );
+          })}
+        </g>
+      );
+    },
+    [result, selectedKey],
+  );
+
+  function selectGroup(key: string | null) {
+    setSelectedKey(key);
   }
 
   if (maps.length === 0) {
@@ -112,6 +240,7 @@ export function AdminDuplicateScanClient({ maps }: Props) {
                 setVersionId(event.target.value);
                 setResult(null);
                 setError(null);
+                setSelectedKey(null);
               }}
               className="form-select w-full"
               disabled={loading || !selectedMap}
@@ -189,6 +318,36 @@ export function AdminDuplicateScanClient({ maps }: Props) {
             </p>
           ) : (
             <>
+              <div>
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-slate-800">Karta</p>
+                  <p className="text-xs text-slate-500">
+                    Orangemarkörer visar dubbletter (siffran = antal). Klicka markör eller rad för
+                    att zooma.
+                  </p>
+                </div>
+                <DiffMapPanel
+                  previewUrl={`/api/maps/${result.map.slug}/versions/${result.version.id}/preview`}
+                  title="Dubbletter"
+                  mapSlug={result.map.slug}
+                  versionId={result.version.id}
+                  basemap="tiles"
+                  exportEnabled={false}
+                  showLayerPanel={false}
+                  focusTarget={focusTarget}
+                  selectedChange={selectedGroup ? groupToChange(selectedGroup) : null}
+                  clickableItems={clickableItems}
+                  onClearFocus={() => selectGroup(null)}
+                  onObjectClick={(index) => {
+                    const group = result.groups[index];
+                    if (group) selectGroup(group.key);
+                  }}
+                  fitGeoBbox={fitGeoBbox}
+                  renderScreenOverlay={renderScreenOverlay}
+                  viewportClassName="h-[min(65svh,520px)] min-h-[280px]"
+                />
+              </div>
+
               {result.groupsTruncated && (
                 <p className="text-sm text-amber-800">
                   Visar de {result.groups.length} största grupperna av totalt{" "}
@@ -207,29 +366,40 @@ export function AdminDuplicateScanClient({ maps }: Props) {
                     </tr>
                   </thead>
                   <tbody>
-                    {result.groups.map((group) => (
-                      <tr key={group.key} className="border-b border-slate-100 last:border-0">
-                        <td className="px-3 py-2 text-slate-900">
-                          <span className="font-medium">
-                            {formatOcadSymbolNumber(group.symbolNumber)}
-                          </span>{" "}
-                          {group.symbolName}
-                          {group.text ? (
-                            <span className="mt-0.5 block text-xs text-slate-500">
-                              text «{group.text}»
-                            </span>
-                          ) : null}
-                        </td>
-                        <td className="px-3 py-2 text-slate-600">{objectTypeLabel(group.type)}</td>
-                        <td className="px-3 py-2 tabular-nums text-slate-900">×{group.count}</td>
-                        <td className="px-3 py-2 font-mono text-xs text-slate-600">
-                          ({Math.round(group.centroid[0])}, {Math.round(group.centroid[1])})
-                        </td>
-                        <td className="px-3 py-2 font-mono text-xs text-slate-600">
-                          {formatIndices(group.objectIndices)}
-                        </td>
-                      </tr>
-                    ))}
+                    {result.groups.map((group) => {
+                      const selected = group.key === selectedKey;
+                      return (
+                        <tr
+                          key={group.key}
+                          className={`cursor-pointer border-b border-slate-100 last:border-0 ${
+                            selected ? "bg-amber-50" : "hover:bg-slate-50"
+                          }`}
+                          onClick={() => selectGroup(selected ? null : group.key)}
+                        >
+                          <td className="px-3 py-2 text-slate-900">
+                            <span className="font-medium">
+                              {formatOcadSymbolNumber(group.symbolNumber)}
+                            </span>{" "}
+                            {group.symbolName}
+                            {group.text ? (
+                              <span className="mt-0.5 block text-xs text-slate-500">
+                                text «{group.text}»
+                              </span>
+                            ) : null}
+                          </td>
+                          <td className="px-3 py-2 text-slate-600">
+                            {objectTypeLabel(group.type)}
+                          </td>
+                          <td className="px-3 py-2 tabular-nums text-slate-900">×{group.count}</td>
+                          <td className="px-3 py-2 font-mono text-xs text-slate-600">
+                            ({Math.round(group.centroid[0])}, {Math.round(group.centroid[1])})
+                          </td>
+                          <td className="px-3 py-2 font-mono text-xs text-slate-600">
+                            {formatIndices(group.objectIndices)}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
