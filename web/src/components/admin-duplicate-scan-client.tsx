@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { DuplicateScanMapOption, DuplicateScanResult } from "@/lib/admin/duplicate-scan";
 import type { ExactDuplicateGroup } from "@/lib/ocad/exact-duplicates";
 import type { OcadObjectChange } from "@/lib/ocad/diff-types";
@@ -62,6 +63,7 @@ function groupToChange(group: ExactDuplicateGroup): OcadObjectChange {
 }
 
 export function AdminDuplicateScanClient({ maps }: Props) {
+  const router = useRouter();
   const [mapId, setMapId] = useState(maps[0]?.id ?? "");
   const selectedMap = useMemo(
     () => maps.find((map) => map.id === mapId) ?? null,
@@ -69,7 +71,11 @@ export function AdminDuplicateScanClient({ maps }: Props) {
   );
   const [versionId, setVersionId] = useState(selectedMap?.versions[0]?.id ?? "");
   const [loading, setLoading] = useState(false);
+  const [actionBusy, setActionBusy] = useState<"export-dup" | "export-unique" | "dedupe" | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [result, setResult] = useState<DuplicateScanResult | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [fitRequestId, setFitRequestId] = useState(0);
@@ -81,6 +87,7 @@ export function AdminDuplicateScanClient({ maps }: Props) {
     setVersionId(next?.versions[0]?.id ?? "");
     setResult(null);
     setError(null);
+    setActionMessage(null);
     setSelectedKey(null);
   }
 
@@ -88,6 +95,7 @@ export function AdminDuplicateScanClient({ maps }: Props) {
     if (!versionId) return;
     setLoading(true);
     setError(null);
+    setActionMessage(null);
     setResult(null);
     setSelectedKey(null);
     try {
@@ -194,6 +202,85 @@ export function AdminDuplicateScanClient({ maps }: Props) {
     setSelectedKey(key);
   }
 
+  async function downloadExport(kind: "duplicates" | "uniques") {
+    if (!result) return;
+    setActionBusy(kind === "duplicates" ? "export-dup" : "export-unique");
+    setError(null);
+    setActionMessage(null);
+    try {
+      const res = await fetch(
+        `/api/admin/duplicates/export?versionId=${encodeURIComponent(result.version.id)}&kind=${kind}`,
+      );
+      if (!res.ok) {
+        const { message } = await readApiError(res, "Export misslyckades");
+        setError(message);
+        return;
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition") ?? "";
+      const match = disposition.match(/filename="([^"]+)"/);
+      const fileName =
+        match?.[1] ??
+        (kind === "duplicates" ? "dubbletter.ocd" : "unika.ocd");
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = fileName;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setActionMessage(
+        kind === "duplicates"
+          ? "Nedladdning av dubbletter startad."
+          : "Nedladdning av unika objekt startad.",
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Export misslyckades");
+    } finally {
+      setActionBusy(null);
+    }
+  }
+
+  async function handleDedupe() {
+    if (!result) return;
+    const ok = window.confirm(
+      `Ta bort ${result.extraDuplicateCount} extra dubbletter från v${result.version.versionNumber}?\n\n` +
+        `I varje grupp behålls objektet med lägst index. En ny opublicerad version skapas.`,
+    );
+    if (!ok) return;
+
+    setActionBusy("dedupe");
+    setError(null);
+    setActionMessage(null);
+    try {
+      const res = await fetch("/api/admin/duplicates/dedupe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ versionId: result.version.id }),
+      });
+      if (!res.ok) {
+        const { message } = await readApiError(res, "Borttagning misslyckades");
+        setError(message);
+        return;
+      }
+      const data = (await res.json()) as {
+        versionId: string;
+        versionNumber: number;
+        deletedCount: number;
+      };
+      setActionMessage(
+        `Skapade v${data.versionNumber} utan ${data.deletedCount} extra dubbletter. Versionen är vald — skanna igen för att kontrollera.`,
+      );
+      setVersionId(data.versionId);
+      setResult(null);
+      setSelectedKey(null);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Borttagning misslyckades");
+    } finally {
+      setActionBusy(null);
+    }
+  }
+
   if (maps.length === 0) {
     return (
       <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
@@ -279,6 +366,12 @@ export function AdminDuplicateScanClient({ maps }: Props) {
         </div>
       )}
 
+      {actionMessage && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+          {actionMessage}
+        </div>
+      )}
+
       {result && (
         <>
           <section className="card space-y-4">
@@ -333,6 +426,48 @@ export function AdminDuplicateScanClient({ maps }: Props) {
               <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
                 Inga exakta dubbletter hittades — ingen karta behövs.
               </p>
+            )}
+
+            {result.duplicateGroupCount > 0 && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3">
+                <p className="text-sm font-medium text-slate-900">Åtgärder</p>
+                <p className="mt-1 text-xs text-slate-600">
+                  Export tar ut delmängder till .ocd. «Radera dubbletter» behåller lågst index i
+                  varje grupp och skapar en ny opublicerad version.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={actionBusy != null}
+                    onClick={() => void downloadExport("duplicates")}
+                    className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-medium text-amber-900 hover:bg-amber-50 disabled:opacity-50"
+                  >
+                    {actionBusy === "export-dup"
+                      ? "Exporterar…"
+                      : "Exportera dubbletter (.ocd)"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={actionBusy != null}
+                    onClick={() => void downloadExport("uniques")}
+                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    {actionBusy === "export-unique"
+                      ? "Exporterar…"
+                      : "Exportera unika (.ocd)"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={actionBusy != null}
+                    onClick={() => void handleDedupe()}
+                    className="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {actionBusy === "dedupe"
+                      ? "Tar bort…"
+                      : `Radera dubbletter (${result.extraDuplicateCount})`}
+                  </button>
+                </div>
+              </div>
             )}
           </section>
 

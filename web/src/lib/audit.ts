@@ -51,7 +51,9 @@ export type AuditAction =
   | "FEEDBACK_CREATED"
   | "FEEDBACK_REVIEWED"
   | "FEEDBACK_VOTED"
-  | "ADMIN_DUPLICATE_SCAN";
+  | "ADMIN_DUPLICATE_SCAN"
+  | "ADMIN_DUPLICATE_EXPORT"
+  | "ADMIN_DUPLICATE_DEDUPE";
 
 export type EmailSentAuditMetadata = {
   kind: "checkin" | "new_upload" | "test";

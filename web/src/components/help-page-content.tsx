@@ -1014,9 +1014,15 @@ export async function HelpPageContent() {
               dubbletter (samma symbol, geometri och text). Resultatet visas på en karta med
               orangemarkörer och i en lista med antal, läge och objektindex. Kartan ligger på samma
               sida under rubriken «Dubbletter på kartan» — klicka knappen «Visa dubbletter på
-              kartan» eller en markör/rad för att zooma. Ta bort överflödiga kopior i OCAD och
-              ladda upp en ny version.
+              kartan» eller en markör/rad för att zooma.
             </p>
+            <HelpList
+              items={[
+                "Exportera dubbletter — .ocd med bara objekten som ingår i dubblettgrupper",
+                "Exportera unika — .ocd med objekt som inte är dubbletter",
+                "Radera dubbletter — behåller lägst objektindex i varje grupp och skapar en ny opublicerad version (publicera i versionshistoriken om du vill)",
+              ]}
+            />
 
             <h3 className="font-medium text-slate-900">Användarhantering</h3>
             <p>

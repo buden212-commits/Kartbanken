@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-09-24",
+    title: "Radera och exportera dubbletter från Admin → Dubbletter",
+    items: [
+      "Efter skanning kan du exportera dubbletter respektive unika objekt till egna .ocd-filer",
+      "«Radera dubbletter» behåller ett objekt per grupp (lägst index) och skapar en ny opublicerad kartversion",
+    ],
+  },
+  {
+    date: "2026-09-24",
     title: "Adminverktyg för att hitta exakta dubbletter i kartan",
     items: [
       "Under Admin → Dubbletter kan du välja område och version och skanna efter objekt med identisk symbol och geometri",

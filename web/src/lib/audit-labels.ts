@@ -145,6 +145,20 @@ export function formatAuditActivity(action: string, metadataRaw: string | null):
       }
       return ref ? `Dubblettskanning — ${ref}` : "Dubblettskanning";
     }
+    case "ADMIN_DUPLICATE_EXPORT": {
+      const ref = mapRef(metadata);
+      const kind = metaString(metadata, "kind");
+      const label = kind === "uniques" ? "unika" : "dubbletter";
+      return ref ? `Dubblettexport (${label}) — ${ref}` : `Dubblettexport (${label})`;
+    }
+    case "ADMIN_DUPLICATE_DEDUPE": {
+      const ref = mapRef(metadata);
+      const deleted = metadata?.deletedCount;
+      if (ref && typeof deleted === "number") {
+        return `Dubbletter borttagna — ${ref}: ${deleted} extra objekt`;
+      }
+      return ref ? `Dubbletter borttagna — ${ref}` : "Dubbletter borttagna";
+    }
     case "CHECKOUT_CANCELLED": {
       const ref = mapRef(metadata);
       return ref ? `Utcheckning avbruten — ${ref}` : "Utcheckning avbruten";

@@ -20,6 +20,37 @@ export type ExactDuplicateGroup = {
   centroid: [number, number];
 };
 
+/** Indices to keep vs soft-delete when reducing each group to one object. */
+export type DuplicateDedupIndexSets = {
+  /** Lowest objectIndex in each duplicate group (kept). */
+  keepers: Set<number>;
+  /** Extra copies to remove (all but the keeper). */
+  extras: Set<number>;
+  /** Every index that belongs to a duplicate group (keepers + extras). */
+  allInDuplicateGroups: Set<number>;
+};
+
+export function duplicateDedupIndexSets(
+  groups: ExactDuplicateGroup[],
+): DuplicateDedupIndexSets {
+  const keepers = new Set<number>();
+  const extras = new Set<number>();
+  const allInDuplicateGroups = new Set<number>();
+
+  for (const group of groups) {
+    if (group.objectIndices.length === 0) continue;
+    const [keeper, ...rest] = group.objectIndices;
+    keepers.add(keeper!);
+    allInDuplicateGroups.add(keeper!);
+    for (const index of rest) {
+      extras.add(index);
+      allInDuplicateGroups.add(index);
+    }
+  }
+
+  return { keepers, extras, allInDuplicateGroups };
+}
+
 /**
  * Groups objects that are exact clones (same symbol, geometry hash and text)
  * but different objectIndex. Count ≥ 2 ⇒ duplicate cluster.
