@@ -942,7 +942,7 @@ export async function HelpPageContent() {
           </p>
           <HelpList
             items={[
-              "Välj skala: 1:10 000, 1:7 500 eller 1:5 000",
+              "Välj skala: 1:10 000, 1:7 500 eller 1:5 000 — den valda skalan skrivs ut längst ner till vänster i PDF:en",
               "Välj pappersformat: A4 eller A3",
               "Välj orientering: stående eller liggande",
               "Välj utdataformat: PDF, OCAD (.ocd), OpenOrienteering Mapper (.omap) eller GeoTIFF (.tif)",

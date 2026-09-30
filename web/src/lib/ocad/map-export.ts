@@ -228,6 +228,8 @@ export function buildClippedExportSvg(
   pixelHeight: number,
   bottomLeftMarkup?: string,
   rotatedOverlayMarkup?: string,
+  /** Print scale for bottom-left label (user-selected export scale). Falls back to OCAD file scale. */
+  exportScale?: number,
 ): string {
   const fillMatch = fullSvgText.match(/<svg[^>]*\bfill=["']([^"']+)["']/i);
   const fill = fillMatch?.[1] ?? "transparent";
@@ -244,11 +246,13 @@ export function buildClippedExportSvg(
   const kartramMarkup = isPrebuiltExport
     ? ""
     : buildKartramFrameMarkup(parseKartramFromSvg(fullSvgText), exportFrameBbox(frame));
+  const scaleForLabel =
+    exportScale != null && Number.isFinite(exportScale) && exportScale > 0
+      ? exportScale
+      : (parseOcadMapScale(fullSvgText) ?? 15000);
   const infoMarkup =
     bottomLeftMarkup ??
-    (isPrebuiltExport
-      ? ""
-      : buildMapScaleInfoSvg(frame, parseOcadMapScale(fullSvgText) ?? 15000));
+    (isPrebuiltExport ? "" : buildMapScaleInfoSvg(frame, scaleForLabel));
   const overlayMarkup = rotatedOverlayMarkup?.trim() ? `\n${rotatedOverlayMarkup}\n` : "";
   const rotatedContent = isPrebuiltExport
     ? inner
@@ -283,7 +287,7 @@ export async function downloadMapPdf(
   fullSvgText: string,
   frame: ExportFrame,
   fileName: string,
-  options?: { suggestionOverlaySvg?: string },
+  options?: { suggestionOverlaySvg?: string; exportScale?: number },
 ): Promise<void> {
   validateExportFrame(frame);
 
@@ -296,6 +300,7 @@ export async function downloadMapPdf(
     pixelHeight,
     undefined,
     options?.suggestionOverlaySvg,
+    options?.exportScale,
   );
   const img = await loadSvgImage(exportSvg);
 
@@ -426,7 +431,7 @@ export async function downloadMapGeoTiff(
   fullSvgText: string,
   frame: ExportFrame,
   fileName: string,
-  options?: { suggestionOverlaySvg?: string },
+  options?: { suggestionOverlaySvg?: string; exportScale?: number },
 ): Promise<void> {
   validateExportFrame(frame);
 
@@ -439,6 +444,7 @@ export async function downloadMapGeoTiff(
     pixelHeight,
     undefined,
     options?.suggestionOverlaySvg,
+    options?.exportScale,
   );
   const img = await loadSvgImage(exportSvg);
 

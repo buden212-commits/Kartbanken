@@ -7,6 +7,13 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-09-30",
+    title: "Rätt skala i exporterad PDF från kartutsnitt",
+    items: [
+      "Vid «Exportera utsnitt» som PDF visas nu den skala du valt (t.ex. 1:5 000) i stället för kartfilens skala",
+    ],
+  },
+  {
     date: "2026-09-24",
     title: "Radera och exportera dubbletter från Admin → Dubbletter",
     items: [

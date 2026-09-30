@@ -924,12 +924,13 @@ export function DiffMapPanel({
             svgForExport,
             exportFrame,
             `${safeTitle}-${exportSettings.scale}`,
-            { suggestionOverlaySvg },
+            { suggestionOverlaySvg, exportScale: exportSettings.scale },
           );
         } else {
           if (!svgForExport) return;
           await downloadMapPdf(svgForExport, exportFrame, `${safeTitle}-${exportSettings.scale}`, {
             suggestionOverlaySvg,
+            exportScale: exportSettings.scale,
           });
         }
 
