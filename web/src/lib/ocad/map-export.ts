@@ -362,7 +362,7 @@ async function fetchExportRaster(
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") {
       throw new Error(
-        "PDF-exporten tog för lång tid. Försök igen om en stund — karttiles kan behöva bli klara först.",
+        "PDF-exporten tog för lång tid. Vänta en stund och försök igen.",
       );
     }
     throw err;

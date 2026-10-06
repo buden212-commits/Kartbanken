@@ -13,7 +13,8 @@ export const releaseNotes: ReleaseNote[] = [
       "PDF och GeoTIFF ritas från kartfilen i utskriftsupplösning, så sjöar, myrar och andra ytor följer med",
       "Exporten fungerar i den skala och det format du valt, även på stora kartor",
       "Export startar direkt utan att först ladda in hela kartfilen i webbläsaren",
-      "Under exporten visas en spinner och vilket steg som pågår, till exempel «Ritar kartan (3 av 12)»",
+      "Under exporten visas en spinner och vilket steg som pågår, till exempel «Ritar kartan»",
+      "Utsnittet ritas i ett svep så exporten hinner bli klar",
     ],
   },
   {

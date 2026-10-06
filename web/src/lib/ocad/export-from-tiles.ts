@@ -9,10 +9,6 @@ import { rasterizeExportSvg } from "@/lib/ocad/export-rasterize";
 import { ocadSvgYFlip, rasterizeOcadRegionPng } from "@/lib/ocad/tile-generate";
 import type { SvgBounds } from "@/lib/ocad/svg-utils";
 
-/** Print-resolution cells. Small enough that area hatch/struct patterns survive rasterizing. */
-const CELL_PX = 512;
-const CELL_CONCURRENCY = 3;
-
 export type VersionExportRasterInput = {
   mapFileId: string;
   versionNumber: number;
@@ -58,28 +54,9 @@ function frameToBounds(frame: ExportFrame): SvgBounds {
   };
 }
 
-async function mapPool<T, R>(
-  items: T[],
-  concurrency: number,
-  worker: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let next = 0;
-  async function run(): Promise<void> {
-    while (next < items.length) {
-      const i = next++;
-      results[i] = await worker(items[i]!);
-    }
-  }
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, Math.max(1, items.length)) }, () => run()),
-  );
-  return results;
-}
-
 /**
- * Draw the export window from the OCD file at print resolution, in cells.
- * Stored overview tiles are too coarse: lake fills and marsh hatching disappear.
+ * Draw the export window once, at print resolution, from the objects inside it.
+ * One render keeps lake fills and marsh hatching, and finishes inside the request limit.
  */
 async function rasterizeVectorFrame(params: {
   mapFileId: string;
@@ -94,65 +71,16 @@ async function rasterizeVectorFrame(params: {
   const ocdBuffer = await readStoredFile(params.storagePath);
   const cacheKey = `${params.mapFileId}/v${params.versionNumber}`;
   const yFlip = await ocadSvgYFlip(ocdBuffer, cacheKey);
-  const spanX = params.sourceBounds.maxX - params.sourceBounds.minX;
-  const spanY = params.sourceBounds.maxY - params.sourceBounds.minY;
 
-  const cells: Array<{
-    left: number;
-    top: number;
-    width: number;
-    height: number;
-    bounds: SvgBounds;
-  }> = [];
-
-  for (let top = 0; top < params.overscanH; top += CELL_PX) {
-    for (let left = 0; left < params.overscanW; left += CELL_PX) {
-      const width = Math.min(CELL_PX, params.overscanW - left);
-      const height = Math.min(CELL_PX, params.overscanH - top);
-      cells.push({
-        left,
-        top,
-        width,
-        height,
-        bounds: {
-          minX: params.sourceBounds.minX + (left / params.overscanW) * spanX,
-          maxX: params.sourceBounds.minX + ((left + width) / params.overscanW) * spanX,
-          minY: params.sourceBounds.minY + (top / params.overscanH) * spanY,
-          maxY: params.sourceBounds.minY + ((top + height) / params.overscanH) * spanY,
-        },
-      });
-    }
-  }
-
-  params.onProgress?.({ label: "Ritar kartan", done: 0, total: cells.length });
-  let finished = 0;
-  const parts = await mapPool(cells, CELL_CONCURRENCY, async (cell) => {
-    const png = await rasterizeOcadRegionPng({
-      ocdBuffer,
-      cacheKey,
-      yFlip,
-      bounds: cell.bounds,
-      widthPx: cell.width,
-      heightPx: cell.height,
-    });
-    finished += 1;
-    params.onProgress?.({ label: "Ritar kartan", done: finished, total: cells.length });
-    return { input: png, left: cell.left, top: cell.top };
+  params.onProgress?.({ label: "Ritar kartan" });
+  return rasterizeOcadRegionPng({
+    ocdBuffer,
+    cacheKey,
+    yFlip,
+    bounds: params.sourceBounds,
+    widthPx: params.overscanW,
+    heightPx: params.overscanH,
   });
-
-  params.onProgress?.({ label: "Sätter ihop bilden" });
-
-  return sharp({
-    create: {
-      width: params.overscanW,
-      height: params.overscanH,
-      channels: 3,
-      background: { r: 255, g: 255, b: 255 },
-    },
-  })
-    .composite(parts)
-    .png({ compressionLevel: 6, effort: 1 })
-    .toBuffer();
 }
 
 async function rasterizePreviewFallback(
