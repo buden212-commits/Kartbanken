@@ -66,10 +66,27 @@ export function CoursePdfPanel({
         params.set("centerY", String(exportCenter.centerY));
       }
 
-      const res = await fetch(
-        `/api/maps/${mapSlug}/courses/${exportCourseId}/export/pdf?${params}`,
-        { headers: { Accept: "application/json" } },
-      );
+      const controller = new AbortController();
+      const timer = window.setTimeout(() => controller.abort(), 150_000);
+      let res: Response;
+      try {
+        res = await fetch(
+          `/api/maps/${mapSlug}/courses/${exportCourseId}/export/pdf?${params}`,
+          {
+            headers: { Accept: "application/json" },
+            signal: controller.signal,
+          },
+        );
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          throw new Error(
+            "PDF-exporten tog för lång tid. Prova ett mindre pappersformat eller annan skala.",
+          );
+        }
+        throw err;
+      } finally {
+        window.clearTimeout(timer);
+      }
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -77,7 +94,10 @@ export function CoursePdfPanel({
       }
 
       const data = (await res.json()) as {
-        svg: string;
+        svg?: string;
+        hudSvg?: string;
+        pngBase64?: string;
+        rotationDeg?: number;
         courseName?: string;
         frame: {
           centerX: number;
@@ -92,10 +112,19 @@ export function CoursePdfPanel({
       const nameForFile =
         data.courseName ?? exportCourse?.name ?? "bana";
 
+      if (!data.pngBase64 && !data.svg) {
+        throw new Error("Export misslyckades");
+      }
+
       await downloadMapPdf(
-        data.svg,
+        data.svg ?? "",
         data.frame,
         `${nameForFile.replace(/[^\w\s-åäöÅÄÖ]/g, "").trim() || "bana"}-${scale}`,
+        {
+          pngBase64: data.pngBase64,
+          hudSvg: data.hudSvg,
+          rotationDeg: data.rotationDeg,
+        },
       );
       setPreviewNote(
         `Exporterad ${nameForFile} · ${format} ${orientation === "portrait" ? "stående" : "liggande"} ${formatScaleLabel(scale)}`,

@@ -56,7 +56,7 @@ const OCAD_UNITS_PER_MM = 100;
 
 const EXPORT_DPI = 200;
 
-/** Clockwise rotation applied to all PDF export content (map + overlays). */
+/** Default clockwise rotation for PDF export (IOF). Overridden by Admin → Inställningar. */
 export const PDF_EXPORT_ROTATION_DEG = 7;
 
 /** Course overlay text (704 etc.) — matches PDF export tilt in the editor. */
@@ -73,8 +73,41 @@ export function courseTextRotationTransform(
 }
 
 /** Rotate export content around the export frame center (same as viewBox center). */
-export function pdfExportRotationTransform(frame: ExportFrame): string {
-  return `rotate(${PDF_EXPORT_ROTATION_DEG} ${frame.centerX} ${frame.centerY})`;
+export function pdfExportRotationTransform(
+  frame: ExportFrame,
+  deg: number = PDF_EXPORT_ROTATION_DEG,
+): string {
+  return `rotate(${deg} ${frame.centerX} ${frame.centerY})`;
+}
+
+/**
+ * Compose export page rotation into every SVG `<pattern>`'s `patternTransform`.
+ * Prefer placing `<defs>` inside the rotated export `<g>` instead — mutating
+ * patternTransform has broken Image→canvas rasterization in Chromium.
+ * Kept for callers that still need an explicit pattern tilt.
+ */
+export function applyExportRotationToPatterns(
+  svgFragment: string,
+  deg: number = PDF_EXPORT_ROTATION_DEG,
+): string {
+  if (!svgFragment || !deg) return svgFragment;
+  const rotate = `rotate(${deg})`;
+  return svgFragment.replace(/<pattern\b([^>]*)>/gi, (match, attrs: string) => {
+    const transformMatch = attrs.match(/\bpatternTransform\s*=\s*(["'])([\s\S]*?)\1/i);
+    if (!transformMatch) {
+      const trimmed = attrs.trimEnd();
+      const spacer = trimmed.length > 0 && !/\s$/.test(attrs) ? " " : "";
+      return `<pattern${attrs}${spacer}patternTransform="${rotate}">`;
+    }
+    const quote = transformMatch[1];
+    const existing = transformMatch[2].trim();
+    const next = existing ? `${rotate} ${existing}` : rotate;
+    const nextAttrs = attrs.replace(
+      /\bpatternTransform\s*=\s*(["'])([\s\S]*?)\1/i,
+      `patternTransform=${quote}${next}${quote}`,
+    );
+    return `<pattern${nextAttrs}>`;
+  });
 }
 
 /** Rotate a point clockwise around a center (degrees). Used to place horizontal export text. */
@@ -221,15 +254,36 @@ export function buildMapScaleInfoSvg(frame: ExportFrame, mapScale: number): stri
   return buildExportInfoSvg(frame, [formatMapScaleExportLabel(mapScale)]);
 }
 
+/** Wrap HUD markup (scale label, course text) in a transparent SVG matching the export frame. */
+export function buildExportHudSvg(
+  frame: ExportFrame,
+  pixelWidth: number,
+  pixelHeight: number,
+  hudMarkup: string,
+): string {
+  if (!hudMarkup.trim()) return "";
+  const { x, y, width, height } = exportFrameBbox(frame);
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" fill="transparent" viewBox="${x} ${y} ${width} ${height}" width="${pixelWidth}" height="${pixelHeight}">
+${hudMarkup}
+</svg>`;
+}
+
+/**
+ * Build export SVG clipped to the frame. Map content stays axis-aligned —
+ * page tilt is applied later on the canvas so patterns/symbols rotate as pixels.
+ */
 export function buildClippedExportSvg(
   fullSvgText: string,
   frame: ExportFrame,
   pixelWidth: number,
   pixelHeight: number,
-  bottomLeftMarkup?: string,
+  _bottomLeftMarkup?: string,
   rotatedOverlayMarkup?: string,
-  /** Print scale for bottom-left label (user-selected export scale). Falls back to OCAD file scale. */
-  exportScale?: number,
+  /** Print scale kept for call-site compatibility; HUD is built separately. */
+  _exportScale?: number,
+  /** @deprecated Page rotation is applied on canvas; kept for call-site compatibility. */
+  _rotationDeg: number = PDF_EXPORT_ROTATION_DEG,
 ): string {
   const fillMatch = fullSvgText.match(/<svg[^>]*\bfill=["']([^"']+)["']/i);
   const fill = fillMatch?.[1] ?? "transparent";
@@ -246,76 +300,82 @@ export function buildClippedExportSvg(
   const kartramMarkup = isPrebuiltExport
     ? ""
     : buildKartramFrameMarkup(parseKartramFromSvg(fullSvgText), exportFrameBbox(frame));
-  const scaleForLabel =
-    exportScale != null && Number.isFinite(exportScale) && exportScale > 0
-      ? exportScale
-      : (parseOcadMapScale(fullSvgText) ?? 15000);
-  const infoMarkup =
-    bottomLeftMarkup ??
-    (isPrebuiltExport ? "" : buildMapScaleInfoSvg(frame, scaleForLabel));
   const overlayMarkup = rotatedOverlayMarkup?.trim() ? `\n${rotatedOverlayMarkup}\n` : "";
-  const rotatedContent = isPrebuiltExport
+  const mapContent = isPrebuiltExport
     ? inner
-    : `<g transform="${pdfExportRotationTransform(frame)}">\n${inner}\n${kartramMarkup}${overlayMarkup}</g>`;
+    : `${defs}\n${inner}\n${kartramMarkup}${overlayMarkup}`;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" fill="${fill}" viewBox="${x} ${y} ${width} ${height}" width="${pixelWidth}" height="${pixelHeight}">
-${defs}
-${rotatedContent}
-${infoMarkup}
+<svg xmlns="http://www.w3.org/2000/svg" fill="${fill}" viewBox="${x} ${y} ${width} ${height}" width="${pixelWidth}" height="${pixelHeight}" data-canvas-rotate="true">
+${mapContent}
 </svg>`;
 }
 
-function loadSvgImage(svgMarkup: string): Promise<HTMLImageElement> {
+function loadPngBlobToCanvas(
+  blob: Blob,
+  pixelWidth: number,
+  pixelHeight: number,
+): Promise<HTMLCanvasElement> {
+  const url = URL.createObjectURL(blob);
   return new Promise((resolve, reject) => {
-    const blob = new Blob([svgMarkup], { type: "image/svg+xml;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const img = new Image();
-    img.onload = () => {
+    const image = new Image();
+    image.onload = () => {
       URL.revokeObjectURL(url);
-      resolve(img);
+      const canvas = document.createElement("canvas");
+      canvas.width = pixelWidth;
+      canvas.height = pixelHeight;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("Kunde inte skapa exportyta"));
+        return;
+      }
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, pixelWidth, pixelHeight);
+      ctx.drawImage(image, 0, 0, pixelWidth, pixelHeight);
+      resolve(canvas);
     };
-    img.onerror = () => {
+    image.onerror = () => {
       URL.revokeObjectURL(url);
-      reject(new Error("Kunde inte rendera kartbilden för export"));
+      reject(new Error("Kunde inte läsa rastrerad exportbild"));
     };
-    img.src = url;
+    image.src = url;
   });
 }
 
-export async function downloadMapPdf(
-  fullSvgText: string,
+/** Client wait budget for server-side SVG→PNG (must stay under route maxDuration). */
+const EXPORT_RASTER_FETCH_TIMEOUT_MS = 150_000;
+
+async function fetchExportRaster(
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), EXPORT_RASTER_FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error(
+        "PDF-exporten tog för lång tid. Prova ett mindre utsnitt (t.ex. A4) eller lägre skala.",
+      );
+    }
+    throw err;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+async function readRasterError(res: Response): Promise<string> {
+  const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+  return payload?.error ?? "Kunde inte rastrera kartbilden för export";
+}
+
+/** Build PDF from an already-rasterized export canvas. */
+async function saveCanvasAsPdf(
+  canvas: HTMLCanvasElement,
   frame: ExportFrame,
   fileName: string,
-  options?: { suggestionOverlaySvg?: string; exportScale?: number },
 ): Promise<void> {
-  validateExportFrame(frame);
-
-  const pixelWidth = mmToPx(frame.widthMm);
-  const pixelHeight = mmToPx(frame.heightMm);
-  const exportSvg = buildClippedExportSvg(
-    fullSvgText,
-    frame,
-    pixelWidth,
-    pixelHeight,
-    undefined,
-    options?.suggestionOverlaySvg,
-    options?.exportScale,
-  );
-  const img = await loadSvgImage(exportSvg);
-
-  const canvas = document.createElement("canvas");
-  canvas.width = pixelWidth;
-  canvas.height = pixelHeight;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    throw new Error("Kunde inte skapa exportyta");
-  }
-
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, pixelWidth, pixelHeight);
-  ctx.drawImage(img, 0, 0, pixelWidth, pixelHeight);
-
   const { jsPDF } = await import("jspdf");
   const orientation = frame.widthMm >= frame.heightMm ? "landscape" : "portrait";
   const pdfFormat = frame.widthMm <= 220 ? "a4" : "a3";
@@ -328,7 +388,213 @@ export async function downloadMapPdf(
 
   const dataUrl = canvas.toDataURL("image/png");
   pdf.addImage(dataUrl, "PNG", 0, 0, frame.widthMm, frame.heightMm);
-  pdf.save(fileName.endsWith(".pdf") ? fileName : `${fileName}.pdf`);
+
+  // Blob + <a download> is more reliable than pdf.save() after long async work
+  // (browsers may ignore downloads that are no longer tied to the click gesture).
+  const blob = pdf.output("blob");
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName.endsWith(".pdf") ? fileName : `${fileName}.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+}
+
+/**
+ * Rasterize via version endpoint (server reads preview SVG from storage).
+ * Avoids uploading multi‑MB map SVG in the request body (Vercel limit).
+ */
+export async function rasterizeVersionExportToCanvas(
+  mapSlug: string,
+  versionId: string,
+  frame: ExportFrame,
+  pixelWidth: number,
+  pixelHeight: number,
+  options?: {
+    rotationDeg?: number;
+    exportScale?: number;
+    suggestionOverlaySvg?: string;
+  },
+): Promise<HTMLCanvasElement> {
+  const res = await fetchExportRaster(
+    `/api/maps/${mapSlug}/versions/${versionId}/export-raster`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        frame,
+        rotationDeg: options?.rotationDeg,
+        exportScale: options?.exportScale,
+        suggestionOverlaySvg: options?.suggestionOverlaySvg?.trim()
+          ? options.suggestionOverlaySvg
+          : undefined,
+      }),
+    },
+  );
+
+  if (!res.ok) {
+    throw new Error(await readRasterError(res));
+  }
+
+  const blob = await res.blob();
+  return loadPngBlobToCanvas(blob, pixelWidth, pixelHeight);
+}
+
+/**
+ * Rasterize a (usually small/prebuilt) SVG via sharp/librsvg.
+ * Prefer {@link rasterizeVersionExportToCanvas} for full map exports.
+ */
+export async function rasterizeExportToCanvas(
+  mapSvg: string,
+  _frame: ExportFrame,
+  pixelWidth: number,
+  pixelHeight: number,
+  rotationDeg: number,
+  hudSvg?: string,
+): Promise<HTMLCanvasElement> {
+  const res = await fetchExportRaster("/api/export/rasterize", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      mapSvg,
+      hudSvg: hudSvg?.trim() ? hudSvg : undefined,
+      rotationDeg,
+      widthPx: pixelWidth,
+      heightPx: pixelHeight,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(await readRasterError(res));
+  }
+
+  const blob = await res.blob();
+  return loadPngBlobToCanvas(blob, pixelWidth, pixelHeight);
+}
+
+/** Create a canvas from a PNG already produced server-side (e.g. course PDF). */
+export async function canvasFromPngBase64(
+  pngBase64: string,
+  pixelWidth: number,
+  pixelHeight: number,
+): Promise<HTMLCanvasElement> {
+  const raw = pngBase64.replace(/^data:image\/\w+;base64,/, "");
+  const binary = atob(raw);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  const blob = new Blob([bytes], { type: "image/png" });
+  return loadPngBlobToCanvas(blob, pixelWidth, pixelHeight);
+}
+
+export async function downloadMapPdf(
+  fullSvgText: string,
+  frame: ExportFrame,
+  fileName: string,
+  options?: {
+    mapSlug?: string;
+    versionId?: string;
+    suggestionOverlaySvg?: string;
+    exportScale?: number;
+    rotationDeg?: number;
+    /** Horizontal overlay (scale label, course text). Drawn after canvas rotation. */
+    hudSvg?: string;
+    /** Server-rasterized PNG (base64); skips SVG upload. */
+    pngBase64?: string;
+  },
+): Promise<void> {
+  validateExportFrame(frame);
+
+  const pixelWidth = mmToPx(frame.widthMm);
+  const pixelHeight = mmToPx(frame.heightMm);
+
+  if (options?.pngBase64?.trim()) {
+    const canvas = await canvasFromPngBase64(
+      options.pngBase64,
+      pixelWidth,
+      pixelHeight,
+    );
+    await saveCanvasAsPdf(canvas, frame, fileName);
+    return;
+  }
+
+  let rotationDeg = options?.rotationDeg;
+  if (rotationDeg == null) {
+    const { fetchExportRotationDeg } = await import(
+      "@/lib/settings/export-rotation-client"
+    );
+    rotationDeg = await fetchExportRotationDeg();
+  }
+
+  const isPrebuiltExport = /<svg[^>]*\bdata-pdf-export=["']true["']/i.test(fullSvgText);
+
+  // Full map exports: rasterize on server from stored preview (no giant SVG body).
+  if (
+    !isPrebuiltExport &&
+    options?.mapSlug &&
+    options?.versionId
+  ) {
+    const canvas = await rasterizeVersionExportToCanvas(
+      options.mapSlug,
+      options.versionId,
+      frame,
+      pixelWidth,
+      pixelHeight,
+      {
+        rotationDeg,
+        exportScale: options.exportScale,
+        suggestionOverlaySvg: options.suggestionOverlaySvg,
+      },
+    );
+    await saveCanvasAsPdf(canvas, frame, fileName);
+    return;
+  }
+
+  let mapSvg: string;
+  let hudSvg = options?.hudSvg?.trim() ?? "";
+
+  if (isPrebuiltExport) {
+    mapSvg = fullSvgText;
+  } else {
+    mapSvg = buildClippedExportSvg(
+      fullSvgText,
+      frame,
+      pixelWidth,
+      pixelHeight,
+      "",
+      options?.suggestionOverlaySvg,
+      options?.exportScale,
+      0,
+    );
+    if (!hudSvg) {
+      const scaleForLabel =
+        options?.exportScale != null &&
+        Number.isFinite(options.exportScale) &&
+        options.exportScale > 0
+          ? options.exportScale
+          : (parseOcadMapScale(fullSvgText) ?? 15000);
+      hudSvg = buildExportHudSvg(
+        frame,
+        pixelWidth,
+        pixelHeight,
+        buildMapScaleInfoSvg(frame, scaleForLabel),
+      );
+    }
+  }
+
+  const canvas = await rasterizeExportToCanvas(
+    mapSvg,
+    frame,
+    pixelWidth,
+    pixelHeight,
+    rotationDeg,
+    hudSvg || undefined,
+  );
+
+  await saveCanvasAsPdf(canvas, frame, fileName);
 }
 
 export async function downloadMapOcd(
@@ -431,34 +697,76 @@ export async function downloadMapGeoTiff(
   fullSvgText: string,
   frame: ExportFrame,
   fileName: string,
-  options?: { suggestionOverlaySvg?: string; exportScale?: number },
+  options?: {
+    suggestionOverlaySvg?: string;
+    exportScale?: number;
+    rotationDeg?: number;
+    hudSvg?: string;
+  },
 ): Promise<void> {
   validateExportFrame(frame);
 
-  const pixelWidth = mmToPx(frame.widthMm);
-  const pixelHeight = mmToPx(frame.heightMm);
-  const exportSvg = buildClippedExportSvg(
-    fullSvgText,
-    frame,
-    pixelWidth,
-    pixelHeight,
-    undefined,
-    options?.suggestionOverlaySvg,
-    options?.exportScale,
-  );
-  const img = await loadSvgImage(exportSvg);
-
-  const canvas = document.createElement("canvas");
-  canvas.width = pixelWidth;
-  canvas.height = pixelHeight;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    throw new Error("Kunde inte skapa exportyta");
+  let rotationDeg = options?.rotationDeg;
+  if (rotationDeg == null) {
+    const { fetchExportRotationDeg } = await import(
+      "@/lib/settings/export-rotation-client"
+    );
+    rotationDeg = await fetchExportRotationDeg();
   }
 
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, pixelWidth, pixelHeight);
-  ctx.drawImage(img, 0, 0, pixelWidth, pixelHeight);
+  const pixelWidth = mmToPx(frame.widthMm);
+  const pixelHeight = mmToPx(frame.heightMm);
+
+  // Prefer server-side raster from stored preview (avoids uploading full SVG).
+  let canvas: HTMLCanvasElement;
+  try {
+    canvas = await rasterizeVersionExportToCanvas(
+      mapSlug,
+      versionId,
+      frame,
+      pixelWidth,
+      pixelHeight,
+      {
+        rotationDeg,
+        exportScale: options?.exportScale,
+        suggestionOverlaySvg: options?.suggestionOverlaySvg,
+      },
+    );
+  } catch {
+    const mapSvg = buildClippedExportSvg(
+      fullSvgText,
+      frame,
+      pixelWidth,
+      pixelHeight,
+      "",
+      options?.suggestionOverlaySvg,
+      options?.exportScale,
+      0,
+    );
+    let hudSvg = options?.hudSvg?.trim() ?? "";
+    if (!hudSvg) {
+      const scaleForLabel =
+        options?.exportScale != null &&
+        Number.isFinite(options.exportScale) &&
+        options.exportScale > 0
+          ? options.exportScale
+          : (parseOcadMapScale(fullSvgText) ?? 15000);
+      hudSvg = buildExportHudSvg(
+        frame,
+        pixelWidth,
+        pixelHeight,
+        buildMapScaleInfoSvg(frame, scaleForLabel),
+      );
+    }
+    canvas = await rasterizeExportToCanvas(
+      mapSvg,
+      frame,
+      pixelWidth,
+      pixelHeight,
+      rotationDeg,
+      hudSvg || undefined,
+    );
+  }
 
   const imageBase64 = canvas.toDataURL("image/png");
 

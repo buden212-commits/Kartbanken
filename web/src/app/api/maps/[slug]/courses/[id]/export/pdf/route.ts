@@ -23,9 +23,18 @@ import {
 } from "@/lib/course/geometry";
 import { geoToSvgUserPoint } from "@/lib/ocad/svg-coords";
 import { prisma } from "@/lib/prisma";
+import { rasterizeExportSvg } from "@/lib/ocad/export-rasterize";
+import { resolveExportRotationDeg } from "@/lib/settings/app-settings";
 import { readStoredFile } from "@/lib/storage";
 import { NextResponse } from "next/server";
 
+const EXPORT_DPI = 200;
+
+function mmToPx(mm: number): number {
+  return Math.max(1, Math.round((mm / 25.4) * EXPORT_DPI));
+}
+
+export const runtime = "nodejs";
 export const maxDuration = 300;
 
 type RouteParams = { params: Promise<{ slug: string; id: string }> };
@@ -137,7 +146,8 @@ export async function GET(request: Request, { params }: RouteParams) {
     computeCourseLengthMeters(exportObjects, fileMapScale, printSequence),
   );
 
-  const exportSvg = buildCourseExportSvg(
+  const rotationDeg = await resolveExportRotationDeg();
+  const { svg: exportSvg, hudSvg, rotationDeg: exportRotationDeg } = buildCourseExportSvg(
     svgText,
     frame,
     exportObjects,
@@ -145,6 +155,7 @@ export async function GET(request: Request, { params }: RouteParams) {
     undefined,
     { name: course.name, lengthLabel: courseLengthLabel, mapScale: scale },
     printSequence,
+    rotationDeg,
   );
 
   await logAction(session.user.id, "COURSE_PDF_EXPORT", "Course", id, {
@@ -158,8 +169,29 @@ export async function GET(request: Request, { params }: RouteParams) {
   const accept = request.headers.get("accept") ?? "";
   if (accept.includes("application/json")) {
     const { widthMm, heightMm } = paperSizeMm(format, orientation);
+    const pixelWidth = mmToPx(frame.widthMm);
+    const pixelHeight = mmToPx(frame.heightMm);
+
+    let pngBase64: string | undefined;
+    try {
+      const png = await rasterizeExportSvg({
+        mapSvg: exportSvg,
+        hudSvg,
+        rotationDeg: exportRotationDeg,
+        widthPx: pixelWidth,
+        heightPx: pixelHeight,
+      });
+      pngBase64 = png.toString("base64");
+    } catch (error) {
+      console.error("Course PDF rasterize failed:", error);
+      // Client can fall back to SVG + /api/export/rasterize
+    }
+
     return NextResponse.json({
-      svg: exportSvg,
+      svg: pngBase64 ? undefined : exportSvg,
+      hudSvg: pngBase64 ? undefined : hudSvg,
+      pngBase64,
+      rotationDeg: exportRotationDeg,
       frame,
       courseName: course.name,
       courseLengthLabel,

@@ -7,6 +7,31 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-10-06",
+    title: "PDF-export hänger inte längre på stora kartor",
+    items: [
+      "«Exportera utsnitt» som PDF startar direkt utan att först ladda in hela kartfilen i webbläsaren",
+      "Rastrering på servern är snabbare och avbryts med ett tydligt felmeddelande om den tar för lång tid",
+      "Nedladdningen av PDF:en är mer pålitlig efter längre export",
+    ],
+  },
+  {
+    date: "2026-10-03",
+    title: "Stabilare PDF-export med roterad karta",
+    items: [
+      "PDF- och GeoTIFF-export rastrerar kartan på servern från sparad förhandsvisning, så stora kartor inte längre misslyckas med «Kunde inte rastrera kartbilden för export»",
+      "Yt-raster (t.ex. myrar) och punktsymboler följer fortfarande sidans rotation vid export",
+    ],
+  },
+  {
+    date: "2026-09-30",
+    title: "Konfigurerbar rotation vid kartexport",
+    items: [
+      "Under Admin → Inställningar kan du ange hur många grader PDF och GeoTIFF ska roteras (standard +7° enligt IOF)",
+      "Yt-raster (t.ex. myrar) och punktsymboler (t.ex. gropar) roteras nu tillsammans med kartan vid PDF-/GeoTIFF-export",
+    ],
+  },
+  {
     date: "2026-09-30",
     title: "Rätt skala i exporterad PDF från kartutsnitt",
     items: [

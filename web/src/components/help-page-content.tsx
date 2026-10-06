@@ -703,7 +703,7 @@ export async function HelpPageContent() {
               "Välj orientering: stående eller liggande",
               "Välj skala (t.ex. 1:10 000, 1:7 500, 1:5 000)",
               "Utskriftsområdet centreras automatiskt på den valda banans utbredning",
-              "PDF roteras +7° enligt IOF-utskriftsstandard",
+              "PDF roteras enligt Admin → Inställningar (standard +7° IOF), inklusive yt-raster och struktursymboler",
               "Bannamn och banlängd skrivs ut nederst till vänster i magenta",
               "Luckor i cirklar och sträckor följer med i PDF:en",
             ]}
@@ -929,10 +929,11 @@ export async function HelpPageContent() {
             arbete på en second skärm. GPS och export fungerar även i helskärmsvyn.
           </p>
           <p>
-            Helskärmsvyn använder karttiles för snabb zoom och panorering på stora kartor. Kartan
-            läses in i sin helhet först när du klickar <strong>Exportera</strong> (knappen visar
-            «Förbereder export…» en kort stund). Behöver du visa eller dölja kartlager gör du det i
-            standardvyn för versionen.
+            Helskärmsvyn använder karttiles för snabb zoom och panorering på stora kartor. PDF- och
+            GeoTIFF-export rastreras på servern från sparad förhandsvisning — du behöver inte vänta
+            på att hela kartan laddas in innan du kan exportera. Vid Mapper (.omap)-export kan
+            knappen visa «Förbereder export…» en kort stund medan kartan läses in. Behöver du visa
+            eller dölja kartlager gör du det i standardvyn för versionen.
           </p>
 
           <h3 className="font-medium text-slate-900">Exportera utsnitt</h3>
@@ -946,6 +947,7 @@ export async function HelpPageContent() {
               "Välj pappersformat: A4 eller A3",
               "Välj orientering: stående eller liggande",
               "Välj utdataformat: PDF, OCAD (.ocd), OpenOrienteering Mapper (.omap) eller GeoTIFF (.tif)",
+              "PDF och GeoTIFF roteras enligt Admin → Inställningar (standard +7° IOF) — inklusive yt-raster och struktursymboler",
               "Kryssruta «Exportera endast kartförslag»: PDF och GeoTIFF ritar förslagen ovanpå kartan; OCD exporterar enbart markeringarna (inte grundkartan)",
               "Mapper (.omap): native fil för OpenOrienteering Mapper — objekt i utsnittet, färger och förenklade symboler; georeferering följer med när kartan har EPSG",
               "GeoTIFF sparas med kartans projicerade koordinatsystem (EPSG) — kräver georefererad karta",
@@ -1063,10 +1065,11 @@ export async function HelpPageContent() {
             <h3 className="font-medium text-slate-900">E-postinställningar (SMTP)</h3>
             <p>
               Under <Link href="/admin/settings" className="link-primary">Inställningar</Link>{" "}
-              konfigureras SMTP för systemets e-postnotiser:
+              konfigureras kartexport och SMTP för systemets e-postnotiser:
             </p>
             <HelpList
               items={[
+                "Kartexport — rotation i grader (medurs) för PDF och GeoTIFF; standard +7° enligt IOF",
                 "SMTP-server och port (Gmail: smtp.gmail.com, port 587)",
                 "Gmail-adress som avsändare och Google App-lösenord (krävs — vanligt lösenord fungerar inte)",
                 "Admin-notis e-post — en eller flera mottagare (komma eller radbrytning); får alltid .ocd-bilaga vid versioner och incheckning",

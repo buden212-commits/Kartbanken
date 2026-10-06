@@ -19,15 +19,16 @@ export default async function AdminSettingsPage() {
       <p className="page-eyebrow">Administration</p>
       <h1 className="mt-2 text-2xl font-semibold text-slate-900">Inställningar</h1>
       <p className="mt-2 text-sm text-slate-600">
-        Konfigurera SMTP för e-postnotiser från systemet.
+        Konfigurera kartexport och SMTP för e-postnotiser från systemet.
       </p>
 
       <AdminNav active="settings" />
 
       <section className="card mt-8">
-        <HelpSectionHeading section="admin">E-post (SMTP)</HelpSectionHeading>
+        <HelpSectionHeading section="admin">Systeminställningar</HelpSectionHeading>
         <p className="mt-1 text-sm text-slate-600">
-          För Gmail krävs ett app-lösenord om tvåfaktorsautentisering är aktiverat.
+          Kartexportens rotation gäller alla PDF- och GeoTIFF-utskrifter. För Gmail krävs ett
+          app-lösenord om tvåfaktorsautentisering är aktiverat.
         </p>
         <div className="mt-6">
           <SmtpSettingsForm initialSettings={settings} />

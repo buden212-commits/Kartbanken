@@ -197,6 +197,8 @@ model AppSettings {
   adminNotificationEmail     String?
   checkoutReminderDays       Int      @default(7)
   checkoutReminderRepeatDays Int      @default(7)
+  // Clockwise PDF/GeoTIFF export rotation in degrees (IOF default +7)
+  exportRotationDeg          Int      @default(7)
   enabled                    Boolean  @default(false)
   updatedAt                  DateTime @updatedAt
 }

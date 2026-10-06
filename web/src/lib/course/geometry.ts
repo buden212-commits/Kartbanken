@@ -628,9 +628,9 @@ export function renderCourseExportTextSvg(
   transform: SvgRootTransform,
   frame: ExportFrame,
   controlNumbers?: Map<string, number | string>,
+  rotationDeg: number = PDF_EXPORT_ROTATION_DEG,
 ): string {
   const { centerX, centerY } = frame;
-  const rotationDeg = PDF_EXPORT_ROTATION_DEG;
   const parts: string[] = [];
 
   for (const obj of objects) {

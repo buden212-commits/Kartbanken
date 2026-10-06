@@ -38,6 +38,7 @@ export function SmtpSettingsForm({ initialSettings }: Props) {
       adminNotificationEmail: formData.get("adminNotificationEmail")?.toString() ?? "",
       checkoutReminderDays: Number(formData.get("checkoutReminderDays") ?? 7),
       checkoutReminderRepeatDays: Number(formData.get("checkoutReminderRepeatDays") ?? 7),
+      exportRotationDeg: Number(formData.get("exportRotationDeg") ?? 7) || 7,
       enabled: formData.get("enabled") === "on",
     };
 
@@ -53,6 +54,11 @@ export function SmtpSettingsForm({ initialSettings }: Props) {
       if (!res.ok) {
         throw new Error(data.error ?? "Kunde inte spara inställningarna");
       }
+
+      const { clearExportRotationDegCache } = await import(
+        "@/lib/settings/export-rotation-client"
+      );
+      clearExportRotationDegCache();
 
       setSettings(data);
       setSaveState({ ok: true, message: "Inställningarna sparades." });
@@ -103,10 +109,36 @@ export function SmtpSettingsForm({ initialSettings }: Props) {
   return (
     <div className="space-y-6">
       <form
-        key={`${settings.enabled}-${settings.smtpHost}-${settings.smtpPort}-${settings.smtpUser}-${settings.hasPassword}-${settings.adminNotificationEmail}-${settings.checkoutReminderDays}-${settings.checkoutReminderRepeatDays}`}
+        key={`${settings.enabled}-${settings.smtpHost}-${settings.smtpPort}-${settings.smtpUser}-${settings.hasPassword}-${settings.adminNotificationEmail}-${settings.checkoutReminderDays}-${settings.checkoutReminderRepeatDays}-${settings.exportRotationDeg}`}
         onSubmit={(event) => void handleSubmit(event)}
         className="grid gap-4 sm:grid-cols-2"
       >
+        <div className="sm:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <h3 className="text-sm font-medium text-slate-900">Kartexport</h3>
+          <p className="mt-1 text-xs text-slate-500">
+            Gäller PDF- och GeoTIFF-export av kartutsnitt och banor (inklusive yt-raster).
+          </p>
+          <div className="mt-3 max-w-xs">
+            <label htmlFor="exportRotationDeg" className="form-label">
+              Rotation (grader, medurs)
+            </label>
+            <input
+              id="exportRotationDeg"
+              name="exportRotationDeg"
+              type="number"
+              required
+              min={-180}
+              max={180}
+              step={1}
+              defaultValue={settings.exportRotationDeg}
+              className="form-input"
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              Standard enligt IOF är +7°. Negativa värden roterar moturs. 0 = ingen rotation.
+            </p>
+          </div>
+        </div>
+
         <div className="sm:col-span-2">
           <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-slate-700">
             <input

@@ -3,9 +3,10 @@ import { renderCourseExportTextSvg, renderCourseOverlaySvg } from "./geometry";
 import { IDENTITY_SVG_TRANSFORM, type SvgRootTransform } from "@/lib/ocad/svg-coords";
 import { buildKartramFrameMarkup, parseKartramFromSvg } from "@/lib/ocad/kartram";
 import {
+  buildExportHudSvg,
   buildExportInfoSvg,
   exportFrameBbox,
-  pdfExportRotationTransform,
+  PDF_EXPORT_ROTATION_DEG,
   type ExportFrame,
 } from "@/lib/ocad/map-export";
 import {
@@ -58,6 +59,19 @@ export function buildCourseInfoSvg(
   return buildExportInfoSvg(frame, lines, options);
 }
 
+export type CourseExportSvgParts = {
+  /** Axis-aligned map + course symbols (rotated on canvas later). */
+  svg: string;
+  /** Horizontal text overlay drawn after canvas rotation. */
+  hudSvg: string;
+  rotationDeg: number;
+};
+
+/**
+ * Build course PDF layers. Map content is axis-aligned; page tilt is applied
+ * on the canvas so OCAD patterns/symbols rotate with the map. Control numbers
+ * and info stay horizontal via hudSvg (anchors pre-moved with rotatePointDeg).
+ */
 export function buildCourseExportSvg(
   fullSvgText: string,
   frame: ExportFrame,
@@ -66,7 +80,8 @@ export function buildCourseExportSvg(
   controlNumbers?: Map<string, number | string>,
   courseInfo?: { name: string; lengthLabel: string; mapScale?: number },
   sequence?: string[] | null,
-): string {
+  rotationDeg: number = PDF_EXPORT_ROTATION_DEG,
+): CourseExportSvgParts {
   const pixelWidth = Math.max(1, Math.round((frame.widthMm / 25.4) * 200));
   const pixelHeight = Math.max(1, Math.round((frame.heightMm / 25.4) * 200));
 
@@ -91,6 +106,7 @@ export function buildCourseExportSvg(
     rootTransform,
     frame,
     controlNumbers,
+    rotationDeg,
   );
   const infoMarkup =
     courseInfo != null
@@ -103,23 +119,23 @@ export function buildCourseExportSvg(
         )
       : "";
 
-  const rotation = pdfExportRotationTransform(frame);
   const kartramMarkup = buildKartramFrameMarkup(
     parseKartramFromSvg(fullSvgText),
     exportFrameBbox(frame),
   );
 
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" fill="${fill}" data-pdf-export="true" viewBox="${x} ${y} ${width} ${height}" width="${pixelWidth}" height="${pixelHeight}">
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" fill="${fill}" data-pdf-export="true" data-canvas-rotate="true" viewBox="${x} ${y} ${width} ${height}" width="${pixelWidth}" height="${pixelHeight}">
 ${defs}
-<g transform="${rotation}">
 ${inner}
 <g data-course-overlay="true">${overlayMarkup}</g>
 ${kartramMarkup}
-</g>
-${exportTextMarkup ? `<g data-export-text="true">\n${exportTextMarkup}\n</g>` : ""}
-${infoMarkup}
 </svg>`;
+
+  const hudBody = [exportTextMarkup, infoMarkup].filter(Boolean).join("\n");
+  const hudSvg = buildExportHudSvg(frame, pixelWidth, pixelHeight, hudBody);
+
+  return { svg, hudSvg, rotationDeg };
 }
 
 export function parseExportQueryParams(searchParams: URLSearchParams): {

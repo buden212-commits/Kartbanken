@@ -2,6 +2,7 @@ import { logAction } from "@/lib/audit";
 import { requireAdmin } from "@/lib/auth/api";
 import { resetEmailTransport } from "@/lib/email";
 import {
+  clampExportRotationDeg,
   clampReminderDays,
   getSmtpSettingsPublic,
   shouldUpdateSmtpPassword,
@@ -43,6 +44,7 @@ export async function PUT(request: Request) {
   const checkoutReminderRepeatDays = clampReminderDays(
     Number(body.checkoutReminderRepeatDays ?? 7),
   );
+  const exportRotationDeg = clampExportRotationDeg(Number(body.exportRotationDeg ?? 7));
 
   const existing = await getSmtpSettingsPublic();
   const enabled = body.enabled === true;
@@ -82,6 +84,7 @@ export async function PUT(request: Request) {
       adminNotificationEmail: body.adminNotificationEmail?.trim() || "",
       checkoutReminderDays,
       checkoutReminderRepeatDays,
+      exportRotationDeg,
       enabled,
     });
 
@@ -95,6 +98,7 @@ export async function PUT(request: Request) {
       passwordChanged: shouldUpdateSmtpPassword(body.smtpPass),
       checkoutReminderDays,
       checkoutReminderRepeatDays,
+      exportRotationDeg,
     });
 
     return NextResponse.json(settings);

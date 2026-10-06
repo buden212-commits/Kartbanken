@@ -20,6 +20,7 @@ export type SmtpSettingsPublic = {
   adminNotificationEmail: string;
   checkoutReminderDays: number;
   checkoutReminderRepeatDays: number;
+  exportRotationDeg: number;
   enabled: boolean;
   hasPassword: boolean;
 };
@@ -32,6 +33,7 @@ export type SmtpSettingsInput = {
   adminNotificationEmail: string;
   checkoutReminderDays: number;
   checkoutReminderRepeatDays: number;
+  exportRotationDeg: number;
   enabled: boolean;
 };
 
@@ -93,6 +95,17 @@ export function clampReminderDays(value: number): number {
   return Math.min(365, Math.max(1, Math.floor(value)));
 }
 
+/** Default IOF print tilt; also used when DB row is missing. */
+export const DEFAULT_EXPORT_ROTATION_DEG = 7;
+
+/** Clamp export rotation to whole degrees in [-180, 180]. */
+export function clampExportRotationDeg(value: number): number {
+  if (!Number.isFinite(value)) {
+    return DEFAULT_EXPORT_ROTATION_DEG;
+  }
+  return Math.min(180, Math.max(-180, Math.round(value)));
+}
+
 function defaultPublicSettings(): SmtpSettingsPublic {
   return {
     smtpHost: process.env.SMTP_HOST?.trim() || "smtp.gmail.com",
@@ -108,6 +121,7 @@ function defaultPublicSettings(): SmtpSettingsPublic {
       ),
     checkoutReminderDays: defaultReminderDays(),
     checkoutReminderRepeatDays: defaultReminderRepeatDays(),
+    exportRotationDeg: DEFAULT_EXPORT_ROTATION_DEG,
     enabled: false,
     hasPassword: !!process.env.SMTP_PASS?.trim(),
   };
@@ -131,6 +145,9 @@ export async function getSmtpSettingsPublic(): Promise<SmtpSettingsPublic> {
     checkoutReminderDays: row.checkoutReminderDays ?? defaultReminderDays(),
     checkoutReminderRepeatDays:
       row.checkoutReminderRepeatDays ?? defaultReminderRepeatDays(),
+    exportRotationDeg: clampExportRotationDeg(
+      row.exportRotationDeg ?? DEFAULT_EXPORT_ROTATION_DEG,
+    ),
     enabled: row.enabled,
     hasPassword: !!row.smtpPassEncrypted,
   };
@@ -208,6 +225,14 @@ export async function resolveCheckoutReminderRepeatDays(): Promise<number> {
   return defaultReminderRepeatDays();
 }
 
+export async function resolveExportRotationDeg(): Promise<number> {
+  const row = await getAppSettingsRow();
+  if (row?.exportRotationDeg != null) {
+    return clampExportRotationDeg(row.exportRotationDeg);
+  }
+  return DEFAULT_EXPORT_ROTATION_DEG;
+}
+
 export function shouldUpdateSmtpPassword(input: string | undefined | null): boolean {
   if (!input) {
     return false;
@@ -232,6 +257,7 @@ export async function upsertSmtpSettings(input: SmtpSettingsInput): Promise<Smtp
   const adminEmails = validateAdminNotificationEmails(input.adminNotificationEmail);
   const checkoutReminderDays = clampReminderDays(input.checkoutReminderDays);
   const checkoutReminderRepeatDays = clampReminderDays(input.checkoutReminderRepeatDays);
+  const exportRotationDeg = clampExportRotationDeg(input.exportRotationDeg);
 
   const row = await prisma.appSettings.upsert({
     where: { id: APP_SETTINGS_ID },
@@ -244,6 +270,7 @@ export async function upsertSmtpSettings(input: SmtpSettingsInput): Promise<Smtp
       adminNotificationEmail: serializeAdminNotificationEmails(adminEmails) || null,
       checkoutReminderDays,
       checkoutReminderRepeatDays,
+      exportRotationDeg,
       enabled: input.enabled,
     },
     update: {
@@ -254,6 +281,7 @@ export async function upsertSmtpSettings(input: SmtpSettingsInput): Promise<Smtp
       adminNotificationEmail: serializeAdminNotificationEmails(adminEmails) || null,
       checkoutReminderDays,
       checkoutReminderRepeatDays,
+      exportRotationDeg,
       enabled: input.enabled,
     },
   });
@@ -265,6 +293,9 @@ export async function upsertSmtpSettings(input: SmtpSettingsInput): Promise<Smtp
     adminNotificationEmail: row.adminNotificationEmail?.trim() || "",
     checkoutReminderDays: row.checkoutReminderDays ?? checkoutReminderDays,
     checkoutReminderRepeatDays: row.checkoutReminderRepeatDays ?? checkoutReminderRepeatDays,
+    exportRotationDeg: clampExportRotationDeg(
+      row.exportRotationDeg ?? exportRotationDeg,
+    ),
     enabled: row.enabled,
     hasPassword: !!row.smtpPassEncrypted,
   };

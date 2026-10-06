@@ -72,8 +72,10 @@ import {
   translateGeometry,
 } from "@/lib/course/geometry";
 import { getCourseSymbol, IOF_LINE_WIDTH, IOF_MAGENTA } from "@/lib/course/symbols";
+import { COURSE_TEXT_ROTATION_DEG } from "@/lib/ocad/map-export";
 import { screenToSvgPoint, parseViewBoxString } from "@/lib/ocad/map-hit-test";
 import { geoToSvgUserPoint, svgUserToGeoPoint, type SvgRootTransform } from "@/lib/ocad/svg-coords";
+import { fetchExportRotationDeg } from "@/lib/settings/export-rotation-client";
 
 type Props = {
   mapSlug: string;
@@ -172,6 +174,7 @@ export function CourseEditorClient({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [mapScale, setMapScale] = useState(15000);
+  const [exportRotationDeg, setExportRotationDeg] = useState(COURSE_TEXT_ROTATION_DEG);
   const [focusTarget, setFocusTarget] = useState<{
     bbox: [number, number, number, number];
     centroid: [number, number];
@@ -235,6 +238,16 @@ export function CourseEditorClient({
     const next = ensureControlNumbers(objects, sequence);
     if (next !== objects) setObjects(next);
   }, [objects, sequence]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchExportRotationDeg().then((deg) => {
+      if (!cancelled) setExportRotationDeg(deg);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const loadLayer = useCallback(async () => {
     const res = await fetch(`/api/maps/${mapSlug}/course-layer`);
@@ -1005,11 +1018,13 @@ export function CourseEditorClient({
         opacity: 0.45,
         sequence: ghostSequence,
         omitSymbolNrs: [...CONTROL_LAYER_SYMBOLS],
+        textRotationDeg: exportRotationDeg,
       });
 
       const activeMarkup = renderCourseOverlaySvg(objects, rootTransform, {
         selectedId,
         sequence,
+        textRotationDeg: exportRotationDeg,
       });
 
       return (
@@ -1041,7 +1056,7 @@ export function CourseEditorClient({
         </g>
       );
     },
-    [ghostObjects, ghostSequence, lineDraft, objects, polygonDraft, selectedId, sequence],
+    [ghostObjects, ghostSequence, lineDraft, objects, polygonDraft, selectedId, sequence, exportRotationDeg],
   );
 
   function handleUndoLastVisit() {

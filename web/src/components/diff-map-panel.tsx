@@ -813,15 +813,14 @@ export function DiffMapPanel({
 
   const startExportMode = useCallback(() => {
     setExportError(null);
-    if (basemap === "tiles" && !fullSvgText) {
-      void ensureFullSvg();
-    }
+    // PDF/GeoTIFF rasterize on the server from stored preview — do not preload
+    // the full multi‑MB SVG here (that made «Exportera» hang on large maps).
     setExportMode(true);
     requestAnimationFrame(() => {
       const frame = initExportFrame();
       if (frame) setExportFrame(frame);
     });
-  }, [initExportFrame, basemap, fullSvgText, ensureFullSvg]);
+  }, [initExportFrame]);
 
   const cancelExportMode = useCallback(() => {
     setExportMode(false);
@@ -846,10 +845,8 @@ export function DiffMapPanel({
       setExportError(null);
       setOcdSymbolDialogOpen(false);
       try {
-        const needsFullSvg =
-          exportSettings.outputFormat === "geotiff" ||
-          exportSettings.outputFormat === "pdf" ||
-          exportSettings.outputFormat === "omap";
+        // PDF/GeoTIFF rasterize on the server from stored preview — no full SVG upload.
+        const needsFullSvg = exportSettings.outputFormat === "omap";
         let svgForExport = fullSvgText;
         if (needsFullSvg && !svgForExport) {
           svgForExport = await ensureFullSvg();
@@ -912,7 +909,6 @@ export function DiffMapPanel({
             window.alert(warnings);
           }
         } else if (exportSettings.outputFormat === "geotiff") {
-          if (!svgForExport) return;
           if (!isGeoreferencedCrs(ocadCrs)) {
             throw new Error(
               "Kartan saknar georeferering — GeoTIFF-export kräver EPSG-koordinater i filen.",
@@ -921,17 +917,23 @@ export function DiffMapPanel({
           await downloadMapGeoTiff(
             mapSlug,
             versionId,
-            svgForExport,
+            svgForExport ?? "",
             exportFrame,
             `${safeTitle}-${exportSettings.scale}`,
             { suggestionOverlaySvg, exportScale: exportSettings.scale },
           );
         } else {
-          if (!svgForExport) return;
-          await downloadMapPdf(svgForExport, exportFrame, `${safeTitle}-${exportSettings.scale}`, {
-            suggestionOverlaySvg,
-            exportScale: exportSettings.scale,
-          });
+          await downloadMapPdf(
+            svgForExport ?? "",
+            exportFrame,
+            `${safeTitle}-${exportSettings.scale}`,
+            {
+              mapSlug,
+              versionId,
+              suggestionOverlaySvg,
+              exportScale: exportSettings.scale,
+            },
+          );
         }
 
         cancelExportMode();
@@ -959,11 +961,7 @@ export function DiffMapPanel({
   const handleExport = useCallback(async () => {
     if (!exportFrame) return;
 
-    const needsFullSvg =
-      exportSettings.outputFormat === "pdf" ||
-      exportSettings.outputFormat === "geotiff" ||
-      exportSettings.outputFormat === "omap";
-    if (needsFullSvg && !fullSvgText) {
+    if (exportSettings.outputFormat === "omap" && !fullSvgText) {
       const svgText = await ensureFullSvg();
       if (!svgText) return;
     }
