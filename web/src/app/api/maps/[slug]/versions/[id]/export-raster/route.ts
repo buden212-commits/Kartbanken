@@ -3,18 +3,15 @@ import {
   assertVersionViewAccess,
   getMapVersionOr404,
 } from "@/lib/maps/version-lookup";
-import { rasterizeExportSvg } from "@/lib/ocad/export-rasterize";
+import { rasterizeVersionExport } from "@/lib/ocad/export-from-tiles";
 import {
-  buildClippedExportSvg,
   buildExportHudSvg,
   buildMapScaleInfoSvg,
   exportFrameBbox,
   type ExportFrame,
 } from "@/lib/ocad/map-export";
-import { parseOcadMapScale } from "@/lib/ocad/svg-utils";
 import { prisma } from "@/lib/prisma";
 import { resolveExportRotationDeg } from "@/lib/settings/app-settings";
-import { readStoredFile } from "@/lib/storage";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -91,18 +88,17 @@ export async function POST(request: Request, { params }: RouteParams) {
 
   const version = await prisma.mapVersion.findUnique({
     where: { id: lookup.version.id },
-    select: { previewSvgPath: true },
+    select: {
+      previewSvgPath: true,
+      storagePath: true,
+      mapFileId: true,
+      versionNumber: true,
+      tileStatus: true,
+      tileManifestPath: true,
+    },
   });
   if (!version?.previewSvgPath) {
     return NextResponse.json({ error: "Kartpreview saknas" }, { status: 404 });
-  }
-
-  let svgText: string;
-  try {
-    const buffer = await readStoredFile(version.previewSvgPath);
-    svgText = buffer.toString("utf-8");
-  } catch {
-    return NextResponse.json({ error: "Kunde inte läsa kartpreview" }, { status: 500 });
   }
 
   let rotationDeg =
@@ -119,23 +115,12 @@ export async function POST(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Bildstorleken är för stor" }, { status: 400 });
   }
 
-  const mapSvg = buildClippedExportSvg(
-    svgText,
-    frame,
-    pixelWidth,
-    pixelHeight,
-    "",
-    body.suggestionOverlaySvg,
-    body.exportScale,
-    0,
-  );
-
   const scaleForLabel =
     body.exportScale != null &&
     Number.isFinite(body.exportScale) &&
     body.exportScale > 0
       ? body.exportScale
-      : (parseOcadMapScale(svgText) ?? 15000);
+      : 15000;
   const hudSvg = buildExportHudSvg(
     frame,
     pixelWidth,
@@ -144,12 +129,19 @@ export async function POST(request: Request, { params }: RouteParams) {
   );
 
   try {
-    const png = await rasterizeExportSvg({
-      mapSvg,
-      hudSvg: hudSvg || undefined,
-      rotationDeg,
+    const png = await rasterizeVersionExport({
+      mapFileId: version.mapFileId,
+      versionNumber: version.versionNumber,
+      storagePath: version.storagePath,
+      previewSvgPath: version.previewSvgPath,
+      tileStatus: version.tileStatus,
+      tileManifestPath: version.tileManifestPath,
+      frame,
       widthPx: pixelWidth,
       heightPx: pixelHeight,
+      rotationDeg,
+      suggestionOverlaySvg: body.suggestionOverlaySvg,
+      hudSvg: hudSvg || undefined,
     });
     return new NextResponse(new Uint8Array(png), {
       headers: {

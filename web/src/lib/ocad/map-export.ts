@@ -342,8 +342,8 @@ function loadPngBlobToCanvas(
   });
 }
 
-/** Client wait budget for server-side SVG→PNG (must stay under route maxDuration). */
-const EXPORT_RASTER_FETCH_TIMEOUT_MS = 150_000;
+/** Client wait budget for server-side export (under route maxDuration 300s). */
+const EXPORT_RASTER_FETCH_TIMEOUT_MS = 280_000;
 
 async function fetchExportRaster(
   url: string,
@@ -356,7 +356,7 @@ async function fetchExportRaster(
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") {
       throw new Error(
-        "PDF-exporten tog för lång tid. Prova ett mindre utsnitt (t.ex. A4) eller lägre skala.",
+        "PDF-exporten tog för lång tid. Försök igen om en stund — karttiles kan behöva bli klara först.",
       );
     }
     throw err;

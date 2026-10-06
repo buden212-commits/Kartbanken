@@ -8,11 +8,11 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-10-06",
-    title: "PDF-export hänger inte längre på stora kartor",
+    title: "PDF-export i vald skala och format",
     items: [
-      "«Exportera utsnitt» som PDF startar direkt utan att först ladda in hela kartfilen i webbläsaren",
-      "Rastrering på servern är snabbare och avbryts med ett tydligt felmeddelande om den tar för lång tid",
-      "Nedladdningen av PDF:en är mer pålitlig efter längre export",
+      "PDF och GeoTIFF byggs från karttiles, så export fungerar även för A3 och detaljerad skala på stora kartor",
+      "Du behöver inte minska format eller skala för att exporten ska lyckas",
+      "Export startar direkt utan att först ladda in hela kartfilen i webbläsaren",
     ],
   },
   {

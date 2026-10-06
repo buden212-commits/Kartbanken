@@ -14,7 +14,8 @@ export type ExportRasterizeInput = {
  * can hang the export request for minutes with no useful progress.
  */
 const SVG_RASTER_DENSITY = 96;
-const RASTER_TIMEOUT_SECONDS = 120;
+/** Fallback SVG path only — tile export should finish well under this. */
+const RASTER_TIMEOUT_SECONDS = 240;
 
 /**
  * Rasterize export SVG with librsvg (sharp). Chromium's Image→canvas path
