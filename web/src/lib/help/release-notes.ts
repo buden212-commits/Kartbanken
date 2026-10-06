@@ -10,8 +10,8 @@ export const releaseNotes: ReleaseNote[] = [
     date: "2026-10-06",
     title: "PDF-export i vald skala och format",
     items: [
-      "PDF och GeoTIFF byggs från karttiles, så export fungerar även för A3 och detaljerad skala på stora kartor",
-      "Du behöver inte minska format eller skala för att exporten ska lyckas",
+      "PDF och GeoTIFF ritas från kartfilen i utskriftsupplösning, så sjöar, myrar och andra ytor följer med",
+      "Exporten fungerar i den skala och det format du valt, även på stora kartor",
       "Export startar direkt utan att först ladda in hela kartfilen i webbläsaren",
     ],
   },

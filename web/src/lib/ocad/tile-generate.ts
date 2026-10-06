@@ -5,7 +5,7 @@ import { fileExists, readStoredFile, uploadFile } from "@/lib/storage";
 import {
   buildPreviewSvgPath,
   generateAndStorePreviewSvg,
-  generateOcadSvgFiltered,
+  renderFilteredOcadSvg,
 } from "@/lib/ocad/svg";
 import {
   boundsToViewBox,
@@ -421,10 +421,75 @@ export async function generateOnDemandTile(params: {
       .toBuffer();
   }
 
-  svg = await generateOcadSvgFiltered(ocdBuffer, indices, bounds);
+  svg = renderFilteredOcadSvg(ocadFile as never, indices, bounds);
   const webp = await rasterizeSvgRegion(svg, bounds);
   await uploadTile(mapFileId, versionNumber, z, x, y, webp);
   return webp;
+}
+
+/**
+ * Rasterize one map window from the OCD file at an exact pixel size.
+ * Area colors and hatch/struct patterns are included (same renderer as map tiles).
+ * Object lookup is padded so strokes that cross the edge are not dropped.
+ */
+export async function rasterizeOcadRegionPng(params: {
+  ocdBuffer: Buffer;
+  cacheKey: string;
+  yFlip: number;
+  bounds: SvgBounds;
+  widthPx: number;
+  heightPx: number;
+}): Promise<Buffer> {
+  const widthPx = Math.max(1, Math.round(params.widthPx));
+  const heightPx = Math.max(1, Math.round(params.heightPx));
+  const ocadFile = await parseOcadCached(params.cacheKey, params.ocdBuffer);
+
+  const pad = 250;
+  const query: SvgBounds = {
+    minX: params.bounds.minX - pad,
+    minY: params.bounds.minY - pad,
+    maxX: params.bounds.maxX + pad,
+    maxY: params.bounds.maxY + pad,
+  };
+
+  const indices = new Set<number>();
+  for (const obj of ocadFile.objects) {
+    const idx = obj.objIndex?._index;
+    if (idx == null) continue;
+    const objBounds = objectSvgBounds(obj, params.yFlip);
+    if (objBounds && boundsIntersect(objBounds, query)) {
+      indices.add(idx);
+    }
+  }
+
+  if (indices.size === 0) {
+    return sharp({
+      create: {
+        width: widthPx,
+        height: heightPx,
+        channels: 3,
+        background: { r: 255, g: 255, b: 255 },
+      },
+    })
+      .png({ compressionLevel: 6, effort: 1 })
+      .toBuffer();
+  }
+
+  const svg = renderFilteredOcadSvg(ocadFile as never, indices, params.bounds);
+  const clipped = rewriteSvgViewBox(svg, params.bounds, widthPx, heightPx);
+  return sharp(Buffer.from(clipped, "utf-8"), {
+    density: 96,
+    limitInputPixels: false,
+  })
+    .resize(widthPx, heightPx, { fit: "fill" })
+    .png({ compressionLevel: 6, effort: 1 })
+    .toBuffer();
+}
+
+export async function ocadSvgYFlip(ocdBuffer: Buffer, cacheKey: string): Promise<number> {
+  const ocadFile = await parseOcadCached(cacheKey, ocdBuffer);
+  const raw = ocadFile.getBounds();
+  return raw && raw.length >= 4 ? raw[1]! + raw[3]! : 0;
 }
 
 /** Stop starting new units after this long so the invocation can finish cleanly. */

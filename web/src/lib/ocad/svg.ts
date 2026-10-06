@@ -412,17 +412,26 @@ export async function generateOcadSvg(buffer: Buffer): Promise<{
   return { svg, bounds };
 }
 
+/** SVG for a subset of objects, with symbol colors and area patterns (hatch/struct). */
+export function renderFilteredOcadSvg(
+  ocadFile: OcadFile,
+  objectIndices: Set<number>,
+  viewBounds: SvgBounds,
+): string {
+  const filtered = filterObjectsByIndex(ocadFile, objectIndices);
+  const document = new DOMImplementation().createDocument(null, null, null);
+  const svgElement = ocadToSvg(ocadFile, { document, objects: filtered }) as Element;
+  applySvgMetadata(svgElement, ocadFile);
+  return serializeSvg(svgElement, viewBounds, ocadFile);
+}
+
 export async function generateOcadSvgFiltered(
   buffer: Buffer,
   objectIndices: Set<number>,
   viewBounds: SvgBounds,
 ): Promise<string> {
   const ocadFile = (await readOcad(buffer, { quietWarnings: true })) as OcadFile;
-  const filtered = filterObjectsByIndex(ocadFile, objectIndices);
-  const document = new DOMImplementation().createDocument(null, null, null);
-  const svgElement = ocadToSvg(ocadFile, { document, objects: filtered }) as Element;
-  applySvgMetadata(svgElement, ocadFile);
-  return serializeSvg(svgElement, viewBounds, ocadFile);
+  return renderFilteredOcadSvg(ocadFile, objectIndices, viewBounds);
 }
 
 export function buildPreviewSvgPath(mapFileId: string, versionNumber: number): string {

@@ -930,9 +930,9 @@ export async function HelpPageContent() {
           </p>
           <p>
             Helskärmsvyn använder karttiles för snabb zoom och panorering på stora kartor. PDF- och
-            GeoTIFF-export byggs från samma tiles, så du kan exportera i den skala och det format du
-            valt utan att hela kartfilen måste rastreras på nytt. Vid Mapper (.omap)-export kan
-            knappen visa «Förbereder export…» en kort stund medan kartan läses in. Behöver du visa
+            GeoTIFF-export ritas från kartfilen i utskriftsupplösning för det utsnitt du valt, så sjöar,
+            myrar och övriga ytor följer med i den skala och det format du valt. Vid Mapper (.omap)-export
+            kan knappen visa «Förbereder export…» en kort stund medan kartan läses in. Behöver du visa
             eller dölja kartlager gör du det i standardvyn för versionen.
           </p>
 
@@ -947,7 +947,7 @@ export async function HelpPageContent() {
               "Välj pappersformat: A4 eller A3",
               "Välj orientering: stående eller liggande",
               "Välj utdataformat: PDF, OCAD (.ocd), OpenOrienteering Mapper (.omap) eller GeoTIFF (.tif)",
-              "PDF och GeoTIFF byggs från karttiles (snabbt även för A3 och detaljerad skala); Mapper (.omap) kan visa «Förbereder export…» medan kartan läses in",
+              "PDF och GeoTIFF ritas från kartfilen i utskriftsupplösning (sjöar, myrar och övriga ytor följer med); Mapper (.omap) kan visa «Förbereder export…» medan kartan läses in",
               "PDF och GeoTIFF roteras enligt Admin → Inställningar (standard +7° IOF) — inklusive yt-raster och struktursymboler",
               "Kryssruta «Exportera endast kartförslag»: PDF och GeoTIFF ritar förslagen ovanpå kartan; OCD exporterar enbart markeringarna (inte grundkartan)",
               "Mapper (.omap): native fil för OpenOrienteering Mapper — objekt i utsnittet, färger och förenklade symboler; georeferering följer med när kartan har EPSG",

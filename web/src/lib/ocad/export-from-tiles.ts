@@ -1,24 +1,17 @@
 import sharp from "sharp";
-import { fileExists, readStoredFile } from "@/lib/storage";
+import { readStoredFile } from "@/lib/storage";
 import { buildKartramFrameMarkup, parseKartramFromSvg } from "@/lib/ocad/kartram";
 import {
   exportFrameBbox,
   type ExportFrame,
 } from "@/lib/ocad/map-export";
 import { rasterizeExportSvg } from "@/lib/ocad/export-rasterize";
-import { buildTilePath } from "@/lib/ocad/tile-paths";
-import { readTileManifest } from "@/lib/ocad/tile-status";
-import {
-  TILE_SIZE_PX,
-  mapUnitsPerPixelAtZoom,
-  tileBounds,
-  tilesPerSide,
-  type TileManifest,
-} from "@/lib/ocad/tile-math";
+import { ocadSvgYFlip, rasterizeOcadRegionPng } from "@/lib/ocad/tile-generate";
 import type { SvgBounds } from "@/lib/ocad/svg-utils";
 
-const MAX_COMPOSITE_TILES = 64;
-const TILE_LOAD_CONCURRENCY = 8;
+/** Print-resolution cells. Small enough that area hatch/struct patterns survive rasterizing. */
+const CELL_PX = 512;
+const CELL_CONCURRENCY = 3;
 
 export type VersionExportRasterInput = {
   mapFileId: string;
@@ -64,71 +57,6 @@ function frameToBounds(frame: ExportFrame): SvgBounds {
   };
 }
 
-function pickExportTileZoom(
-  manifest: TileManifest,
-  sourceBounds: SvgBounds,
-  widthPx: number,
-  heightPx: number,
-): number {
-  const needUpp = Math.min(
-    (sourceBounds.maxX - sourceBounds.minX) / Math.max(1, widthPx),
-    (sourceBounds.maxY - sourceBounds.minY) / Math.max(1, heightPx),
-  );
-
-  // Smallest z that is sharp enough (fewest tiles).
-  let chosen = manifest.maxZ;
-  for (let z = 0; z <= manifest.maxZ; z++) {
-    if (mapUnitsPerPixelAtZoom(manifest, z).x <= needUpp) {
-      chosen = z;
-      break;
-    }
-  }
-
-  for (let z = chosen; z >= 0; z--) {
-    if (tilesCoveringBounds(manifest, z, sourceBounds).length <= MAX_COMPOSITE_TILES) {
-      return z;
-    }
-  }
-  return 0;
-}
-
-function tilesCoveringBounds(
-  manifest: TileManifest,
-  z: number,
-  bounds: SvgBounds,
-): Array<{ z: number; x: number; y: number }> {
-  const n = tilesPerSide(z);
-  const mapW = manifest.bounds.maxX - manifest.bounds.minX;
-  const mapH = manifest.bounds.maxY - manifest.bounds.minY;
-  if (!(mapW > 0) || !(mapH > 0) || n < 1) return [];
-
-  const tileW = mapW / n;
-  const tileH = mapH / n;
-
-  const minX = Math.max(manifest.bounds.minX, bounds.minX);
-  const maxX = Math.min(manifest.bounds.maxX, bounds.maxX);
-  const minY = Math.max(manifest.bounds.minY, bounds.minY);
-  const maxY = Math.min(manifest.bounds.maxY, bounds.maxY);
-  if (!(maxX > minX) || !(maxY > minY)) return [];
-
-  let x0 = Math.floor((minX - manifest.bounds.minX) / tileW);
-  let x1 = Math.floor((maxX - manifest.bounds.minX) / tileW);
-  let y0 = Math.floor((minY - manifest.bounds.minY) / tileH);
-  let y1 = Math.floor((maxY - manifest.bounds.minY) / tileH);
-  x0 = Math.max(0, Math.min(n - 1, x0));
-  x1 = Math.max(0, Math.min(n - 1, x1));
-  y0 = Math.max(0, Math.min(n - 1, y0));
-  y1 = Math.max(0, Math.min(n - 1, y1));
-
-  const out: Array<{ z: number; x: number; y: number }> = [];
-  for (let y = y0; y <= y1; y++) {
-    for (let x = x0; x <= x1; x++) {
-      out.push({ z, x, y });
-    }
-  }
-  return out;
-}
-
 async function mapPool<T, R>(
   items: T[],
   concurrency: number,
@@ -148,45 +76,11 @@ async function mapPool<T, R>(
   return results;
 }
 
-async function loadTileWebp(params: {
-  manifest: TileManifest;
-  mapFileId: string;
-  versionNumber: number;
-  storagePath: string;
-  z: number;
-  x: number;
-  y: number;
-}): Promise<Buffer> {
-  const tilePath = buildTilePath(
-    params.mapFileId,
-    params.versionNumber,
-    params.z,
-    params.x,
-    params.y,
-  );
-  try {
-    if (await fileExists(tilePath)) {
-      return await readStoredFile(tilePath);
-    }
-  } catch {
-    // regenerate below
-  }
-
-  const ocdBuffer = await readStoredFile(params.storagePath);
-  const { generateOnDemandTile } = await import("@/lib/ocad/tile-generate");
-  return generateOnDemandTile({
-    ocdBuffer,
-    manifest: params.manifest,
-    mapFileId: params.mapFileId,
-    versionNumber: params.versionNumber,
-    z: params.z,
-    x: params.x,
-    y: params.y,
-  });
-}
-
-async function rasterizeFromTiles(params: {
-  manifest: TileManifest;
+/**
+ * Draw the export window from the OCD file at print resolution, in cells.
+ * Stored overview tiles are too coarse: lake fills and marsh hatching disappear.
+ */
+async function rasterizeVectorFrame(params: {
   mapFileId: string;
   versionNumber: number;
   storagePath: string;
@@ -194,77 +88,60 @@ async function rasterizeFromTiles(params: {
   overscanW: number;
   overscanH: number;
 }): Promise<Buffer> {
-  const { manifest, sourceBounds, overscanW, overscanH } = params;
-  const z = pickExportTileZoom(manifest, sourceBounds, overscanW, overscanH);
-  const coords = tilesCoveringBounds(manifest, z, sourceBounds);
-  if (coords.length === 0) {
-    throw new Error("Inga tiles täcker exportområdet");
+  const ocdBuffer = await readStoredFile(params.storagePath);
+  const cacheKey = `${params.mapFileId}/v${params.versionNumber}`;
+  const yFlip = await ocadSvgYFlip(ocdBuffer, cacheKey);
+  const spanX = params.sourceBounds.maxX - params.sourceBounds.minX;
+  const spanY = params.sourceBounds.maxY - params.sourceBounds.minY;
+
+  const cells: Array<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    bounds: SvgBounds;
+  }> = [];
+
+  for (let top = 0; top < params.overscanH; top += CELL_PX) {
+    for (let left = 0; left < params.overscanW; left += CELL_PX) {
+      const width = Math.min(CELL_PX, params.overscanW - left);
+      const height = Math.min(CELL_PX, params.overscanH - top);
+      cells.push({
+        left,
+        top,
+        width,
+        height,
+        bounds: {
+          minX: params.sourceBounds.minX + (left / params.overscanW) * spanX,
+          maxX: params.sourceBounds.minX + ((left + width) / params.overscanW) * spanX,
+          minY: params.sourceBounds.minY + (top / params.overscanH) * spanY,
+          maxY: params.sourceBounds.minY + ((top + height) / params.overscanH) * spanY,
+        },
+      });
+    }
   }
 
-  const upp = mapUnitsPerPixelAtZoom(manifest, z);
-  const canvasW = Math.max(1, Math.ceil((sourceBounds.maxX - sourceBounds.minX) / upp.x));
-  const canvasH = Math.max(1, Math.ceil((sourceBounds.maxY - sourceBounds.minY) / upp.y));
+  const parts = await mapPool(cells, CELL_CONCURRENCY, async (cell) => {
+    const png = await rasterizeOcadRegionPng({
+      ocdBuffer,
+      cacheKey,
+      yFlip,
+      bounds: cell.bounds,
+      widthPx: cell.width,
+      heightPx: cell.height,
+    });
+    return { input: png, left: cell.left, top: cell.top };
+  });
 
-  const composites = (
-    await mapPool(coords, TILE_LOAD_CONCURRENCY, async (coord) => {
-      const webp = await loadTileWebp({
-        manifest,
-        mapFileId: params.mapFileId,
-        versionNumber: params.versionNumber,
-        storagePath: params.storagePath,
-        z: coord.z,
-        x: coord.x,
-        y: coord.y,
-      });
-
-      const bounds = tileBounds(manifest, coord.z, coord.x, coord.y);
-      const intersectMinX = Math.max(bounds.minX, sourceBounds.minX);
-      const intersectMinY = Math.max(bounds.minY, sourceBounds.minY);
-      const intersectMaxX = Math.min(bounds.maxX, sourceBounds.maxX);
-      const intersectMaxY = Math.min(bounds.maxY, sourceBounds.maxY);
-      if (!(intersectMaxX > intersectMinX) || !(intersectMaxY > intersectMinY)) {
-        return null;
-      }
-
-      const srcLeft = Math.max(0, Math.round((intersectMinX - bounds.minX) / upp.x));
-      const srcTop = Math.max(0, Math.round((intersectMinY - bounds.minY) / upp.y));
-      const dstLeft = Math.max(0, Math.round((intersectMinX - sourceBounds.minX) / upp.x));
-      const dstTop = Math.max(0, Math.round((intersectMinY - sourceBounds.minY) / upp.y));
-      const width = Math.min(
-        TILE_SIZE_PX - srcLeft,
-        canvasW - dstLeft,
-        Math.round((intersectMaxX - intersectMinX) / upp.x),
-      );
-      const height = Math.min(
-        TILE_SIZE_PX - srcTop,
-        canvasH - dstTop,
-        Math.round((intersectMaxY - intersectMinY) / upp.y),
-      );
-      if (width < 1 || height < 1) return null;
-
-      const cropped = await sharp(webp)
-        .extract({ left: srcLeft, top: srcTop, width, height })
-        .png({ compressionLevel: 6, effort: 1 })
-        .toBuffer();
-
-      return { input: cropped, left: dstLeft, top: dstTop };
-    })
-  ).filter((part): part is NonNullable<typeof part> => part != null);
-
-  const composed = await sharp({
+  return sharp({
     create: {
-      width: canvasW,
-      height: canvasH,
+      width: params.overscanW,
+      height: params.overscanH,
       channels: 3,
       background: { r: 255, g: 255, b: 255 },
     },
   })
-    .composite(composites)
-    .png({ compressionLevel: 6, effort: 1 })
-    .toBuffer();
-
-  return sharp(composed)
-    .resize(overscanW, overscanH, { fit: "fill" })
+    .composite(parts)
     .png({ compressionLevel: 6, effort: 1 })
     .toBuffer();
 }
@@ -301,8 +178,8 @@ async function rasterizePreviewFallback(
 }
 
 /**
- * Rasterize an export frame by compositing map tiles when available.
- * Falls back to preview SVG only if tiles are missing.
+ * Rasterize the chosen paper window from the map file at print resolution.
+ * Falls back to the stored preview SVG only if that render fails.
  */
 export async function rasterizeVersionExport(input: VersionExportRasterInput): Promise<Buffer> {
   const paperBounds = frameToBounds(input.frame);
@@ -316,24 +193,18 @@ export async function rasterizeVersionExport(input: VersionExportRasterInput): P
 
   let mapPng: Buffer | null = null;
 
-  if (input.tileStatus === "READY" && input.tileManifestPath) {
-    try {
-      if (await fileExists(input.tileManifestPath)) {
-        const manifest = await readTileManifest(input.tileManifestPath);
-        mapPng = await rasterizeFromTiles({
-          manifest,
-          mapFileId: input.mapFileId,
-          versionNumber: input.versionNumber,
-          storagePath: input.storagePath,
-          sourceBounds,
-          overscanW,
-          overscanH,
-        });
-      }
-    } catch (error) {
-      console.warn("Tile-based export failed, falling back to SVG:", error);
-      mapPng = null;
-    }
+  try {
+    mapPng = await rasterizeVectorFrame({
+      mapFileId: input.mapFileId,
+      versionNumber: input.versionNumber,
+      storagePath: input.storagePath,
+      sourceBounds,
+      overscanW,
+      overscanH,
+    });
+  } catch (error) {
+    console.warn("Vector export failed, falling back to preview SVG:", error);
+    mapPng = null;
   }
 
   let previewSvgText: string | null = null;
