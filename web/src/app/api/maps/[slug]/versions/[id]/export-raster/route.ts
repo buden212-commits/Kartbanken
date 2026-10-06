@@ -100,6 +100,7 @@ export async function POST(request: Request, { params }: RouteParams) {
   if (!version?.previewSvgPath) {
     return NextResponse.json({ error: "Kartpreview saknas" }, { status: 404 });
   }
+  const previewSvgPath = version.previewSvgPath;
 
   let rotationDeg =
     body.rotationDeg != null && Number.isFinite(Number(body.rotationDeg))
@@ -128,32 +129,76 @@ export async function POST(request: Request, { params }: RouteParams) {
     buildMapScaleInfoSvg(frame, scaleForLabel),
   );
 
-  try {
-    const png = await rasterizeVersionExport({
-      mapFileId: version.mapFileId,
-      versionNumber: version.versionNumber,
-      storagePath: version.storagePath,
-      previewSvgPath: version.previewSvgPath,
-      tileStatus: version.tileStatus,
-      tileManifestPath: version.tileManifestPath,
-      frame,
-      widthPx: pixelWidth,
-      heightPx: pixelHeight,
-      rotationDeg,
-      suggestionOverlaySvg: body.suggestionOverlaySvg,
-      hudSvg: hudSvg || undefined,
-    });
-    return new NextResponse(new Uint8Array(png), {
-      headers: {
-        "Content-Type": "image/png",
-        "Cache-Control": "private, no-store",
-      },
-    });
-  } catch (error) {
-    console.error("Version export rasterize failed:", error);
-    return NextResponse.json(
-      { error: "Kunde inte rastrera kartbilden för export" },
-      { status: 500 },
-    );
+  const wantsProgress = (request.headers.get("accept") ?? "").includes("application/x-ndjson");
+
+  if (!wantsProgress) {
+    try {
+      const png = await rasterizeVersionExport({
+        mapFileId: version.mapFileId,
+        versionNumber: version.versionNumber,
+        storagePath: version.storagePath,
+        previewSvgPath: version.previewSvgPath,
+        tileStatus: version.tileStatus,
+        tileManifestPath: version.tileManifestPath,
+        frame,
+        widthPx: pixelWidth,
+        heightPx: pixelHeight,
+        rotationDeg,
+        suggestionOverlaySvg: body.suggestionOverlaySvg,
+        hudSvg: hudSvg || undefined,
+      });
+      return new NextResponse(new Uint8Array(png), {
+        headers: {
+          "Content-Type": "image/png",
+          "Cache-Control": "private, no-store",
+        },
+      });
+    } catch (error) {
+      console.error("Version export rasterize failed:", error);
+      return NextResponse.json(
+        { error: "Kunde inte rastrera kartbilden för export" },
+        { status: 500 },
+      );
+    }
   }
+
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (event: Record<string, unknown>) => {
+        controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+      };
+      try {
+        const png = await rasterizeVersionExport({
+          mapFileId: version.mapFileId,
+          versionNumber: version.versionNumber,
+          storagePath: version.storagePath,
+          previewSvgPath,
+          tileStatus: version.tileStatus,
+          tileManifestPath: version.tileManifestPath,
+          frame,
+          widthPx: pixelWidth,
+          heightPx: pixelHeight,
+          rotationDeg,
+          suggestionOverlaySvg: body.suggestionOverlaySvg,
+          hudSvg: hudSvg || undefined,
+          onProgress: (progress) => send({ type: "progress", ...progress }),
+        });
+        send({ type: "result", pngBase64: png.toString("base64") });
+        controller.close();
+      } catch (error) {
+        console.error("Version export rasterize failed:", error);
+        send({ type: "error", error: "Kunde inte rastrera kartbilden för export" });
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "application/x-ndjson; charset=utf-8",
+      "Cache-Control": "private, no-store",
+      "X-Accel-Buffering": "no",
+    },
+  });
 }

@@ -33,6 +33,7 @@ import {
   exportFrameBbox,
   pointInExportFrame,
   type ExportFrame,
+  type ExportProgress,
   type ExportSettings,
 } from "@/lib/ocad/map-export";
 import { defaultOcadExportVersion } from "@/lib/ocad/ocad-export-shared";
@@ -373,6 +374,7 @@ export function DiffMapPanel({
   });
   const [exportFrame, setExportFrame] = useState<ExportFrame | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [ocdSymbolDialogOpen, setOcdSymbolDialogOpen] = useState(false);
   const [ocadCrs, setOcadCrs] = useState<OcadCrsInfo | null>(null);
@@ -843,6 +845,7 @@ export function DiffMapPanel({
       if (!exportFrame) return;
       setExporting(true);
       setExportError(null);
+      setExportProgress({ label: "Startar export" });
       setOcdSymbolDialogOpen(false);
       try {
         // PDF/GeoTIFF rasterize on the server from stored preview — no full SVG upload.
@@ -864,6 +867,7 @@ export function DiffMapPanel({
             overlays = suggestionOverlays;
           } else {
             overlays = [];
+            setExportProgress({ label: "Hämtar kartförslag" });
             try {
               const res = await fetch(
                 `/api/maps/${mapSlug}/suggestions?overlay=1&mapVersionId=${encodeURIComponent(versionId)}`,
@@ -882,6 +886,7 @@ export function DiffMapPanel({
         }
 
         if (exportSettings.outputFormat === "ocd") {
+          setExportProgress({ label: "Skapar OCD-fil" });
           const { versionWarning, suggestionWarnings } = await downloadMapOcd(
             mapSlug,
             versionId,
@@ -899,6 +904,7 @@ export function DiffMapPanel({
             window.alert(suggestionWarnings);
           }
         } else if (exportSettings.outputFormat === "omap") {
+          setExportProgress({ label: "Skapar Mapper-fil" });
           const { warnings } = await downloadMapOmap(
             mapSlug,
             versionId,
@@ -920,7 +926,7 @@ export function DiffMapPanel({
             svgForExport ?? "",
             exportFrame,
             `${safeTitle}-${exportSettings.scale}`,
-            { suggestionOverlaySvg, exportScale: exportSettings.scale },
+            { suggestionOverlaySvg, exportScale: exportSettings.scale, onProgress: setExportProgress },
           );
         } else {
           await downloadMapPdf(
@@ -932,6 +938,7 @@ export function DiffMapPanel({
               versionId,
               suggestionOverlaySvg,
               exportScale: exportSettings.scale,
+              onProgress: setExportProgress,
             },
           );
         }
@@ -941,6 +948,7 @@ export function DiffMapPanel({
         setExportError(err instanceof Error ? err.message : "Export misslyckades");
       } finally {
         setExporting(false);
+        setExportProgress(null);
       }
     },
     [
@@ -1742,6 +1750,7 @@ export function DiffMapPanel({
           onExport={handleExport}
           onCancel={cancelExportMode}
           exporting={exporting || preparingExport}
+          progress={exporting ? exportProgress : null}
           error={exportError}
           suggestionOverlayCount={suggestionOverlays?.length}
           promptOcdSuggestionSymbols={promptOcdSuggestionSymbols}

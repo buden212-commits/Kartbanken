@@ -9,6 +9,12 @@ export type ExportFormat = "A4" | "A3";
 export type ExportOrientation = "portrait" | "landscape";
 export type ExportOutputFormat = "pdf" | "ocd" | "omap" | "geotiff";
 
+export type ExportProgress = {
+  label: string;
+  done?: number;
+  total?: number;
+};
+
 export type ExportSettings = {
   scale: ExportScale;
   format: ExportFormat;
@@ -416,13 +422,18 @@ export async function rasterizeVersionExportToCanvas(
     rotationDeg?: number;
     exportScale?: number;
     suggestionOverlaySvg?: string;
+    onProgress?: (progress: ExportProgress) => void;
   },
 ): Promise<HTMLCanvasElement> {
+  options?.onProgress?.({ label: "Startar export" });
   const res = await fetchExportRaster(
     `/api/maps/${mapSlug}/versions/${versionId}/export-raster`,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/x-ndjson",
+      },
       body: JSON.stringify({
         frame,
         rotationDeg: options?.rotationDeg,
@@ -438,8 +449,58 @@ export async function rasterizeVersionExportToCanvas(
     throw new Error(await readRasterError(res));
   }
 
-  const blob = await res.blob();
-  return loadPngBlobToCanvas(blob, pixelWidth, pixelHeight);
+  const contentType = res.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/x-ndjson")) {
+    const blob = await res.blob();
+    return loadPngBlobToCanvas(blob, pixelWidth, pixelHeight);
+  }
+
+  if (!res.body) {
+    throw new Error("Kunde inte läsa exportens förlopp");
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let pending = "";
+  let pngBase64: string | null = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    pending += decoder.decode(value, { stream: true });
+    const lines = pending.split("\n");
+    pending = lines.pop() ?? "";
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const event = JSON.parse(trimmed) as {
+        type?: string;
+        label?: string;
+        done?: number;
+        total?: number;
+        error?: string;
+        pngBase64?: string;
+      };
+      if (event.type === "progress" && event.label) {
+        options?.onProgress?.({
+          label: event.label,
+          done: event.done,
+          total: event.total,
+        });
+      } else if (event.type === "error") {
+        throw new Error(event.error ?? "Kunde inte rastrera kartbilden för export");
+      } else if (event.type === "result" && event.pngBase64) {
+        pngBase64 = event.pngBase64;
+      }
+    }
+  }
+
+  if (!pngBase64) {
+    throw new Error("Kunde inte rastrera kartbilden för export");
+  }
+
+  options?.onProgress?.({ label: "Tar emot bilden" });
+  return canvasFromPngBase64(pngBase64, pixelWidth, pixelHeight);
 }
 
 /**
@@ -504,6 +565,7 @@ export async function downloadMapPdf(
     hudSvg?: string;
     /** Server-rasterized PNG (base64); skips SVG upload. */
     pngBase64?: string;
+    onProgress?: (progress: ExportProgress) => void;
   },
 ): Promise<void> {
   validateExportFrame(frame);
@@ -512,11 +574,13 @@ export async function downloadMapPdf(
   const pixelHeight = mmToPx(frame.heightMm);
 
   if (options?.pngBase64?.trim()) {
+    options.onProgress?.({ label: "Skapar PDF" });
     const canvas = await canvasFromPngBase64(
       options.pngBase64,
       pixelWidth,
       pixelHeight,
     );
+    options.onProgress?.({ label: "Sparar PDF" });
     await saveCanvasAsPdf(canvas, frame, fileName);
     return;
   }
@@ -547,8 +611,10 @@ export async function downloadMapPdf(
         rotationDeg,
         exportScale: options.exportScale,
         suggestionOverlaySvg: options.suggestionOverlaySvg,
+        onProgress: options.onProgress,
       },
     );
+    options?.onProgress?.({ label: "Skapar PDF" });
     await saveCanvasAsPdf(canvas, frame, fileName);
     return;
   }
@@ -702,6 +768,7 @@ export async function downloadMapGeoTiff(
     exportScale?: number;
     rotationDeg?: number;
     hudSvg?: string;
+    onProgress?: (progress: ExportProgress) => void;
   },
 ): Promise<void> {
   validateExportFrame(frame);
@@ -730,6 +797,7 @@ export async function downloadMapGeoTiff(
         rotationDeg,
         exportScale: options?.exportScale,
         suggestionOverlaySvg: options?.suggestionOverlaySvg,
+        onProgress: options?.onProgress,
       },
     );
   } catch {
@@ -768,6 +836,7 @@ export async function downloadMapGeoTiff(
     );
   }
 
+  options?.onProgress?.({ label: "Skapar GeoTIFF" });
   const imageBase64 = canvas.toDataURL("image/png");
 
   const response = await fetch(`/api/maps/${mapSlug}/versions/${versionId}/export-geotiff`, {
@@ -781,6 +850,7 @@ export async function downloadMapGeoTiff(
     throw new Error(payload?.error ?? "GeoTIFF-export misslyckades");
   }
 
+  options?.onProgress?.({ label: "Sparar GeoTIFF" });
   const blob = await response.blob();
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");

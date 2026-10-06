@@ -26,6 +26,7 @@ export type VersionExportRasterInput = {
   rotationDeg: number;
   suggestionOverlaySvg?: string;
   hudSvg?: string;
+  onProgress?: (progress: { label: string; done?: number; total?: number }) => void;
 };
 
 function expandBoundsForRotation(bounds: SvgBounds, rotationDeg: number): SvgBounds {
@@ -87,7 +88,9 @@ async function rasterizeVectorFrame(params: {
   sourceBounds: SvgBounds;
   overscanW: number;
   overscanH: number;
+  onProgress?: (progress: { label: string; done?: number; total?: number }) => void;
 }): Promise<Buffer> {
+  params.onProgress?.({ label: "Läser kartfilen" });
   const ocdBuffer = await readStoredFile(params.storagePath);
   const cacheKey = `${params.mapFileId}/v${params.versionNumber}`;
   const yFlip = await ocadSvgYFlip(ocdBuffer, cacheKey);
@@ -121,6 +124,8 @@ async function rasterizeVectorFrame(params: {
     }
   }
 
+  params.onProgress?.({ label: "Ritar kartan", done: 0, total: cells.length });
+  let finished = 0;
   const parts = await mapPool(cells, CELL_CONCURRENCY, async (cell) => {
     const png = await rasterizeOcadRegionPng({
       ocdBuffer,
@@ -130,8 +135,12 @@ async function rasterizeVectorFrame(params: {
       widthPx: cell.width,
       heightPx: cell.height,
     });
+    finished += 1;
+    params.onProgress?.({ label: "Ritar kartan", done: finished, total: cells.length });
     return { input: png, left: cell.left, top: cell.top };
   });
+
+  params.onProgress?.({ label: "Sätter ihop bilden" });
 
   return sharp({
     create: {
@@ -193,6 +202,8 @@ export async function rasterizeVersionExport(input: VersionExportRasterInput): P
 
   let mapPng: Buffer | null = null;
 
+  const report = input.onProgress;
+
   try {
     mapPng = await rasterizeVectorFrame({
       mapFileId: input.mapFileId,
@@ -201,6 +212,7 @@ export async function rasterizeVersionExport(input: VersionExportRasterInput): P
       sourceBounds,
       overscanW,
       overscanH,
+      onProgress: report,
     });
   } catch (error) {
     console.warn("Vector export failed, falling back to preview SVG:", error);
@@ -224,6 +236,7 @@ export async function rasterizeVersionExport(input: VersionExportRasterInput): P
 
   if (!mapPng) {
     if (!previewSvgText) throw new Error("Kunde inte läsa kartpreview");
+    report?.({ label: "Ritar kartan" });
     mapPng = await rasterizePreviewFallback(
       previewSvgText,
       input.frame,
@@ -243,6 +256,7 @@ export async function rasterizeVersionExport(input: VersionExportRasterInput): P
   const suggestion = input.suggestionOverlaySvg?.trim() ?? "";
   const overlayBody = [kartram, suggestion].filter(Boolean).join("\n");
   if (overlayBody) {
+    report?.({ label: "Lägger till ram och kartförslag" });
     const overlaySvg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" fill="transparent" viewBox="${paperBox.x} ${paperBox.y} ${paperBox.width} ${paperBox.height}" width="${input.widthPx}" height="${input.heightPx}">
 ${overlayBody}
@@ -262,6 +276,7 @@ ${overlayBody}
   }
 
   if (input.rotationDeg) {
+    report?.({ label: "Roterar kartan" });
     const rotated = await sharp(mapPng)
       .rotate(input.rotationDeg, { background: "#ffffff" })
       .png({ compressionLevel: 6, effort: 1 })
@@ -286,6 +301,8 @@ ${overlayBody}
 
   const hudSvg = input.hudSvg?.trim();
   if (!hudSvg) return mapPng;
+
+  report?.({ label: "Lägger till skala" });
 
   const hudPng = await rasterizeExportSvg({
     mapSvg: hudSvg,

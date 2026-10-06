@@ -4,6 +4,7 @@ import type {
   ExportFormat,
   ExportOrientation,
   ExportOutputFormat,
+  ExportProgress,
   ExportScale,
   ExportSettings,
 } from "@/lib/ocad/map-export";
@@ -22,6 +23,8 @@ type Props = {
   onExport: () => void;
   onCancel: () => void;
   exporting: boolean;
+  /** Current step while an export is running. */
+  progress?: ExportProgress | null;
   error: string | null;
   /** When set, shows checkbox to include kartförslag in PDF/GeoTIFF (count may be unknown until export). */
   suggestionOverlayCount?: number;
@@ -35,6 +38,7 @@ export function MapExportControls({
   onExport,
   onCancel,
   exporting,
+  progress = null,
   error,
   suggestionOverlayCount,
   promptOcdSuggestionSymbols = false,
@@ -200,6 +204,33 @@ export function MapExportControls({
           </button>
         </div>
       </div>
+
+      {exporting && (
+        <div className="mt-3 flex items-center gap-3" role="status" aria-live="polite">
+          <span
+            className="inline-block h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-slate-300 border-t-ifk-blue"
+            aria-hidden
+          />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm text-slate-800">
+              {progress?.label ?? "Exporterar"}
+              {progress?.total != null && progress.total > 0
+                ? ` (${progress.done ?? 0} av ${progress.total})`
+                : "…"}
+            </p>
+            {progress?.total != null && progress.total > 0 && (
+              <div className="mt-1 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-slate-200">
+                <div
+                  className="h-full rounded-full bg-ifk-blue transition-[width] duration-200"
+                  style={{
+                    width: `${Math.min(100, Math.round(((progress.done ?? 0) / progress.total) * 100))}%`,
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <p className="mt-2 text-xs text-slate-500">
         Dra ramen på kartan till önskat utsnitt innan du exporterar.

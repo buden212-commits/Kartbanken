@@ -957,6 +957,7 @@ export async function HelpPageContent() {
               "Exporterad OCD-fil ska öppnas normalt i OCAD; om du får internt fel vid öppning, exportera igen efter senaste uppdateringen",
               ".omap-filer öppnas i OpenOrienteering Mapper 0.9.6 eller senare",
               "Dra exportramen på kartan till önskat utsnitt innan du exporterar",
+              "Under exporten visas en förloppsindikator (t.ex. «Ritar kartan (3 av 12)»)",
             ]}
           />
           <HelpProcessDiagram title="Flöde — visa karta och export" chart={mapViewExport} />
