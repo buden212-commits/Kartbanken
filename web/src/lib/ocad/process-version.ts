@@ -1,4 +1,4 @@
-import { compareOcadObjects } from "./diff";
+import { compareOcadObjects, resolveDiffToleranceMeters } from "./diff";
 import type { OcadDiffResult } from "./diff-types";
 import { changeIndicesByKind, limitStoredChanges } from "./diff-storage";
 import {
@@ -25,7 +25,7 @@ export {
   type VersionDiffProgressStep,
 } from "./version-diff-progress";
 
-const TOLERANCE = Number(process.env.DIFF_SPATIAL_TOLERANCE_M ?? 2);
+const TOLERANCE = resolveDiffToleranceMeters();
 
 async function writeVersionDiffProgress(
   mapFileId: string,
@@ -272,7 +272,7 @@ export async function computeVersionDiff(
       fileNameA: versionA.originalFilename,
       fileNameB: versionB.originalFilename,
     },
-    { toleranceMeters: TOLERANCE },
+    { toleranceMeters: TOLERANCE, mapScale: summaryA.mapScale ?? summaryB.mapScale },
   );
 
   const layerObjectIndices = changeIndicesByKind(diff.changes);

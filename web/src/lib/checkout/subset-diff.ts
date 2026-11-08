@@ -11,7 +11,8 @@ import {
 } from "./import-partial-polygon";
 import { objectCrossesBbox, objectIntersectsBbox } from "./import-partial-analysis";
 import { importChangeKey } from "./import-partial-types";
-import { compareOcadObjects } from "@/lib/ocad/diff";
+import { compareOcadObjects, resolveDiffToleranceMeters } from "@/lib/ocad/diff";
+import { readOcadFileInfo } from "@/lib/ocad/ocad-file-info";
 import type { OcadDiffResult, OcadObjectChange, SymbolDiffSummary } from "@/lib/ocad/diff-types";
 import {
   buildCheckoutDiffLayerPath,
@@ -19,10 +20,12 @@ import {
   type DiffLayerPaths,
 } from "@/lib/ocad/diff-layers";
 import { buildCheckinDuplicateValidationWarnings } from "@/lib/ocad/exact-duplicates";
+import { buildCheckinReviewChecks } from "./checkin-review-checks";
 import { parseOcadBuffer } from "@/lib/ocad/read";
 import type { NormalizedOcadObject } from "@/lib/ocad/types";
 import { readStoredFile } from "@/lib/storage";
 import { prisma } from "@/lib/prisma";
+import { COMPLETED_VERSION_WHERE } from "@/lib/maps/head-version";
 import {
   buffersContentEqual,
   buildEmptyOcadDiffResult,
@@ -32,7 +35,17 @@ import {
   resolveCheckoutDiffScopeIds,
 } from "./subset-diff-helpers";
 
-const TOLERANCE = Number(process.env.DIFF_SPATIAL_TOLERANCE_M ?? 2);
+const TOLERANCE = resolveDiffToleranceMeters();
+
+function readMapScale(buffer: Buffer | undefined): number | undefined {
+  if (!buffer) return undefined;
+  try {
+    const scale = readOcadFileInfo(buffer).scaleParams?.scale;
+    return scale && Number.isFinite(scale) && scale > 0 ? scale : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export type CheckoutSubsetDiffResult = OcadDiffResult & {
   headVersionId: string;
@@ -42,7 +55,12 @@ export type CheckoutSubsetDiffResult = OcadDiffResult & {
   outOfScopeWarnings: string[];
   /** Exakta dubbletter i incheckningen / tillägg som kopierar befintlig geometri. */
   validationWarnings: string[];
+  /** Problems that make integration impossible (e.g. symbols missing in the map). */
+  blockingErrors: string[];
   layerPaths: DiffLayerPaths | null;
+  /** Checkin file the diff was computed for (stale if the user re-checks in). */
+  checkinStoragePath?: string;
+  computedAt?: string;
 };
 
 function buildSymbolSummariesFromChanges(changes: OcadObjectChange[]): SymbolDiffSummary[] {
@@ -121,6 +139,7 @@ function buildEmptyCheckoutSubsetDiff(input: {
     scopedObjectIds: input.scopedObjectIds,
     outOfScopeWarnings: [],
     validationWarnings: input.validationWarnings ?? [],
+    blockingErrors: [],
     layerPaths: null,
   };
 }
@@ -150,6 +169,15 @@ function isPathologicalCheckoutExport(exportBuffer: Buffer, checkinBuffer: Buffe
 }
 
 export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<CheckoutSubsetDiffResult> {
+  const source: { checkinStoragePath?: string } = {};
+  const result = await computeCheckoutSubsetDiffInner(checkoutId, source);
+  return { ...result, checkinStoragePath: source.checkinStoragePath };
+}
+
+async function computeCheckoutSubsetDiffInner(
+  checkoutId: string,
+  source: { checkinStoragePath?: string },
+): Promise<CheckoutSubsetDiffResult> {
   const checkout = await prisma.mapCheckout.findUnique({
     where: { id: checkoutId },
     include: {
@@ -159,6 +187,7 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
       mapFile: {
         include: {
           versions: {
+            where: COMPLETED_VERSION_WHERE,
             orderBy: { versionNumber: "desc" },
             take: 1,
             select: { id: true, objectCount: true, originalFilename: true, storagePath: true },
@@ -175,6 +204,7 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
   if (!checkout.checkinStoragePath) {
     throw new Error("Utcheckningen saknar incheckad fil");
   }
+  source.checkinStoragePath = checkout.checkinStoragePath;
 
   const headVersion = checkout.mapFile.versions[0];
   if (!headVersion) {
@@ -352,7 +382,18 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
       fileNameA: emptyDiffInput.fileNameA,
       fileNameB: "checkin-subset.ocd",
     },
-    { toleranceMeters: TOLERANCE, matchByObjectIndex },
+    {
+      toleranceMeters: TOLERANCE,
+      // Import-partial heuristics (edge zones, grid) are tuned on raw coordinate units and
+      // must match the import guide's analysis, so only desktop checkouts convert via scale.
+      mapScale: importPartial
+        ? undefined
+        : (readMapScale(baselineSourceBuffer) ?? readMapScale(checkinBuffer)),
+      matchByObjectIndex,
+      // Every byte-level edit in a desktop checkout must reach the map; import-partial
+      // files are re-digitized, so they keep the tolerance-based comparison.
+      exactModified: !importPartial,
+    },
   );
 
   // Guard against false add/remove from rematching noise when content bags match.
@@ -456,11 +497,20 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
   }
 
   const addedChanges = changes.filter((change) => change.changeType === "added");
-  const validationWarnings = buildCheckinDuplicateValidationWarnings(
-    checkinObjects,
-    baselineObjects,
-    addedChanges,
-  );
+  const reviewChecks = buildCheckinReviewChecks({
+    changes,
+    baselineObjectCount: baselineObjects.length,
+    unchangedCount: diff.unchanged,
+    baselineSymbolNums: (exportSummary ?? headSummary)?.symbolNums ?? [],
+    checkinSymbolNums: checkinSummary.symbolNums,
+    baselineSymbolHashes: (exportSummary ?? headSummary)?.symbolHashes,
+    checkinSymbolHashes: checkinSummary.symbolHashes,
+    selectionGeometry: importPartial ? undefined : selection.geometry,
+  });
+  const validationWarnings = [
+    ...reviewChecks.warnings,
+    ...buildCheckinDuplicateValidationWarnings(checkinObjects, baselineObjects, addedChanges),
+  ];
 
   return {
     ...diff,
@@ -475,16 +525,25 @@ export async function computeCheckoutSubsetDiff(checkoutId: string): Promise<Che
     scopedObjectIds,
     outOfScopeWarnings,
     validationWarnings,
+    blockingErrors: reviewChecks.blockingErrors,
     layerPaths,
   };
 }
 
+/** Returns false when the guard no longer matched (a newer checkin/attempt owns the row). */
 export async function storeCheckoutDiffSummary(
   checkoutId: string,
   diff: CheckoutSubsetDiffResult,
-): Promise<void> {
-  await prisma.mapCheckout.update({
-    where: { id: checkoutId },
+  guard?: { checkinStoragePath: string; attemptId: string },
+): Promise<boolean> {
+  const result = await prisma.mapCheckout.updateMany({
+    where: guard
+      ? {
+          id: checkoutId,
+          checkinStoragePath: guard.checkinStoragePath,
+          diffSummaryJson: { contains: `"attemptId":${JSON.stringify(guard.attemptId)}` },
+        }
+      : { id: checkoutId },
     data: {
       diffSummaryJson: JSON.stringify({
         added: diff.added,
@@ -496,11 +555,14 @@ export async function storeCheckoutDiffSummary(
         scopedObjectIds: diff.scopedObjectIds,
         outOfScopeWarnings: diff.outOfScopeWarnings,
         validationWarnings: diff.validationWarnings,
+        blockingErrors: diff.blockingErrors,
         bySymbol: diff.bySymbol,
         changes: diff.changes,
         layerPaths: diff.layerPaths,
+        checkinStoragePath: diff.checkinStoragePath,
         computedAt: new Date().toISOString(),
       }),
     },
   });
+  return result.count > 0;
 }

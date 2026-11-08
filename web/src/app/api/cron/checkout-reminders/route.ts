@@ -4,7 +4,11 @@ import {
   markReminderSent,
 } from "@/lib/checkout/repository";
 import { CheckoutStatus } from "@/lib/checkout/types";
-import { notifyCheckoutReminder, notifyCheckoutUserConfirmed } from "@/lib/email";
+import { runCheckoutMaintenance } from "@/lib/checkout/maintenance";
+import {
+  notifyCheckoutAwaitingIntegrationReminder,
+  notifyCheckoutReminder,
+} from "@/lib/email";
 import { prisma } from "@/lib/prisma";
 import {
   resolveCheckoutReminderDays,
@@ -35,6 +39,8 @@ export async function GET(request: Request) {
   const repeatCutoff = new Date(Date.now() - repeatDays * 24 * 60 * 60 * 1000);
   const checkouts = await findCheckoutsNeedingReminder(initialCutoff, repeatCutoff);
 
+  const maintenance = await runCheckoutMaintenance();
+
   let sent = 0;
 
   for (const checkout of checkouts) {
@@ -46,11 +52,19 @@ export async function GET(request: Request) {
 
     const isRepeat = checkout.reminderSentAt != null;
 
-    if (checkout.status === CheckoutStatus.PENDING_ADMIN_CONFIRM) {
-      notifyCheckoutUserConfirmed({
+    // Mark first: a timeout after sending must not cause duplicate emails next run.
+    await markReminderSent(checkout.id);
+
+    if (
+      checkout.status === CheckoutStatus.PENDING_ADMIN_CONFIRM ||
+      checkout.status === CheckoutStatus.CHECKED_IN
+    ) {
+      notifyCheckoutAwaitingIntegrationReminder({
         checkoutId: checkout.id,
         map: { title: map.title, slug: map.slug },
         owner: { name: checkout.user.name, email: checkout.user.email },
+        days: reminderDays,
+        userConfirmed: checkout.status === CheckoutStatus.PENDING_ADMIN_CONFIRM,
       });
     } else {
       notifyCheckoutReminder({
@@ -62,7 +76,6 @@ export async function GET(request: Request) {
       });
     }
 
-    await markReminderSent(checkout.id);
     await logAction(null, "CHECKOUT_REMINDER_SENT", "MapCheckout", checkout.id, {
       mapSlug: map.slug,
       days: reminderDays,
@@ -72,5 +85,5 @@ export async function GET(request: Request) {
     sent++;
   }
 
-  return NextResponse.json({ ok: true, sent, reminderDays, repeatDays });
+  return NextResponse.json({ ok: true, sent, reminderDays, repeatDays, maintenance });
 }

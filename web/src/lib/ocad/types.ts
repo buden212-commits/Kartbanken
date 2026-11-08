@@ -22,6 +22,10 @@ export type OcadParseSummary = {
   symbolCount: number;
   /** Alla symbolnummer i filens symboltabell (även oanvända). */
   symbolNums: number[];
+  /** Fingerprint per symbol definition (number → hash) for detecting edited symbols. */
+  symbolHashes?: Record<number, string>;
+  /** Map scale denominator from the file header (e.g. 10000), when readable. */
+  mapScale?: number;
   warnings: string[];
   byType: Record<OcadObjectType, number>;
   topSymbols: Array<{

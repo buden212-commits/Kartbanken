@@ -1,13 +1,8 @@
-import { logAction } from "@/lib/audit";
 import { requireSession } from "@/lib/auth/api";
 import { canCheckin } from "@/lib/auth/permissions";
-import {
-  markCheckoutDiffPending,
-  scheduleCheckoutSubsetDiff,
-} from "@/lib/checkout/diff-status";
-import { getCheckoutById, updateCheckoutCheckin } from "@/lib/checkout/repository";
+import { checkinStatusAllowsUpload, submitCheckin } from "@/lib/checkout/checkin-submit";
+import { getCheckoutById } from "@/lib/checkout/repository";
 import { CheckoutStatus } from "@/lib/checkout/types";
-import { notifyCheckinSubmitted } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
 import {
   buildCheckoutCheckinPath,
@@ -48,7 +43,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Du kan endast checka in egna utcheckningar" }, { status: 403 });
   }
 
-  if (checkout.status !== CheckoutStatus.ACTIVE && checkout.status !== CheckoutStatus.CHECKED_IN) {
+  if (!checkinStatusAllowsUpload(checkout.status)) {
     return NextResponse.json(
       { error: "Utcheckningen accepterar inte incheckning i nuvarande status" },
       { status: 400 },
@@ -87,40 +82,33 @@ export async function POST(request: Request, { params }: RouteParams) {
   const storagePath = buildCheckoutCheckinPath(map.id, checkout.id);
   const buffer = Buffer.from(await file.arrayBuffer());
 
+  let storedRef: string;
   try {
-    const storedRef = await uploadFile(storagePath, buffer);
-
-    if (checkout.checkinStoragePath) {
-      await deleteFile(checkout.checkinStoragePath).catch(() => undefined);
-    }
-
-    await updateCheckoutCheckin(
-      checkout.id,
-      storedRef,
-      CheckoutStatus.CHECKED_IN,
-      session.user.id,
-      integrationComment,
-    );
-    await markCheckoutDiffPending(checkout.id);
-
-    await logAction(session.user.id, "CHECKIN_SUBMITTED", "MapCheckout", checkout.id, {
-      mapSlug: slug,
-      filename: file.name,
-    });
-
-    notifyCheckinSubmitted({
-      checkoutId: checkout.id,
-      map: { title: map.title, slug: map.slug },
-      owner: { name: checkout.user.name, email: checkout.user.email },
-      checkin: { storagePath: storedRef, filename: file.name },
-    });
-
-    scheduleCheckoutSubsetDiff(checkout.id);
-
-    return NextResponse.json({ ok: true, status: CheckoutStatus.CHECKED_IN });
+    storedRef = await uploadFile(storagePath, buffer);
   } catch (err) {
     await deleteFile(storagePath).catch(() => undefined);
     console.error("Checkin upload failed:", err);
+    return NextResponse.json({ error: "Checkin misslyckades" }, { status: 500 });
+  }
+
+  try {
+    const result = await submitCheckin({
+      checkout,
+      map,
+      newStoragePath: storedRef,
+      buffer,
+      userId: session.user.id,
+      comment: integrationComment,
+      filename: file.name,
+      via: "form",
+    });
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
+    }
+
+    return NextResponse.json({ ok: true, status: CheckoutStatus.CHECKED_IN });
+  } catch (err) {
+    console.error("Checkin registration failed:", err);
     return NextResponse.json({ error: "Checkin misslyckades" }, { status: 500 });
   }
 }

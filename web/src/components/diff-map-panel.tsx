@@ -364,6 +364,7 @@ export function DiffMapPanel({
   const maxZoomRef = useRef(maxZoom);
   maxZoomRef.current = maxZoom;
   const [exportMode, setExportMode] = useState(false);
+  const [sourceOcadFileVersion, setSourceOcadFileVersion] = useState<number | null>(null);
   const [exportSettings, setExportSettings] = useState<ExportSettings>({
     scale: 10000,
     format: "A4",
@@ -641,6 +642,7 @@ export function DiffMapPanel({
           setMapLayers(ocadLayers);
           setLayerVisibility(initialLayerVisibility(ocadLayers));
           onOcadLayersReady?.(ocadLayers);
+          setSourceOcadFileVersion(ocadFileVersion ?? null);
           setExportSettings((prev) => ({
             ...prev,
             ocadVersion: defaultOcadExportVersion(ocadFileVersion),
@@ -798,6 +800,7 @@ export function DiffMapPanel({
         setLayerVisibility(initialLayerVisibility(ocadLayers));
         onOcadLayersReady?.(ocadLayers);
       }
+      setSourceOcadFileVersion(ocadFileVersion ?? null);
       setExportSettings((prev) => ({
         ...prev,
         ocadVersion: defaultOcadExportVersion(ocadFileVersion),
@@ -1754,6 +1757,7 @@ export function DiffMapPanel({
           error={exportError}
           suggestionOverlayCount={suggestionOverlays?.length}
           promptOcdSuggestionSymbols={promptOcdSuggestionSymbols}
+          sourceOcadVersion={sourceOcadFileVersion}
         />
       )}
 
@@ -2023,6 +2027,15 @@ export function DiffMapPanel({
                   {infoChange.symbolNumber} · {infoChange.symbolName}
                 </dd>
               </div>
+              {infoChange.previousSymbolNumber != null && (
+                <div className="flex gap-2">
+                  <dt className="text-slate-500">Tidigare</dt>
+                  <dd className="font-mono text-amber-700">
+                    {infoChange.previousSymbolNumber}
+                    {infoChange.previousSymbolName ? ` · ${infoChange.previousSymbolName}` : ""}
+                  </dd>
+                </div>
+              )}
               <div className="flex gap-2">
                 <dt className="text-slate-500">Typ</dt>
                 <dd className="text-slate-800">{OBJECT_TYPE_LABELS[infoChange.type]}</dd>

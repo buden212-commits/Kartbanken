@@ -1,4 +1,5 @@
 import sharp, { type OutputInfo } from "sharp";
+import { renderAsync } from "@resvg/resvg-js";
 import { createRequire } from "module";
 import { prisma } from "@/lib/prisma";
 import { fileExists, readStoredFile, uploadFile } from "@/lib/storage";
@@ -14,6 +15,7 @@ import {
   type SvgBounds,
 } from "@/lib/ocad/svg-utils";
 import { rewriteSvgRootTag } from "@/lib/ocad/svg-root";
+import { EXPORT_FONT_FAMILY, EXPORT_FONT_FILES, svgWithExportFont } from "@/lib/ocad/export-font";
 import { IDENTITY_SVG_TRANSFORM } from "@/lib/ocad/svg-coords";
 import { buildTileManifestPath, buildTilePath } from "@/lib/ocad/tile-paths";
 import { parseOcadCrsFromSvg } from "@/lib/ocad/crs";
@@ -477,10 +479,52 @@ export async function rasterizeOcadRegionPng(params: {
 
   const svg = renderFilteredOcadSvg(ocadFile as never, indices, params.bounds);
   const clipped = rewriteSvgViewBox(svg, params.bounds, widthPx, heightPx);
-  return sharp(Buffer.from(clipped, "utf-8"), {
-    density: 96,
-    limitInputPixels: false,
-  })
+  return rasterizeSvgPng(clipped, widthPx, heightPx);
+}
+
+/**
+ * Draw one map window in a single pass at the requested pixel size.
+ * A full-page render is much faster than slicing the same vectors into many
+ * librsvg tiles, and it keeps lakes, marsh and contours at print resolution.
+ */
+export async function rasterizeOcadWindowPng(params: {
+  ocdBuffer: Buffer;
+  cacheKey: string;
+  yFlip: number;
+  bounds: SvgBounds;
+  widthPx: number;
+  heightPx: number;
+}): Promise<Buffer> {
+  return rasterizeOcadRegionPng(params);
+}
+
+/**
+ * Rasterize an SVG at an exact pixel size.
+ * `background: null` keeps transparency (course numbers and other overlays).
+ */
+export async function rasterizeSvgPng(
+  svg: string,
+  widthPx: number,
+  heightPx: number,
+  options?: { background?: string | null },
+): Promise<Buffer> {
+  const background = options?.background === undefined ? "white" : options.background;
+  const rendered = await renderAsync(svgWithExportFont(svg), {
+    ...(background ? { background } : {}),
+    font: {
+      fontFiles: EXPORT_FONT_FILES,
+      loadSystemFonts: false,
+      defaultFontFamily: EXPORT_FONT_FAMILY,
+    },
+    shapeRendering: 2,
+    textRendering: 2,
+    imageRendering: 0,
+  });
+  const png = Buffer.from(rendered.asPng());
+  if (rendered.width === widthPx && rendered.height === heightPx) {
+    return sharp(png).png({ compressionLevel: 6, effort: 1 }).toBuffer();
+  }
+  return sharp(png)
     .resize(widthPx, heightPx, { fit: "fill" })
     .png({ compressionLevel: 6, effort: 1 })
     .toBuffer();

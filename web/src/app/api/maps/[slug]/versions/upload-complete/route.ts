@@ -5,6 +5,10 @@ import { runAfterResponse } from "@/lib/background";
 import { sha256 } from "@/lib/hash";
 import { assertMapAllowsUpload, checkVersionUploadGuards } from "@/lib/maps/upload-guards";
 import { processVersionAfterUpload } from "@/lib/ocad/process-version";
+import {
+  appendDuplicateStripComment,
+  stripExactDuplicatesFromBuffer,
+} from "@/lib/ocad/strip-duplicates";
 import { prisma } from "@/lib/prisma";
 import type { Role as RoleType } from "@/lib/roles";
 import {
@@ -12,6 +16,7 @@ import {
   fileExists,
   readStoredFile,
   supportsClientUploads,
+  uploadFile,
   validateOcdUpload,
 } from "@/lib/storage";
 import {
@@ -104,6 +109,9 @@ export async function POST(request: Request, { params }: RouteParams) {
   }
 
   let contentHash: string;
+  let storedBuffer: Buffer;
+  let extrasRemoved = 0;
+  let groupCount = 0;
   try {
     const buffer = await readStoredFile(storageRef);
     if (buffer.length !== version.fileSizeBytes) {
@@ -112,7 +120,14 @@ export async function POST(request: Request, { params }: RouteParams) {
         { status: 400 },
       );
     }
-    contentHash = sha256(buffer);
+    const stripped = await stripExactDuplicatesFromBuffer(buffer, version.originalFilename);
+    storedBuffer = stripped.buffer;
+    extrasRemoved = stripped.extrasRemoved;
+    groupCount = stripped.groupCount;
+    if (extrasRemoved > 0) {
+      storageRef = await uploadFile(version.storagePath, storedBuffer);
+    }
+    contentHash = sha256(storedBuffer);
   } catch (err) {
     console.error("Complete upload read failed:", err);
     return NextResponse.json({ error: "Kunde inte läsa uppladdad fil" }, { status: 500 });
@@ -122,6 +137,7 @@ export async function POST(request: Request, { params }: RouteParams) {
     where: {
       mapFileId: map.id,
       versionNumber: { lt: version.versionNumber },
+      contentHash: { not: null },
     },
     orderBy: { versionNumber: "desc" },
   });
@@ -146,7 +162,12 @@ export async function POST(request: Request, { params }: RouteParams) {
 
   await prisma.mapVersion.update({
     where: { id: versionId },
-    data: { contentHash },
+    data: {
+      contentHash,
+      storagePath: storageRef,
+      fileSizeBytes: storedBuffer.byteLength,
+      comment: appendDuplicateStripComment(version.comment, extrasRemoved, groupCount),
+    },
   });
 
   await logAction(session.user.id, "UPLOAD", "MapVersion", version.id, {

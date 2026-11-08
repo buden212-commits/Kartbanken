@@ -138,10 +138,6 @@ export function buildCheckoutExportPath(mapFileId: string, checkoutId: string): 
   return `maps/${mapFileId}/checkouts/${checkoutId}/subset-${randomUUID()}.ocd`;
 }
 
-export function buildCheckoutManifestPath(mapFileId: string, checkoutId: string): string {
-  return `maps/${mapFileId}/checkouts/${checkoutId}/manifest-${randomUUID()}.json`;
-}
-
 export function buildCheckoutCheckinPath(mapFileId: string, checkoutId: string): string {
   return `maps/${mapFileId}/checkouts/${checkoutId}/checkin-${randomUUID()}.ocd`;
 }

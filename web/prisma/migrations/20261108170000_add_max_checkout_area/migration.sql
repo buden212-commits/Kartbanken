@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "AppSettings" ADD COLUMN "maxCheckoutAreaKm2" DOUBLE PRECISION NOT NULL DEFAULT 0;

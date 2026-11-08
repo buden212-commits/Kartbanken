@@ -88,6 +88,8 @@ type Props = {
   onOcadVersionChange?: (version: OcadExportVersion) => void;
 
   sourceOcadVersionLabel?: string;
+  /** Selectable export versions; defaults to all. */
+  ocadVersionOptions?: readonly { value: OcadExportVersion; label: string }[];
   hideOcadVersion?: boolean;
   createButtonLabel?: string;
   createLoadingLabel?: string;
@@ -210,6 +212,7 @@ export function CheckoutMapPanel({
   onOcadVersionChange,
 
   sourceOcadVersionLabel,
+  ocadVersionOptions = OCAD_EXPORT_VERSIONS,
   hideOcadVersion = false,
   createButtonLabel = "Checka ut område",
   createLoadingLabel = "Skapar utcheckning…",
@@ -647,7 +650,7 @@ export function CheckoutMapPanel({
                     }
                     className="form-select mt-1 min-w-[140px]"
                   >
-                    {OCAD_EXPORT_VERSIONS.map((opt) => (
+                    {ocadVersionOptions.map((opt) => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
                       </option>

@@ -4,6 +4,7 @@ import {
   canAdminConfirmIntegration,
   canCancelCheckout,
   canConfirmCheckoutIntegration,
+  canOwnerCancelCheckout,
   canViewCheckouts,
 } from "@/lib/auth/permissions";
 import { cancelCheckout, getCheckoutById, serializeCheckoutResponse } from "@/lib/checkout/repository";
@@ -48,10 +49,6 @@ export async function DELETE(request: Request, { params }: RouteParams) {
   const session = await requireSession();
   if (session instanceof NextResponse) return session;
 
-  if (!canCancelCheckout(session.user.role)) {
-    return NextResponse.json({ error: "Endast admin kan avbryta utcheckningar" }, { status: 403 });
-  }
-
   const { slug, id } = await params;
   const map = await prisma.mapFile.findUnique({
     where: { slug },
@@ -64,6 +61,22 @@ export async function DELETE(request: Request, { params }: RouteParams) {
   const checkout = await getCheckoutById(map.id, id);
   if (!checkout) {
     return NextResponse.json({ error: "Utcheckning hittades inte" }, { status: 404 });
+  }
+
+  const isAdminCancel = canCancelCheckout(session.user.role);
+  const isOwnerCancel =
+    !isAdminCancel &&
+    canOwnerCancelCheckout(session.user.role, checkout.userId, session.user.id, checkout.status);
+  if (!isAdminCancel && !isOwnerCancel) {
+    return NextResponse.json(
+      {
+        error:
+          checkout.userId === session.user.id
+            ? "Du kan bara avbryta din utcheckning innan den checkats in. Kontakta admin."
+            : "Endast admin kan avbryta andras utcheckningar",
+      },
+      { status: 403 },
+    );
   }
 
   const cancellableStatuses: CheckoutStatus[] =
@@ -99,6 +112,7 @@ export async function DELETE(request: Request, { params }: RouteParams) {
     mapFileId: map.id,
     cancelledById: session.user.id,
     cancelReason,
+    ...(isOwnerCancel ? { allowedStatuses: [CheckoutStatus.ACTIVE] } : {}),
   });
 
   if (result.count === 0) {
@@ -111,6 +125,7 @@ export async function DELETE(request: Request, { params }: RouteParams) {
   await logAction(session.user.id, "CHECKOUT_CANCELLED", "MapCheckout", checkout.id, {
     mapSlug: slug,
     reason: cancelReason,
+    byOwner: isOwnerCancel,
   });
 
   notifyCheckoutCancelled({
@@ -118,6 +133,7 @@ export async function DELETE(request: Request, { params }: RouteParams) {
     map: { title: map.title, slug: map.slug },
     owner: { name: checkout.user.name, email: checkout.user.email },
     reason: cancelReason,
+    byOwner: isOwnerCancel,
   });
 
   return NextResponse.json({ ok: true, status: CheckoutStatus.CANCELLED });

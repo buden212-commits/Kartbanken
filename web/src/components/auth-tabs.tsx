@@ -7,7 +7,7 @@ import { RegisterForm } from "@/components/register-form";
 
 type AuthTab = "login" | "register";
 
-export function AuthTabs() {
+export function AuthTabs({ googleEnabled = false }: { googleEnabled?: boolean }) {
   const searchParams = useSearchParams();
   const initialTab: AuthTab = searchParams.get("tab") === "register" ? "register" : "login";
   const [tab, setTab] = useState<AuthTab>(initialTab);
@@ -39,7 +39,9 @@ export function AuthTabs() {
         </button>
       </div>
 
-      <div className="mt-6">{tab === "login" ? <LoginForm /> : <RegisterForm />}</div>
+      <div className="mt-6">
+        {tab === "login" ? <LoginForm googleEnabled={googleEnabled} /> : <RegisterForm />}
+      </div>
     </div>
   );
 }

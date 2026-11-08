@@ -1,6 +1,19 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { CheckoutMode, CheckoutStatus, LOCKING_CHECKOUT_STATUSES, parseSelectionJson, serializeSelection, type CheckoutSelection, type CheckoutSelectionType, type ExistingCheckoutForOverlap } from "./types";
+import {
+  CHECKIN_ALLOWED_STATUSES,
+  CheckoutMode,
+  CheckoutSelectionType as CheckoutSelectionTypeValue,
+  CheckoutStatus,
+  LOCKING_CHECKOUT_STATUSES,
+  serializeSelection,
+  tryParseSelectionJson,
+  type CheckoutSelection,
+  type CheckoutSelectionType,
+  type ExistingCheckoutForOverlap,
+} from "./types";
 import { parseFieldEditOps } from "@/lib/field-edit/types";
+import { COMPLETED_VERSION_WHERE } from "@/lib/maps/head-version";
 
 const checkoutWithUserSelect = {
   id: true,
@@ -41,7 +54,7 @@ export type MapCheckoutRecord = Awaited<ReturnType<typeof getCheckoutById>>;
 
 export async function getHeadVersionId(mapFileId: string): Promise<string | null> {
   const head = await prisma.mapVersion.findFirst({
-    where: { mapFileId },
+    where: { mapFileId, ...COMPLETED_VERSION_WHERE },
     orderBy: { versionNumber: "desc" },
     select: { id: true },
   });
@@ -73,8 +86,11 @@ export async function findActiveFieldEditsForMap(mapFileId: string) {
 }
 
 /** All area-locking sessions (desktop checkout + field edit) for overlap checks. */
-export async function findActiveAreaLocksForMap(mapFileId: string) {
-  return prisma.mapCheckout.findMany({
+export async function findActiveAreaLocksForMap(
+  mapFileId: string,
+  client: Prisma.TransactionClient = prisma,
+) {
+  return client.mapCheckout.findMany({
     where: {
       mapFileId,
       status: { in: LOCKING_CHECKOUT_STATUSES },
@@ -97,7 +113,10 @@ export async function findCheckoutsForMap(mapFileId: string, statuses?: Checkout
 
 export function toOverlapCandidate(
   checkout: Awaited<ReturnType<typeof findActiveCheckoutsForMap>>[number],
-): ExistingCheckoutForOverlap {
+): ExistingCheckoutForOverlap | null {
+  // A corrupt row is skipped (and logged) rather than blocking every new checkout on the map.
+  const selection = tryParseSelectionJson(checkout.selectionJson, checkout.id);
+  if (!selection) return null;
   return {
     id: checkout.id,
     userId: checkout.userId,
@@ -105,14 +124,17 @@ export function toOverlapCandidate(
     userEmail: checkout.user.email,
     status: checkout.status as ExistingCheckoutForOverlap["status"],
     selectionType: checkout.selectionType as CheckoutSelectionType,
-    selection: parseSelectionJson(checkout.selectionJson),
+    selection,
     createdAt: checkout.createdAt,
   };
 }
 
-export async function findActiveOverlapCandidates(mapFileId: string): Promise<ExistingCheckoutForOverlap[]> {
-  const rows = await findActiveAreaLocksForMap(mapFileId);
-  return rows.map(toOverlapCandidate);
+export async function findActiveOverlapCandidates(
+  mapFileId: string,
+  client: Prisma.TransactionClient = prisma,
+): Promise<ExistingCheckoutForOverlap[]> {
+  const rows = await findActiveAreaLocksForMap(mapFileId, client);
+  return rows.flatMap((row) => toOverlapCandidate(row) ?? []);
 }
 
 export async function getCheckoutById(mapFileId: string, checkoutId: string) {
@@ -132,15 +154,20 @@ export type CreateCheckoutInput = {
   exportOcadVersion?: number;
   mode?: CheckoutMode;
   editOpsJson?: string | null;
+  /** EXPORTING while the export file is being written; defaults to ACTIVE. */
+  status?: CheckoutStatus;
 };
 
-export async function createCheckout(input: CreateCheckoutInput) {
-  return prisma.mapCheckout.create({
+export async function createCheckout(
+  input: CreateCheckoutInput,
+  client: Prisma.TransactionClient = prisma,
+) {
+  return client.mapCheckout.create({
     data: {
       mapFileId: input.mapFileId,
       baseVersionId: input.baseVersionId,
       userId: input.userId,
-      status: CheckoutStatus.ACTIVE,
+      status: input.status ?? CheckoutStatus.ACTIVE,
       selectionType: input.selectionType,
       selectionJson: serializeSelection(input.selection),
       exportStoragePath: input.exportStoragePath ?? null,
@@ -160,35 +187,45 @@ export async function updateCheckoutExportPath(checkoutId: string, exportStorage
   });
 }
 
+/**
+ * Registers a checkin file and sets status CHECKED_IN — only from ACTIVE/CHECKED_IN.
+ * Returns false when the checkout is in any other status (integrated, cancelled …).
+ */
 export async function updateCheckoutCheckin(
   checkoutId: string,
   checkinStoragePath: string,
-  status: CheckoutStatus,
   checkedInById: string,
   integrationComment?: string | null,
-) {
-  return prisma.mapCheckout.update({
-    where: { id: checkoutId },
+): Promise<boolean> {
+  const result = await prisma.mapCheckout.updateMany({
+    where: { id: checkoutId, status: { in: CHECKIN_ALLOWED_STATUSES } },
     data: {
       checkinStoragePath,
       checkedInById,
-      status,
+      status: CheckoutStatus.CHECKED_IN,
       ...(integrationComment !== undefined ? { integrationComment } : {}),
+      // Reset in the same write so a diff of the previous file can never appear current.
+      diffSummaryJson: JSON.stringify({
+        _status: "pending",
+        startedAt: new Date().toISOString(),
+        checkinStoragePath,
+      }),
       updatedAt: new Date(),
     },
-    select: checkoutWithUserSelect,
   });
+  return result.count === 1;
 }
 
-export async function confirmCheckoutByUser(checkoutId: string) {
-  return prisma.mapCheckout.update({
-    where: { id: checkoutId },
+/** CHECKED_IN → PENDING_ADMIN_CONFIRM. Returns false if the status changed meanwhile. */
+export async function confirmCheckoutByUser(checkoutId: string): Promise<boolean> {
+  const result = await prisma.mapCheckout.updateMany({
+    where: { id: checkoutId, status: CheckoutStatus.CHECKED_IN },
     data: {
       status: CheckoutStatus.PENDING_ADMIN_CONFIRM,
       userConfirmedAt: new Date(),
     },
-    select: checkoutWithUserSelect,
   });
+  return result.count === 1;
 }
 
 export async function updateFieldEditOps(checkoutId: string, editOpsJson: string) {
@@ -265,6 +302,19 @@ export async function findCheckoutsNeedingReminder(
             },
           ],
         },
+        {
+          status: CheckoutStatus.CHECKED_IN,
+          mode: CheckoutMode.OCAD_DESKTOP,
+          OR: [
+            {
+              reminderSentAt: null,
+              updatedAt: { lt: initialOlderThan },
+            },
+            {
+              reminderSentAt: { lt: repeatOlderThan },
+            },
+          ],
+        },
       ],
     },
     select: checkoutWithUserSelect,
@@ -283,6 +333,8 @@ export type CancelCheckoutInput = {
   mapFileId: string;
   cancelledById: string;
   cancelReason?: string | null;
+  /** Narrower status set (e.g. owner may only cancel ACTIVE). */
+  allowedStatuses?: CheckoutStatus[];
 };
 
 const CANCELLABLE_STATUSES: CheckoutStatus[] = [
@@ -292,11 +344,14 @@ const CANCELLABLE_STATUSES: CheckoutStatus[] = [
 ];
 
 export async function cancelCheckout(input: CancelCheckoutInput) {
+  const statuses = input.allowedStatuses
+    ? input.allowedStatuses.filter((status) => CANCELLABLE_STATUSES.includes(status))
+    : CANCELLABLE_STATUSES;
   return prisma.mapCheckout.updateMany({
     where: {
       id: input.checkoutId,
       mapFileId: input.mapFileId,
-      status: { in: CANCELLABLE_STATUSES },
+      status: { in: statuses },
     },
     data: {
       status: CheckoutStatus.CANCELLED,
@@ -317,7 +372,13 @@ export function serializeCheckoutResponse(
     userId: checkout.userId,
     status: checkout.status,
     selectionType: checkout.selectionType,
-    selection: parseSelectionJson(checkout.selectionJson),
+    selection: tryParseSelectionJson(checkout.selectionJson, checkout.id) ?? {
+      geometry: {
+        type: CheckoutSelectionTypeValue.BBOX,
+        bbox: { minX: 0, minY: 0, maxX: 0, maxY: 0 },
+      },
+      objectIds: [],
+    },
     exportStoragePath: checkout.exportStoragePath,
     checkinStoragePath: checkout.checkinStoragePath,
     checkedInById: checkout.checkedInById,

@@ -16,20 +16,23 @@ import {
 export { makeImportPartialProgress, type ImportPartialProgress } from "@/lib/checkout/import-partial-progress";
 import { objectIdsFromSelection } from "@/lib/checkout/selection-objects";
 import {
-  createCheckout,
   findActiveOverlapCandidates,
   getHeadVersionId,
   updateCheckoutCheckin,
 } from "@/lib/checkout/repository";
-import { generateCheckoutExport } from "@/lib/checkout/create-checkout";
+import {
+  CheckoutConflictError,
+  createCheckoutWithExport,
+} from "@/lib/checkout/create-checkout";
 import { scheduleCheckoutSubsetDiff } from "@/lib/checkout/diff-status";
-import { CheckoutStatus } from "@/lib/checkout/types";
+import { HeadVersionChangedError } from "@/lib/maps/head-version";
 import { readOcadHeaderVersion } from "@/lib/ocad/ocad-export-server";
 import { normalizeSourceVersion } from "@/lib/ocad/ocad-export-shared";
 import { parseOcadBuffer } from "@/lib/ocad/read";
 import { prisma } from "@/lib/prisma";
 import {
   buildCheckoutCheckinPath,
+  deleteFile,
   fileExists,
   readStoredFile,
   uploadFile,
@@ -430,36 +433,47 @@ export async function commitImportPartialJob(input: {
   const exportOcadVersion =
     sourceVersion === 10 || sourceVersion === 11 || sourceVersion === 18 ? sourceVersion : 12;
 
-  const checkout = await createCheckout({
-    mapFileId: input.mapFileId,
-    baseVersionId: headVersionId,
-    userId: input.userId,
-    selectionType: geometry.type,
-    selection,
-    exportOcadVersion,
-  });
-
+  let checkout: Awaited<ReturnType<typeof createCheckoutWithExport>>;
   try {
-    await generateCheckoutExport(
-      input.mapFileId,
-      checkout.id,
-      headVersionId,
+    checkout = await createCheckoutWithExport({
+      mapFileId: input.mapFileId,
+      baseVersionId: headVersionId,
+      userId: input.userId,
+      selectionType: geometry.type,
       selection,
       exportOcadVersion,
-      { sourceBuffer: headBuffer },
-    );
+      sourceBuffer: headBuffer,
+    });
+  } catch (err) {
+    if (err instanceof CheckoutConflictError) {
+      throw new Error(
+        `Området överlappar en befintlig utcheckning (${err.conflicts[0]?.userLabel ?? "okänd"}). Avsluta den först.`,
+      );
+    }
+    if (err instanceof HeadVersionChangedError) {
+      throw new Error("Kartan har fått en ny version sedan analysen. Kör om importguiden.");
+    }
+    throw err;
+  }
 
+  try {
     const partialBuffer = await readStoredFile(importPartialFilePath(job.id));
     const checkinPath = buildCheckoutCheckinPath(input.mapFileId, checkout.id);
     const storedRef = await uploadFile(checkinPath, partialBuffer);
-    await updateCheckoutCheckin(
+    const registered = await updateCheckoutCheckin(
       checkout.id,
       storedRef,
-      CheckoutStatus.CHECKED_IN,
+      input.userId,
       input.comment?.trim() || `Importerad delkarta (${job.fileName}) via importguide.`,
     );
+    if (!registered) {
+      throw new Error("Utcheckningen kunde inte registreras som incheckad.");
+    }
   } catch (err) {
     await prisma.mapCheckout.delete({ where: { id: checkout.id } }).catch(() => undefined);
+    if (checkout.exportStoragePath) {
+      await deleteFile(checkout.exportStoragePath).catch(() => undefined);
+    }
     throw err;
   }
 

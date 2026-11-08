@@ -131,10 +131,13 @@ function resolveOcadVersion(version: number): 10 | 11 | 12 {
 }
 
 /** Actual serialized object size (falls back to reserved len-based size). */
-export function measureObjectByteSize(buffer: Buffer, entry: ObjectIndexEntryInfo): number {
+export function measureObjectByteSize(
+  buffer: Buffer,
+  entry: ObjectIndexEntryInfo,
+  headerVersion?: number,
+): number {
   const reader = new BufferReader(buffer);
-  const header = readHeader(buffer);
-  const version = resolveOcadVersion(header.version);
+  const version = resolveOcadVersion(headerVersion ?? readHeader(buffer).version);
   const TObjectClass = TObjectModule[version] ?? TObjectModule[12];
 
   reader.push(entry.pos);
@@ -511,6 +514,154 @@ export function readActiveObjectIndices(buffer: Buffer): Set<number> {
     }
   });
   return indices;
+}
+
+export function readOcadVersionFromBuffer(buffer: Buffer): number {
+  return readHeader(buffer).version;
+}
+
+/** Active object index entries keyed by objectIndex (single pass over the index). */
+export function collectActiveIndexEntries(buffer: Buffer): Map<number, ObjectIndexEntryInfo> {
+  const entries = new Map<number, ObjectIndexEntryInfo>();
+  iterateAllIndexSlots(buffer, (slot) => {
+    const info = parseEntryAt(buffer, slot.entryOffset, slot.objectIndex);
+    if (info.status <= 0 || info.status >= 3 || info.pos <= 0) return;
+    info.blockStart = slot.blockStart;
+    info.slotIndex = slot.slotIndex;
+    entries.set(slot.objectIndex, info);
+  });
+  return entries;
+}
+
+function rawObjectBytes(
+  buffer: Buffer,
+  entry: ObjectIndexEntryInfo,
+  version: number,
+): Buffer | null {
+  const size = measureObjectByteSize(buffer, entry, version);
+  if (size <= 0 || entry.pos + size > buffer.length) return null;
+  return buffer.subarray(entry.pos, entry.pos + size);
+}
+
+export type ObjectConflict = {
+  objectIndex: number;
+  reason: "missing_in_head" | "changed_in_head";
+};
+
+/**
+ * Objects whose bytes in `headBuffer` differ from `referenceBuffer` (the version the
+ * checkout was exported from). A difference means someone else changed or renumbered
+ * the object after checkout — writing to that index would hit the wrong object.
+ */
+export function findChangedObjectsSinceReference(
+  headBuffer: Buffer,
+  referenceBuffer: Buffer,
+  objectIndices: Iterable<number>,
+): ObjectConflict[] {
+  const headVersion = readHeader(headBuffer).version;
+  const refVersion = readHeader(referenceBuffer).version;
+  const headEntries = collectActiveIndexEntries(headBuffer);
+  const refEntries = collectActiveIndexEntries(referenceBuffer);
+  const conflicts: ObjectConflict[] = [];
+
+  for (const objectIndex of objectIndices) {
+    const headEntry = headEntries.get(objectIndex);
+    if (!headEntry) {
+      conflicts.push({ objectIndex, reason: "missing_in_head" });
+      continue;
+    }
+    const refEntry = refEntries.get(objectIndex);
+    if (!refEntry) {
+      // Not in reference → cannot verify; treat as changed to stay safe.
+      conflicts.push({ objectIndex, reason: "changed_in_head" });
+      continue;
+    }
+    if (headEntry.sym !== refEntry.sym || headEntry.objType !== refEntry.objType) {
+      conflicts.push({ objectIndex, reason: "changed_in_head" });
+      continue;
+    }
+    const headBytes = rawObjectBytes(headBuffer, headEntry, headVersion);
+    const refBytes = rawObjectBytes(referenceBuffer, refEntry, refVersion);
+    if (!headBytes || !refBytes || !headBytes.equals(refBytes)) {
+      conflicts.push({ objectIndex, reason: "changed_in_head" });
+    }
+  }
+
+  return conflicts;
+}
+
+export type ModifiedObjectPair = {
+  /** Target slot in head (baseline index). */
+  headIndex: number;
+  /** Source object in checkin. */
+  checkinIndex: number;
+};
+
+export type ApplyModifiedResult = {
+  /** Copied in place (same byte size). */
+  copied: number;
+  /** Size differs — caller must mark headIndex deleted and append checkinIndex. */
+  needsReplace: ModifiedObjectPair[];
+  failed: Array<ModifiedObjectPair & { reason: "missing_in_head" | "missing_in_checkin" }>;
+};
+
+/**
+ * Writes modified objects into head (mutates `headBuffer`).
+ * Same size: bytes + full index entry (rc, len, sym, objType, color …) are copied,
+ * keeping head's pos/status. Other sizes are returned for delete + append.
+ */
+export function applyModifiedObjects(
+  headBuffer: Buffer,
+  checkinBuffer: Buffer,
+  pairs: ModifiedObjectPair[],
+): ApplyModifiedResult {
+  const result: ApplyModifiedResult = { copied: 0, needsReplace: [], failed: [] };
+  if (pairs.length === 0) return result;
+
+  const headVersion = readHeader(headBuffer).version;
+  const checkinVersion = readHeader(checkinBuffer).version;
+  const headEntries = collectActiveIndexEntries(headBuffer);
+  const checkinEntries = collectActiveIndexEntries(checkinBuffer);
+
+  for (const pair of pairs) {
+    const headEntry = headEntries.get(pair.headIndex);
+    if (!headEntry) {
+      result.failed.push({ ...pair, reason: "missing_in_head" });
+      continue;
+    }
+    const checkinEntry = checkinEntries.get(pair.checkinIndex);
+    if (!checkinEntry) {
+      result.failed.push({ ...pair, reason: "missing_in_checkin" });
+      continue;
+    }
+
+    const headSize = measureObjectByteSize(headBuffer, headEntry, headVersion);
+    const checkinSize = measureObjectByteSize(checkinBuffer, checkinEntry, checkinVersion);
+    if (
+      headSize <= 0 ||
+      headSize !== checkinSize ||
+      headEntry.pos + headSize > headBuffer.length ||
+      checkinEntry.pos + checkinSize > checkinBuffer.length
+    ) {
+      result.needsReplace.push(pair);
+      continue;
+    }
+
+    checkinBuffer.copy(headBuffer, headEntry.pos, checkinEntry.pos, checkinEntry.pos + checkinSize);
+    const headPos = headBuffer.readInt32LE(headEntry.entryOffset + OBJECT_INDEX_POS_OFFSET);
+    const headStatus = headBuffer.readUInt8(headEntry.entryOffset + OBJECT_INDEX_STATUS_OFFSET);
+    checkinBuffer.copy(
+      headBuffer,
+      headEntry.entryOffset,
+      checkinEntry.entryOffset,
+      checkinEntry.entryOffset + OBJECT_INDEX_ENTRY_SIZE,
+    );
+    headBuffer.writeInt32LE(headPos, headEntry.entryOffset + OBJECT_INDEX_POS_OFFSET);
+    headBuffer.writeUInt8(headStatus, headEntry.entryOffset + OBJECT_INDEX_STATUS_OFFSET);
+    result.copied++;
+  }
+
+  return result;
 }
 
 /**

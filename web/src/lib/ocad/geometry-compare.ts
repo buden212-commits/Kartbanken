@@ -25,7 +25,7 @@ function directedHausdorff(
   return maxMin;
 }
 
-/** Symmetriskt Hausdorff-avstånd mellan två punktmängder (OCAD-koordinater ≈ meter). */
+/** Symmetriskt Hausdorff-avstånd mellan två punktmängder (samma enhet som koordinaterna). */
 export function symmetricHausdorff(
   pointsA: [number, number][],
   pointsB: [number, number][],
@@ -89,21 +89,25 @@ type MatchedPair = {
  * (A1↔B1 och A2↔B2 oförändrade trots att innehåll bytts: A1↔B2, A2↔B1).
  */
 export function markSwappedGeometryPairs(pairs: MatchedPair[]): void {
-  const unchanged = pairs.filter((pair) => !pair.modified);
-  if (unchanged.length < 2) return;
+  // Only "unchanged within tolerance" pairs whose hashes differ can hide a swap;
+  // identical-hash pairs (the vast majority) are skipped, keeping this linear.
+  const candidates = pairs.filter(
+    (pair) => !pair.modified && pair.a.geometryHash !== pair.b.geometryHash,
+  );
+  if (candidates.length < 2) return;
 
-  for (let i = 0; i < unchanged.length; i++) {
-    for (let j = i + 1; j < unchanged.length; j++) {
-      const left = unchanged[i]!;
-      const right = unchanged[j]!;
-      if (
-        left.a.geometryHash === right.b.geometryHash &&
-        right.a.geometryHash === left.b.geometryHash &&
-        left.a.geometryHash !== left.b.geometryHash
-      ) {
-        left.modified = true;
-        right.modified = true;
-      }
-    }
+  const byHashPair = new Map<string, MatchedPair[]>();
+  for (const pair of candidates) {
+    const key = `${pair.a.geometryHash}\t${pair.b.geometryHash}`;
+    const bucket = byHashPair.get(key) ?? [];
+    bucket.push(pair);
+    byHashPair.set(key, bucket);
+  }
+
+  for (const left of candidates) {
+    const mirrored = byHashPair.get(`${left.b.geometryHash}\t${left.a.geometryHash}`);
+    if (!mirrored?.length) continue;
+    left.modified = true;
+    for (const right of mirrored) right.modified = true;
   }
 }

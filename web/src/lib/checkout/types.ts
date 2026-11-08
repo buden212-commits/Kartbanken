@@ -6,10 +6,14 @@ export const CheckoutMode = {
 export type CheckoutMode = (typeof CheckoutMode)[keyof typeof CheckoutMode];
 
 export const CheckoutStatus = {
+  /** Exportfilen skapas — låser området men går inte att ladda ner/checka in. */
+  EXPORTING: "EXPORTING",
   ACTIVE: "ACTIVE",
   CHECKED_IN: "CHECKED_IN",
   PENDING_USER_CONFIRM: "PENDING_USER_CONFIRM",
   PENDING_ADMIN_CONFIRM: "PENDING_ADMIN_CONFIRM",
+  /** Admin-integrering pågår (anspråk mot dubbelklick/parallella körningar). */
+  INTEGRATING: "INTEGRATING",
   INTEGRATED: "INTEGRATED",
   CANCELLED: "CANCELLED",
 } as const;
@@ -26,10 +30,21 @@ export type CheckoutSelectionType =
 
 /** Statuses that hold an exclusive area lock (overlap checks). */
 export const LOCKING_CHECKOUT_STATUSES: CheckoutStatus[] = [
+  CheckoutStatus.EXPORTING,
   CheckoutStatus.ACTIVE,
   CheckoutStatus.CHECKED_IN,
   CheckoutStatus.PENDING_ADMIN_CONFIRM,
+  CheckoutStatus.INTEGRATING,
 ];
+
+/** Statuses where the owner may upload (or replace) a checkin file. */
+export const CHECKIN_ALLOWED_STATUSES: CheckoutStatus[] = [
+  CheckoutStatus.ACTIVE,
+  CheckoutStatus.CHECKED_IN,
+];
+
+/** INTEGRATING older than this is treated as an aborted run and may be claimed again. */
+export const STALE_INTEGRATING_MS = 10 * 60 * 1000;
 
 export type Bbox = {
   minX: number;
@@ -98,7 +113,7 @@ export function parseBbox(value: unknown): Bbox | null {
   return { minX, minY, maxX, maxY };
 }
 
-function parsePolygonRing(value: unknown): PolygonRing | null {
+export function parsePolygonRing(value: unknown): PolygonRing | null {
   if (!Array.isArray(value) || value.length < 3) return null;
   const ring: PolygonRing = [];
   for (const point of value) {
@@ -180,24 +195,28 @@ export function parseSelectionJson(raw: string): CheckoutSelection {
   }
 
   if (geom.type === CheckoutSelectionType.POLYGON) {
-    const ring = geom.ring;
-    if (!Array.isArray(ring) || ring.length < 3) {
+    const ring = parsePolygonRing(geom.ring);
+    if (!ring) {
       throw new Error("POLYGON saknar giltig ring");
     }
-    const normalized: PolygonRing = ring.map((point) => {
-      if (!Array.isArray(point) || point.length < 2) {
-        throw new Error("Ogiltig polygonpunkt");
-      }
-      return [Number(point[0]), Number(point[1])] as [number, number];
-    });
     return {
-      geometry: { type: CheckoutSelectionType.POLYGON, ring: normalized },
+      geometry: { type: CheckoutSelectionType.POLYGON, ring },
       objectIds,
       ...importFields(record),
     };
   }
 
   throw new Error("Okänd geometrityp i selectionJson");
+}
+
+/** Like parseSelectionJson but returns null (and logs) instead of throwing. */
+export function tryParseSelectionJson(raw: string, context?: string): CheckoutSelection | null {
+  try {
+    return parseSelectionJson(raw);
+  } catch (err) {
+    console.error(`[checkout] Ogiltigt selectionJson${context ? ` (${context})` : ""}:`, err);
+    return null;
+  }
 }
 
 export function serializeSelection(selection: CheckoutSelection): string {
@@ -216,6 +235,8 @@ export function checkoutModeLabel(mode: CheckoutMode): string {
 
 export function checkoutStatusLabel(status: CheckoutStatus): string {
   switch (status) {
+    case CheckoutStatus.EXPORTING:
+      return "Exporteras";
     case CheckoutStatus.ACTIVE:
       return "Aktiv";
     case CheckoutStatus.CHECKED_IN:
@@ -224,6 +245,8 @@ export function checkoutStatusLabel(status: CheckoutStatus): string {
       return "Väntar på användarbekräftelse";
     case CheckoutStatus.PENDING_ADMIN_CONFIRM:
       return "Väntar på admin-bekräftelse";
+    case CheckoutStatus.INTEGRATING:
+      return "Integreras";
     case CheckoutStatus.INTEGRATED:
       return "Integrerad";
     case CheckoutStatus.CANCELLED:

@@ -3,9 +3,11 @@ import path from "path";
 import { createRequire } from "module";
 import {
   buildSymbolNameMap,
+  buildVertexFlagSignatures,
   normalizeFromGeoJson,
   summarizeParseResult,
 } from "./normalize";
+import { readOcadFileInfo } from "./ocad-file-info";
 import type { OcadParseSummary } from "./types";
 import type { Feature, Geometry } from "geojson";
 
@@ -61,18 +63,33 @@ export async function parseOcadBufferWithFile(
   const objects = normalizeFromGeoJson(
     geojson.features as Feature<Geometry, OcadObjectProperties>[],
     symbolNames,
+    buildVertexFlagSignatures(ocadFile.objects),
   );
 
+  const mapScale = readMapScaleSafe(buffer);
+
   return {
-    summary: summarizeParseResult({
-      fileName,
-      fileSizeBytes: buffer.byteLength,
-      parseDurationMs: Date.now() - started,
-      ocadFile,
-      objects,
-    }),
+    summary: {
+      ...summarizeParseResult({
+        fileName,
+        fileSizeBytes: buffer.byteLength,
+        parseDurationMs: Date.now() - started,
+        ocadFile,
+        objects,
+      }),
+      ...(mapScale ? { mapScale } : {}),
+    },
     ocadFile,
   };
+}
+
+function readMapScaleSafe(buffer: Buffer): number | undefined {
+  try {
+    const scale = readOcadFileInfo(buffer).scaleParams?.scale;
+    return scale && Number.isFinite(scale) && scale > 0 ? scale : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 export async function parseOcadBuffer(

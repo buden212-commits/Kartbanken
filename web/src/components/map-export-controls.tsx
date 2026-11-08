@@ -14,7 +14,10 @@ import {
   EXPORT_SCALES,
   formatExportLabel,
 } from "@/lib/ocad/map-export";
-import { OCAD_EXPORT_VERSIONS, type OcadExportVersion } from "@/lib/ocad/ocad-export-shared";
+import {
+  compatibleOcadExportVersions,
+  type OcadExportVersion,
+} from "@/lib/ocad/ocad-export-shared";
 import { HelpLinkIcon } from "@/components/help-link-icon";
 
 type Props = {
@@ -30,6 +33,8 @@ type Props = {
   suggestionOverlayCount?: number;
   /** When true, OCD+förslag asks for symbols in a dialog (Föreslå ändringar). */
   promptOcdSuggestionSymbols?: boolean;
+  /** Source file version; limits OCAD targets to the same object format. */
+  sourceOcadVersion?: number | null;
 };
 
 export function MapExportControls({
@@ -42,6 +47,7 @@ export function MapExportControls({
   error,
   suggestionOverlayCount,
   promptOcdSuggestionSymbols = false,
+  sourceOcadVersion = null,
 }: Props) {
   const showSuggestionOption =
     settings.outputFormat === "pdf" ||
@@ -103,7 +109,7 @@ export function MapExportControls({
               }
               className="form-select min-w-[140px]"
             >
-              {OCAD_EXPORT_VERSIONS.map((opt) => (
+              {compatibleOcadExportVersions(sourceOcadVersion).map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>

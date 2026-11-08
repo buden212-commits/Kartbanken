@@ -1,4 +1,4 @@
-import { compareOcadObjects } from "./diff";
+import { compareOcadObjects, resolveDiffToleranceMeters } from "./diff";
 import { changeIndicesByKind, limitStoredChanges } from "./diff-storage";
 import type { OcadObjectChange } from "./diff-types";
 import { buildTempDiffLayerPath, generateDiffLayerSvgs } from "./diff-layers";
@@ -11,7 +11,7 @@ import {
 } from "@/lib/storage";
 import { randomUUID } from "crypto";
 
-const TOLERANCE = Number(process.env.DIFF_SPATIAL_TOLERANCE_M ?? 2);
+const TOLERANCE = resolveDiffToleranceMeters();
 
 /** Skip re-start om ett bakgrundsanrop redan kör (serverless kan ta flera minuter). */
 const PROCESSING_LEASE_MS = 2 * 60 * 1000;
@@ -212,7 +212,7 @@ export async function processTempCompareJob(jobId: string): Promise<void> {
         fileNameA: activeJob.fileNameA,
         fileNameB: activeJob.fileNameB,
       },
-      { toleranceMeters: TOLERANCE },
+      { toleranceMeters: TOLERANCE, mapScale: summaryA.mapScale ?? summaryB.mapScale },
     );
 
     const stored = limitStoredChanges(diff.changes);

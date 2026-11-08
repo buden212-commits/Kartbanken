@@ -58,7 +58,13 @@ export async function POST(_request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Diff saknas för utcheckning" }, { status: 409 });
   }
 
-  const updated = await confirmCheckoutByUser(checkout.id);
+  const confirmed = await confirmCheckoutByUser(checkout.id);
+  if (!confirmed) {
+    return NextResponse.json(
+      { error: "Utcheckningens status har ändrats — ladda om sidan" },
+      { status: 409 },
+    );
+  }
 
   await logAction(session.user.id, "CHECKOUT_USER_CONFIRMED", "MapCheckout", checkout.id, {
     mapSlug: slug,
@@ -70,5 +76,5 @@ export async function POST(_request: Request, { params }: RouteParams) {
     owner: { name: checkout.user.name, email: checkout.user.email },
   });
 
-  return NextResponse.json({ ok: true, status: updated.status });
+  return NextResponse.json({ ok: true, status: CheckoutStatus.PENDING_ADMIN_CONFIRM });
 }

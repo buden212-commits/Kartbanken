@@ -5,8 +5,11 @@ import {
 } from "@/lib/ocad/ocad-integrate";
 import {
   buildVersionWarning,
+  incompatibleExportVersionMessage,
+  isCompatibleExportVersion,
   normalizeSourceVersion,
   OCAD_EXPORT_VERSIONS,
+  ocadHeaderVersionValue,
   type CropBbox,
   type CropOcadOptions,
   type CropOcadResult,
@@ -123,6 +126,14 @@ export function cropOcadBuffer(buffer: Buffer, options: CropOcadOptions): CropOc
   if (!OCAD_EXPORT_VERSIONS.some((v) => v.value === options.targetVersion)) {
     throw new Error("Ogiltig målversion för OCAD-export");
   }
+  if (!isCompatibleExportVersion(sourceVersion, options.targetVersion)) {
+    throw new Error(incompatibleExportVersionMessage(sourceVersion, options.targetVersion));
+  }
+
+  const keep = options.keepObjectIndices
+    ? (_entry: ObjectIndexEntry, objectIndex: number) =>
+        options.keepObjectIndices!.has(objectIndex)
+    : (entry: ObjectIndexEntry) => rectIntersectsBbox(entry.rc, options.bbox);
 
   const output = Buffer.from(buffer);
   let keptObjects = 0;
@@ -147,7 +158,7 @@ export function cropOcadBuffer(buffer: Buffer, options: CropOcadOptions): CropOc
       const statusOffset = entryOffset + OBJECT_INDEX_STATUS_OFFSET;
       const objectIndex = startIndex + i;
 
-      if (rectIntersectsBbox(entry.rc, options.bbox)) {
+      if (keep(entry, objectIndex)) {
         keptObjects++;
         keptObjectIndices.push(objectIndex);
       } else {
@@ -166,8 +177,7 @@ export function cropOcadBuffer(buffer: Buffer, options: CropOcadOptions): CropOc
 
   const targetVersion = options.targetVersion;
   if (targetVersion !== sourceVersion) {
-    output.writeInt16LE(targetVersion, HEADER_VERSION_OFFSET);
-    output.writeInt32LE(targetVersion, HEADER_CURRENT_FILE_VERSION_OFFSET);
+    writeHeaderVersion(output, targetVersion);
   }
 
   return {
@@ -236,11 +246,21 @@ export function applyOcadTargetVersion(
   sourceVersion: number,
   targetVersion: number,
 ): string | undefined {
-  if (targetVersion === sourceVersion) return undefined;
+  const normalizedSource = normalizeSourceVersion(sourceVersion);
+  const normalizedTarget = normalizeSourceVersion(targetVersion);
+  if (normalizedTarget === normalizedSource) return undefined;
+  if (!isCompatibleExportVersion(normalizedSource, normalizedTarget)) {
+    throw new Error(incompatibleExportVersionMessage(normalizedSource, normalizedTarget));
+  }
 
-  buffer.writeInt16LE(targetVersion, HEADER_VERSION_OFFSET);
-  buffer.writeInt32LE(targetVersion, HEADER_CURRENT_FILE_VERSION_OFFSET);
-  return buildVersionWarning(sourceVersion, targetVersion);
+  writeHeaderVersion(buffer, normalizedTarget);
+  return buildVersionWarning(normalizedSource, normalizedTarget);
+}
+
+function writeHeaderVersion(buffer: Buffer, version: number): void {
+  const headerValue = ocadHeaderVersionValue(version);
+  buffer.writeInt16LE(headerValue, HEADER_VERSION_OFFSET);
+  buffer.writeInt32LE(headerValue, HEADER_CURRENT_FILE_VERSION_OFFSET);
 }
 
 /** Marks OCAD objects deleted by their object index (mutates buffer in place). */

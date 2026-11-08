@@ -9,7 +9,10 @@ import {
   applyOcadTargetVersion,
   readOcadHeaderVersion,
 } from "@/lib/ocad/ocad-export-server";
+import { CheckoutStatus, checkoutStatusLabel } from "@/lib/checkout/types";
 import {
+  incompatibleExportVersionMessage,
+  isCompatibleExportVersion,
   normalizeSourceVersion,
   ocadExportVersionLabel,
   parseOcadExportVersion,
@@ -70,6 +73,19 @@ export async function GET(request: Request, { params }: RouteParams) {
     return NextResponse.json(
       { error: "Ingen behörighet att ladda ner utcheckning" },
       { status: 403 },
+    );
+  }
+
+  // Owners may only fetch the export while they can still check in; admins always.
+  const isAdmin = canAdminConfirmIntegration(session.user.role);
+  if (
+    !isAdmin &&
+    checkout.status !== CheckoutStatus.ACTIVE &&
+    checkout.status !== CheckoutStatus.CHECKED_IN
+  ) {
+    return NextResponse.json(
+      { error: `Utcheckningen kan inte laddas ner i status «${checkoutStatusLabel(checkout.status as CheckoutStatus)}».` },
+      { status: 409 },
     );
   }
 
@@ -165,6 +181,12 @@ export async function GET(request: Request, { params }: RouteParams) {
     // Annan OCAD-version: skriv om headerfälten i en kopia av subset-filen.
     const output = Buffer.from(sourceBuffer);
     const sourceVersion = normalizeSourceVersion(readOcadHeaderVersion(output));
+    if (!isCompatibleExportVersion(sourceVersion, requestedVersion)) {
+      return NextResponse.json(
+        { error: incompatibleExportVersionMessage(sourceVersion, requestedVersion) },
+        { status: 400 },
+      );
+    }
     const versionWarning = applyOcadTargetVersion(output, sourceVersion, requestedVersion);
 
     await logAction(session.user.id, "DOWNLOAD", "MapCheckout", checkout.id, {

@@ -6,7 +6,7 @@ import {
   type ExportFrame,
 } from "@/lib/ocad/map-export";
 import { rasterizeExportSvg } from "@/lib/ocad/export-rasterize";
-import { ocadSvgYFlip, rasterizeOcadRegionPng } from "@/lib/ocad/tile-generate";
+import { ocadSvgYFlip, rasterizeOcadWindowPng, rasterizeSvgPng } from "@/lib/ocad/tile-generate";
 import type { SvgBounds } from "@/lib/ocad/svg-utils";
 
 export type VersionExportRasterInput = {
@@ -22,6 +22,10 @@ export type VersionExportRasterInput = {
   rotationDeg: number;
   suggestionOverlaySvg?: string;
   hudSvg?: string;
+  /** Shown while the frame overlay (course, suggestions, map frame) is drawn. */
+  overlayLabel?: string;
+  /** Shown while the horizontal text overlay is drawn. */
+  hudLabel?: string;
   onProgress?: (progress: { label: string; done?: number; total?: number }) => void;
 };
 
@@ -56,7 +60,6 @@ function frameToBounds(frame: ExportFrame): SvgBounds {
 
 /**
  * Draw the export window once, at print resolution, from the objects inside it.
- * One render keeps lake fills and marsh hatching, and finishes inside the request limit.
  */
 async function rasterizeVectorFrame(params: {
   mapFileId: string;
@@ -73,7 +76,9 @@ async function rasterizeVectorFrame(params: {
   const yFlip = await ocadSvgYFlip(ocdBuffer, cacheKey);
 
   params.onProgress?.({ label: "Ritar kartan" });
-  return rasterizeOcadRegionPng({
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  return rasterizeOcadWindowPng({
     ocdBuffer,
     cacheKey,
     yFlip,
@@ -184,7 +189,7 @@ export async function rasterizeVersionExport(input: VersionExportRasterInput): P
   const suggestion = input.suggestionOverlaySvg?.trim() ?? "";
   const overlayBody = [kartram, suggestion].filter(Boolean).join("\n");
   if (overlayBody) {
-    report?.({ label: "Lägger till ram och kartförslag" });
+    report?.({ label: input.overlayLabel ?? "Lägger till ram och kartförslag" });
     const overlaySvg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" fill="transparent" viewBox="${paperBox.x} ${paperBox.y} ${paperBox.width} ${paperBox.height}" width="${input.widthPx}" height="${input.heightPx}">
 ${overlayBody}
@@ -230,13 +235,10 @@ ${overlayBody}
   const hudSvg = input.hudSvg?.trim();
   if (!hudSvg) return mapPng;
 
-  report?.({ label: "Lägger till skala" });
+  report?.({ label: input.hudLabel ?? "Lägger till skala" });
 
-  const hudPng = await rasterizeExportSvg({
-    mapSvg: hudSvg,
-    rotationDeg: 0,
-    widthPx: input.widthPx,
-    heightPx: input.heightPx,
+  const hudPng = await rasterizeSvgPng(hudSvg, input.widthPx, input.heightPx, {
+    background: null,
   });
 
   return sharp(mapPng)

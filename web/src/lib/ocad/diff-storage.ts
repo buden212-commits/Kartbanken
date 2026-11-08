@@ -54,7 +54,7 @@ export function changeIndicesByKind(changes: OcadObjectChange[]): {
   for (const change of changes) {
     if (change.changeType === "added") added.push(change.objectIndex);
     else if (change.changeType === "removed") removed.push(change.objectIndex);
-    else modified.push(change.objectIndex);
+    else modified.push(change.checkinObjectIndex ?? change.objectIndex);
   }
 
   return { added, removed, modified };

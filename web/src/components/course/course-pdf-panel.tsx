@@ -7,7 +7,7 @@ import {
   type PdfOrientation,
   type PdfPaperFormat,
 } from "@/lib/course/pdf-scale";
-import { downloadMapPdf } from "@/lib/ocad/map-export";
+import { downloadMapPdf, type ExportProgress } from "@/lib/ocad/map-export";
 import { HelpLinkIcon } from "@/components/help-link-icon";
 import { useEffect, useMemo, useState } from "react";
 
@@ -32,6 +32,7 @@ export function CoursePdfPanel({
   const [orientation, setOrientation] = useState<PdfOrientation>("portrait");
   const [scale, setScale] = useState(10000);
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState<ExportProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [previewNote, setPreviewNote] = useState<string | null>(null);
 
@@ -53,6 +54,7 @@ export function CoursePdfPanel({
     }
 
     setLoading(true);
+    setProgress({ label: "Startar export" });
     setError(null);
 
     try {
@@ -67,20 +69,20 @@ export function CoursePdfPanel({
       }
 
       const controller = new AbortController();
-      const timer = window.setTimeout(() => controller.abort(), 150_000);
+      const timer = window.setTimeout(() => controller.abort(), 280_000);
       let res: Response;
       try {
         res = await fetch(
           `/api/maps/${mapSlug}/courses/${exportCourseId}/export/pdf?${params}`,
           {
-            headers: { Accept: "application/json" },
+            headers: { Accept: "application/x-ndjson" },
             signal: controller.signal,
           },
         );
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") {
           throw new Error(
-            "PDF-exporten tog för lång tid. Prova ett mindre pappersformat eller annan skala.",
+            "PDF-exporten tog för lång tid. Vänta en stund och försök igen.",
           );
         }
         throw err;
@@ -93,37 +95,77 @@ export function CoursePdfPanel({
         throw new Error(data.error ?? "Export misslyckades");
       }
 
-      const data = (await res.json()) as {
-        svg?: string;
-        hudSvg?: string;
-        pngBase64?: string;
-        rotationDeg?: number;
-        courseName?: string;
-        frame: {
-          centerX: number;
-          centerY: number;
-          widthUnits: number;
-          heightUnits: number;
-          widthMm: number;
-          heightMm: number;
-        };
-      };
-
-      const nameForFile =
-        data.courseName ?? exportCourse?.name ?? "bana";
-
-      if (!data.pngBase64 && !data.svg) {
-        throw new Error("Export misslyckades");
+      if (!res.body) {
+        throw new Error("Kunde inte läsa exportens förlopp");
       }
 
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let pending = "";
+      let pngBase64: string | null = null;
+      let rotationDeg: number | undefined;
+      let courseName: string | undefined;
+      let frame: {
+        centerX: number;
+        centerY: number;
+        widthUnits: number;
+        heightUnits: number;
+        widthMm: number;
+        heightMm: number;
+      } | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        pending += decoder.decode(value, { stream: true });
+        const lines = pending.split("\n");
+        pending = lines.pop() ?? "";
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          const event = JSON.parse(trimmed) as {
+            type?: string;
+            label?: string;
+            done?: number;
+            total?: number;
+            error?: string;
+            pngBase64?: string;
+            rotationDeg?: number;
+            courseName?: string;
+            frame?: NonNullable<typeof frame>;
+          };
+          if (event.type === "progress" && event.label) {
+            setProgress({
+              label: event.label,
+              done: event.done,
+              total: event.total,
+            });
+          } else if (event.type === "error") {
+            throw new Error(event.error ?? "Export misslyckades");
+          } else if (event.type === "result" && event.pngBase64 && event.frame) {
+            pngBase64 = event.pngBase64;
+            rotationDeg = event.rotationDeg;
+            courseName = event.courseName;
+            frame = event.frame;
+          }
+        }
+      }
+
+      if (!pngBase64 || !frame) {
+        throw new Error("Kunde inte rastrera kartbilden för export");
+      }
+
+      const nameForFile = courseName ?? exportCourse?.name ?? "bana";
+
+      setProgress({ label: "Skapar PDF" });
       await downloadMapPdf(
-        data.svg ?? "",
-        data.frame,
+        "",
+        frame,
         `${nameForFile.replace(/[^\w\s-åäöÅÄÖ]/g, "").trim() || "bana"}-${scale}`,
         {
-          pngBase64: data.pngBase64,
-          hudSvg: data.hudSvg,
-          rotationDeg: data.rotationDeg,
+          pngBase64,
+          rotationDeg,
+          onProgress: setProgress,
         },
       );
       setPreviewNote(
@@ -133,6 +175,7 @@ export function CoursePdfPanel({
       setError(err instanceof Error ? err.message : "Export misslyckades");
     } finally {
       setLoading(false);
+      setProgress(null);
     }
   }
 
@@ -197,11 +240,37 @@ export function CoursePdfPanel({
           {loading ? "Exporterar…" : "Ladda ner PDF"}
         </button>
       </div>
+      {loading && (
+        <div className="mt-3 flex items-center gap-3" role="status" aria-live="polite">
+          <span
+            className="inline-block h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-slate-300 border-t-ifk-blue"
+            aria-hidden
+          />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm text-slate-800">
+              {progress?.label ?? "Exporterar"}
+              {progress?.total != null && progress.total > 0
+                ? ` (${progress.done ?? 0} av ${progress.total})`
+                : "…"}
+            </p>
+            {progress?.total != null && progress.total > 0 && (
+              <div className="mt-1 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-slate-200">
+                <div
+                  className="h-full rounded-full bg-ifk-blue transition-[width] duration-200"
+                  style={{
+                    width: `${Math.min(100, Math.round(((progress.done ?? 0) / progress.total) * 100))}%`,
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {previewNote && <p className="mt-2 text-xs text-emerald-700">{previewNote}</p>}
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
       <p className="mt-1 text-xs text-slate-500">
-        Välj bana — utskriftsområdet centreras på den banans utbredning. PDF genereras i
-        webbläsaren (jspdf).
+        Välj bana — utskriftsområdet centreras på den banans utbredning. Kartan ritas i
+        utskriftsupplösning och banan läggs ovanpå.
       </p>
     </div>
   );

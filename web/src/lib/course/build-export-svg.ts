@@ -67,6 +67,56 @@ export type CourseExportSvgParts = {
   rotationDeg: number;
 };
 
+export type CoursePrintParts = {
+  /** Course symbols in map coordinates. Drawn with the map, then rotated. */
+  overlayMarkup: string;
+  /** Control numbers and course info, kept horizontal after rotation. */
+  hudSvg: string;
+  rotationDeg: number;
+};
+
+/**
+ * Course symbols and horizontal text for a print export.
+ * The map itself is rasterized separately at print resolution.
+ */
+export function buildCoursePrintParts(
+  frame: ExportFrame,
+  objects: CourseObjectDto[],
+  rootTransform: SvgRootTransform = IDENTITY_SVG_TRANSFORM,
+  controlNumbers?: Map<string, number | string>,
+  courseInfo?: { name: string; lengthLabel: string; mapScale?: number },
+  sequence?: string[] | null,
+  rotationDeg: number = PDF_EXPORT_ROTATION_DEG,
+): CoursePrintParts {
+  const pixelWidth = Math.max(1, Math.round((frame.widthMm / 25.4) * 200));
+  const pixelHeight = Math.max(1, Math.round((frame.heightMm / 25.4) * 200));
+  const overlayMarkup = renderCourseOverlaySvg(objects, rootTransform, {
+    controlNumbers,
+    skipText: true,
+    sequence,
+  });
+  const exportTextMarkup = renderCourseExportTextSvg(
+    objects,
+    rootTransform,
+    frame,
+    controlNumbers,
+    rotationDeg,
+  );
+  const infoMarkup =
+    courseInfo != null
+      ? buildCourseInfoSvg(
+          frame,
+          courseInfo.name,
+          courseInfo.lengthLabel,
+          courseInfo.mapScale,
+          { textRotationDeg: 0 },
+        )
+      : "";
+  const hudBody = [exportTextMarkup, infoMarkup].filter(Boolean).join("\n");
+  const hudSvg = buildExportHudSvg(frame, pixelWidth, pixelHeight, hudBody);
+  return { overlayMarkup, hudSvg, rotationDeg };
+}
+
 /**
  * Build course PDF layers. Map content is axis-aligned; page tilt is applied
  * on the canvas so OCAD patterns/symbols rotate with the map. Control numbers
@@ -96,28 +146,15 @@ export function buildCourseExportSvg(
     .replace(/<defs[\s\S]*?<\/defs>/i, "");
 
   const { x, y, width, height } = exportFrameBbox(frame);
-  const overlayMarkup = renderCourseOverlaySvg(objects, rootTransform, {
-    controlNumbers,
-    skipText: true,
-    sequence,
-  });
-  const exportTextMarkup = renderCourseExportTextSvg(
+  const { overlayMarkup, hudSvg } = buildCoursePrintParts(
+    frame,
     objects,
     rootTransform,
-    frame,
     controlNumbers,
+    courseInfo,
+    sequence,
     rotationDeg,
   );
-  const infoMarkup =
-    courseInfo != null
-      ? buildCourseInfoSvg(
-          frame,
-          courseInfo.name,
-          courseInfo.lengthLabel,
-          courseInfo.mapScale,
-          { textRotationDeg: 0 },
-        )
-      : "";
 
   const kartramMarkup = buildKartramFrameMarkup(
     parseKartramFromSvg(fullSvgText),
@@ -131,9 +168,6 @@ ${inner}
 <g data-course-overlay="true">${overlayMarkup}</g>
 ${kartramMarkup}
 </svg>`;
-
-  const hudBody = [exportTextMarkup, infoMarkup].filter(Boolean).join("\n");
-  const hudSvg = buildExportHudSvg(frame, pixelWidth, pixelHeight, hudBody);
 
   return { svg, hudSvg, rotationDeg };
 }

@@ -19,6 +19,8 @@ export type CropOcadOptions = {
   targetVersion: OcadExportVersion;
   /** Tillåt tom crop (alla objekt soft-delete). Används vid import av delkarta i tomt område. */
   allowEmpty?: boolean;
+  /** When set, exactly these object indices are kept (bbox is ignored for the predicate). */
+  keepObjectIndices?: Set<number>;
 };
 
 export type CropOcadResult = {
@@ -59,6 +61,41 @@ export function svgExportFrameToGeoBbox(
 export function normalizeSourceVersion(version: number): number {
   if (version === 2018) return 18;
   return version;
+}
+
+/** Value written to the OCAD file header (OCAD itself stores 2018, not 18). */
+export function ocadHeaderVersionValue(version: number): number {
+  return normalizeSourceVersion(version) === 18 ? 2018 : version;
+}
+
+/** OCAD object record layout: 10, 11 and 12 (12 and 2018 share format). */
+function exportObjectFormat(version: number): number {
+  const normalized = normalizeSourceVersion(version);
+  return normalized === 18 ? 12 : normalized;
+}
+
+/**
+ * Only the header is rewritten on export, so the target must share the source's
+ * object record layout — otherwise the file is unreadable.
+ */
+export function isCompatibleExportVersion(sourceVersion: number, targetVersion: number): boolean {
+  return exportObjectFormat(sourceVersion) === exportObjectFormat(targetVersion);
+}
+
+export function compatibleOcadExportVersions(
+  sourceVersion: number | null | undefined,
+): (typeof OCAD_EXPORT_VERSIONS)[number][] {
+  if (sourceVersion == null) return [...OCAD_EXPORT_VERSIONS];
+  return OCAD_EXPORT_VERSIONS.filter((entry) =>
+    isCompatibleExportVersion(sourceVersion, entry.value),
+  );
+}
+
+export function incompatibleExportVersionMessage(
+  sourceVersion: number,
+  targetVersion: number,
+): string {
+  return `Kan inte spara ${versionLabel(normalizeSourceVersion(sourceVersion))} som ${versionLabel(targetVersion)} — objektformatet skiljer sig. Välj samma OCAD-version som källfilen (eller öppna och spara om filen i OCAD).`;
 }
 
 export function defaultOcadExportVersion(

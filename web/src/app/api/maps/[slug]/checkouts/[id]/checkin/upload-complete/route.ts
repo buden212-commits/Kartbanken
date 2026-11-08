@@ -1,20 +1,17 @@
-import { logAction } from "@/lib/audit";
 import { requireSession } from "@/lib/auth/api";
 import { canCheckin } from "@/lib/auth/permissions";
-import {
-  markCheckoutDiffPending,
-  scheduleCheckoutSubsetDiff,
-} from "@/lib/checkout/diff-status";
-import { getCheckoutById, updateCheckoutCheckin } from "@/lib/checkout/repository";
+import { checkinStatusAllowsUpload, submitCheckin } from "@/lib/checkout/checkin-submit";
+import { getCheckoutById } from "@/lib/checkout/repository";
 import { CheckoutStatus } from "@/lib/checkout/types";
-import { notifyCheckinSubmitted } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
-import { deleteFile } from "@/lib/storage";
+import { MAX_UPLOAD_BYTES, readStoredFile } from "@/lib/storage";
 import {
   blobRefToPathname,
   isCheckoutCheckinPath,
 } from "@/lib/storage/blob-path-security";
 import { NextResponse } from "next/server";
+
+export const maxDuration = 300;
 
 type RouteParams = { params: Promise<{ slug: string; id: string }> };
 
@@ -44,9 +41,16 @@ export async function POST(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Endast utcheckningsägaren kan checka in" }, { status: 403 });
   }
 
-  let body: { blobUrl?: string; comment?: string };
+  if (!checkinStatusAllowsUpload(checkout.status)) {
+    return NextResponse.json(
+      { error: "Utcheckningen accepterar inte incheckning i nuvarande status" },
+      { status: 409 },
+    );
+  }
+
+  let body: { blobUrl?: string; comment?: string; filename?: string };
   try {
-    body = (await request.json()) as { blobUrl?: string; comment?: string };
+    body = (await request.json()) as { blobUrl?: string; comment?: string; filename?: string };
   } catch {
     return NextResponse.json({ error: "Ogiltig JSON" }, { status: 400 });
   }
@@ -60,37 +64,42 @@ export async function POST(request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Ogiltig checkin-sökväg" }, { status: 400 });
   }
 
-  const integrationComment = body.comment?.trim() || null;
-
-  if (checkout.checkinStoragePath) {
-    await deleteFile(checkout.checkinStoragePath).catch(() => undefined);
+  if (checkout.checkinStoragePath === checkinPath) {
+    // Retried completion of an already registered upload.
+    return NextResponse.json({ ok: true, status: CheckoutStatus.CHECKED_IN });
   }
 
-  await updateCheckoutCheckin(
-    checkout.id,
-    checkinPath,
-    CheckoutStatus.CHECKED_IN,
-    session.user.id,
-    integrationComment,
-  );
-  await markCheckoutDiffPending(checkout.id);
+  let buffer: Buffer;
+  try {
+    buffer = await readStoredFile(checkinPath);
+  } catch {
+    return NextResponse.json(
+      { error: "Den uppladdade filen hittades inte. Ladda upp igen." },
+      { status: 400 },
+    );
+  }
+  if (buffer.byteLength === 0 || buffer.byteLength > MAX_UPLOAD_BYTES) {
+    return NextResponse.json({ error: "Filen är tom eller för stor" }, { status: 400 });
+  }
 
-  await logAction(session.user.id, "CHECKIN_SUBMITTED", "MapCheckout", checkout.id, {
-    mapSlug: slug,
-    via: "blob",
-  });
-
-  notifyCheckinSubmitted({
-    checkoutId: checkout.id,
-    map: { title: map.title, slug: map.slug },
-    owner: { name: checkout.user.name, email: checkout.user.email },
-    checkin: {
-      storagePath: checkinPath,
-      filename: `${map.title.replace(/\s+/g, "-")}-checkin.ocd`,
-    },
-  });
-
-  scheduleCheckoutSubsetDiff(checkout.id);
+  try {
+    const result = await submitCheckin({
+      checkout,
+      map,
+      newStoragePath: checkinPath,
+      buffer,
+      userId: session.user.id,
+      comment: body.comment?.trim() || null,
+      filename: body.filename?.trim() || `${map.title.replace(/\s+/g, "-")}-checkin.ocd`,
+      via: "blob",
+    });
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
+    }
+  } catch (err) {
+    console.error("Checkin registration failed:", err);
+    return NextResponse.json({ error: "Checkin misslyckades" }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true, status: CheckoutStatus.CHECKED_IN });
 }

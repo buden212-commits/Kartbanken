@@ -3,16 +3,22 @@ import {
   duplicateDedupIndexSets,
   type ExactDuplicateGroup,
 } from "@/lib/ocad/exact-duplicates";
+import { exportObjectsByIndices } from "@/lib/ocad/ocad-export-server";
 import {
-  exportObjectsByIndices,
-  markObjectsDeletedByIndices,
-} from "@/lib/ocad/ocad-export-server";
+  duplicateStripComment,
+  stripExactDuplicatesFromBuffer,
+} from "@/lib/ocad/strip-duplicates";
 import { readActiveObjectIndices } from "@/lib/ocad/ocad-integrate";
 import { parseOcadBuffer } from "@/lib/ocad/read";
 import { processVersionAfterUpload } from "@/lib/ocad/process-version";
 import { sha256 } from "@/lib/hash";
-import { buildMapVersionPath, readStoredFile, uploadFile } from "@/lib/storage";
+import { buildMapVersionPath, deleteFile, readStoredFile, uploadFile } from "@/lib/storage";
 import { prisma } from "@/lib/prisma";
+import {
+  findHeadVersion,
+  lockMapAndAllocateVersionNumber,
+  MapVersionSource,
+} from "@/lib/maps/head-version";
 
 export type DuplicateScanResult = {
   map: {
@@ -197,55 +203,62 @@ export async function dedupeMapVersion(
     throw new Error("MAP_ARCHIVED");
   }
 
-  const head = await prisma.mapVersion.findFirst({
-    where: { mapFileId: version.mapFileId },
-    orderBy: { versionNumber: "desc" },
-    select: { id: true, versionNumber: true },
-  });
+  const head = await findHeadVersion(version.mapFileId);
   if (!head || head.id !== version.id) {
     throw new Error("NOT_HEAD_VERSION");
   }
 
   const sourceBuffer = await readStoredFile(version.storagePath);
-  const summary = await parseOcadBuffer(sourceBuffer, version.originalFilename);
-  const groups = findExactDuplicateGroups(summary.objects);
-  const { extras } = duplicateDedupIndexSets(groups);
-
-  if (extras.size === 0) {
-    throw new Error("NO_DUPLICATES");
-  }
-
-  const working = Buffer.from(sourceBuffer);
-  const { deleted } = markObjectsDeletedByIndices(working, extras);
-  if (deleted === 0) {
+  const stripped = await stripExactDuplicatesFromBuffer(
+    sourceBuffer,
+    version.originalFilename,
+  );
+  if (stripped.extrasRemoved === 0) {
     throw new Error("NO_DUPLICATES");
   }
 
   try {
-    await parseOcadBuffer(working, "dedupe-preview.ocd");
+    await parseOcadBuffer(stripped.buffer, "dedupe-preview.ocd");
   } catch {
     throw new Error("RESULT_INVALID");
   }
 
   const nextVersionNumber = head.versionNumber + 1;
   const storagePath = buildMapVersionPath(version.mapFileId, nextVersionNumber);
-  const storedRef = await uploadFile(storagePath, working);
-  const contentHash = sha256(working);
-  const comment = `Borttagna dubbletter (${deleted} extra objekt i ${groups.length} grupper)`;
+  const storedRef = await uploadFile(storagePath, stripped.buffer);
+  const contentHash = sha256(stripped.buffer);
+  const comment = duplicateStripComment(stripped.extrasRemoved, stripped.groupCount);
 
-  const created = await prisma.mapVersion.create({
-    data: {
-      mapFileId: version.mapFileId,
-      versionNumber: nextVersionNumber,
-      storagePath: storedRef,
-      originalFilename: `${safeFileStem(version.mapFile.title)}-v${nextVersionNumber}-utan-dubbletter.ocd`,
-      fileSizeBytes: working.byteLength,
-      contentHash,
-      uploadedById: userId,
-      comment,
-      parseStatus: "PENDING",
-    },
-  });
+  let created;
+  try {
+    created = await prisma.$transaction(
+      async (tx) => {
+        const versionNumber = await lockMapAndAllocateVersionNumber(
+          tx,
+          version.mapFileId,
+          head.id,
+        );
+        return tx.mapVersion.create({
+          data: {
+            mapFileId: version.mapFileId,
+            versionNumber,
+            storagePath: storedRef,
+            originalFilename: `${safeFileStem(version.mapFile.title)}-v${versionNumber}-utan-dubbletter.ocd`,
+            source: MapVersionSource.DUPLICATE_CLEANUP,
+            fileSizeBytes: stripped.buffer.byteLength,
+            contentHash,
+            uploadedById: userId,
+            comment,
+            parseStatus: "PENDING",
+          },
+        });
+      },
+      { timeout: 30_000, maxWait: 30_000 },
+    );
+  } catch (err) {
+    await deleteFile(storedRef).catch(() => undefined);
+    throw err;
+  }
 
   try {
     await processVersionAfterUpload(version.mapFileId, created.id, version.id);
@@ -256,8 +269,8 @@ export async function dedupeMapVersion(
   return {
     versionId: created.id,
     versionNumber: created.versionNumber,
-    deletedCount: deleted,
-    duplicateGroupCount: groups.length,
+    deletedCount: stripped.extrasRemoved,
+    duplicateGroupCount: stripped.groupCount,
     mapSlug: version.mapFile.slug,
   };
 }

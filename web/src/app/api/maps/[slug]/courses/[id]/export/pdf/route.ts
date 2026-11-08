@@ -3,6 +3,7 @@ import { logAction } from "@/lib/audit";
 import { assertCourseViewAccess } from "@/lib/course/access";
 import {
   buildCourseExportSvg,
+  buildCoursePrintParts,
   parseExportQueryParams,
 } from "@/lib/course/build-export-svg";
 import { getCourseById, toCourseDetail } from "@/lib/course/repository";
@@ -23,7 +24,7 @@ import {
 } from "@/lib/course/geometry";
 import { geoToSvgUserPoint } from "@/lib/ocad/svg-coords";
 import { prisma } from "@/lib/prisma";
-import { rasterizeExportSvg } from "@/lib/ocad/export-rasterize";
+import { rasterizeVersionExport } from "@/lib/ocad/export-from-tiles";
 import { resolveExportRotationDeg } from "@/lib/settings/app-settings";
 import { readStoredFile } from "@/lib/storage";
 import { NextResponse } from "next/server";
@@ -75,7 +76,14 @@ export async function GET(request: Request, { params }: RouteParams) {
 
   const version = await prisma.mapVersion.findUnique({
     where: { id: publishedVersion.id },
-    select: { previewSvgPath: true, storagePath: true },
+    select: {
+      previewSvgPath: true,
+      storagePath: true,
+      mapFileId: true,
+      versionNumber: true,
+      tileStatus: true,
+      tileManifestPath: true,
+    },
   });
   if (!version?.previewSvgPath) {
     return NextResponse.json({ error: "Kartpreview saknas" }, { status: 404 });
@@ -147,8 +155,7 @@ export async function GET(request: Request, { params }: RouteParams) {
   );
 
   const rotationDeg = await resolveExportRotationDeg();
-  const { svg: exportSvg, hudSvg, rotationDeg: exportRotationDeg } = buildCourseExportSvg(
-    svgText,
+  const printParts = buildCoursePrintParts(
     frame,
     exportObjects,
     rootTransform,
@@ -167,56 +174,121 @@ export async function GET(request: Request, { params }: RouteParams) {
   });
 
   const accept = request.headers.get("accept") ?? "";
-  if (accept.includes("application/json")) {
+  const wantsRaster =
+    accept.includes("application/json") || accept.includes("application/x-ndjson");
+  if (wantsRaster) {
     const { widthMm, heightMm } = paperSizeMm(format, orientation);
     const pixelWidth = mmToPx(frame.widthMm);
     const pixelHeight = mmToPx(frame.heightMm);
+    const rasterInput = {
+      mapFileId: version.mapFileId,
+      versionNumber: version.versionNumber,
+      storagePath: version.storagePath,
+      previewSvgPath: version.previewSvgPath,
+      tileStatus: version.tileStatus,
+      tileManifestPath: version.tileManifestPath,
+      frame,
+      widthPx: pixelWidth,
+      heightPx: pixelHeight,
+      rotationDeg: printParts.rotationDeg,
+      suggestionOverlaySvg: printParts.overlayMarkup,
+      hudSvg: printParts.hudSvg,
+      overlayLabel: "Ritar banan",
+      hudLabel: "Lägger till bantext",
+    };
 
-    let pngBase64: string | undefined;
-    try {
-      const png = await rasterizeExportSvg({
-        mapSvg: exportSvg,
-        hudSvg,
-        rotationDeg: exportRotationDeg,
-        widthPx: pixelWidth,
-        heightPx: pixelHeight,
+    if (accept.includes("application/x-ndjson")) {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        async start(controller) {
+          const send = (event: Record<string, unknown>) => {
+            controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+          };
+          try {
+            const png = await rasterizeVersionExport({
+              ...rasterInput,
+              onProgress: (progress) => send({ type: "progress", ...progress }),
+            });
+            send({
+              type: "result",
+              pngBase64: png.toString("base64"),
+              rotationDeg: printParts.rotationDeg,
+              frame,
+              courseName: course.name,
+              courseLengthLabel,
+              mapTitle: map.title,
+              scale,
+              format,
+              orientation,
+              widthMm,
+              heightMm,
+            });
+            controller.close();
+          } catch (error) {
+            console.error("Course PDF rasterize failed:", error);
+            send({ type: "error", error: "Kunde inte rastrera kartbilden för export" });
+            controller.close();
+          }
+        },
       });
-      pngBase64 = png.toString("base64");
-    } catch (error) {
-      console.error("Course PDF rasterize failed:", error);
-      // Client can fall back to SVG + /api/export/rasterize
+
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "application/x-ndjson; charset=utf-8",
+          "Cache-Control": "private, no-store",
+          "X-Accel-Buffering": "no",
+        },
+      });
     }
 
-    return NextResponse.json({
-      svg: pngBase64 ? undefined : exportSvg,
-      hudSvg: pngBase64 ? undefined : hudSvg,
-      pngBase64,
-      rotationDeg: exportRotationDeg,
-      frame,
-      courseName: course.name,
-      courseLengthLabel,
-      mapTitle: map.title,
-      scale,
-      format,
-      orientation,
-      widthMm,
-      heightMm,
-      controlList: includeControlList
-        ? buildCourseVisits(hydrated.objects, hydrated.sequence).map((visit) => ({
-            number: visit.visitNumber ?? 0,
-            symbolNr: visit.symbolNr,
-            text:
-              visit.symbolNr === 701
-                ? "Start"
-                : visit.symbolNr === 706
-                  ? "Mål"
-                  : visit.code != null
-                    ? String(visit.code)
-                    : null,
-          }))
-        : [],
-    });
+    try {
+      const png = await rasterizeVersionExport(rasterInput);
+      return NextResponse.json({
+        pngBase64: png.toString("base64"),
+        rotationDeg: printParts.rotationDeg,
+        frame,
+        courseName: course.name,
+        courseLengthLabel,
+        mapTitle: map.title,
+        scale,
+        format,
+        orientation,
+        widthMm,
+        heightMm,
+        controlList: includeControlList
+          ? buildCourseVisits(hydrated.objects, hydrated.sequence).map((visit) => ({
+              number: visit.visitNumber ?? 0,
+              symbolNr: visit.symbolNr,
+              text:
+                visit.symbolNr === 701
+                  ? "Start"
+                  : visit.symbolNr === 706
+                    ? "Mål"
+                    : visit.code != null
+                      ? String(visit.code)
+                      : null,
+            }))
+          : [],
+      });
+    } catch (error) {
+      console.error("Course PDF rasterize failed:", error);
+      return NextResponse.json(
+        { error: "Kunde inte rastrera kartbilden för export" },
+        { status: 500 },
+      );
+    }
   }
+
+  const { svg: exportSvg } = buildCourseExportSvg(
+    svgText,
+    frame,
+    exportObjects,
+    rootTransform,
+    undefined,
+    { name: course.name, lengthLabel: courseLengthLabel, mapScale: scale },
+    printSequence,
+    rotationDeg,
+  );
 
   const safeName = course.name.replace(/[^\w\s-åäöÅÄÖ]/g, "").trim() || "bana";
   return new NextResponse(exportSvg, {

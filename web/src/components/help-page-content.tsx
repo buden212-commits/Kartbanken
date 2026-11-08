@@ -116,7 +116,10 @@ export async function HelpPageContent() {
           <p>Huvudflödet för versionshantering ser ut så här:</p>
           <ol className="list-decimal space-y-2 pl-5">
             <li>Logga in och välj ett område på startsidan.</li>
-            <li>Ladda upp en ny .ocd-fil som skapar en ny version.</li>
+            <li>
+              Ladda upp en ny .ocd-fil som skapar en ny version. Extra identiska objekt (samma
+              symbol, geometri och text) tas bort automatiskt — ett per grupp behålls.
+            </li>
             <li>Granska diff mot föregående version.</li>
             <li>Publicera versionen när den ska vara tillgänglig för läsare.</li>
           </ol>
@@ -167,6 +170,14 @@ export async function HelpPageContent() {
             administratör om det dröjer. När administratören godkänner ditt konto skickas ett
             e-postmeddelande med vilken behörighet du fått och länk till inloggning (kräver
             konfigurerad SMTP).
+          </p>
+          <p className="mt-3">
+            Klubbmedlemmar kan i stället välja <strong>Logga in med Google</strong>. Google-kontots
+            verifierade e-post jämförs med Eventor. Stämmer inte e-posten räcker ett unikt för- och
+            efternamn. Du får då läsbehörighet direkt, tills en administratör sätter en annan roll.
+            Delar flera medlemmar samma namn måste e-posten vara den som står i Eventor. Saknas
+            träff kan du skapa konto och vänta på godkännande. Ett konto som redan har en roll
+            behåller den när du loggar in med samma e-post.
           </p>
           <HelpProcessDiagram title="Flöde — logga in" chart={loginFlow} />
 
@@ -364,8 +375,8 @@ export async function HelpPageContent() {
                   "Välj verktyg: Panorera (standard), rektangel eller polygon",
                   "Rita området på kartan och bekräfta urvalet — kartan använder tiles för smidigare zoom/pan (särskilt på stora kartor); första gången kan tiles byggas en stund med räknare (X av Y rutor)",
                   "Klicka Checka ut område — du kommer till utcheckningssidan",
-                  "Välj OCAD-format (t.ex. OCAD 12 eller OCAD 2018) när du skapar utcheckningen — måste matcha din OCAD-installation",
-                  "På utcheckningssidan kan du ladda ner som OCAD (.ocd) i valfri stödd version, eller som OpenOrienteering Mapper (.omap)",
+                  "Välj OCAD-format när du skapar utcheckningen — bara versioner med samma objektformat som kartan (OCAD 12 och OCAD 2018 går att växla emellan; 10 och 11 kan inte konverteras här)",
+                  "På utcheckningssidan kan du ladda ner som OCAD (.ocd) i en kompatibel version, eller som OpenOrienteering Mapper (.omap)",
                   "Öppna och spara .ocd i OCAD innan du redigerar — filen genereras av systemet. .omap öppnas i Mapper 0.9.6 eller senare",
                   "Överlappande utcheckningar blockeras — vänta tills ett område frigörs",
                 ]}
@@ -391,10 +402,10 @@ export async function HelpPageContent() {
               <HelpList
                 items={[
                   "Efter vanlig utcheckning: ladda upp den redigerade .ocd-filen via Checka in på utcheckningssidan (gäller inte Importera delkarta — där är filen redan incheckad)",
-                  "Granska utcheckningsdiff (tillagda, borttagna, ändrade). Diffen matchar i första hand på samma geometri, så oförändrade objekt med nytt index i OCAD inte blir «nya». Sidan uppdateras automatiskt. Om något går fel: «Försök beräkna diff igen»",
-                  "Validering vid incheckning varnar om incheckningsfilen har exakta dubbletter (identisk symbol och geometri), eller om tillagda objekt är kopior av något som redan finns — granska innan du bekräftar",
+                  "Granska utcheckningsdiff (tillagda, borttagna, ändrade, symbol ändrad). Diffen matchar i första hand på samma geometri, så oförändrade objekt med nytt index i OCAD inte blir «nya». Sidan uppdateras automatiskt. Om något går fel: «Försök beräkna diff igen»",
+                  "Validering stoppar integrering om nya eller ändrade objekt använder symboler som saknas i grundkartan. Du får också varning vid ändrad symboltabell, objekt utanför området, exakta dubbletter eller om filen inte ser ut att vara den utcheckade",
                   "Bekräfta integration — utcheckningen går till admin-bekräftelse (admin kan också integrera direkt utan din bekräftelse)",
-                  "Administratör bekräftar och integrerar — en ny opublicerad kartversion skapas (publicera i versionshistoriken)",
+                  "Administratör bekräftar och integrerar — en ny opublicerad kartversion skapas (publicera i versionshistoriken). Extra identiska objekt på hela kartan tas bort i den sparade versionen",
                   "Uppladdare i versionshistoriken är den som checkade in filen — inte administratören som integrerar",
                   "Efter integration: jämför, granska och publicera så att läsare ser ändringarna",
                   "Vid incheckning skickas e-post med .ocd-bilaga till admin och prenumeranter med «Bifoga .ocd»",
@@ -424,11 +435,11 @@ export async function HelpPageContent() {
               <h3 className="font-medium text-slate-900">Administratör</h3>
               <HelpList
                 items={[
-                  "Avbryt utcheckning eller fältredigering (tvinga avbryt) med valfri anledning om arbetet behöver stoppas",
+                  "Avbryt utcheckning eller fältredigering (tvinga avbryt) med valfri anledning om arbetet behöver stoppas. Ägaren kan själv avbryta så länge utcheckningen är aktiv och inget är incheckat",
                   "Godkänn incheckade fältredigeringar under Admin → Utcheckningar — granskningen visar jämförelsekarta med röd/gul/grön markering av ändringarna",
                   "Bekräfta och integrera när diffen är klar — du behöver inte vänta på att ägaren bekräftat först",
                   "Bekräfta granskning (kryssruta) innan integration genomförs",
-                  "Vid full uppladdning av hel karta blockeras uppladdning vid aktiva utcheckningar och fältredigeringar — admin kan bekräfta undantag",
+                  "Vid full uppladdning av hel karta blockeras uppladdning vid aktiva utcheckningar och fältredigeringar — admin kan bekräfta undantag. En manuell uppladdning efter utcheckningen gör att incheckningen inte kan integreras",
                 ]}
               />
             </>
@@ -451,7 +462,7 @@ export async function HelpPageContent() {
           <HelpProcessDiagram
             title="Status — utcheckning"
             chart={checkoutFlow}
-            caption="ACTIVE → incheckad → väntar på admin → integrerad (ny version). Admin kan avbryta från ACTIVE."
+            caption="ACTIVE → incheckad → väntar på admin → integrerad (ny version). Ägaren eller admin kan avbryta från ACTIVE."
           />
           {showEditor && (
             <HelpProcessDiagram title="Steg för steg — checka ut och in" chart={checkoutSteps} />
@@ -703,8 +714,10 @@ export async function HelpPageContent() {
               "Välj orientering: stående eller liggande",
               "Välj skala (t.ex. 1:10 000, 1:7 500, 1:5 000)",
               "Utskriftsområdet centreras automatiskt på den valda banans utbredning",
+              "Bakgrundskartan ritas i utskriftsupplösning, så sjöar, myrar och konturer blir skarpa",
+              "En spinner visar var i exporten du är, till exempel «Ritar kartan» och «Ritar banan»",
               "PDF roteras enligt Admin → Inställningar (standard +7° IOF), inklusive yt-raster och struktursymboler",
-              "Bannamn och banlängd skrivs ut nederst till vänster i magenta",
+              "Kontrollsiffror och övrig karttext följer med, och bannamn plus banlängd skrivs nederst till vänster i magenta",
               "Luckor i cirklar och sträckor följer med i PDF:en",
             ]}
           />
@@ -1013,8 +1026,9 @@ export async function HelpPageContent() {
 
             <h3 className="font-medium text-slate-900">Dubbletter</h3>
             <p>
+              Nya kartversioner rensas automatiskt från extra identiska objekt när de sparas.
               På <Link href="/admin/dubbletter" className="link-primary">/admin/dubbletter</Link>{" "}
-              kan du validera en kartversion: välj område och version och skanna efter exakta
+              kan du validera en äldre version: välj område och version och skanna efter exakta
               dubbletter (samma symbol, geometri och text). Resultatet visas på en karta med
               orangemarkörer och i en lista med antal, läge och objektindex. Kartan ligger på samma
               sida under rubriken «Dubbletter på kartan» — klicka knappen «Visa dubbletter på
@@ -1036,6 +1050,7 @@ export async function HelpPageContent() {
             <HelpList
               items={[
                 "Godkänn väntande konton och tilldela roll (läsare, redaktör eller administratör)",
+                "Klubbmedlemmar som loggar in med Google får läsbehörighet direkt — byt roll här om de ska vara redaktör eller administratör",
                 "Vid godkännande skickas e-post till användaren med behörighet och inloggningslänk",
                 "Avvisa konton som inte ska få tillgång",
                 "Skapa konton manuellt med e-post, namn, lösenord och roll",
@@ -1072,6 +1087,7 @@ export async function HelpPageContent() {
             <HelpList
               items={[
                 "Kartexport — rotation i grader (medurs) för PDF och GeoTIFF; standard +7° enligt IOF",
+                "Max yta per utcheckning (km²) — 0 betyder ingen gräns",
                 "SMTP-server och port (Gmail: smtp.gmail.com, port 587)",
                 "Gmail-adress som avsändare och Google App-lösenord (krävs — vanligt lösenord fungerar inte)",
                 "Admin-notis e-post — en eller flera mottagare (komma eller radbrytning); får alltid .ocd-bilaga vid versioner och incheckning",
@@ -1096,12 +1112,13 @@ export async function HelpPageContent() {
                 "Kartförslag granskat — till skaparen (om notiser påslagna)",
                 "Konto godkänt — till användaren med tilldelad behörighet",
                 "Tillfälligt lösenord — till användare som begärt återställning",
+                "Ny läsare via Google — när en klubbmedlem loggar in med Google och får läsbehörighet",
                 "Ny kartversion uppladdad — med valfri .ocd-bilaga till berättigade mottagare",
                 "Ny utcheckning skapad — till utcheckningsägare och prenumeranter",
                 "Incheckning inskickad — med .ocd-bilaga till admin och prenumeranter med «Bifoga .ocd»",
                 "Användare bekräftat integration — till prenumeranter",
                 "Utcheckning integrerad — till utcheckningsägare och prenumeranter",
-                "Utcheckning avbruten av admin — till utcheckningsägare och prenumeranter",
+                "Utcheckning avbruten av admin eller av ägaren — till utcheckningsägare och prenumeranter",
                 "Påminnelse om gammal utcheckning — till utcheckningsägare (och admin vid väntande integration); dagar och upprepning konfigureras under Inställningar",
               ]}
             />
@@ -1128,7 +1145,8 @@ export async function HelpPageContent() {
               <h3 className="font-medium text-slate-900">Jag kan inte logga in</h3>
               <p className="mt-1">
                 Kontot kan vänta på godkännande eller ha avvisats. Skapa konto om du saknar konto
-                och kontakta klubbens administratör. Godkända konton kan logga in direkt. Har du
+                och kontakta klubbens administratör. Godkända konton kan logga in direkt. Klubbmedlemmar
+                kan logga in med Google om e-posten eller namnet stämmer med Eventor. Har du
                 glömt lösenordet, använd <strong>Glömt lösenord?</strong> på inloggningssidan.
                 Efter många misslyckade försök kan inloggning tillfälligt blockeras — vänta en
                 stund och försök igen.
@@ -1161,7 +1179,8 @@ export async function HelpPageContent() {
                 Utcheckning låter redaktörer reservera ett kartområde, ladda ner en utcheckning .ocd,
                 redigera i OCAD och checka in ändringarna för granskning. Andra ser ditt område som
                 en färgad överlagring på kartan. Efter diff-granskning bekräftar du integrationen,
-                och en administratör slår ihop ändringarna i en ny kartversion.
+                och en administratör slår ihop ändringarna i en ny kartversion. Du kan avbryta
+                din egen utcheckning innan du checkat in. Saknade symboler stoppar integrering.
               </p>
             </div>
             <div>

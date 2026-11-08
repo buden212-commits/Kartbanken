@@ -106,9 +106,21 @@ export function buildCheckinDuplicateValidationWarnings(
 ): string[] {
   const warnings: string[] = [];
 
-  const internal = findExactDuplicateGroups(checkinObjects);
+  // Only report duplicates the editor introduced — clusters already in the baseline
+  // (with at least as many copies) are pre-existing map issues, not part of this checkin.
+  const baselineCounts = new Map<string, number>();
+  for (const object of baselineObjects) {
+    const key = objectContentKey(object);
+    baselineCounts.set(key, (baselineCounts.get(key) ?? 0) + 1);
+  }
+  const internal = findExactDuplicateGroups(checkinObjects).filter(
+    (group) => group.count > (baselineCounts.get(group.key) ?? 0) && group.count > 1,
+  );
   if (internal.length > 0) {
-    const extraCopies = internal.reduce((sum, group) => sum + (group.count - 1), 0);
+    const extraCopies = internal.reduce(
+      (sum, group) => sum + (group.count - Math.max(1, baselineCounts.get(group.key) ?? 0)),
+      0,
+    );
     const samples = internal.slice(0, 5).map((group) => {
       const textPart = group.text ? `, text «${group.text}»` : "";
       return `${group.symbolNumber} ${group.symbolName} ×${group.count} (index ${formatIndices(group.objectIndices)})${textPart}`;
@@ -116,7 +128,7 @@ export function buildCheckinDuplicateValidationWarnings(
     const more =
       internal.length > 5 ? ` — plus ${internal.length - 5} ytterligare grupper` : "";
     warnings.push(
-      `Incheckningen innehåller ${extraCopies} exakt${extraCopies === 1 ? "" : "a"} dubblett${extraCopies === 1 ? "" : "er"} ` +
+      `Incheckningen innehåller ${extraCopies} ny${extraCopies === 1 ? "" : "a"} exakt${extraCopies === 1 ? "" : "a"} dubblett${extraCopies === 1 ? "" : "er"} ` +
         `(${internal.length} grupp${internal.length === 1 ? "" : "er"} med identisk geometri): ${samples.join("; ")}${more}.`,
     );
   }

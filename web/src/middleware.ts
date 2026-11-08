@@ -1,7 +1,10 @@
-import { Role, type Role as RoleType } from "@/lib/roles";
+import { Role } from "@/lib/roles";
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
+import NextAuth from "next-auth";
+import { authConfig } from "@/auth.config";
 import { isApproved } from "@/lib/auth/permissions";
+
+const { auth } = NextAuth(authConfig);
 
 export default auth((req) => {
   const { pathname } = req.nextUrl;

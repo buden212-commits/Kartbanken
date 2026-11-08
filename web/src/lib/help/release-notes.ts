@@ -7,6 +7,30 @@ export type ReleaseNote = {
 
 export const releaseNotes: ReleaseNote[] = [
   {
+    date: "2026-11-08",
+    title: "Säkrare ut- och incheckning",
+    items: [
+      "Incheckningen granskas hårdare: saknade symboler stoppar integrering, och du får varning om symboltabellen skiljer sig, om objekt ligger utanför området eller om fel fil verkar ha laddats upp",
+      "Symbolbyte på samma objekt visas som «symbol ändrad» i stället för borttaget plus tillagt",
+      "Du kan själv avbryta din utcheckning så länge du inte har checkat in — administratör kan fortfarande avbryta när som helst",
+      "En manuell uppladdning av hela kartan efter utcheckningen blockerar integrering, så ändringarna inte skrivs över fel version",
+      "Nedladdning som OCAD 12 och OCAD 2018 går bara när kartan har samma objektformat — äldre format (10/11) kan inte konverteras i webben",
+      "Administratör kan sätta en maxyta per utcheckning under Inställningar (0 = ingen gräns)",
+      "När en ny kartversion sparas (uppladdning, incheckning eller fältredigering) tas extra identiska objekt bort automatiskt — ett per grupp behålls",
+    ],
+  },
+  {
+    date: "2026-10-08",
+    title: "Logga in med Google som klubbmedlem",
+    items: [
+      "På inloggningssidan kan du välja Logga in med Google",
+      "Om din e-post eller ditt namn matchar en medlem i Eventor får du läsbehörighet direkt",
+      "Har flera medlemmar samma namn behöver e-posten stämma med den som står i Eventor",
+      "Administratören kan senare höja behörigheten under Användare",
+      "E-post och lösenord samt Skapa konto fungerar som tidigare",
+    ],
+  },
+  {
     date: "2026-10-06",
     title: "PDF-export i vald skala och format",
     items: [
@@ -14,7 +38,10 @@ export const releaseNotes: ReleaseNote[] = [
       "Exporten fungerar i den skala och det format du valt, även på stora kartor",
       "Export startar direkt utan att först ladda in hela kartfilen i webbläsaren",
       "Under exporten visas en spinner och vilket steg som pågår, till exempel «Ritar kartan»",
-      "Utsnittet ritas i ett svep så exporten hinner bli klar",
+      "Kartutsnitt och bana hinner ritas klart i den skala och det format du valt",
+      "PDF av en bana ritar bakgrundskartan i utskriftsupplösning, så den inte blir suddig",
+      "Kontrollsiffror, karttext, bannamn och banlängd följer med i PDF:en",
+      "Banexporten visar samma typ av spinner, med steg som «Ritar banan»",
     ],
   },
   {

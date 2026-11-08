@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth/api";
 import { resetEmailTransport } from "@/lib/email";
 import {
   clampExportRotationDeg,
+  clampMaxCheckoutAreaKm2,
   clampReminderDays,
   getSmtpSettingsPublic,
   shouldUpdateSmtpPassword,
@@ -45,6 +46,7 @@ export async function PUT(request: Request) {
     Number(body.checkoutReminderRepeatDays ?? 7),
   );
   const exportRotationDeg = clampExportRotationDeg(Number(body.exportRotationDeg ?? 7));
+  const maxCheckoutAreaKm2 = clampMaxCheckoutAreaKm2(Number(body.maxCheckoutAreaKm2 ?? 0));
 
   const existing = await getSmtpSettingsPublic();
   const enabled = body.enabled === true;
@@ -85,6 +87,7 @@ export async function PUT(request: Request) {
       checkoutReminderDays,
       checkoutReminderRepeatDays,
       exportRotationDeg,
+      maxCheckoutAreaKm2,
       enabled,
     });
 
@@ -99,6 +102,7 @@ export async function PUT(request: Request) {
       checkoutReminderDays,
       checkoutReminderRepeatDays,
       exportRotationDeg,
+      maxCheckoutAreaKm2,
     });
 
     return NextResponse.json(settings);

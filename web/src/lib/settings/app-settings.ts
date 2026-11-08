@@ -21,6 +21,7 @@ export type SmtpSettingsPublic = {
   checkoutReminderDays: number;
   checkoutReminderRepeatDays: number;
   exportRotationDeg: number;
+  maxCheckoutAreaKm2: number;
   enabled: boolean;
   hasPassword: boolean;
 };
@@ -34,6 +35,7 @@ export type SmtpSettingsInput = {
   checkoutReminderDays: number;
   checkoutReminderRepeatDays: number;
   exportRotationDeg: number;
+  maxCheckoutAreaKm2: number;
   enabled: boolean;
 };
 
@@ -106,6 +108,19 @@ export function clampExportRotationDeg(value: number): number {
   return Math.min(180, Math.max(-180, Math.round(value)));
 }
 
+/** 0 = unlimited; otherwise km² with two decimals, capped at 10 000. */
+export function clampMaxCheckoutAreaKm2(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+  return Math.min(10_000, Math.round(value * 100) / 100);
+}
+
+export async function resolveMaxCheckoutAreaKm2(): Promise<number> {
+  const row = await getAppSettingsRow();
+  return clampMaxCheckoutAreaKm2(row?.maxCheckoutAreaKm2 ?? 0);
+}
+
 function defaultPublicSettings(): SmtpSettingsPublic {
   return {
     smtpHost: process.env.SMTP_HOST?.trim() || "smtp.gmail.com",
@@ -122,6 +137,7 @@ function defaultPublicSettings(): SmtpSettingsPublic {
     checkoutReminderDays: defaultReminderDays(),
     checkoutReminderRepeatDays: defaultReminderRepeatDays(),
     exportRotationDeg: DEFAULT_EXPORT_ROTATION_DEG,
+    maxCheckoutAreaKm2: 0,
     enabled: false,
     hasPassword: !!process.env.SMTP_PASS?.trim(),
   };
@@ -148,6 +164,7 @@ export async function getSmtpSettingsPublic(): Promise<SmtpSettingsPublic> {
     exportRotationDeg: clampExportRotationDeg(
       row.exportRotationDeg ?? DEFAULT_EXPORT_ROTATION_DEG,
     ),
+    maxCheckoutAreaKm2: clampMaxCheckoutAreaKm2(row.maxCheckoutAreaKm2 ?? 0),
     enabled: row.enabled,
     hasPassword: !!row.smtpPassEncrypted,
   };
@@ -258,6 +275,7 @@ export async function upsertSmtpSettings(input: SmtpSettingsInput): Promise<Smtp
   const checkoutReminderDays = clampReminderDays(input.checkoutReminderDays);
   const checkoutReminderRepeatDays = clampReminderDays(input.checkoutReminderRepeatDays);
   const exportRotationDeg = clampExportRotationDeg(input.exportRotationDeg);
+  const maxCheckoutAreaKm2 = clampMaxCheckoutAreaKm2(input.maxCheckoutAreaKm2);
 
   const row = await prisma.appSettings.upsert({
     where: { id: APP_SETTINGS_ID },
@@ -271,6 +289,7 @@ export async function upsertSmtpSettings(input: SmtpSettingsInput): Promise<Smtp
       checkoutReminderDays,
       checkoutReminderRepeatDays,
       exportRotationDeg,
+      maxCheckoutAreaKm2,
       enabled: input.enabled,
     },
     update: {
@@ -282,6 +301,7 @@ export async function upsertSmtpSettings(input: SmtpSettingsInput): Promise<Smtp
       checkoutReminderDays,
       checkoutReminderRepeatDays,
       exportRotationDeg,
+      maxCheckoutAreaKm2,
       enabled: input.enabled,
     },
   });
@@ -296,6 +316,7 @@ export async function upsertSmtpSettings(input: SmtpSettingsInput): Promise<Smtp
     exportRotationDeg: clampExportRotationDeg(
       row.exportRotationDeg ?? exportRotationDeg,
     ),
+    maxCheckoutAreaKm2: clampMaxCheckoutAreaKm2(row.maxCheckoutAreaKm2 ?? maxCheckoutAreaKm2),
     enabled: row.enabled,
     hasPassword: !!row.smtpPassEncrypted,
   };

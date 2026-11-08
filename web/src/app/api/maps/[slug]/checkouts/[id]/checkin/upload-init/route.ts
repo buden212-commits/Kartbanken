@@ -1,7 +1,8 @@
 import { requireSession } from "@/lib/auth/api";
 import { canCheckin } from "@/lib/auth/permissions";
+import { checkinStatusAllowsUpload } from "@/lib/checkout/checkin-submit";
 import { getCheckoutById } from "@/lib/checkout/repository";
-import { CheckoutStatus } from "@/lib/checkout/types";
+import { CHECKIN_ALLOWED_STATUSES } from "@/lib/checkout/types";
 import { prisma } from "@/lib/prisma";
 import { buildCheckoutCheckinPath, shouldUseClientUpload } from "@/lib/storage";
 import { NextResponse } from "next/server";
@@ -29,6 +30,13 @@ export async function POST(request: Request, { params }: RouteParams) {
 
   if (checkout.userId !== session.user.id && session.user.role !== "ADMIN") {
     return NextResponse.json({ error: "Endast utcheckningsägaren kan checka in" }, { status: 403 });
+  }
+
+  if (!checkinStatusAllowsUpload(checkout.status)) {
+    return NextResponse.json(
+      { error: "Utcheckningen accepterar inte incheckning i nuvarande status" },
+      { status: 409 },
+    );
   }
 
   let body: { filename?: string; size?: number; comment?: string };
@@ -62,6 +70,6 @@ export async function POST(request: Request, { params }: RouteParams) {
   return NextResponse.json({
     checkoutId: checkout.id,
     storagePath,
-    allowedStatuses: [CheckoutStatus.ACTIVE, CheckoutStatus.CHECKED_IN],
+    allowedStatuses: CHECKIN_ALLOWED_STATUSES,
   });
 }

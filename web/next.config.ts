@@ -30,7 +30,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["ocad2geojson"],
+  serverExternalPackages: ["ocad2geojson", "@resvg/resvg-js"],
   outputFileTracingIncludes: {
     "/hjalp/sjalvstudier": ["./src/lib/help/course-material.md"],
     "/api/maps/[slug]/versions/[id]/tiles/**": [
@@ -42,6 +42,16 @@ const nextConfig: NextConfig = {
       "./node_modules/@img/sharp-linux-x64/**",
       "./node_modules/@img/sharp-libvips-linux-x64/**",
       "./node_modules/sharp/**",
+    ],
+    "/api/maps/[slug]/courses/[id]/export/pdf": [
+      "./node_modules/@resvg/resvg-js/**",
+      "./node_modules/@resvg/resvg-js-linux-x64-gnu/**",
+      "./src/lib/ocad/fonts/**",
+    ],
+    "/api/maps/[slug]/versions/[id]/export-raster": [
+      "./node_modules/@resvg/resvg-js/**",
+      "./node_modules/@resvg/resvg-js-linux-x64-gnu/**",
+      "./src/lib/ocad/fonts/**",
     ],
   },
   experimental: {

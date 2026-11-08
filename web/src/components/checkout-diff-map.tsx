@@ -45,6 +45,10 @@ type Props = {
   headVersionId: string;
   changes: OcadObjectChange[];
   layerPaths: LayerPaths | null;
+  /** Diff timestamp; busts cached layer images when the diff is recomputed. */
+  computedAt?: string;
+  totalChanges?: number;
+  changesTruncated?: boolean;
 };
 
 const MAP_TABS: { id: MapTab; label: string; description: string; legendClass: string }[] = [
@@ -87,6 +91,9 @@ export function CheckoutDiffMap({
   headVersionId,
   changes,
   layerPaths,
+  computedAt,
+  totalChanges,
+  changesTruncated = false,
 }: Props) {
   const [activeTab, setActiveTab] = useState<MapTab>("full");
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -105,15 +112,16 @@ export function CheckoutDiffMap({
         }
       : null;
 
-  const previewUrls = useMemo(
-    () => ({
+  const previewUrls = useMemo(() => {
+    const layerBase = `/api/maps/${mapSlug}/checkouts/${checkoutId}/diff/layer`;
+    const version = computedAt ? `&v=${encodeURIComponent(computedAt)}` : "";
+    return {
       full: `/api/maps/${mapSlug}/versions/${headVersionId}/preview`,
-      added: `/api/maps/${mapSlug}/checkouts/${checkoutId}/diff/layer?layer=added`,
-      removed: `/api/maps/${mapSlug}/checkouts/${checkoutId}/diff/layer?layer=removed`,
-      modified: `/api/maps/${mapSlug}/checkouts/${checkoutId}/diff/layer?layer=modified`,
-    }),
-    [mapSlug, checkoutId, headVersionId],
-  );
+      added: `${layerBase}?layer=added${version}`,
+      removed: `${layerBase}?layer=removed${version}`,
+      modified: `${layerBase}?layer=modified${version}`,
+    };
+  }, [mapSlug, checkoutId, headVersionId, computedAt]);
 
   const filteredChanges = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -258,6 +266,9 @@ export function CheckoutDiffMap({
               selectedIndex={selectedIndex}
               onSelect={handleSelectChange}
               listLength={changes.length}
+              totalChanges={totalChanges}
+              changesTruncated={changesTruncated}
+              maxChangesApplied={changesTruncated ? changes.length : null}
             />
           </div>
         </>

@@ -2,7 +2,9 @@
  * Verifierar subset-diff scope, identisk checkin, och add/remove/move-detektering.
  * Kör: npm run test:subset-diff
  */
-import { compareOcadObjects } from "../src/lib/ocad/diff";
+import { compareOcadObjects, resolveDiffToleranceMeters } from "../src/lib/ocad/diff";
+import { markSwappedGeometryPairs } from "../src/lib/ocad/geometry-compare";
+import { metersToMapUnits } from "../src/lib/ocad/crs";
 import type { NormalizedOcadObject } from "../src/lib/ocad/types";
 import { normalizeFromGeoJson } from "../src/lib/ocad/normalize";
 import {
@@ -308,5 +310,77 @@ assert(
   validationWarnings.some((w) => w.includes("exakta kopior")),
   `expected added-copy warning, got: ${validationWarnings.join(" | ")}`,
 );
+
+// Modified pair with a new checkin index keeps the baseline objectIndex
+const resizedDiff = compareOcadObjects(
+  [makeObject(10, 101, "hash-old-shape", [100, 200])],
+  [makeObject(99, 101, "hash-new-shape", [100, 200])],
+  { fileNameA: "export.ocd", fileNameB: "checkin.ocd" },
+  { toleranceMeters: 2, exactModified: true },
+);
+assert(resizedDiff.modified === 1, `expected 1 modified, got ${resizedDiff.modified}`);
+assert(resizedDiff.added === 0 && resizedDiff.removed === 0, "same-centroid edit must not be remove+add");
+const resizedChange = resizedDiff.changes.find((c) => c.changeType === "modified");
+assert(resizedChange?.objectIndex === 10, `baseline objectIndex should be 10, got ${resizedChange?.objectIndex}`);
+assert(
+  resizedChange?.checkinObjectIndex === 99,
+  `checkinObjectIndex should be 99, got ${resizedChange?.checkinObjectIndex}`,
+);
+
+// exactModified: a sub-tolerance move still counts as modified
+const tinyMove = compareOcadObjects(
+  [makeObject(1, 101, "hash-a", [100, 200])],
+  [makeObject(1, 101, "hash-a-moved", [100.5, 200])],
+  { fileNameA: "a.ocd", fileNameB: "b.ocd" },
+  { toleranceMeters: 2, exactModified: true },
+);
+assert(tinyMove.modified === 1, "exactModified must flag a hash change even within tolerance");
+
+// Scale: 2 m at 1:10 000 is 20 paper units, so a 10-unit move stays unchanged
+const mapScale = 10_000;
+const paperFor2m = metersToMapUnits(2, mapScale);
+assert(Math.abs(paperFor2m - 20) < 1e-6, `expected 20 paper units for 2 m at 1:10000, got ${paperFor2m}`);
+const scaledNear = compareOcadObjects(
+  [makeObject(1, 101, "hash-a", [100, 200])],
+  [makeObject(1, 101, "hash-a-10", [110, 200])],
+  { fileNameA: "a.ocd", fileNameB: "b.ocd" },
+  { toleranceMeters: 2, mapScale },
+);
+assert(scaledNear.modified === 0, "10 paper units is 1 m at 1:10000 — within 2 m");
+const scaledFar = compareOcadObjects(
+  [makeObject(1, 101, "hash-a", [100, 200])],
+  [makeObject(1, 101, "hash-a-30", [130, 200])],
+  { fileNameA: "a.ocd", fileNameB: "b.ocd" },
+  { toleranceMeters: 2, mapScale },
+);
+assert(scaledFar.modified === 1, "30 paper units is 3 m at 1:10000 — beyond 2 m");
+
+assert(resolveDiffToleranceMeters(undefined) === 2, "missing env falls back to 2 m");
+assert(resolveDiffToleranceMeters("nope") === 2, "NaN falls back to 2 m");
+assert(resolveDiffToleranceMeters("0") === 2, "non-positive falls back to 2 m");
+assert(resolveDiffToleranceMeters("1.5") === 1.5, "valid positive meters are kept");
+
+// Symbol swap with identical shape is one modified change, not remove+add
+const symbolSwap = compareOcadObjects(
+  [makeObject(4, 101, "shape-hash", [100, 200])],
+  [makeObject(4, 202, "shape-hash", [100, 200])],
+  { fileNameA: "a.ocd", fileNameB: "b.ocd" },
+  { toleranceMeters: 2, exactModified: true },
+);
+assert(symbolSwap.modified === 1, `symbol change should be modified, got ${symbolSwap.modified}`);
+assert(symbolSwap.added === 0 && symbolSwap.removed === 0, "symbol change must not be remove+add");
+assert(symbolSwap.changes[0]?.previousSymbolNumber === 101, "previous symbol should be recorded");
+assert(symbolSwap.changes[0]?.symbolNumber === 202, "new symbol should be on the change");
+
+// Swap check is linear: many unmatched-hash pairs must finish quickly
+const swapPairs = Array.from({ length: 4000 }, (_, i) => ({
+  a: makeObject(i, 601, `left-${i}`, [i, 0]),
+  b: makeObject(i, 601, `right-${i}`, [i, 0]),
+  modified: false,
+}));
+const swapStarted = Date.now();
+markSwappedGeometryPairs(swapPairs);
+const swapMs = Date.now() - swapStarted;
+assert(swapMs < 500, `swap check should be O(n), took ${swapMs} ms for ${swapPairs.length} pairs`);
 
 console.log("subset diff tests passed");

@@ -1,6 +1,10 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import Google from "next-auth/providers/google";
+import type { GoogleProfile } from "next-auth/providers/google";
+import { authConfig } from "@/auth.config";
 import { logAction } from "@/lib/audit";
+import { resolveGoogleLogin } from "@/lib/auth/google-login";
 import { Role, type Role as RoleType } from "@/lib/roles";
 import { verifyPassword } from "@/lib/auth/password";
 import { prisma } from "@/lib/prisma";
@@ -40,7 +44,16 @@ function applyDbUserToToken(
   return token;
 }
 
+const googleClientId = process.env.AUTH_GOOGLE_ID?.trim();
+const googleClientSecret = process.env.AUTH_GOOGLE_SECRET?.trim();
+
+function googleProfile(profile: unknown): GoogleProfile | null {
+  if (!profile || typeof profile !== "object") return null;
+  return profile as GoogleProfile;
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  ...authConfig,
   providers: [
     Credentials({
       name: "credentials",
@@ -102,12 +115,63 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         };
       },
     }),
+    ...(googleClientId && googleClientSecret
+      ? [
+          Google({
+            clientId: googleClientId,
+            clientSecret: googleClientSecret,
+          }),
+        ]
+      : []),
   ],
-  pages: {
-    signIn: "/login",
-  },
   callbacks: {
-    async jwt({ token, user, trigger }) {
+    ...authConfig.callbacks,
+    async signIn({ account, profile }) {
+      if (account?.provider !== "google") return true;
+
+      const google = googleProfile(profile);
+      const verifiedFlag = google?.email_verified as boolean | string | undefined;
+      const verified = verifiedFlag === true || verifiedFlag === "true";
+      const result = await resolveGoogleLogin({
+        email: google?.email ?? "",
+        emailVerified: verified,
+        name: google?.name ?? null,
+        givenName: google?.given_name ?? null,
+        familyName: google?.family_name ?? null,
+        googleSub: account.providerAccountId,
+      });
+      if (!result.ok) return `/login?error=${result.errorCode}`;
+      return true;
+    },
+    async jwt({ token, user, account, trigger }) {
+      if (account?.provider === "google") {
+        const email = (user?.email ?? token.email)?.toString().trim().toLowerCase();
+        if (!email) {
+          token.error = "UserNotFound";
+          return token;
+        }
+        const dbUser = await prisma.user.findUnique({
+          where: { email },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            canFieldEdit: true,
+            mustChangePassword: true,
+            passwordExpiresAt: true,
+          },
+        });
+        if (!dbUser) {
+          token.error = "UserNotFound";
+          return token;
+        }
+        applyDbUserToToken(token, dbUser);
+        token.sub = dbUser.id;
+        token.mustChangePassword = false;
+        return token;
+      }
+
       if (user) {
         token.id = user.id;
         token.name = user.name;
@@ -132,28 +196,5 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       return token;
     },
-    async session({ session, token }) {
-      if (token.error === "UserNotFound") {
-        session.user.id = "";
-        session.user.role = Role.PENDING;
-        session.user.mustChangePassword = false;
-        return session;
-      }
-      if (session.user) {
-        session.user.id = token.id as string;
-        session.user.name = (token.name as string | null | undefined) ?? null;
-        if (token.email) {
-          session.user.email = token.email as string;
-        }
-        session.user.role = (token.role as RoleType) ?? Role.PENDING;
-        session.user.canFieldEdit = token.canFieldEdit === true;
-        session.user.mustChangePassword = token.mustChangePassword === true;
-      }
-      return session;
-    },
   },
-  session: {
-    strategy: "jwt",
-  },
-  trustHost: true,
 });

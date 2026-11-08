@@ -19,7 +19,7 @@ export async function compareOcadFiles(
       fileNameA: summaryA.fileName,
       fileNameB: summaryB.fileName,
     },
-    options,
+    { mapScale: summaryA.mapScale ?? summaryB.mapScale, ...options },
   );
 }
 

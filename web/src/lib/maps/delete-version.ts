@@ -1,4 +1,5 @@
 import { LOCKING_CHECKOUT_STATUSES } from "@/lib/checkout/types";
+import { MapVersionSource } from "@/lib/maps/head-version";
 import { prisma } from "@/lib/prisma";
 import {
   collectLayerPathsFromSummary,
@@ -19,6 +20,7 @@ export async function deleteMapVersion(versionId: string): Promise<DeleteVersion
       storagePath: true,
       previewSvgPath: true,
       tileManifestPath: true,
+      source: true,
     },
   });
 
@@ -38,14 +40,17 @@ export async function deleteMapVersion(versionId: string): Promise<DeleteVersion
     };
   }
 
-  const activeCheckoutRefs = await prisma.mapCheckout.count({
+  const checkoutRefs = await prisma.mapCheckout.findMany({
     where: {
-      baseVersionId: versionId,
-      status: { in: LOCKING_CHECKOUT_STATUSES },
+      OR: [{ baseVersionId: versionId }, { integratedVersionId: versionId }],
     },
+    select: { id: true, status: true, integratedVersionId: true },
   });
 
-  if (activeCheckoutRefs > 0) {
+  const activeCheckoutRefs = checkoutRefs.filter((checkout) =>
+    LOCKING_CHECKOUT_STATUSES.includes(checkout.status as (typeof LOCKING_CHECKOUT_STATUSES)[number]),
+  );
+  if (activeCheckoutRefs.length > 0) {
     return {
       ok: false,
       error: "Det finns aktiva utcheckningar på denna version.",
@@ -53,28 +58,22 @@ export async function deleteMapVersion(versionId: string): Promise<DeleteVersion
     };
   }
 
-  const historicalCheckouts = await prisma.mapCheckout.findMany({
-    where: {
-      baseVersionId: versionId,
-      status: { notIn: LOCKING_CHECKOUT_STATUSES },
-    },
-    select: {
-      id: true,
-      exportStoragePath: true,
-      checkinStoragePath: true,
-    },
-  });
+  const producedIntegration = checkoutRefs.some((checkout) => checkout.integratedVersionId === versionId);
+  if (producedIntegration || version.source === MapVersionSource.INTEGRATION) {
+    return {
+      ok: false,
+      error:
+        "Versionen skapades genom incheckning och kan inte raderas — utcheckningshistoriken måste behållas.",
+      status: 409,
+    };
+  }
 
-  if (historicalCheckouts.length > 0) {
-    await deleteStoragePaths(
-      historicalCheckouts.flatMap((checkout) => [
-        checkout.exportStoragePath,
-        checkout.checkinStoragePath,
-      ]),
-    );
-    await prisma.mapCheckout.deleteMany({
-      where: { id: { in: historicalCheckouts.map((checkout) => checkout.id) } },
-    });
+  if (checkoutRefs.length > 0) {
+    return {
+      ok: false,
+      error: "Versionen ingår i utcheckningshistorik och kan inte raderas.",
+      status: 409,
+    };
   }
 
   const diffs = await prisma.versionDiff.findMany({

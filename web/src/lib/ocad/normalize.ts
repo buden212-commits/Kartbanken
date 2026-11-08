@@ -7,7 +7,16 @@ type OcadObjectProperties = {
   sym: number;
   objectIndex: number;
   text?: string;
+  /** OCAD object type: 1 point, 2 line, 3 area, 4/5 text, 6 line text, 7 rectangle. */
+  otp?: number;
+  /** Rotation in 0.1° (points, texts, area patterns). */
+  ang?: number;
+  col?: number;
+  lineWidth?: number;
+  diamFlags?: number;
 };
+
+const OCAD_TEXT_OBJECT_TYPES = new Set([4, 5, 6]);
 
 type OcadFileLike = {
   header: { version: number };
@@ -19,6 +28,8 @@ type OcadFileLike = {
 
 
 function geometryTypeFromFeature(feature: Feature<Geometry, OcadObjectProperties>): OcadObjectType {
+  const otp = feature.properties?.otp;
+  if (otp != null && OCAD_TEXT_OBJECT_TYPES.has(otp)) return "text";
   const geometryType = feature.geometry.type;
   if (geometryType === "Point" || geometryType === "MultiPoint") return "point";
   if (geometryType === "LineString" || geometryType === "MultiLineString") return "line";
@@ -70,8 +81,46 @@ function computeBbox(coords: number[][]): [number, number, number, number] {
   return [minX, minY, maxX, maxY];
 }
 
-function hashGeometry(geometry: Geometry, symbolNumber: number, text?: string): string {
-  const payload = JSON.stringify({ geometry, symbolNumber, text: text ?? "" });
+type RawOcadObject = {
+  objIndex?: { _index?: number };
+  coordinates?: Array<{ xFlags?: number; yFlags?: number }>;
+};
+
+/**
+ * Per-object vertex flag signature (bezier/corner/dash/hole) from the raw OCAD objects.
+ * GeoJSON coordinates lose these flags, so a corner→curve edit would otherwise hash equal.
+ */
+export function buildVertexFlagSignatures(rawObjects: unknown[]): Map<number, string> {
+  const signatures = new Map<number, string>();
+  for (const raw of rawObjects as RawOcadObject[]) {
+    const index = raw?.objIndex?._index;
+    if (typeof index !== "number" || !Array.isArray(raw.coordinates)) continue;
+    let signature = "";
+    for (const coord of raw.coordinates) {
+      signature += `${coord?.xFlags ?? 0},${coord?.yFlags ?? 0};`;
+    }
+    signatures.set(index, signature);
+  }
+  return signatures;
+}
+
+function hashGeometry(
+  geometry: Geometry,
+  symbolNumber: number,
+  text: string | undefined,
+  properties: OcadObjectProperties | undefined,
+  flags: string,
+): string {
+  const payload = JSON.stringify({
+    geometry,
+    symbolNumber,
+    text: text ?? "",
+    ang: properties?.ang ?? 0,
+    col: properties?.col ?? 0,
+    lineWidth: properties?.lineWidth ?? 0,
+    diamFlags: properties?.diamFlags ?? 0,
+    flags,
+  });
   return createHash("sha256").update(payload).digest("hex").slice(0, 16);
 }
 
@@ -88,6 +137,7 @@ export function buildSymbolNameMap(
 export function normalizeFromGeoJson(
   features: Feature<Geometry, OcadObjectProperties>[],
   symbolNames: Map<number, string>,
+  vertexFlags?: Map<number, string>,
 ): NormalizedOcadObject[] {
   const objects: NormalizedOcadObject[] = [];
 
@@ -112,7 +162,13 @@ export function normalizeFromGeoJson(
       type,
       centroid: computeCentroid(coords),
       bbox: computeBbox(coords),
-      geometryHash: hashGeometry(feature.geometry, symbolNumber, text),
+      geometryHash: hashGeometry(
+        feature.geometry,
+        symbolNumber,
+        text,
+        feature.properties,
+        vertexFlags?.get(objectIndex) ?? "",
+      ),
       ...(vertices.length >= minVertexCount && (type === "line" || type === "area")
         ? { vertices }
         : {}),
@@ -121,6 +177,22 @@ export function normalizeFromGeoJson(
   }
 
   return objects;
+}
+
+function buildSymbolHashes(symbols: unknown[]): Record<number, string> {
+  const hashes: Record<number, string> = {};
+  for (const symbol of symbols as Array<{ symNum?: number }>) {
+    if (typeof symbol?.symNum !== "number") continue;
+    try {
+      hashes[symbol.symNum] = createHash("sha256")
+        .update(JSON.stringify(symbol))
+        .digest("hex")
+        .slice(0, 16);
+    } catch {
+      // Unserializable symbol (cyclic refs) — skip; only used for a warning.
+    }
+  }
+  return hashes;
 }
 
 export function summarizeParseResult(input: {
@@ -176,6 +248,7 @@ export function summarizeParseResult(input: {
     symbolNums: input.ocadFile.symbols
       .map((symbol) => symbol.symNum)
       .filter((n) => Number.isFinite(n)),
+    symbolHashes: buildSymbolHashes(input.ocadFile.symbols),
     warnings: input.ocadFile.warnings,
     byType,
     topSymbols,

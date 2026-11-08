@@ -4,12 +4,14 @@
  * med giltig otp och Color (undviker OCAD DrawObjectsCmykColor-krasch).
  */
 import fs from "fs";
+import os from "os";
 import path from "path";
 import { createRequire } from "module";
 import { markAllActiveObjectsDeleted, applyOcadTargetVersion } from "../src/lib/ocad/ocad-export-server";
 import { appendSuggestionsToOcadBuffer } from "../src/lib/ocad/ocad-suggestion-export";
 import { readActiveObjectIndices, readObjectIndexEntry, measureObjectByteSize } from "../src/lib/ocad/ocad-integrate";
 import type { SuggestionGeometry } from "../src/lib/suggestion/types";
+import { getRepoRoot } from "../src/lib/ocad/read";
 
 const require = createRequire(import.meta.url);
 const { readOcad } = require("ocad2geojson") as {
@@ -37,7 +39,11 @@ function assert(condition: boolean, message: string): void {
 async function main() {
   const fixture =
     process.argv[2] ??
-    "/workspace/Exempelfil/ORIGINAL_Mora_Väst_med_Venjan_ISOM2017-6-2_20260227_ocad12.ocd";
+    path.join(
+      getRepoRoot(),
+      "Exempelfil",
+      "ORIGINAL_Mora_Väst_med_Venjan_ISOM2017-6-2_20260227_ocad12.ocd",
+    );
 
   const sourceBuffer = fs.readFileSync(fixture);
   const source = await readOcad(sourceBuffer, { quietWarnings: true });
@@ -84,7 +90,7 @@ async function main() {
   ];
 
   const cleared = markAllActiveObjectsDeleted(sourceBuffer);
-  applyOcadTargetVersion(cleared.buffer, source.header.version, source.header.version === 18 ? 18 : 12);
+  applyOcadTargetVersion(cleared.buffer, source.header.version, source.header.version);
 
   const appendResult = await appendSuggestionsToOcadBuffer(
     cleared.buffer,
@@ -127,7 +133,7 @@ async function main() {
   const active = readActiveObjectIndices(appendResult.buffer);
   assert(active.size === appendResult.appended, `active ${active.size} !== appended ${appendResult.appended}`);
 
-  const outPath = path.join("/tmp", "suggestion-export-test.ocd");
+  const outPath = path.join(os.tmpdir(), "suggestion-export-test.ocd");
   fs.writeFileSync(outPath, appendResult.buffer);
   console.log("wrote", outPath);
   console.log("OK");

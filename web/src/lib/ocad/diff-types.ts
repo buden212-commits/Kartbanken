@@ -2,7 +2,13 @@ export type ChangeType = "added" | "removed" | "modified";
 
 export type OcadObjectChange = {
   changeType: ChangeType;
+  /**
+   * Removed/modified: index in file A (baseline/export/head).
+   * Added: index in file B (checkin).
+   */
   objectIndex: number;
+  /** Index in file B (checkin) for added/modified — source of new object bytes. */
+  checkinObjectIndex?: number;
   symbolNumber: number;
   symbolName: string;
   type: import("./types").OcadObjectType;
@@ -11,6 +17,9 @@ export type OcadObjectChange = {
   text?: string;
   geometryHash?: string;
   previousGeometryHash?: string;
+  /** Set on modified changes where only/also the symbol changed (same geometry). */
+  previousSymbolNumber?: number;
+  previousSymbolName?: string;
 };
 
 export type SymbolDiffSummary = {
@@ -39,7 +48,15 @@ export type OcadDiffResult = {
 };
 
 export type OcadDiffOptions = {
+  /** Ground distance; converted to paper units (0.01 mm) with `mapScale`. */
   toleranceMeters?: number;
+  /** Map scale denominator (e.g. 10000). Object coordinates are paper units. */
+  mapScale?: number;
+  /**
+   * Treat every matched pair whose geometryHash differs as modified (no tolerance).
+   * Used for checkout check-ins where any edit must be integrated.
+   */
+  exactModified?: boolean;
   /**
    * @deprecated Diff-motorn returnerar alla ändringar. Använd limitStoredChanges vid lagring.
    */

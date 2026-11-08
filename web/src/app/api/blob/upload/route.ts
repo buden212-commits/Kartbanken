@@ -14,7 +14,13 @@ import {
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { canCheckout, canCreateMapSuggestion, canUpload } from "@/lib/auth/permissions";
+import {
+  canCheckin,
+  canCheckout,
+  canCreateMapSuggestion,
+  canUpload,
+} from "@/lib/auth/permissions";
+import { checkinStatusAllowsUpload } from "@/lib/checkout/checkin-submit";
 
 export const maxDuration = 60;
 
@@ -73,7 +79,7 @@ export async function POST(request: Request): Promise<NextResponse> {
             throw new Error("Ogiltig versionssökväg");
           }
         } else if (payload.kind === "checkoutCheckin") {
-          if (!canCheckout(session.user.role)) {
+          if (!canCheckin(session.user.role)) {
             throw new Error("Saknar checkin-behörighet");
           }
           const map = await prisma.mapFile.findUnique({
@@ -85,6 +91,9 @@ export async function POST(request: Request): Promise<NextResponse> {
           if (!checkout) throw new Error("Utcheckning hittades inte");
           if (checkout.userId !== session.user.id && session.user.role !== "ADMIN") {
             throw new Error("Endast utcheckningsägaren kan checka in");
+          }
+          if (!checkinStatusAllowsUpload(checkout.status)) {
+            throw new Error("Utcheckningen accepterar inte incheckning i nuvarande status");
           }
           if (!isCheckoutCheckinPath(normalizedPath, map.id, checkout.id)) {
             throw new Error("Sökväg matchar inte utcheckningen");

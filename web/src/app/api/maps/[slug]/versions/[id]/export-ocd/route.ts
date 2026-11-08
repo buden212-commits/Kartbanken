@@ -12,6 +12,8 @@ import {
   type OcdSuggestionSymbolMapping,
 } from "@/lib/ocad/ocad-suggestion-export";
 import {
+  incompatibleExportVersionMessage,
+  isCompatibleExportVersion,
   normalizeSourceVersion,
   svgExportFrameToGeoBbox,
   type OcadExportVersion,
@@ -117,6 +119,12 @@ export async function POST(request: Request, { params }: RouteParams) {
     const sourceBuffer = await readStoredFile(version.storagePath);
     const ocadFile = await readOcad(sourceBuffer, { quietWarnings: true });
     const sourceVersion = normalizeSourceVersion(ocadFile.header.version);
+    if (!isCompatibleExportVersion(sourceVersion, exportRequest.ocadVersion)) {
+      return NextResponse.json(
+        { error: incompatibleExportVersionMessage(sourceVersion, exportRequest.ocadVersion) },
+        { status: 400 },
+      );
+    }
 
     let outputBuffer: Buffer;
     let keptObjects = 0;

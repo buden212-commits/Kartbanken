@@ -29,6 +29,20 @@ export function canCancelCheckout(role: RoleType): boolean {
   return role === Role.ADMIN;
 }
 
+/** Owners may withdraw their own checkout while it is still ACTIVE (nothing checked in). */
+export function canOwnerCancelCheckout(
+  role: RoleType,
+  checkoutUserId: string,
+  sessionUserId: string,
+  status: string,
+): boolean {
+  return (
+    (role === Role.EDITOR || role === Role.ADMIN) &&
+    checkoutUserId === sessionUserId &&
+    status === "ACTIVE"
+  );
+}
+
 export function canCheckin(role: RoleType): boolean {
   return role === Role.EDITOR || role === Role.ADMIN;
 }

@@ -72,7 +72,7 @@ export async function generateDiffLayerSvgs(
   for (const change of changes) {
     if (change.changeType === "added") addedIndices.add(change.objectIndex);
     else if (change.changeType === "removed") removedIndices.add(change.objectIndex);
-    else modifiedIndices.add(change.objectIndex);
+    else modifiedIndices.add(change.checkinObjectIndex ?? change.objectIndex);
   }
 
   return generateDiffLayerSvgsFromIndices(

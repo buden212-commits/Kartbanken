@@ -1,6 +1,6 @@
 import { bboxFromGeometry } from "./overlap";
 import { CheckoutSelectionType, type Bbox, type PolygonRing } from "./types";
-import { compareOcadObjects } from "@/lib/ocad/diff";
+import { compareOcadObjects, resolveDiffToleranceMeters } from "@/lib/ocad/diff";
 import type { NormalizedOcadObject, OcadParseSummary } from "@/lib/ocad/types";
 import type {
   ImportDiffSample,
@@ -46,7 +46,7 @@ export {
   shrinkRing,
 } from "./import-partial-polygon";
 
-const DIFF_TOLERANCE_M = Number(process.env.DIFF_SPATIAL_TOLERANCE_M ?? 2);
+const DIFF_TOLERANCE_M = resolveDiffToleranceMeters();
 /** Punkter per objektkontur i kartbilden — nog för formen utan att svälla svaret. */
 const MAX_OUTLINE_POINTS = 24;
 const MAX_EDGE_SAMPLES = 80;
@@ -387,7 +387,7 @@ export function analyzeImportPartial(input: {
     const source =
       change.changeType === "removed"
         ? baselineByIndex.get(change.objectIndex)
-        : partialByIndex.get(change.objectIndex);
+        : partialByIndex.get(change.checkinObjectIndex ?? change.objectIndex);
     const outline = source ? sampleOutline(source) : null;
     return {
       changeType: change.changeType,

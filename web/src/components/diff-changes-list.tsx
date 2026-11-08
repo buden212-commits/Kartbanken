@@ -116,6 +116,13 @@ export function DiffChangesList({
                 </span>
                 <span className="font-mono text-slate-500">{change.symbolNumber}</span>
                 <span>{change.symbolName}</span>
+                {change.previousSymbolNumber != null && (
+                  <span className="text-xs text-amber-700">
+                    symbol ändrad från {change.previousSymbolNumber}
+                    {change.previousSymbolName ? ` ${change.previousSymbolName}` : ""}
+                  </span>
+                )}
+                {change.type === "text" && <span className="text-xs text-slate-400">text</span>}
                 {change.type === "point" && <span className="text-xs text-slate-400">punkt</span>}
                 {change.type === "line" && <span className="text-xs text-slate-400">linje</span>}
                 <span className="font-mono text-xs text-slate-500">

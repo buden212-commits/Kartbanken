@@ -106,8 +106,14 @@ AUTH_URL=https://web-ebon-eight-72.vercel.app
 | Variabel | Beskrivning |
 |----------|-------------|
 | `SMTP_*` | Gmail SMTP — kan istället konfigureras under `/admin/settings` |
+| `AUTH_GOOGLE_ID` | Google OAuth-klient. Utan id och hemlighet visas inte «Logga in med Google» |
+| `AUTH_GOOGLE_SECRET` | Hemlighet för Google OAuth-klienten |
+| `EVENTOR_API_KEY` | API-nyckel för klubbens organisation i Eventor. Används för att ge klubbmedlemmar läsbehörighet vid Google-inloggning |
+| `EVENTOR_ORGANISATION_ID` | Eventor-organisation, standard `575` (IFK Mora OK) |
 | `MAX_UPLOAD_BYTES` | Max filstorlek (standard 100 MB) |
 | `DIFF_SPATIAL_TOLERANCE_M` | Tolerans för OCD-jämförelse (standard 2 m) |
+
+Google-inloggning kräver en OAuth-klient i Google Cloud. Auktoriserad redirect-URI är `{AUTH_URL}/api/auth/callback/google`, till exempel `http://localhost:3000/api/auth/callback/google` lokalt och produktionsadressen i produktion. Klubbmedlemmar matchas mot Eventor på verifierad e-post, eller på ett unikt för- och efternamn när e-posten inte stämmer.
 
 ### Deploy med Vercel CLI
 

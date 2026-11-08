@@ -543,6 +543,56 @@ export async function notifyAdminOfNewRegistration(user: {
   await sendMailToNotificationRecipients({ subject, text, html });
 }
 
+export async function notifyAdminOfGoogleReader(user: {
+  name: string;
+  email: string;
+  via: "email" | "name";
+}): Promise<void> {
+  if (!(await isEmailConfigured())) {
+    console.warn("[email] SMTP not configured — skipping Google reader notification");
+    return;
+  }
+
+  const adminUsersUrl = `${getAppBaseUrl()}/admin/users`;
+  const matched =
+    user.via === "email" ? "e-postadress i Eventor" : "namn i Eventor";
+  const subject = `Ny läsare via Google — ${APP_NAME}`;
+  const text = [
+    `En klubbmedlem har loggat in med Google på ${APP_NAME} och fått läsbehörighet.`,
+    `Matchningen gjordes mot ${matched}.`,
+    "",
+    `Namn: ${user.name}`,
+    `E-post: ${user.email}`,
+    "",
+    `Byt behörighet här om personen ska vara redaktör eller administratör: ${adminUsersUrl}`,
+  ].join("\n");
+
+  const bodyHtml = `
+    <p style="margin:0 0 16px;">En klubbmedlem har loggat in med Google och fått läsbehörighet. Matchningen gjordes mot ${escapeHtml(matched)}.</p>
+    <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 20px;width:100%;font-size:15px;">
+      <tr>
+        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;width:80px;">Namn</td>
+        <td style="padding:4px 0;color:#0f172a;">${escapeHtml(user.name)}</td>
+      </tr>
+      <tr>
+        <td style="padding:4px 12px 4px 0;color:#64748b;vertical-align:top;">E-post</td>
+        <td style="padding:4px 0;color:#0f172a;">${escapeHtml(user.email)}</td>
+      </tr>
+    </table>
+    <p style="margin:0 0 16px;">Byt behörighet om personen ska vara redaktör eller administratör.</p>
+    <p style="margin:0;">
+      <a href="${escapeHtml(adminUsersUrl)}" style="display:inline-block;padding:10px 18px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:500;">Öppna användarhantering</a>
+    </p>
+  `.trim();
+
+  const html = buildHtmlEmail({
+    title: subject,
+    bodyHtml,
+  });
+
+  await sendMailToNotificationRecipients({ subject, text, html });
+}
+
 function ocdAttachmentFilename(originalFilename: string, fallbackBase: string): string {
   return originalFilename.toLowerCase().endsWith(".ocd")
     ? originalFilename
@@ -937,21 +987,22 @@ async function notifyCheckoutIntegratedAsync(
 }
 
 export function notifyCheckoutCancelled(
-  ctx: CheckoutMailContext & { reason?: string | null },
+  ctx: CheckoutMailContext & { reason?: string | null; byOwner?: boolean },
 ): void {
   scheduleEmail(() => notifyCheckoutCancelledAsync(ctx), "checkout cancelled");
 }
 
 async function notifyCheckoutCancelledAsync(
-  ctx: CheckoutMailContext & { reason?: string | null },
+  ctx: CheckoutMailContext & { reason?: string | null; byOwner?: boolean },
 ): Promise<void> {
   if (!(await isEmailConfigured())) return;
 
   const url = checkoutDetailUrl(ctx.map.slug, ctx.checkoutId);
   const subject = `Utcheckning avbruten — ${ctx.map.title}`;
   const reasonLine = ctx.reason ? `\nAnledning: ${ctx.reason}` : "";
+  const byLabel = ctx.byOwner ? "av ägaren" : "av administratör";
   const text = [
-    `Utcheckning på ${ctx.map.title} har avbrutits av administratör.${reasonLine}`,
+    `Utcheckning på ${ctx.map.title} har avbrutits ${byLabel}.${reasonLine}`,
     "",
     `Detaljer: ${url}`,
   ].join("\n");
@@ -961,7 +1012,7 @@ async function notifyCheckoutCancelledAsync(
     : "";
 
   const bodyHtml = `
-    <p style="margin:0 0 16px;">Utcheckning på <strong>${escapeHtml(ctx.map.title)}</strong> har avbrutits av administratör.</p>
+    <p style="margin:0 0 16px;">Utcheckning på <strong>${escapeHtml(ctx.map.title)}</strong> har avbrutits ${byLabel}.</p>
     ${reasonHtml}
     <p style="margin:0;"><a href="${escapeHtml(url)}" style="color:#2563eb;text-decoration:none;">Visa utcheckning</a></p>
   `.trim();
@@ -969,6 +1020,36 @@ async function notifyCheckoutCancelledAsync(
   const html = buildHtmlEmail({ title: subject, bodyHtml });
   const recipients = await resolveCheckoutRecipients(ctx.owner.email);
   await Promise.all(recipients.map((to) => sendMail({ to, subject, text, html })));
+}
+
+export function notifyCheckoutAwaitingIntegrationReminder(
+  ctx: CheckoutMailContext & { days: number; userConfirmed: boolean },
+): void {
+  scheduleEmail(
+    () => notifyCheckoutAwaitingIntegrationReminderAsync(ctx),
+    "checkout awaiting integration reminder",
+  );
+}
+
+async function notifyCheckoutAwaitingIntegrationReminderAsync(
+  ctx: CheckoutMailContext & { days: number; userConfirmed: boolean },
+): Promise<void> {
+  if (!(await isEmailConfigured())) return;
+
+  const url = checkoutDetailUrl(ctx.map.slug, ctx.checkoutId);
+  const subject = `Påminnelse: incheckning väntar på integrering — ${ctx.map.title}`;
+  const intro = ctx.userConfirmed
+    ? `${ownerLabel(ctx.owner)} har bekräftat sin incheckning på ${ctx.map.title} för mer än ${ctx.days} dagar sedan. Den väntar på admin-integrering.`
+    : `${ownerLabel(ctx.owner)} checkade in ${ctx.map.title} för mer än ${ctx.days} dagar sedan. Incheckningen väntar på granskning och integrering.`;
+  const text = [intro, "", `Granska: ${url}`].join("\n");
+
+  const bodyHtml = `
+    <p style="margin:0 0 16px;">${escapeHtml(intro)}</p>
+    <p style="margin:0;"><a href="${escapeHtml(url)}" style="display:inline-block;padding:10px 18px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:500;">Granska utcheckning</a></p>
+  `.trim();
+
+  const html = buildHtmlEmail({ title: subject, bodyHtml });
+  await sendMailToNotificationRecipients({ subject, text, html });
 }
 
 export function notifyCheckoutReminder(

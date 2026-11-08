@@ -11,8 +11,8 @@ import {
   parseCheckoutDiffFromRecord,
   parseStoredCheckoutDiffJson,
 } from "@/lib/checkout/diff-status";
-import { getCheckoutById, confirmCheckoutByUser } from "@/lib/checkout/repository";
-import { CheckoutStatus } from "@/lib/checkout/types";
+import { getCheckoutById } from "@/lib/checkout/repository";
+import { CheckoutMode, CheckoutStatus } from "@/lib/checkout/types";
 import { notifyCheckoutIntegrated, queueNotifyAdminOfNewUpload } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
@@ -21,7 +21,22 @@ export const maxDuration = 300;
 
 type RouteParams = { params: Promise<{ slug: string; id: string }> };
 
-export async function POST(_request: Request, { params }: RouteParams) {
+async function readReviewedDiff(
+  request: Request,
+): Promise<{ computedAt?: string; checkinStoragePath?: string }> {
+  try {
+    const body = (await request.json()) as Record<string, unknown> | null;
+    return {
+      computedAt: typeof body?.computedAt === "string" ? body.computedAt : undefined,
+      checkinStoragePath:
+        typeof body?.checkinStoragePath === "string" ? body.checkinStoragePath : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
+export async function POST(request: Request, { params }: RouteParams) {
   const session = await requireSession();
   if (session instanceof NextResponse) return session;
 
@@ -41,6 +56,20 @@ export async function POST(_request: Request, { params }: RouteParams) {
   const checkout = await getCheckoutById(map.id, id);
   if (!checkout) {
     return NextResponse.json({ error: "Utcheckning hittades inte" }, { status: 404 });
+  }
+
+  if (checkout.mode !== CheckoutMode.OCAD_DESKTOP) {
+    return NextResponse.json(
+      { error: "Fältredigeringar publiceras från fältredigeringssidan" },
+      { status: 400 },
+    );
+  }
+
+  if (checkout.status === CheckoutStatus.INTEGRATING) {
+    return NextResponse.json(
+      { error: "Integrering pågår redan för den här utcheckningen" },
+      { status: 409 },
+    );
   }
 
   if (
@@ -70,14 +99,25 @@ export async function POST(_request: Request, { params }: RouteParams) {
     return NextResponse.json({ error: "Diff saknas för utcheckning" }, { status: 409 });
   }
 
-  // Admin may integrate directly from CHECKED_IN (before owner confirm).
-  if (checkout.status === CheckoutStatus.CHECKED_IN) {
-    await confirmCheckoutByUser(checkout.id);
-    await logAction(session.user.id, "CHECKOUT_USER_CONFIRMED", "MapCheckout", checkout.id, {
-      mapSlug: slug,
-      byAdmin: true,
-    });
+  const reviewed = await readReviewedDiff(request);
+  const reviewOutdated =
+    (reviewed.checkinStoragePath &&
+      reviewed.checkinStoragePath !== checkout.checkinStoragePath) ||
+    (reviewed.computedAt &&
+      diffStatus.status === "ready" &&
+      diffStatus.summary.computedAt &&
+      reviewed.computedAt !== diffStatus.summary.computedAt);
+  if (reviewOutdated) {
+    return NextResponse.json(
+      {
+        error:
+          "Incheckningen eller diffen har ändrats sedan du granskade den. Ladda om sidan och granska igen.",
+      },
+      { status: 409 },
+    );
   }
+
+  const integratedDirectlyFromCheckin = checkout.status === CheckoutStatus.CHECKED_IN;
 
   const storedDiff = parseStoredCheckoutDiffJson(checkout.diffSummaryJson);
   if (diffStatus.status === "ready") {
@@ -104,7 +144,17 @@ export async function POST(_request: Request, { params }: RouteParams) {
   }
 
   try {
-    const result = await integrateCheckout(checkout.id);
+    const result = await integrateCheckout(checkout.id, {
+      expectedCheckinStoragePath: reviewed.checkinStoragePath,
+      expectedDiffComputedAt: reviewed.computedAt,
+    });
+
+    if (integratedDirectlyFromCheckin) {
+      await logAction(session.user.id, "CHECKOUT_USER_CONFIRMED", "MapCheckout", checkout.id, {
+        mapSlug: slug,
+        byAdmin: true,
+      });
+    }
 
     await logAction(session.user.id, "CHECKOUT_INTEGRATED", "MapCheckout", checkout.id, {
       mapSlug: slug,
@@ -113,6 +163,7 @@ export async function POST(_request: Request, { params }: RouteParams) {
       warnings: result.warningMessages,
       deletedObjects: result.deletedObjects,
       copiedObjects: result.copiedObjects,
+      replacedObjects: result.replacedObjects,
       skippedCopies: result.skippedCopies,
       appendedObjects: result.appendedObjects,
     });
@@ -169,6 +220,11 @@ export async function POST(_request: Request, { params }: RouteParams) {
       { mapSlug: slug, adminUserId: session.user.id },
     );
     const payload = integrationErrorPayload(err, "Integration misslyckades");
-    return NextResponse.json(payload, { status: 500 });
+    // Start/conflict errors are expected business outcomes, not server faults.
+    const status =
+      err instanceof IntegrationError && err.step !== "upload" && err.step !== "post_process"
+        ? 409
+        : 500;
+    return NextResponse.json(payload, { status });
   }
 }

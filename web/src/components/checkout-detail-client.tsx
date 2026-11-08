@@ -21,7 +21,7 @@ import type { OcadObjectChange } from "@/lib/ocad/diff-types";
 import { CheckoutDiffMap } from "@/components/checkout-diff-map";
 
 import {
-  OCAD_EXPORT_VERSIONS,
+  compatibleOcadExportVersions,
   ocadExportVersionLabel,
   parseOcadExportVersion,
   type OcadExportVersion,
@@ -60,7 +60,17 @@ type DiffSummary = {
 
   validationWarnings?: string[];
 
+  blockingErrors?: string[];
+
+  computedAt?: string;
+
+  checkinStoragePath?: string;
+
   changes?: OcadObjectChange[];
+
+  totalChanges?: number;
+
+  changesTruncated?: boolean;
 
   layerPaths?: {
 
@@ -132,6 +142,9 @@ type Props = {
   isOwner: boolean;
 
   subsetNotice?: ReactNode;
+
+  /** Set when integration is impossible (e.g. manual upload since checkout). */
+  integrationBlockedReason?: string | null;
 
 };
 
@@ -251,6 +264,8 @@ export function CheckoutDetailClient({
   isOwner,
 
   subsetNotice,
+
+  integrationBlockedReason,
 
 }: Props) {
 
@@ -589,6 +604,16 @@ export function CheckoutDetailClient({
 
       method: "POST",
 
+      headers: { "Content-Type": "application/json" },
+
+      body: JSON.stringify({
+
+        computedAt: diff?.computedAt,
+
+        checkinStoragePath: diff?.checkinStoragePath,
+
+      }),
+
     });
 
     setPendingAction(null);
@@ -719,6 +744,21 @@ export function CheckoutDetailClient({
 
   const isImportPartial = checkout.selection.importPartial === true;
 
+  const isOpenStatus =
+    checkout.status !== CheckoutStatus.INTEGRATED &&
+    checkout.status !== CheckoutStatus.CANCELLED &&
+    checkout.status !== CheckoutStatus.INTEGRATING &&
+    checkout.status !== CheckoutStatus.EXPORTING;
+
+  const canCancel =
+    isOpenStatus && (isAdmin || (isOwner && checkout.status === CheckoutStatus.ACTIVE));
+
+  const canDownload =
+    checkout.status !== CheckoutStatus.EXPORTING &&
+    (isAdmin ||
+      checkout.status === CheckoutStatus.ACTIVE ||
+      checkout.status === CheckoutStatus.CHECKED_IN);
+
   const canCheckin =
     !isImportPartial &&
     isOwner &&
@@ -753,6 +793,10 @@ export function CheckoutDetailClient({
     isAdmin &&
 
     !!diff &&
+
+    !integrationBlockedReason &&
+
+    !(diff.blockingErrors && diff.blockingErrors.length > 0) &&
 
     (checkout.status === CheckoutStatus.PENDING_ADMIN_CONFIRM ||
 
@@ -891,7 +935,7 @@ export function CheckoutDetailClient({
         ) : null}
 
         {isImportPartial ? (
-          isAdmin && checkout.status !== CheckoutStatus.INTEGRATED ? (
+          canCancel ? (
             <div className="mt-4">
               <button
                 type="button"
@@ -903,7 +947,7 @@ export function CheckoutDetailClient({
               </button>
             </div>
           ) : null
-        ) : (
+        ) : !canDownload ? null : (
           <div className="mt-4 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
             <p className="text-sm font-medium text-slate-800">Ladda ner utcheckning</p>
             <div className="flex flex-wrap items-end gap-3">
@@ -939,7 +983,7 @@ export function CheckoutDetailClient({
                     }
                     className="form-select min-w-[10rem]"
                   >
-                    {OCAD_EXPORT_VERSIONS.map((opt) => (
+                    {compatibleOcadExportVersions(storedOcadVersion).map((opt) => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
                       </option>
@@ -959,7 +1003,7 @@ export function CheckoutDetailClient({
                     ? "Ladda ner .omap"
                     : `Ladda ner .ocd (${ocadExportVersionLabel(downloadOcadVersion)})`}
               </button>
-              {isAdmin && checkout.status !== CheckoutStatus.INTEGRATED && (
+              {canCancel && (
                 <button
                   type="button"
                   disabled={loading}
@@ -1140,14 +1184,17 @@ export function CheckoutDetailClient({
             </button>
           </div>
 
-          {diff.headChangedSinceCheckout && (
-
-            <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-
-              Aktuell version har ändrats sedan utcheckningen skapades. Granska diff noggrant innan integration.
-
+          {integrationBlockedReason ? (
+            <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+              {integrationBlockedReason}
             </p>
-
+          ) : (
+            diff.headChangedSinceCheckout && (
+              <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                Aktuell version har ändrats sedan utcheckningen skapades. Vid integrering kontrolleras
+                att ingen annan har ändrat samma objekt — annars stoppas integreringen.
+              </p>
+            )
           )}
 
           <div className="mt-4 grid grid-cols-3 gap-3 text-center text-sm">
@@ -1180,6 +1227,17 @@ export function CheckoutDetailClient({
 
             </ul>
 
+          )}
+
+          {diff.blockingErrors && diff.blockingErrors.length > 0 && (
+            <div className="mt-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900">
+              <p className="font-medium">Kan inte integreras</p>
+              <ul className="mt-1 list-disc space-y-1 pl-5">
+                {diff.blockingErrors.map((blocking) => (
+                  <li key={blocking}>{blocking}</li>
+                ))}
+              </ul>
+            </div>
           )}
 
           {diff.validationWarnings && diff.validationWarnings.length > 0 && (
@@ -1221,6 +1279,12 @@ export function CheckoutDetailClient({
           changes={diff?.changes ?? []}
 
           layerPaths={diff?.layerPaths ?? null}
+
+          computedAt={diff?.computedAt}
+
+          totalChanges={diff?.totalChanges}
+
+          changesTruncated={diff?.changesTruncated}
 
         />
 

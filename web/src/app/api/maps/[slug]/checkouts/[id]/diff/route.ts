@@ -10,7 +10,7 @@ import {
   markCheckoutDiffPending,
   parseCheckoutDiffFromRecord,
   runCheckoutSubsetDiffJob,
-  storeCheckoutDiffError,
+  truncateDiffSummaryForResponse,
 } from "@/lib/checkout/diff-status";
 import { CheckoutStatus } from "@/lib/checkout/types";
 import { prisma } from "@/lib/prisma";
@@ -52,7 +52,7 @@ function buildDiffResponse(checkout: NonNullable<Awaited<ReturnType<typeof getCh
     return NextResponse.json({
       status: "ready",
       objectCount: parsed.objectCount,
-      summary: parsed.summary,
+      summary: truncateDiffSummaryForResponse(parsed.summary),
     });
   }
 
@@ -82,15 +82,27 @@ export async function GET(_request: Request, { params }: RouteParams) {
   if ("error" in result && result.error) return result.error;
 
   let checkout = result.checkout!;
-  const parsed = parseCheckoutDiffFromRecord(checkout);
 
   if (
     checkout.status === CheckoutStatus.CHECKED_IN &&
     checkout.checkinStoragePath &&
-    parsed.status === "pending" &&
-    isCheckoutDiffStale(parsed)
+    isCheckoutDiffStale(checkout.diffSummaryJson, Date.now(), checkout.checkinStoragePath)
   ) {
-    await storeCheckoutDiffError(checkout.id, new Error(CHECKOUT_DIFF_STALE_MESSAGE));
+    await prisma.mapCheckout.updateMany({
+      where: {
+        id: checkout.id,
+        checkinStoragePath: checkout.checkinStoragePath,
+        diffSummaryJson: checkout.diffSummaryJson,
+      },
+      data: {
+        diffSummaryJson: JSON.stringify({
+          _status: "error",
+          error: CHECKOUT_DIFF_STALE_MESSAGE,
+          failedAt: new Date().toISOString(),
+          checkinStoragePath: checkout.checkinStoragePath,
+        }),
+      },
+    });
     checkout = (await getCheckoutById(checkout.mapFileId, checkout.id)) ?? checkout;
   }
 
@@ -129,7 +141,7 @@ export async function POST(request: Request, { params }: RouteParams) {
 
   if (force || parsed.status === "error" || parsed.status === "pending") {
     if (force || parsed.status === "error") {
-      await markCheckoutDiffPending(checkout.id);
+      await markCheckoutDiffPending(checkout.id, checkout.checkinStoragePath);
     }
     await runCheckoutSubsetDiffJob(checkout.id);
   }

@@ -9,6 +9,7 @@ import {
   type CheckoutSelection,
 } from "@/lib/checkout/types";
 import {
+  compatibleOcadExportVersions,
   defaultOcadExportVersion,
   normalizeSourceVersion,
   type OcadExportVersion,
@@ -110,6 +111,7 @@ export function CheckoutPageClient({
         ocadVersion={ocadVersion}
         onOcadVersionChange={setOcadVersion}
         sourceOcadVersionLabel={sourceLabel}
+        ocadVersionOptions={compatibleOcadExportVersions(sourceOcadVersion)}
       />
 
       {existingCheckouts.length > 0 && (

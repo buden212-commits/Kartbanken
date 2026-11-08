@@ -1,3 +1,4 @@
+import { metersToMapUnits } from "./crs";
 import {
   euclideanDistance as distance,
   isGeometryModified,
@@ -14,12 +15,28 @@ import type {
 
 const DEFAULT_TOLERANCE_METERS = 2;
 
+/** Parses DIFF_SPATIAL_TOLERANCE_M (meters); falls back to 2 m on missing/invalid values. */
+export function resolveDiffToleranceMeters(
+  raw: string | undefined = process.env.DIFF_SPATIAL_TOLERANCE_M,
+): number {
+  const value = Number(raw);
+  return raw != null && raw.trim() !== "" && Number.isFinite(value) && value > 0
+    ? value
+    : DEFAULT_TOLERANCE_METERS;
+}
+
 type IndexedObject = NormalizedOcadObject & { id: number };
 
 type MatchedPair = {
   a: IndexedObject;
   b: IndexedObject;
   modified: boolean;
+};
+
+type MatchContext = {
+  /** Spatial tolerance in object coordinate units (paper units when mapScale is given). */
+  tolerance: number;
+  isModified: (a: IndexedObject, b: IndexedObject) => boolean;
 };
 
 function cellKey(x: number, y: number, cellSize: number): string {
@@ -49,10 +66,6 @@ function neighborCellKeys(x: number, y: number, cellSize: number): string[] {
   return keys;
 }
 
-function pairIsModified(a: IndexedObject, b: IndexedObject, tolerance: number): boolean {
-  return isGeometryModified(a, b, tolerance);
-}
-
 /**
  * Pair objects with identical geometryHash first (ignores objectIndex).
  * Candidates must also lie within tolerance — identical real geometry shares a
@@ -62,7 +75,7 @@ function pairIsModified(a: IndexedObject, b: IndexedObject, tolerance: number): 
 function matchByExactGeometryHash(
   groupA: IndexedObject[],
   groupB: IndexedObject[],
-  tolerance: number,
+  ctx: MatchContext,
 ): {
   matched: MatchedPair[];
   remainingA: IndexedObject[];
@@ -86,7 +99,7 @@ function matchByExactGeometryHash(
     if (candidates.length === 0) continue;
 
     let best: IndexedObject | null = null;
-    let bestDist = tolerance;
+    let bestDist = ctx.tolerance;
     for (const candidate of candidates) {
       const dist = distance(candidate.centroid, objB.centroid);
       if (dist <= bestDist) {
@@ -102,7 +115,7 @@ function matchByExactGeometryHash(
       a: best,
       b: objB,
       // Identical hash ⇒ unchanged unless text somehow diverged (already in hash).
-      modified: pairIsModified(best, objB, tolerance),
+      modified: ctx.isModified(best, objB),
     });
   }
 
@@ -121,7 +134,7 @@ function matchByExactGeometryHash(
 function matchByObjectIndex(
   groupA: IndexedObject[],
   groupB: IndexedObject[],
-  tolerance: number,
+  ctx: MatchContext,
 ): {
   matched: MatchedPair[];
   remainingA: IndexedObject[];
@@ -151,7 +164,7 @@ function matchByObjectIndex(
     matched.push({
       a: objA,
       b: objB,
-      modified: pairIsModified(objA, objB, tolerance),
+      modified: ctx.isModified(objA, objB),
     });
   }
 
@@ -165,7 +178,7 @@ function matchByObjectIndex(
 function matchSpatially(
   groupA: IndexedObject[],
   groupB: IndexedObject[],
-  tolerance: number,
+  ctx: MatchContext,
 ): {
   matched: MatchedPair[];
   unmatchedA: IndexedObject[];
@@ -175,13 +188,14 @@ function matchSpatially(
   const byIdA = new Map(groupA.map((o) => [o.id, o]));
   const matched: MatchedPair[] = [];
   const unmatchedB: IndexedObject[] = [];
-  const index = buildSpatialIndex(groupA, tolerance);
+  const cellSize = ctx.tolerance > 0 ? ctx.tolerance : 1;
+  const index = buildSpatialIndex(groupA, cellSize);
 
   for (const objB of groupB) {
     let bestId: number | null = null;
-    let bestDist = tolerance;
+    let bestDist = ctx.tolerance;
 
-    for (const key of neighborCellKeys(objB.centroid[0], objB.centroid[1], tolerance)) {
+    for (const key of neighborCellKeys(objB.centroid[0], objB.centroid[1], cellSize)) {
       for (const candidateId of index.get(key) ?? []) {
         if (!availableA.has(candidateId)) continue;
         const objA = byIdA.get(candidateId);
@@ -204,7 +218,7 @@ function matchSpatially(
     matched.push({
       a: objA,
       b: objB,
-      modified: pairIsModified(objA, objB, tolerance),
+      modified: ctx.isModified(objA, objB),
     });
   }
 
@@ -224,26 +238,26 @@ function matchSpatially(
 function matchSymbolGroup(
   groupA: IndexedObject[],
   groupB: IndexedObject[],
-  tolerance: number,
+  ctx: MatchContext,
   preferObjectIndex: boolean,
 ): {
   matched: MatchedPair[];
   unmatchedA: IndexedObject[];
   unmatchedB: IndexedObject[];
 } {
-  const byHash = matchByExactGeometryHash(groupA, groupB, tolerance);
+  const byHash = matchByExactGeometryHash(groupA, groupB, ctx);
   let workA = byHash.remainingA;
   let workB = byHash.remainingB;
   const matched: MatchedPair[] = [...byHash.matched];
 
   if (preferObjectIndex) {
-    const byIndex = matchByObjectIndex(workA, workB, tolerance);
+    const byIndex = matchByObjectIndex(workA, workB, ctx);
     matched.push(...byIndex.matched);
     workA = byIndex.remainingA;
     workB = byIndex.remainingB;
   }
 
-  const spatial = matchSpatially(workA, workB, tolerance);
+  const spatial = matchSpatially(workA, workB, ctx);
   matched.push(...spatial.matched);
 
   markSwappedGeometryPairs(matched);
@@ -255,14 +269,72 @@ function matchSymbolGroup(
   };
 }
 
+/** Symbol-independent shape key: same geometry drawn with another symbol. */
+function shapeKey(object: NormalizedOcadObject): string {
+  return [
+    object.type,
+    object.centroid[0],
+    object.centroid[1],
+    ...object.bbox,
+    object.vertices?.length ?? 0,
+    object.text ?? "",
+  ].join("|");
+}
+
+/**
+ * Pairs removed+added objects with identical shape but different symbol so a symbol
+ * swap shows up as one modified change ("symbol ändrad") instead of remove+add.
+ */
+function pairSymbolChanges(
+  removed: IndexedObject[],
+  added: IndexedObject[],
+  preferObjectIndex: boolean,
+): { pairs: Array<{ a: IndexedObject; b: IndexedObject }>; removed: IndexedObject[]; added: IndexedObject[] } {
+  if (removed.length === 0 || added.length === 0) return { pairs: [], removed, added };
+
+  const byShape = new Map<string, IndexedObject[]>();
+  for (const obj of removed) {
+    const key = shapeKey(obj);
+    const bucket = byShape.get(key) ?? [];
+    bucket.push(obj);
+    byShape.set(key, bucket);
+  }
+
+  const usedA = new Set<number>();
+  const usedB = new Set<number>();
+  const pairs: Array<{ a: IndexedObject; b: IndexedObject }> = [];
+  for (const objB of added) {
+    const candidates = (byShape.get(shapeKey(objB)) ?? []).filter(
+      (candidate) => !usedA.has(candidate.id) && candidate.symbolNumber !== objB.symbolNumber,
+    );
+    if (candidates.length === 0) continue;
+    const objA =
+      (preferObjectIndex
+        ? candidates.find((candidate) => candidate.objectIndex === objB.objectIndex)
+        : undefined) ?? candidates[0]!;
+    usedA.add(objA.id);
+    usedB.add(objB.id);
+    pairs.push({ a: objA, b: objB });
+  }
+
+  return {
+    pairs,
+    removed: removed.filter((obj) => !usedA.has(obj.id)),
+    added: added.filter((obj) => !usedB.has(obj.id)),
+  };
+}
+
 function toChange(
   changeType: ChangeType,
   object: NormalizedOcadObject,
   previous?: NormalizedOcadObject,
 ): OcadObjectChange {
+  const inB = changeType !== "removed";
+  const symbolChanged = previous != null && previous.symbolNumber !== object.symbolNumber;
   return {
     changeType,
-    objectIndex: object.objectIndex,
+    objectIndex: previous ? previous.objectIndex : object.objectIndex,
+    ...(inB ? { checkinObjectIndex: object.objectIndex } : {}),
     symbolNumber: object.symbolNumber,
     symbolName: object.symbolName,
     type: object.type,
@@ -271,6 +343,9 @@ function toChange(
     text: object.text,
     geometryHash: object.geometryHash,
     previousGeometryHash: previous?.geometryHash,
+    ...(symbolChanged
+      ? { previousSymbolNumber: previous.symbolNumber, previousSymbolName: previous.symbolName }
+      : {}),
   };
 }
 
@@ -311,8 +386,18 @@ export function compareOcadObjects(
   options: OcadDiffOptions = {},
 ): OcadDiffResult {
   const started = Date.now();
-  const tolerance = options.toleranceMeters ?? DEFAULT_TOLERANCE_METERS;
+  const toleranceMeters = options.toleranceMeters ?? DEFAULT_TOLERANCE_METERS;
+  const tolerance =
+    options.mapScale && Number.isFinite(options.mapScale) && options.mapScale > 0
+      ? metersToMapUnits(toleranceMeters, options.mapScale)
+      : toleranceMeters;
   const preferObjectIndex = options.matchByObjectIndex ?? true;
+  const ctx: MatchContext = {
+    tolerance,
+    isModified: options.exactModified
+      ? (a, b) => (a.text ?? "") !== (b.text ?? "") || a.geometryHash !== b.geometryHash
+      : (a, b) => isGeometryModified(a, b, tolerance),
+  };
 
   const indexedA = objectsA.map((o, id) => ({ ...o, id }));
   const indexedB = objectsB.map((o, id) => ({ ...o, id }));
@@ -322,9 +407,9 @@ export function compareOcadObjects(
   const allSymbols = new Set([...groupsA.keys(), ...groupsB.keys()]);
 
   const allChanges: OcadObjectChange[] = [];
+  const allUnmatchedA: IndexedObject[] = [];
+  const allUnmatchedB: IndexedObject[] = [];
   let unchanged = 0;
-  let added = 0;
-  let removed = 0;
   let modified = 0;
 
   for (const symbolNumber of allSymbols) {
@@ -333,7 +418,7 @@ export function compareOcadObjects(
     const { matched, unmatchedA, unmatchedB } = matchSymbolGroup(
       groupA,
       groupB,
-      tolerance,
+      ctx,
       preferObjectIndex,
     );
 
@@ -346,21 +431,29 @@ export function compareOcadObjects(
       }
     }
 
-    for (const obj of unmatchedA) {
-      removed += 1;
-      allChanges.push(toChange("removed", obj));
-    }
-    for (const obj of unmatchedB) {
-      added += 1;
-      allChanges.push(toChange("added", obj));
-    }
+    allUnmatchedA.push(...unmatchedA);
+    allUnmatchedB.push(...unmatchedB);
   }
+
+  const symbolSwaps = pairSymbolChanges(allUnmatchedA, allUnmatchedB, preferObjectIndex);
+  for (const { a, b } of symbolSwaps.pairs) {
+    modified += 1;
+    allChanges.push(toChange("modified", b, a));
+  }
+  for (const obj of symbolSwaps.removed) {
+    allChanges.push(toChange("removed", obj));
+  }
+  for (const obj of symbolSwaps.added) {
+    allChanges.push(toChange("added", obj));
+  }
+  const removed = symbolSwaps.removed.length;
+  const added = symbolSwaps.added.length;
 
   return {
     versionA: { fileName: meta.fileNameA, objectCount: objectsA.length },
     versionB: { fileName: meta.fileNameB, objectCount: objectsB.length },
     durationMs: Date.now() - started,
-    toleranceMeters: tolerance,
+    toleranceMeters,
     added,
     removed,
     modified,

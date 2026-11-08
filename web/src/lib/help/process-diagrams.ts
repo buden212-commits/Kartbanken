@@ -41,12 +41,16 @@ flowchart TD
 
 export const loginFlow = `
 flowchart TD
-  S[Ange e-post och lösenord] --> V{Konto godkänt?}
+  S[E-post och lösenord eller Google] --> G{Google?}
+  G -->|Ja, medlem i Eventor| R[Läsare tills admin ändrar roll]
+  G -->|Ja, redan godkänt konto| H[Startsidan / callback]
+  G -->|Nej| V{Konto godkänt?}
+  R --> H
   V -->|Nej, väntar| P[Sida: väntar på godkännande]
   V -->|Nej, avvisat| P
   V -->|Ja| T{Tillfälligt lösenord?}
   T -->|Ja| C[Byt lösenord]
-  C --> H[Startsidan / callback]
+  C --> H
   T -->|Nej| H
 `;
 

@@ -14,6 +14,7 @@ import {
   SubsetDownloadNotice,
 } from "@/components/checkout-flow-extras";
 import { getMapVersionContext } from "@/lib/maps/version-context";
+import { hasManualUploadSinceBase } from "@/lib/maps/head-version";
 import { HelpLinkIcon } from "@/components/help-link-icon";
 import { CheckoutStatus } from "@/lib/checkout/types";
 import { prisma } from "@/lib/prisma";
@@ -45,6 +46,16 @@ export default async function CheckoutDetailPage({ params }: PageProps) {
     }),
     getMapVersionContext(map.id),
   ]);
+
+  const awaitingIntegration =
+    checkout.status === CheckoutStatus.CHECKED_IN ||
+    checkout.status === CheckoutStatus.PENDING_ADMIN_CONFIRM;
+  const integrationBlockedReason =
+    awaitingIntegration &&
+    versionContext.head &&
+    (await hasManualUploadSinceBase(map.id, checkout.baseVersionId, versionContext.head.id))
+      ? "En ny kartfil har laddats upp manuellt efter utcheckningen. Objektnumren i utcheckningen stämmer inte längre med aktuell version, så den kan inte integreras automatiskt. Avbryt och gör en ny utcheckning, eller för över ändringarna manuellt i OCAD."
+      : null;
 
   const serialized = serializeCheckoutResponse(checkout);
   const canManagePublication = canUpload(session.user.role);
@@ -103,6 +114,7 @@ export default async function CheckoutDetailPage({ params }: PageProps) {
           isAdmin={session.user.role === Role.ADMIN}
           isOwner={checkout.userId === session.user.id}
           subsetNotice={<SubsetDownloadNotice />}
+          integrationBlockedReason={integrationBlockedReason}
         />
 
         {checkout.status === CheckoutStatus.INTEGRATED && integratedVersion && (

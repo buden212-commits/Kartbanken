@@ -39,6 +39,7 @@ export function SmtpSettingsForm({ initialSettings }: Props) {
       checkoutReminderDays: Number(formData.get("checkoutReminderDays") ?? 7),
       checkoutReminderRepeatDays: Number(formData.get("checkoutReminderRepeatDays") ?? 7),
       exportRotationDeg: Number(formData.get("exportRotationDeg") ?? 7) || 7,
+      maxCheckoutAreaKm2: Number(formData.get("maxCheckoutAreaKm2") ?? 0) || 0,
       enabled: formData.get("enabled") === "on",
     };
 
@@ -109,7 +110,7 @@ export function SmtpSettingsForm({ initialSettings }: Props) {
   return (
     <div className="space-y-6">
       <form
-        key={`${settings.enabled}-${settings.smtpHost}-${settings.smtpPort}-${settings.smtpUser}-${settings.hasPassword}-${settings.adminNotificationEmail}-${settings.checkoutReminderDays}-${settings.checkoutReminderRepeatDays}-${settings.exportRotationDeg}`}
+        key={`${settings.enabled}-${settings.smtpHost}-${settings.smtpPort}-${settings.smtpUser}-${settings.hasPassword}-${settings.adminNotificationEmail}-${settings.checkoutReminderDays}-${settings.checkoutReminderRepeatDays}-${settings.exportRotationDeg}-${settings.maxCheckoutAreaKm2}`}
         onSubmit={(event) => void handleSubmit(event)}
         className="grid gap-4 sm:grid-cols-2"
       >
@@ -275,6 +276,26 @@ export function SmtpSettingsForm({ initialSettings }: Props) {
           <p className="mt-1 text-xs text-slate-500">
             Ny påminnelse skickas med detta intervall tills utcheckningen är incheckad, integrerad
             eller avbruten.
+          </p>
+        </div>
+
+        <div>
+          <label htmlFor="maxCheckoutAreaKm2" className="form-label">
+            Max yta per utcheckning (km²)
+          </label>
+          <input
+            id="maxCheckoutAreaKm2"
+            name="maxCheckoutAreaKm2"
+            type="number"
+            required
+            min={0}
+            max={10000}
+            step={0.01}
+            defaultValue={settings.maxCheckoutAreaKm2}
+            className="form-input"
+          />
+          <p className="mt-1 text-xs text-slate-500">
+            0 = ingen gräns. Större utcheckningar låser mer av kartan för andra redaktörer.
           </p>
         </div>
 

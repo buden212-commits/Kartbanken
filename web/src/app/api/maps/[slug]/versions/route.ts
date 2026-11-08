@@ -5,6 +5,10 @@ import { runAfterResponse } from "@/lib/background";
 import { sha256 } from "@/lib/hash";
 import { assertMapAllowsUpload, checkVersionUploadGuards } from "@/lib/maps/upload-guards";
 import { processVersionAfterUpload } from "@/lib/ocad/process-version";
+import {
+  appendDuplicateStripComment,
+  stripExactDuplicatesFromBuffer,
+} from "@/lib/ocad/strip-duplicates";
 import { prisma } from "@/lib/prisma";
 import type { Role as RoleType } from "@/lib/roles";
 import {
@@ -65,11 +69,17 @@ export async function POST(request: Request, { params }: RouteParams) {
     );
   }
 
-  const comment = formData.get("comment")?.toString().trim() || null;
   const forceDespiteCheckouts = formData.get("forceDespiteCheckouts") === "true";
   const forceDuplicate = formData.get("forceDuplicate") === "true";
-  const buffer = Buffer.from(await file.arrayBuffer());
+  const uploaded = Buffer.from(await file.arrayBuffer());
+  const stripped = await stripExactDuplicatesFromBuffer(uploaded, file.name);
+  const buffer = stripped.buffer;
   const contentHash = sha256(buffer);
+  const comment = appendDuplicateStripComment(
+    formData.get("comment")?.toString().trim() || null,
+    stripped.extrasRemoved,
+    stripped.groupCount,
+  );
 
   const mapRecord = await prisma.mapFile.findUnique({
     where: { id: map.id },
@@ -121,7 +131,7 @@ export async function POST(request: Request, { params }: RouteParams) {
         versionNumber,
         storagePath: storedRef,
         originalFilename: file.name,
-        fileSizeBytes: file.size,
+        fileSizeBytes: buffer.byteLength,
         contentHash,
         uploadedById: session.user.id,
         comment,

@@ -10,7 +10,7 @@ const { readOcad } = require("ocad2geojson") as {
   }>;
 };
 
-const DEFAULT_MAP_SCALE = 15000;
+export const DEFAULT_MAP_SCALE = 15000;
 
 export async function readMapScaleFromBuffer(buffer: Buffer): Promise<number> {
   const ocadFile = await readOcad(buffer, { quietWarnings: true });
