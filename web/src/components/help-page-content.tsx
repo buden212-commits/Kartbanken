@@ -402,7 +402,7 @@ export async function HelpPageContent() {
               <HelpList
                 items={[
                   "Efter vanlig utcheckning: ladda upp den redigerade .ocd-filen via Checka in på utcheckningssidan (gäller inte Importera delkarta — där är filen redan incheckad)",
-                  "Granska utcheckningsdiff (tillagda, borttagna, ändrade, symbol ändrad). Fliken Jämför visar kartan före och efter med ett skjutreglage — samma zoom och panorama på båda sidor. Diffen matchar i första hand på samma geometri, så oförändrade objekt med nytt index i OCAD inte blir «nya». Sidan uppdateras automatiskt. Om något går fel, eller om Jämför saknas på en äldre incheckning: «Försök beräkna diff igen»",
+                  "Granska utcheckningsdiff (tillagda, borttagna, ändrade, symbol ändrad). Fliken Jämför visar kartan före och efter med ett skjutreglage — samma zoom och panorama på båda sidor. Framhäv-reglaget tonar ner den karta du inte vill se. Diffen matchar i första hand på samma geometri, så oförändrade objekt med nytt index i OCAD inte blir «nya». Sidan uppdateras automatiskt. Om något går fel, eller om Jämför saknas på en äldre incheckning: «Försök beräkna diff igen»",
                   "Validering stoppar integrering om nya eller ändrade objekt använder symboler som saknas i grundkartan. Du får också varning vid ändrad symboltabell, objekt utanför området, exakta dubbletter eller om filen inte ser ut att vara den utcheckade",
                   "Bekräfta integration — utcheckningen går till admin-bekräftelse (admin kan också integrera direkt utan din bekräftelse)",
                   "Administratör bekräftar och integrerar — en ny opublicerad kartversion skapas (publicera i versionshistoriken). Extra identiska objekt på hela kartan tas bort i den sparade versionen",
@@ -832,7 +832,7 @@ export async function HelpPageContent() {
           <h3 className="font-medium text-slate-900">Kartvyer</h3>
           <HelpList
             items={[
-              "Jämför — före och efter sida vid sida med ett vertikalt skjutreglage (samma zoom och panorama). Dra linjen, även på pekskärm",
+              "Jämför — före och efter sida vid sida med ett vertikalt skjutreglage (samma zoom och panorama). Dra linjen, även på pekskärm. Framhäv-reglaget i verktygsraden tonar ner Före eller Efter så du kan lyfta fram den karta du vill se",
               "Hela kartan — senaste versionen",
               "Nya objekt — endast tillagda",
               "Raderade objekt — endast borttagna",

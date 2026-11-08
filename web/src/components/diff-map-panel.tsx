@@ -369,6 +369,7 @@ export function DiffMapPanel({
   const [compareInner, setCompareInner] = useState<string | null>(null);
   const [overlayInner, setOverlayInner] = useState<string | null>(null);
   const [swipeRatio, setSwipeRatio] = useState(0.5);
+  const [emphasizeRatio, setEmphasizeRatio] = useState(0.5);
   const [svgFill, setSvgFill] = useState("transparent");
   const [fullViewBox, setFullViewBox] = useState<string | null>(null);
   const [rootTransform, setRootTransform] = useState<SvgRootTransform>(IDENTITY_SVG_TRANSFORM);
@@ -1713,6 +1714,9 @@ export function DiffMapPanel({
   const compareMode = Boolean(comparePreviewUrl && compareInner);
   const beforeLabel = compareLabels?.before ?? "Före";
   const afterLabel = compareLabels?.after ?? "Efter";
+  const beforeOpacity =
+    emphasizeRatio <= 0.5 ? 1 : 1 - (emphasizeRatio - 0.5) * 2;
+  const afterOpacity = emphasizeRatio >= 0.5 ? 1 : 1 - (0.5 - emphasizeRatio) * 2;
   const overlayClipSvg = useMemo(() => {
     if (!compareAfterClip) return null;
     const [x1, y1, x2, y2] = geoBboxToSvgUser(
@@ -1810,6 +1814,23 @@ export function DiffMapPanel({
           <button type="button" onClick={resetView} className={toolbarBtn}>
             Hela kartan
           </button>
+          {compareMode && (
+            <label className="flex min-w-[12rem] flex-1 items-center gap-2 text-xs text-slate-600 sm:max-w-xs">
+              <span className="shrink-0 font-medium text-slate-700">Framhäv</span>
+              <span className="shrink-0 text-slate-500">{beforeLabel}</span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={1}
+                value={Math.round(emphasizeRatio * 100)}
+                onChange={(e) => setEmphasizeRatio(Number(e.target.value) / 100)}
+                aria-label="Framhäv före eller efter"
+                className="h-2 w-full min-w-[6rem] cursor-pointer accent-ifk-blue"
+              />
+              <span className="shrink-0 text-slate-500">{afterLabel}</span>
+            </label>
+          )}
           {canUseGps && (
             <>
               <button
@@ -1975,6 +1996,7 @@ export function DiffMapPanel({
             style={{
               transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
               transformOrigin: "0 0",
+              opacity: compareMode ? afterOpacity : 1,
             }}
           >
             <svg
@@ -2086,7 +2108,10 @@ export function DiffMapPanel({
         {compareMode && svgInner !== null && fullViewBox && (
           <div
             className="pointer-events-none absolute inset-0"
-            style={{ clipPath: `inset(0 ${(1 - swipeRatio) * 100}% 0 0)` }}
+            style={{
+              clipPath: `inset(0 ${(1 - swipeRatio) * 100}% 0 0)`,
+              opacity: beforeOpacity,
+            }}
           >
             <div
               className="absolute inset-0"
@@ -2103,6 +2128,15 @@ export function DiffMapPanel({
                 className="h-full w-full max-h-full max-w-full"
                 aria-hidden
               >
+                {viewBoxRect && (
+                  <rect
+                    x={viewBoxRect.x}
+                    y={viewBoxRect.y}
+                    width={viewBoxRect.width}
+                    height={viewBoxRect.height}
+                    fill="#ffffff"
+                  />
+                )}
                 <g dangerouslySetInnerHTML={{ __html: compareInner ?? "" }} />
               </svg>
             </div>

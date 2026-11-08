@@ -11,6 +11,7 @@ export const releaseNotes: ReleaseNote[] = [
     title: "Före/efter-reglage vid granskning",
     items: [
       "På Jämför versioner och vid incheckningsgranskning finns fliken Jämför — dra det vertikala reglaget för att se kartan före och efter i samma vy, med samma zoom",
+      "Reglaget Framhäv tonar ner den karta du inte vill se, så Före eller Efter kan lyftas fram",
       "Färgade lager (nya, raderade, ändrade objekt) finns kvar som egna flikar ovanpå kartan",
     ],
   },
