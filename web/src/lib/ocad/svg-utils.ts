@@ -99,3 +99,24 @@ export function extractSvgInner(svgText: string): {
     rootTransform: parseSvgRootTransform(inner),
   };
 }
+
+/** Prefix fragment ids so two inline SVGs can share one HTML document. */
+export function prefixSvgFragmentIds(markup: string, prefix: string): string {
+  if (!prefix || !markup) return markup;
+  return markup
+    .replace(/\bid=(["'])([^"']+)\1/gi, (_m, q: string, id: string) => `id=${q}${prefix}${id}${q}`)
+    .replace(/url\((["']?)#([^)"']+)\1\)/gi, (_m, q: string, id: string) => `url(${q}#${prefix}${id}${q})`)
+    .replace(
+      /\b(xlink:href|href)=(["'])#([^"']+)\2/gi,
+      (_m, attr: string, q: string, id: string) => `${attr}=${q}#${prefix}${id}${q}`,
+    );
+}
+
+/** Rewrite the OCAD Y-flip group so a subset/other-version SVG matches the host map. */
+export function alignSvgInnerTransform(inner: string, transform: SvgRootTransform): string {
+  if (!inner || !transform.flipY) return inner;
+  return inner.replace(
+    /(<g[^>]*transform="translate\()([^,]+)(,\s*)([^)]+)(\)")/i,
+    `$1${transform.tx}$3${transform.ty}$5`,
+  );
+}

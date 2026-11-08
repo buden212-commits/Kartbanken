@@ -4,6 +4,7 @@ type LayerPaths = {
   added?: string;
   removed?: string;
   modified?: string;
+  checkin?: string;
 };
 
 export function collectLayerPathsFromSummary(summaryJson: string | null): string[] {
@@ -12,7 +13,7 @@ export function collectLayerPathsFromSummary(summaryJson: string | null): string
     const summary = JSON.parse(summaryJson) as { layerPaths?: LayerPaths };
     const paths = summary.layerPaths;
     if (!paths) return [];
-    return [paths.added, paths.removed, paths.modified].filter(
+    return [paths.added, paths.removed, paths.modified, paths.checkin].filter(
       (path): path is string => Boolean(path),
     );
   } catch {

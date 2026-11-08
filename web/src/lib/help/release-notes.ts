@@ -8,6 +8,14 @@ export type ReleaseNote = {
 export const releaseNotes: ReleaseNote[] = [
   {
     date: "2026-11-08",
+    title: "Före/efter-reglage vid granskning",
+    items: [
+      "På Jämför versioner och vid incheckningsgranskning finns fliken Jämför — dra det vertikala reglaget för att se kartan före och efter i samma vy, med samma zoom",
+      "Färgade lager (nya, raderade, ändrade objekt) finns kvar som egna flikar ovanpå kartan",
+    ],
+  },
+  {
+    date: "2026-11-08",
     title: "Säkrare ut- och incheckning",
     items: [
       "Incheckningen granskas hårdare: saknade symboler stoppar integrering, och du får varning om symboltabellen skiljer sig, om objekt ligger utanför området eller om fel fil verkar ha laddats upp",

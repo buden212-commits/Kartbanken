@@ -80,6 +80,10 @@ type DiffSummary = {
 
     modified: string;
 
+    checkin?: string;
+
+    checkinClip?: { minX: number; minY: number; maxX: number; maxY: number };
+
   } | null;
 
 };

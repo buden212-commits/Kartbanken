@@ -14,7 +14,7 @@ export const maxDuration = 300;
 
 type RouteParams = { params: Promise<{ slug: string; id: string }> };
 
-const VALID_LAYERS = new Set(["added", "removed", "modified"]);
+const VALID_LAYERS = new Set(["added", "removed", "modified", "checkin"]);
 
 async function loadAuthorizedCheckout(slug: string, id: string, session: AuthSession) {
   const map = await prisma.mapFile.findUnique({ where: { slug }, select: { id: true } });
@@ -46,7 +46,7 @@ export async function GET(request: Request, { params }: RouteParams) {
 
   if (!layer || !VALID_LAYERS.has(layer)) {
     return NextResponse.json(
-      { error: "Ange layer (added|removed|modified)" },
+      { error: "Ange layer (added|removed|modified|checkin)" },
       { status: 400 },
     );
   }

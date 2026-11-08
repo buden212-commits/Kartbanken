@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import type { OcadObjectChange } from "@/lib/ocad/diff-types";
 import type { ChangeType } from "@/lib/ocad/diff-types";
 import { formatChangeCentroid } from "@/lib/ocad/change-utils";
@@ -18,7 +18,13 @@ import {
   type SvgRootTransform,
 } from "@/lib/ocad/svg-coords";
 import { svgUnitsPerScreenPx, svgUnitsPerScreenPxFromElement } from "@/lib/ocad/screen-space";
-import { extractSvgInner, boundsToViewBox, type OcadMapLayer } from "@/lib/ocad/svg-utils";
+import {
+  alignSvgInnerTransform,
+  boundsToViewBox,
+  extractSvgInner,
+  prefixSvgFragmentIds,
+  type OcadMapLayer,
+} from "@/lib/ocad/svg-utils";
 import { flattenOcadLayers, initialLayerVisibility } from "@/lib/ocad/layers";
 import { MapLayerPanel } from "@/components/map-layer-panel";
 import { MapTileLayer } from "@/components/map-tile-layer";
@@ -90,11 +96,19 @@ export type MapDrawPointerHandlers = {
   onPointerUp: (e: React.PointerEvent, svg: SVGSVGElement) => void;
 };
 
+type CompareClip = { minX: number; minY: number; maxX: number; maxY: number };
+
 type Props = {
   previewUrl: string;
   title: string;
   mapSlug: string;
   versionId: string;
+  /** Full-map SVG shown as «före» under the swipe clip. */
+  comparePreviewUrl?: string | null;
+  compareLabels?: { before: string; after: string };
+  /** Subset SVG drawn on the after side, clipped to compareAfterClip. */
+  compareAfterOverlayUrl?: string | null;
+  compareAfterClip?: CompareClip | null;
   /** "tiles" = rasterpyramid för stora kartor (utcheckning / kartförslag). Default SVG. */
   basemap?: "svg" | "tiles";
   exportEnabled?: boolean;
@@ -319,6 +333,10 @@ export function DiffMapPanel({
   title,
   mapSlug,
   versionId,
+  comparePreviewUrl = null,
+  compareLabels,
+  compareAfterOverlayUrl = null,
+  compareAfterClip = null,
   basemap = "svg",
   exportEnabled = true,
   promptOcdSuggestionSymbols = false,
@@ -348,6 +366,9 @@ export function DiffMapPanel({
   gpsTrackFollow = null,
 }: Props) {
   const [svgInner, setSvgInner] = useState<string | null>(null);
+  const [compareInner, setCompareInner] = useState<string | null>(null);
+  const [overlayInner, setOverlayInner] = useState<string | null>(null);
+  const [swipeRatio, setSwipeRatio] = useState(0.5);
   const [svgFill, setSvgFill] = useState("transparent");
   const [fullViewBox, setFullViewBox] = useState<string | null>(null);
   const [rootTransform, setRootTransform] = useState<SvgRootTransform>(IDENTITY_SVG_TRANSFORM);
@@ -385,6 +406,8 @@ export function DiffMapPanel({
   const [gpsError, setGpsError] = useState<string | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const swipeId = useId().replace(/[^a-zA-Z0-9]/g, "");
+  const swipeDragRef = useRef<{ pointerId: number } | null>(null);
   const gpsWatchIdRef = useRef<number | null>(null);
   const gpsCenteredOnceRef = useRef(false);
   const gpsFixRef = useRef<GpsFix | null>(null);
@@ -452,6 +475,8 @@ export function DiffMapPanel({
     setLoading(true);
     setError(null);
     setSvgInner(null);
+    setCompareInner(null);
+    setOverlayInner(null);
     setFullViewBox(null);
     setFullSvgText(null);
     setTileManifest(null);
@@ -618,8 +643,19 @@ export function DiffMapPanel({
         setLoading(false);
       });
     } else {
-      fetchPreviewText(previewUrl, { signal: controller.signal })
-        .then((text) => {
+      const compareUrl =
+        comparePreviewUrl && comparePreviewUrl !== previewUrl ? comparePreviewUrl : null;
+      const overlayUrl = compareAfterOverlayUrl || null;
+      Promise.all([
+        fetchPreviewText(previewUrl, { signal: controller.signal }),
+        compareUrl
+          ? fetchPreviewText(compareUrl, { signal: controller.signal })
+          : Promise.resolve(null),
+        overlayUrl
+          ? fetchPreviewText(overlayUrl, { signal: controller.signal })
+          : Promise.resolve(null),
+      ])
+        .then(([text, compareText, overlayText]) => {
           if (cancelled) return;
           const {
             inner,
@@ -648,6 +684,29 @@ export function DiffMapPanel({
             ocadVersion: defaultOcadExportVersion(ocadFileVersion),
           }));
           setFullSvgText(text);
+
+          const beforeSource = compareText ?? (comparePreviewUrl ? text : null);
+          if (beforeSource) {
+            const beforeInner = extractSvgInner(beforeSource).inner;
+            setCompareInner(
+              prefixSvgFragmentIds(alignSvgInnerTransform(beforeInner, transform), `b${swipeId}-`),
+            );
+          } else {
+            setCompareInner(null);
+          }
+
+          if (overlayText) {
+            const overlayExtracted = extractSvgInner(overlayText).inner;
+            setOverlayInner(
+              prefixSvgFragmentIds(
+                alignSvgInnerTransform(overlayExtracted, transform),
+                `o${swipeId}-`,
+              ),
+            );
+          } else {
+            setOverlayInner(null);
+          }
+
           setLoading(false);
         })
         .catch((err) => {
@@ -662,7 +721,16 @@ export function DiffMapPanel({
       controller.abort();
       if (pollTimer) clearTimeout(pollTimer);
     };
-  }, [previewUrl, reloadKey, basemap, mapSlug, versionId]);
+  }, [
+    previewUrl,
+    comparePreviewUrl,
+    compareAfterOverlayUrl,
+    reloadKey,
+    basemap,
+    mapSlug,
+    versionId,
+    swipeId,
+  ]);
 
   useEffect(() => {
     if (!loading) {
@@ -703,8 +771,10 @@ export function DiffMapPanel({
       return;
     }
     clearPreviewCache(previewUrl);
+    if (comparePreviewUrl) clearPreviewCache(comparePreviewUrl);
+    if (compareAfterOverlayUrl) clearPreviewCache(compareAfterOverlayUrl);
     setReloadKey((key) => key + 1);
-  }, [previewUrl, basemap, mapSlug, versionId]);
+  }, [previewUrl, comparePreviewUrl, compareAfterOverlayUrl, basemap, mapSlug, versionId]);
 
   const toggleLayer = useCallback((layerId: string) => {
     setLayerVisibility((prev) => ({
@@ -1160,6 +1230,14 @@ export function DiffMapPanel({
       const viewport = viewportRef.current;
       if (!viewport) return;
 
+      if ((e.target as Element).closest("[data-swipe-handle]")) {
+        pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        viewport.setPointerCapture(e.pointerId);
+        swipeDragRef.current = { pointerId: e.pointerId };
+        e.preventDefault();
+        return;
+      }
+
       pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
       viewport.setPointerCapture(e.pointerId);
 
@@ -1218,6 +1296,17 @@ export function DiffMapPanel({
     (e: React.PointerEvent) => {
       if (!pointersRef.current.has(e.pointerId)) return;
       pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (swipeDragRef.current?.pointerId === e.pointerId) {
+        const viewport = viewportRef.current;
+        if (!viewport) return;
+        const rect = viewport.getBoundingClientRect();
+        if (rect.width > 0) {
+          setSwipeRatio(Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)));
+        }
+        e.preventDefault();
+        return;
+      }
 
       if (pinchRef.current && pointersRef.current.size >= 2) {
         const viewport = viewportRef.current;
@@ -1347,6 +1436,11 @@ export function DiffMapPanel({
 
       if (viewportRef.current?.hasPointerCapture(e.pointerId)) {
         viewportRef.current.releasePointerCapture(e.pointerId);
+      }
+
+      if (swipeDragRef.current?.pointerId === e.pointerId) {
+        swipeDragRef.current = null;
+        return;
       }
 
       if (pointersRef.current.size >= 2) {
@@ -1616,6 +1710,28 @@ export function DiffMapPanel({
 
   const highlightShape = focusTarget ? buildHighlightShape(focusTarget, rootTransform) : null;
   const exportBbox = exportFrame ? exportFrameBbox(exportFrame) : null;
+  const compareMode = Boolean(comparePreviewUrl && compareInner);
+  const beforeLabel = compareLabels?.before ?? "Före";
+  const afterLabel = compareLabels?.after ?? "Efter";
+  const overlayClipSvg = useMemo(() => {
+    if (!compareAfterClip) return null;
+    const [x1, y1, x2, y2] = geoBboxToSvgUser(
+      [compareAfterClip.minX, compareAfterClip.minY, compareAfterClip.maxX, compareAfterClip.maxY],
+      rootTransform,
+    );
+    const width = Math.abs(x2 - x1);
+    const height = Math.abs(y2 - y1);
+    const pad = Math.max(50, Math.max(width, height) * 0.02);
+    return {
+      x: Math.min(x1, x2) - pad,
+      y: Math.min(y1, y2) - pad,
+      w: width + pad * 2,
+      h: height + pad * 2,
+    };
+  }, [compareAfterClip, rootTransform]);
+  const viewBoxRect = useMemo(() => parseViewBoxString(fullViewBox), [fullViewBox]);
+  const holeMaskId = `swipe-hole-${swipeId}`;
+  const overlayClipId = `swipe-overlay-${swipeId}`;
 
   const [overlaySvgUnitsPerPx, setOverlaySvgUnitsPerPx] = useState(1);
 
@@ -1918,7 +2034,46 @@ export function DiffMapPanel({
                   pointerEvents="none"
                 />
               )}
-              {svgInner ? <g dangerouslySetInnerHTML={{ __html: svgInner }} /> : null}
+              {overlayInner && overlayClipSvg && viewBoxRect && (
+                <defs>
+                  <mask id={holeMaskId} maskUnits="userSpaceOnUse">
+                    <rect
+                      x={viewBoxRect.x}
+                      y={viewBoxRect.y}
+                      width={viewBoxRect.width}
+                      height={viewBoxRect.height}
+                      fill="white"
+                    />
+                    <rect
+                      x={overlayClipSvg.x}
+                      y={overlayClipSvg.y}
+                      width={overlayClipSvg.w}
+                      height={overlayClipSvg.h}
+                      fill="black"
+                    />
+                  </mask>
+                  <clipPath id={overlayClipId} clipPathUnits="userSpaceOnUse">
+                    <rect
+                      x={overlayClipSvg.x}
+                      y={overlayClipSvg.y}
+                      width={overlayClipSvg.w}
+                      height={overlayClipSvg.h}
+                    />
+                  </clipPath>
+                </defs>
+              )}
+              {svgInner ? (
+                <g
+                  mask={overlayInner && overlayClipSvg ? `url(#${holeMaskId})` : undefined}
+                  dangerouslySetInnerHTML={{ __html: svgInner }}
+                />
+              ) : null}
+              {overlayInner && overlayClipSvg ? (
+                <g
+                  clipPath={`url(#${overlayClipId})`}
+                  dangerouslySetInnerHTML={{ __html: overlayInner }}
+                />
+              ) : null}
               <SvgOverlaySafe
                 render={renderSvgOverlay}
                 rootTransform={rootTransform}
@@ -1926,6 +2081,75 @@ export function DiffMapPanel({
               />
             </svg>
           </div>
+        )}
+
+        {compareMode && svgInner !== null && fullViewBox && (
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{ clipPath: `inset(0 ${(1 - swipeRatio) * 100}% 0 0)` }}
+          >
+            <div
+              className="absolute inset-0"
+              style={{
+                transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                transformOrigin: "0 0",
+              }}
+            >
+              <svg
+                viewBox={fullViewBox}
+                fill={svgFill}
+                xmlns="http://www.w3.org/2000/svg"
+                preserveAspectRatio="xMidYMid meet"
+                className="h-full w-full max-h-full max-w-full"
+                aria-hidden
+              >
+                <g dangerouslySetInnerHTML={{ __html: compareInner ?? "" }} />
+              </svg>
+            </div>
+          </div>
+        )}
+
+        {compareMode && (
+          <>
+            <div className="pointer-events-none absolute left-2 top-2 z-20 rounded bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700 shadow">
+              {beforeLabel}
+            </div>
+            <div className="pointer-events-none absolute right-2 top-2 z-20 rounded bg-white/90 px-2 py-0.5 text-xs font-medium text-slate-700 shadow">
+              {afterLabel}
+            </div>
+            <div
+              data-swipe-handle
+              role="slider"
+              tabIndex={0}
+              aria-label="Före och efter"
+              aria-orientation="horizontal"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round(swipeRatio * 100)}
+              className="absolute inset-y-0 z-20 w-10 -translate-x-1/2 cursor-ew-resize touch-none"
+              style={{ left: `${swipeRatio * 100}%` }}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setSwipeRatio((ratio) => Math.max(0, ratio - 0.05));
+                } else if (e.key === "ArrowRight" || e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setSwipeRatio((ratio) => Math.min(1, ratio + 0.05));
+                } else if (e.key === "Home") {
+                  e.preventDefault();
+                  setSwipeRatio(0);
+                } else if (e.key === "End") {
+                  e.preventDefault();
+                  setSwipeRatio(1);
+                }
+              }}
+            >
+              <div className="pointer-events-none absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-white shadow-[0_0_0_1px_rgba(15,23,42,0.35)]" />
+              <div className="pointer-events-none absolute top-1/2 left-1/2 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-slate-300 bg-white text-xs font-medium text-slate-600 shadow">
+                ‹ ›
+              </div>
+            </div>
+          </>
         )}
 
         {svgInner !== null && fullViewBox && renderScreenOverlay && (
@@ -2062,7 +2286,7 @@ export function DiffMapPanel({
           </div>
         )}
 
-        {!infoChange && !clickHint && !exportMode && !mapToolbarOverlay && (
+        {!infoChange && !clickHint && !exportMode && !mapToolbarOverlay && !compareMode && (
           <div className="pointer-events-none absolute right-3 top-3 z-20 max-w-[calc(100%-1.5rem)] rounded-lg border border-slate-200 bg-white/90 px-2 py-1 text-xs text-slate-500 shadow-sm">
             {interactionMode === "draw"
               ? "Ritläge — nyp med två fingrar för att zooma"
@@ -2073,7 +2297,7 @@ export function DiffMapPanel({
         )}
       </div>
 
-      {showLayerPanel && basemap !== "tiles" && (
+      {showLayerPanel && !compareMode && basemap !== "tiles" && (
         <MapLayerPanel
           layers={mapLayers}
           visibility={layerVisibility}

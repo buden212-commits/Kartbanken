@@ -41,6 +41,8 @@ export type CheckoutDiffLayerPaths = {
   removed: string;
   modified: string;
   bounds: { minX: number; minY: number; maxX: number; maxY: number };
+  checkin?: string;
+  checkinClip?: { minX: number; minY: number; maxX: number; maxY: number };
 };
 
 export type CheckoutDiffSummary = {

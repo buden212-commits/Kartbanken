@@ -30,13 +30,15 @@ const CHANGE_TAB: Record<ChangeType, MapTab> = {
   modified: "modified",
 };
 
-type MapTab = "full" | "added" | "removed" | "modified";
+type MapTab = "compare" | "full" | "added" | "removed" | "modified";
 type ChangeFilter = "all" | ChangeType;
 
 type LayerPaths = {
   added: string;
   removed: string;
   modified: string;
+  checkin?: string;
+  checkinClip?: { minX: number; minY: number; maxX: number; maxY: number };
 };
 
 type Props = {
@@ -52,6 +54,12 @@ type Props = {
 };
 
 const MAP_TABS: { id: MapTab; label: string; description: string; legendClass: string }[] = [
+  {
+    id: "compare",
+    label: "Jämför",
+    description: "Dra reglaget för att se kartan före och efter incheckningen",
+    legendClass: "text-slate-600",
+  },
   {
     id: "full",
     label: "Aktuell version",
@@ -95,7 +103,8 @@ export function CheckoutDiffMap({
   totalChanges,
   changesTruncated = false,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<MapTab>("full");
+  const canCompare = Boolean(layerPaths?.checkin && layerPaths.checkinClip);
+  const [activeTab, setActiveTab] = useState<MapTab>(canCompare ? "compare" : "full");
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [changeFilter, setChangeFilter] = useState<ChangeFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -120,6 +129,7 @@ export function CheckoutDiffMap({
       added: `${layerBase}?layer=added${version}`,
       removed: `${layerBase}?layer=removed${version}`,
       modified: `${layerBase}?layer=modified${version}`,
+      checkin: `${layerBase}?layer=checkin${version}`,
     };
   }, [mapSlug, checkoutId, headVersionId, computedAt]);
 
@@ -142,7 +152,7 @@ export function CheckoutDiffMap({
     return changes
       .map((change, index) => ({ change, index }))
       .filter(({ change }) => {
-        if (activeTab === "full") return true;
+        if (activeTab === "full" || activeTab === "compare") return true;
         if (activeTab === "added") return change.changeType === "added";
         if (activeTab === "removed") return change.changeType === "removed";
         if (activeTab === "modified") return change.changeType === "modified";
@@ -168,12 +178,13 @@ export function CheckoutDiffMap({
     <section className="card">
       <h2 className="text-lg font-medium text-slate-900">Kartvy — utcheckningsdiff</h2>
       <p className="mt-1 text-sm text-slate-600">
-        Granska ändringar på kartan. Tryck på kartan eller i listan för objektinfo. Dra för att
-        panorera, nyp eller använd +/− för att zooma.
+        Granska ändringar på kartan. Fliken Jämför visar före och efter med ett skjutreglage.
+        Tryck på kartan eller i listan för objektinfo. Dra för att panorera, nyp eller använd +/−
+        för att zooma.
       </p>
 
       <div className="mt-4 flex flex-wrap gap-3 text-xs">
-        {MAP_TABS.filter((tab) => tab.id !== "full" || hasChanges).map((tab) => (
+        {MAP_TABS.filter((tab) => tab.id !== "compare" && (tab.id !== "full" || hasChanges)).map((tab) => (
           <span key={tab.id} className={`flex items-center gap-1.5 ${tab.legendClass}`}>
             <span
               className={`inline-block h-2.5 w-2.5 rounded-full ${
@@ -202,38 +213,46 @@ export function CheckoutDiffMap({
       {hasChanges && (
         <>
           <div className="mt-4 flex flex-wrap gap-2">
-            {MAP_TABS.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={`rounded-lg px-3 py-2 text-sm transition sm:px-4 ${
-                  activeTab === tab.id
-                    ? "bg-ifk-blue text-white"
-                    : "border border-slate-300 text-slate-700 hover:border-ifk-blue hover:text-ifk-blue"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+            {MAP_TABS.filter((tab) => tab.id !== "compare" || canCompare).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`rounded-lg px-3 py-2 text-sm transition sm:px-4 ${
+                    activeTab === tab.id
+                      ? "bg-ifk-blue text-white"
+                      : "border border-slate-300 text-slate-700 hover:border-ifk-blue hover:text-ifk-blue"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
 
-          <p className="mt-2 text-xs text-slate-500">{activeTabInfo.description}</p>
+            <p className="mt-2 text-xs text-slate-500">{activeTabInfo.description}</p>
 
-          <div className="mt-4">
-            <DiffMapPanel
-              previewUrl={previewUrls[activeTab]}
-              title={activeTabInfo.label}
-              mapSlug={mapSlug}
-              versionId={headVersionId}
-              exportEnabled={false}
-              focusTarget={focusTarget}
-              selectedChange={selectedChange}
-              clickableItems={clickableItems}
-              onClearFocus={handleClearSelection}
-              onObjectClick={handleSelectChange}
-            />
-          </div>
+            <div className="mt-4">
+              <DiffMapPanel
+                previewUrl={activeTab === "compare" ? previewUrls.full : previewUrls[activeTab]}
+                title={activeTabInfo.label}
+                mapSlug={mapSlug}
+                versionId={headVersionId}
+                exportEnabled={false}
+                focusTarget={focusTarget}
+                selectedChange={selectedChange}
+                clickableItems={clickableItems}
+                onClearFocus={handleClearSelection}
+                onObjectClick={handleSelectChange}
+                comparePreviewUrl={activeTab === "compare" ? previewUrls.full : null}
+                compareLabels={
+                  activeTab === "compare" ? { before: "Före", after: "Efter" } : undefined
+                }
+                compareAfterOverlayUrl={
+                  activeTab === "compare" && layerPaths?.checkin ? previewUrls.checkin : null
+                }
+                compareAfterClip={activeTab === "compare" ? layerPaths?.checkinClip ?? null : null}
+              />
+            </div>
 
           <div className="mt-6 border-t border-slate-200 pt-4">
             <h3 className="text-sm font-medium text-slate-900">Ändrade objekt</h3>

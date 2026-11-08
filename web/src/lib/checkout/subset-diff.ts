@@ -19,6 +19,7 @@ import {
   generateDiffLayerSvgs,
   type DiffLayerPaths,
 } from "@/lib/ocad/diff-layers";
+import { generateAndStorePreviewSvg } from "@/lib/ocad/svg";
 import { buildCheckinDuplicateValidationWarnings } from "@/lib/ocad/exact-duplicates";
 import { buildCheckinReviewChecks } from "./checkin-review-checks";
 import { parseOcadBuffer } from "@/lib/ocad/read";
@@ -493,6 +494,26 @@ async function computeCheckoutSubsetDiffInner(
       });
     } catch (layerErr) {
       console.error("Checkout diff-lager misslyckades:", layerErr);
+    }
+
+    try {
+      const checkinPath = buildCheckoutDiffLayerPath(checkout.mapFileId, checkoutId, "checkin");
+      const checkinClip = await generateAndStorePreviewSvg(checkinBuffer, checkinPath);
+      const fallbackBounds = checkinClip ?? layerPaths?.bounds;
+      if (fallbackBounds) {
+        layerPaths = {
+          added: layerPaths?.added ?? buildCheckoutDiffLayerPath(checkout.mapFileId, checkoutId, "added"),
+          removed:
+            layerPaths?.removed ?? buildCheckoutDiffLayerPath(checkout.mapFileId, checkoutId, "removed"),
+          modified:
+            layerPaths?.modified ?? buildCheckoutDiffLayerPath(checkout.mapFileId, checkoutId, "modified"),
+          bounds: layerPaths?.bounds ?? fallbackBounds,
+          checkin: checkinPath,
+          checkinClip: checkinClip ?? undefined,
+        };
+      }
+    } catch (checkinSvgErr) {
+      console.error("Checkout inchecknings-SVG misslyckades:", checkinSvgErr);
     }
   }
 

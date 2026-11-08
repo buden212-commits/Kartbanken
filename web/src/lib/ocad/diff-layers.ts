@@ -18,6 +18,10 @@ export type DiffLayerPaths = {
   removed: string;
   modified: string;
   bounds: SvgBounds;
+  /** Full inchecknings-SVG, aligned client-side onto head preview. */
+  checkin?: string;
+  /** OCAD/geo bbox of the checkin file, used to punch a hole in head. */
+  checkinClip?: SvgBounds;
 };
 
 export function buildDiffLayerPath(
@@ -50,7 +54,7 @@ export function buildTempDiffLayerPath(jobId: string, layer: DiffLayerKind): str
 export function buildCheckoutDiffLayerPath(
   mapFileId: string,
   checkoutId: string,
-  layer: DiffLayerKind,
+  layer: DiffLayerKind | "checkin",
 ): string {
   return `maps/${mapFileId}/checkout-diff/${checkoutId}/${layer}.svg`;
 }

@@ -30,7 +30,7 @@ const CHANGE_TAB: Record<ChangeType, MapTab> = {
   modified: "modified",
 };
 
-type MapTab = "full" | "added" | "removed" | "modified";
+type MapTab = "compare" | "full" | "added" | "removed" | "modified";
 type ChangeFilter = "all" | ChangeType;
 type DetailTab = "changes" | "symbols";
 
@@ -77,6 +77,7 @@ type Props = {
 };
 
 const MAP_TABS: { id: MapTab; label: string; description: string }[] = [
+  { id: "compare", label: "Jämför", description: "Dra reglaget för att se kartan före och efter" },
   { id: "full", label: "Hela kartan", description: "Senaste uppladdade versionen" },
   { id: "added", label: "Nya objekt", description: "Endast tillagda objekt" },
   { id: "removed", label: "Raderade objekt", description: "Endast borttagna objekt" },
@@ -102,7 +103,9 @@ export function DiffViewClient({
   layerPaths,
   exportEnabled = true,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<MapTab>("full");
+  const comparePreviewUrl =
+    mapSlug && versionAId ? `/api/maps/${mapSlug}/versions/${versionAId}/preview` : null;
+  const [activeTab, setActiveTab] = useState<MapTab>(comparePreviewUrl ? "compare" : "full");
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [changeFilter, setChangeFilter] = useState<ChangeFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -155,7 +158,7 @@ export function DiffViewClient({
     return changes
       .map((change, index) => ({ change, index }))
       .filter(({ change }) => {
-        if (activeTab === "full") return true;
+        if (activeTab === "full" || activeTab === "compare") return true;
         if (activeTab === "added") return change.changeType === "added";
         if (activeTab === "removed") return change.changeType === "removed";
         if (activeTab === "modified") return change.changeType === "modified";
@@ -227,8 +230,9 @@ export function DiffViewClient({
           <section>
             <h2 className="text-lg font-medium text-slate-900">Kartvyer</h2>
             <p className="mt-1 text-sm text-slate-600">
-              Välj karta nedan. Tryck på kartan eller i ändringslistan för objektinfo. På mobil: dra
-              för att panorera, nyp för att zooma.
+              Välj karta nedan. Fliken Jämför visar före och efter med ett skjutreglage. Tryck på
+              kartan eller i ändringslistan för objektinfo. På mobil: dra för att panorera, nyp för
+              att zooma.
             </p>
 
             {!layerPaths && (
@@ -238,7 +242,7 @@ export function DiffViewClient({
             )}
 
             <div className="mt-4 flex flex-wrap gap-2">
-              {MAP_TABS.map((tab) => (
+              {MAP_TABS.filter((tab) => tab.id !== "compare" || comparePreviewUrl).map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
@@ -258,7 +262,7 @@ export function DiffViewClient({
 
             <div className="mt-4">
               <DiffMapPanel
-                previewUrl={previewUrls[activeTab]}
+                previewUrl={activeTab === "compare" ? previewUrls.full : previewUrls[activeTab]}
                 title={activeTabInfo.label}
                 mapSlug={mapSlug ?? ""}
                 versionId={versionBId ?? ""}
@@ -268,6 +272,10 @@ export function DiffViewClient({
                 clickableItems={clickableItems}
                 onClearFocus={handleClearSelection}
                 onObjectClick={handleSelectChange}
+                comparePreviewUrl={activeTab === "compare" ? comparePreviewUrl : null}
+                compareLabels={
+                  activeTab === "compare" ? { before: "Före", after: "Efter" } : undefined
+                }
               />
             </div>
           </section>
